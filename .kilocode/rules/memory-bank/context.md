@@ -15,9 +15,9 @@ RMEDIA MindBunker is a personal life metrics and professional performance tracke
 - [x] Memory bank documentation
 - [x] Recipe system for common features
 - [x] **Full RMEDIA MindBunker MVP**
-  - [x] Database setup with Drizzle + SQLite (5 tables)
+  - [x] Database setup with Drizzle + SQLite (5 tables → 4 after investments removal)
   - [x] Modular folder structure (/modules, /components, /utils)
-  - [x] All data models defined (Finance, Investments, Health, Productivity, CRM)
+  - [x] All data models defined (Finance, Health, Productivity, CRM)
   - [x] Core layout with sidebar navigation
   - [x] Dashboard page with all module stat cards
   - [x] Quick Action buttons (Finished Video, Add Income, Add Expense, Log Today)
@@ -25,7 +25,11 @@ RMEDIA MindBunker is a personal life metrics and professional performance tracke
   - [x] Finance module (Income/Expense tracking with table)
   - [x] Health module (DailyLog with 7-day averages)
   - [x] CRM module (Clients & Leads with convert flow)
-  - [x] Investments module (Asset tracking with P&L)
+  - [x] Investments module removed (per user request)
+- [x] **💎 Performance Stats gamified section**
+  - [x] `src/utils/statistics.ts` — isolated derived metrics calculation
+  - [x] `src/components/ui/PerformanceStats.tsx` — gamified UI component
+  - [x] Dashboard updated to render Performance Stats below Health section
 
 ## Current Structure
 
