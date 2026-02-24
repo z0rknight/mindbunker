@@ -12,17 +12,6 @@ export const transactions = sqliteTable("transactions", {
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
-// ─── INVESTMENTS MODULE ───────────────────────────────────────────────────────
-
-export const assets = sqliteTable("assets", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(), // e.g. BTC, ETH
-  amount: real("amount").notNull(),
-  avgBuyPrice: real("avg_buy_price").notNull(),
-  currentPrice: real("current_price").notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-});
-
 // ─── HEALTH MODULE ────────────────────────────────────────────────────────────
 
 export const healthLogs = sqliteTable("health_logs", {

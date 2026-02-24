@@ -9,7 +9,6 @@ const navItems = [
   { href: "/finance", label: "Finance", icon: "💰" },
   { href: "/health", label: "Health", icon: "🫀" },
   { href: "/crm", label: "CRM", icon: "👥" },
-  { href: "/investments", label: "Investments", icon: "📈" },
 ];
 
 export function Sidebar() {

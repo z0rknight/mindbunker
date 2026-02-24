@@ -9,16 +9,14 @@ import { getFinanceSummary } from "@/modules/finance/actions";
 import { getVideoStats } from "@/modules/productivity/actions";
 import { getHealthSummary } from "@/modules/health/actions";
 import { getCRMSummary } from "@/modules/crm/actions";
-import { getInvestmentSummary } from "@/modules/investments/actions";
 import { formatCurrency, currentMonthName } from "@/utils/date";
 
 export default async function DashboardPage() {
-  const [finance, video, health, crm, investments] = await Promise.all([
+  const [finance, video, health, crm] = await Promise.all([
     getFinanceSummary(),
     getVideoStats(),
     getHealthSummary(),
     getCRMSummary(),
-    getInvestmentSummary(),
   ]);
 
   const now = new Date();
@@ -74,39 +72,6 @@ export default async function DashboardPage() {
             value={formatCurrency(finance.monthlyNet)}
             accent={finance.monthlyNet >= 0 ? "green" : "red"}
             icon="⚖️"
-          />
-        </div>
-      </div>
-
-      {/* Investments Section */}
-      <div className="mb-6">
-        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">📈 Investments</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard
-            label="BTC Holdings"
-            value={investments.btcHoldings !== null ? `${investments.btcHoldings} BTC` : "—"}
-            sub={investments.btcValue !== null ? formatCurrency(investments.btcValue) : undefined}
-            accent="amber"
-            icon="₿"
-          />
-          <StatCard
-            label="Portfolio Value"
-            value={formatCurrency(investments.totalValue)}
-            accent="amber"
-            icon="💼"
-          />
-          <StatCard
-            label="Total P&L"
-            value={formatCurrency(investments.totalPnL)}
-            sub={`${investments.pnlPercent > 0 ? "+" : ""}${investments.pnlPercent}%`}
-            accent={investments.totalPnL >= 0 ? "green" : "red"}
-            icon="📊"
-          />
-          <StatCard
-            label="Assets Tracked"
-            value={investments.assets.length}
-            accent="zinc"
-            icon="🪙"
           />
         </div>
       </div>
