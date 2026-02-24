@@ -305,6 +305,155 @@ export function LogTodayButton() {
   );
 }
 
+// ─── Log Bike Ride Button ─────────────────────────────────────────────────────
+
+export function LogBikeRideButton() {
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [km, setKm] = useState("");
+  const [minutes, setMinutes] = useState("");
+  const [flash, setFlash] = useState(false);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    startTransition(async () => {
+      await upsertHealthLog({
+        cyclingKm: km ? Number(km) : undefined,
+        cyclingMinutes: minutes ? Number(minutes) : undefined,
+      });
+      setFlash(true);
+      setTimeout(() => setFlash(false), 1500);
+      setKm("");
+      setMinutes("");
+      setOpen(false);
+    });
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        disabled={isPending}
+        className={`flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm transition-all w-full
+          ${flash
+            ? "bg-cyan-500 text-white scale-95"
+            : "bg-cyan-800 hover:bg-cyan-700 text-white active:scale-95"
+          }
+          ${isPending ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}
+        `}
+      >
+        <span className="text-2xl">{flash ? "✅" : "🚴‍♂️"}</span>
+        <span>{flash ? "Logged!" : "Log Bike Ride"}</span>
+      </button>
+
+      {open && (
+        <Modal title="🚴‍♂️ Log Bike Ride" onClose={() => setOpen(false)}>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Distance (km)</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                value={km}
+                onChange={(e) => setKm(e.target.value)}
+                placeholder="15.5"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <div>
+              <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Duration (minutes)</label>
+              <input
+                type="number"
+                min="0"
+                value={minutes}
+                onChange={(e) => setMinutes(e.target.value)}
+                placeholder="45"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="w-full bg-cyan-700 hover:bg-cyan-600 text-white font-bold py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60"
+            >
+              {isPending ? "Saving..." : "Log Ride"}
+            </button>
+          </form>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+// ─── Log Walk Button ──────────────────────────────────────────────────────────
+
+export function LogWalkButton() {
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [minutes, setMinutes] = useState("");
+  const [flash, setFlash] = useState(false);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!minutes) return;
+    startTransition(async () => {
+      await upsertHealthLog({
+        walkingMinutes: Number(minutes),
+      });
+      setFlash(true);
+      setTimeout(() => setFlash(false), 1500);
+      setMinutes("");
+      setOpen(false);
+    });
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        disabled={isPending}
+        className={`flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm transition-all w-full
+          ${flash
+            ? "bg-teal-500 text-white scale-95"
+            : "bg-teal-800 hover:bg-teal-700 text-white active:scale-95"
+          }
+          ${isPending ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}
+        `}
+      >
+        <span className="text-2xl">{flash ? "✅" : "🚶‍♂️"}</span>
+        <span>{flash ? "Logged!" : "Log Walk"}</span>
+      </button>
+
+      {open && (
+        <Modal title="🚶‍♂️ Log Walk" onClose={() => setOpen(false)}>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Duration (minutes)</label>
+              <input
+                type="number"
+                min="0"
+                value={minutes}
+                onChange={(e) => setMinutes(e.target.value)}
+                placeholder="30"
+                required
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-teal-500"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="w-full bg-teal-700 hover:bg-teal-600 text-white font-bold py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60"
+            >
+              {isPending ? "Saving..." : "Log Walk"}
+            </button>
+          </form>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
 function Modal({

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
+  { href: "/war-room", label: "War Room", icon: "💎" },
   { href: "/", label: "Dashboard", icon: "⬛" },
   { href: "/productivity", label: "Productivity", icon: "🎬" },
   { href: "/finance", label: "Finance", icon: "💰" },
@@ -33,18 +34,28 @@ export function Sidebar() {
       <nav className="flex-1 px-3 py-4 space-y-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
+          const isWarRoom = item.href === "/war-room";
           return (
             <Link
               key={item.href}
               href={item.href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
+                isActive && isWarRoom
+                  ? "bg-cyan-900/40 text-cyan-300 border border-cyan-700/50"
+                  : isActive
                   ? "bg-violet-600/20 text-violet-400 border border-violet-600/30"
+                  : isWarRoom
+                  ? "text-cyan-500 hover:text-cyan-300 hover:bg-cyan-900/20 border border-cyan-900/30"
                   : "text-zinc-400 hover:text-white hover:bg-zinc-800"
               }`}
             >
               <span className="text-base">{item.icon}</span>
               {item.label}
+              {isWarRoom && !isActive && (
+                <span className="ml-auto text-xs bg-cyan-900/50 text-cyan-500 px-1.5 py-0.5 rounded font-bold">
+                  NEW
+                </span>
+              )}
             </Link>
           );
         })}

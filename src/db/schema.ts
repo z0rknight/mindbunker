@@ -21,6 +21,9 @@ export const healthLogs = sqliteTable("health_logs", {
   caffeineMg: integer("caffeine_mg"),
   substancesNotes: text("substances_notes"),
   screenTimeHours: real("screen_time_hours"),
+  cyclingKm: real("cycling_km"),       // km cycled
+  cyclingMinutes: integer("cycling_minutes"), // duration in minutes
+  walkingMinutes: integer("walking_minutes"), // walking duration in minutes
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });

@@ -5,6 +5,8 @@ import {
   AddIncomeButton,
   AddExpenseButton,
   LogTodayButton,
+  LogBikeRideButton,
+  LogWalkButton,
 } from "@/components/ui/QuickActions";
 import { getFinanceSummary } from "@/modules/finance/actions";
 import { getVideoStats } from "@/modules/productivity/actions";
@@ -38,11 +40,13 @@ export default async function DashboardPage() {
       {/* Quick Actions */}
       <div className="mb-8">
         <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <FinishedVideoButton />
           <AddIncomeButton />
           <AddExpenseButton />
           <LogTodayButton />
+          <LogBikeRideButton />
+          <LogWalkButton />
         </div>
       </div>
 
@@ -140,7 +144,7 @@ export default async function DashboardPage() {
       {/* Health Section */}
       <div className="mb-6">
         <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">🫀 Health</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <StatCard
             label="Avg Sleep (7d)"
             value={health.avgSleep7Days !== null ? `${health.avgSleep7Days}h` : "—"}
@@ -158,6 +162,25 @@ export default async function DashboardPage() {
             value={health.screenTimeToday !== null ? `${health.screenTimeToday}h` : "—"}
             accent="zinc"
             icon="🖥️"
+          />
+          <StatCard
+            label="Cycling Today"
+            value={health.cyclingKmToday !== null ? `${health.cyclingKmToday}km` : "—"}
+            accent="blue"
+            icon="🚴‍♂️"
+          />
+          <StatCard
+            label="Walking Today"
+            value={health.walkingMinutesToday !== null ? `${health.walkingMinutesToday}min` : "—"}
+            accent="blue"
+            icon="🚶‍♂️"
+          />
+          <StatCard
+            label="Cycling (7d)"
+            value={health.totalCyclingKm7d > 0 ? `${health.totalCyclingKm7d}km` : "—"}
+            sub="Total last 7 days"
+            accent="zinc"
+            icon="📊"
           />
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { StatCard } from "@/components/ui/StatCard";
-import { LogTodayButton } from "@/components/ui/QuickActions";
+import { LogTodayButton, LogBikeRideButton, LogWalkButton } from "@/components/ui/QuickActions";
 import { getHealthSummary, getAllHealthLogs } from "@/modules/health/actions";
 import { formatDate } from "@/utils/date";
 
@@ -15,11 +15,11 @@ export default async function HealthPage() {
     <div className="p-8 max-w-5xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white">🫀 Health</h1>
-        <p className="text-zinc-500 text-sm mt-1">Daily habit tracker</p>
+        <p className="text-zinc-500 text-sm mt-1">Daily habit tracker · Sleep · Caffeine · Movement</p>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
         <StatCard
           label="Avg Sleep (7d)"
           value={summary.avgSleep7Days !== null ? `${summary.avgSleep7Days}h` : "—"}
@@ -39,22 +39,40 @@ export default async function HealthPage() {
           accent="zinc"
           icon="🖥️"
         />
+        <StatCard
+          label="Cycling (7d)"
+          value={summary.totalCyclingKm7d > 0 ? `${summary.totalCyclingKm7d}km` : "—"}
+          sub="Total last 7 days"
+          accent="blue"
+          icon="🚴‍♂️"
+        />
+        <StatCard
+          label="Walking (7d)"
+          value={summary.totalWalkingMin7d > 0 ? `${summary.totalWalkingMin7d}min` : "—"}
+          sub="Total last 7 days"
+          accent="blue"
+          icon="🚶‍♂️"
+        />
       </div>
 
       {/* Today's Log Status */}
-      <div className="mb-8 p-4 rounded-xl border border-zinc-800 bg-zinc-900/50 flex items-center justify-between">
-        <div>
-          <p className="text-white font-medium text-sm">
-            {summary.todayLog ? "✅ Today's log is complete" : "⚠️ No log for today yet"}
-          </p>
-          <p className="text-zinc-500 text-xs mt-0.5">
-            {summary.todayLog
-              ? `Sleep: ${summary.todayLog.sleepHours ?? "—"}h · Caffeine: ${summary.todayLog.caffeineMg ?? "—"}mg · Screen: ${summary.todayLog.screenTimeHours ?? "—"}h`
-              : "Log your daily metrics to track trends"}
-          </p>
+      <div className="mb-8 p-4 rounded-xl border border-zinc-800 bg-zinc-900/50">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-white font-medium text-sm">
+              {summary.todayLog ? "✅ Today's log is active" : "⚠️ No log for today yet"}
+            </p>
+            <p className="text-zinc-500 text-xs mt-0.5">
+              {summary.todayLog
+                ? `Sleep: ${summary.todayLog.sleepHours ?? "—"}h · Caffeine: ${summary.todayLog.caffeineMg ?? "—"}mg · Screen: ${summary.todayLog.screenTimeHours ?? "—"}h · Cycling: ${summary.todayLog.cyclingKm ?? "—"}km · Walk: ${summary.todayLog.walkingMinutes ?? "—"}min`
+                : "Log your daily metrics to track trends"}
+            </p>
+          </div>
         </div>
-        <div className="w-40">
+        <div className="grid grid-cols-3 gap-2">
           <LogTodayButton />
+          <LogBikeRideButton />
+          <LogWalkButton />
         </div>
       </div>
 
@@ -68,14 +86,16 @@ export default async function HealthPage() {
             <p className="text-zinc-500 text-sm">No health logs yet. Start tracking today!</p>
           </div>
         ) : (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden overflow-x-auto">
+            <table className="w-full text-sm min-w-[700px]">
               <thead>
                 <tr className="border-b border-zinc-800">
                   <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Date</th>
                   <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Sleep</th>
                   <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Caffeine</th>
-                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Screen Time</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Screen</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">🚴 Cycling</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">🚶 Walk</th>
                   <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Notes</th>
                 </tr>
               </thead>
@@ -98,6 +118,19 @@ export default async function HealthPage() {
                     </td>
                     <td className="px-4 py-3 text-zinc-300">
                       {log.screenTimeHours !== null ? `${log.screenTimeHours}h` : <span className="text-zinc-600">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {log.cyclingKm !== null && log.cyclingKm > 0 ? (
+                        <span className="text-cyan-400 font-medium">
+                          {log.cyclingKm}km
+                          {log.cyclingMinutes ? <span className="text-zinc-500 text-xs ml-1">({log.cyclingMinutes}min)</span> : null}
+                        </span>
+                      ) : <span className="text-zinc-600">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {log.walkingMinutes !== null && log.walkingMinutes > 0 ? (
+                        <span className="text-teal-400 font-medium">{log.walkingMinutes}min</span>
+                      ) : <span className="text-zinc-600">—</span>}
                     </td>
                     <td className="px-4 py-3 text-zinc-500 text-xs">{log.substancesNotes ?? "—"}</td>
                   </tr>

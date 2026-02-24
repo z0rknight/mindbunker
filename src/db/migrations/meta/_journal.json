@@ -15,6 +15,13 @@
       "when": 1771969324555,
       "tag": "0001_daily_nightmare",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1771970963056,
+      "tag": "0002_add_cycling_walking_to_health",
+      "breakpoints": true
     }
   ]
 }
