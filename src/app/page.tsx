@@ -1,4 +1,5 @@
 import { StatCard } from "@/components/ui/StatCard";
+import { PerformanceStatsSection } from "@/components/ui/PerformanceStats";
 import {
   FinishedVideoButton,
   AddIncomeButton,
@@ -9,14 +10,16 @@ import { getFinanceSummary } from "@/modules/finance/actions";
 import { getVideoStats } from "@/modules/productivity/actions";
 import { getHealthSummary } from "@/modules/health/actions";
 import { getCRMSummary } from "@/modules/crm/actions";
+import { getPerformanceStats } from "@/utils/statistics";
 import { formatCurrency, currentMonthName } from "@/utils/date";
 
 export default async function DashboardPage() {
-  const [finance, video, health, crm] = await Promise.all([
+  const [finance, video, health, crm, perfStats] = await Promise.all([
     getFinanceSummary(),
     getVideoStats(),
     getHealthSummary(),
     getCRMSummary(),
+    getPerformanceStats(),
   ]);
 
   const now = new Date();
@@ -158,6 +161,9 @@ export default async function DashboardPage() {
           />
         </div>
       </div>
+
+      {/* Performance Stats — Gamified Section */}
+      <PerformanceStatsSection stats={perfStats} />
     </div>
   );
 }
