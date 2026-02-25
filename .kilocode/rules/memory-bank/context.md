@@ -48,6 +48,28 @@ RMEDIA MindBunker is a personal life metrics and professional performance tracke
   - [x] `LogBikeRideButton` and `LogWalkButton` added to QuickActions
   - [x] Dashboard quick actions expanded to 6 buttons (2-col → 6-col grid)
   - [x] Dashboard health section shows cycling/walking stats
+  - [x] Walking logging now cumulative (adds to existing instead of overwriting)
+- [x] **🌍 Brazil Timezone Support**
+  - [x] `nowBrazil()` helper function added to `src/utils/date.ts`
+  - [x] All date functions updated to use GMT-3 timezone
+  - [x] `todayISO()`, `startOfMonthISO()`, `daysAgoISO()`, `currentMonthName()` all use Brazil time
+- [x] **📊 War Room Enhancements**
+  - [x] Physical activity timeline (last 7 days) with progress bars
+  - [x] Motivational quote system based on mood/status (recovery, momentum, focused, motivated, building)
+  - [x] Quote selection based on leverage score, crash detection, revenue streak, and level
+- [x] **🎯 Dashboard Reorganization**
+  - [x] Insights & Correlations section moved to top (prioritized over raw data)
+  - [x] Detailed statistics moved below insights
+  - [x] `AddRevisionButton` added to quick actions (7 total buttons)
+- [x] **📝 Productivity Enhancements**
+  - [x] `AddRevisionButton` added to Productivity page
+  - [x] Revision button logs a finished video with `revisionsCount: 1`
+- [x] **👥 CRM Client Detail Pages**
+  - [x] Dynamic route `/crm/[id]/page.tsx` for individual client details
+  - [x] `ClientTabs` component with 4 tabs: Overview, Projects, Notes, Activity
+  - [x] Notes tab allows editing and saving client notes
+  - [x] Client names in CRM table are clickable links to detail pages
+  - [x] `getClientById()` action added to CRM module
 
 ## Current Structure
 
@@ -60,11 +82,12 @@ RMEDIA MindBunker is a personal life metrics and professional performance tracke
 | `src/app/finance/` | Income/expense tracker | ✅ Ready |
 | `src/app/health/` | Daily habit tracker (+ cycling/walking) | ✅ Ready |
 | `src/app/crm/` | Clients & leads | ✅ Ready |
+| `src/app/crm/[id]/` | Client detail pages with tabs | ✅ Ready |
 | `src/db/schema.ts` | All table definitions (health updated) | ✅ Ready |
 | `src/modules/analytics/service.ts` | War Room analytics service | ✅ Ready |
 | `src/modules/*/actions.ts` | Server actions per module | ✅ Ready |
 | `src/components/layout/Sidebar.tsx` | Navigation sidebar (War Room at top) | ✅ Ready |
-| `src/components/ui/QuickActions.tsx` | Quick action buttons (6 total) | ✅ Ready |
+| `src/components/ui/QuickActions.tsx` | Quick action buttons (7 total) | ✅ Ready |
 | `src/utils/statistics.ts` | Legacy performance stats | ✅ Ready |
 
 ## Database Tables
@@ -90,7 +113,7 @@ RMEDIA MindBunker is a personal life metrics and professional performance tracke
 |--------|-------------|
 | Income Intelligence | R$20k trajectory, flat-rate yield, client revenue ranking |
 | Efficiency & Friction | Revision Drag Index (Elite/Normal/Friction), client drain ranking |
-| Biological Correlation | Sleep/output correlation, caffeine/revenue ratio, crash detector |
+| Biological Correlation | Sleep/output correlation, caffeine/revenue ratio, crash detector, physical activity timeline |
 | Momentum & Trajectory | Revenue streak, MoM growth trends |
 | Leverage Score | XP system, 10 levels (Rookie → Elite), score breakdown |
 
@@ -101,3 +124,4 @@ RMEDIA MindBunker is a personal life metrics and professional performance tracke
 | Initial | Template created with base setup |
 | 2026-02-24 | Full RMEDIA MindBunker MVP built — 5 modules, dashboard, quick actions |
 | 2026-02-24 | War Room intelligence layer + cycling/walking health tracking added |
+| 2026-02-25 | Brazil timezone, activity timeline, motivational quotes, revision button, cumulative walking, client detail pages |
