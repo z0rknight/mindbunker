@@ -1,15 +1,22 @@
 /**
- * Returns today's date as ISO string YYYY-MM-DD
+ * Get current time in Brazil (GMT-3)
  */
-export function todayISO(): string {
-  return new Date().toISOString().split("T")[0];
+export function nowBrazil(): Date {
+  return new Date(new Date().getTime() - 3 * 60 * 60 * 1000);
 }
 
 /**
- * Returns the start of the current month as ISO string YYYY-MM-DD
+ * Returns today's date as ISO string YYYY-MM-DD (Brazil timezone)
+ */
+export function todayISO(): string {
+  return nowBrazil().toISOString().split("T")[0];
+}
+
+/**
+ * Returns the start of the current month as ISO string YYYY-MM-DD (Brazil timezone)
  */
 export function startOfMonthISO(): string {
-  const now = new Date();
+  const now = nowBrazil();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
@@ -17,7 +24,7 @@ export function startOfMonthISO(): string {
  * Returns a date N days ago as ISO string YYYY-MM-DD
  */
 export function daysAgoISO(days: number): string {
-  const d = new Date();
+  const d = nowBrazil();
   d.setDate(d.getDate() - days);
   return d.toISOString().split("T")[0];
 }
@@ -43,8 +50,8 @@ export function formatCurrency(amount: number): string {
 }
 
 /**
- * Get current month name
+ * Get current month name (Brazil timezone)
  */
 export function currentMonthName(): string {
-  return new Date().toLocaleString("en-US", { month: "long" });
+  return nowBrazil().toLocaleString("en-US", { month: "long" });
 }

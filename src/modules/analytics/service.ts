@@ -68,6 +68,13 @@ export interface BiologicalCorrelation {
   avgCyclingKm7d: number | null;
   /** Avg walking minutes last 7 days */
   avgWalkingMin7d: number | null;
+  /** Physical activity timeline for last 7 days */
+  activityTimeline: Array<{
+    date: string;
+    cyclingKm: number | null;
+    walkingMinutes: number | null;
+    totalActivity: number;
+  }>;
 }
 
 export interface MomentumMetrics {
@@ -385,6 +392,16 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       ? Math.round(totalWalkingMin7d / 7)
       : null;
 
+  // Physical activity timeline for last 7 days
+  const activityTimeline = last7HealthLogs
+    .map((h) => ({
+      date: h.date,
+      cyclingKm: h.cyclingKm,
+      walkingMinutes: h.walkingMinutes,
+      totalActivity: (h.cyclingKm ?? 0) * 2 + (h.walkingMinutes ?? 0) * 0.5,
+    }))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
   // ── MOMENTUM METRICS ──────────────────────────────────────────────────────
 
   // Revenue streak: consecutive days with at least one income transaction
@@ -505,6 +522,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       physicalActivityScore,
       avgCyclingKm7d,
       avgWalkingMin7d,
+      activityTimeline,
     },
     momentum: {
       revenueStreak,

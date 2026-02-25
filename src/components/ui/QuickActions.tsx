@@ -37,6 +37,38 @@ export function FinishedVideoButton() {
   );
 }
 
+// ─── Add Revision Button ─────────────────────────────────────────────────────────
+
+export function AddRevisionButton() {
+  const [isPending, startTransition] = useTransition();
+  const [flash, setFlash] = useState(false);
+
+  function handleClick() {
+    startTransition(async () => {
+      await logFinishedVideo({ revisionsCount: 1 });
+      setFlash(true);
+      setTimeout(() => setFlash(false), 1500);
+    });
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={isPending}
+      className={`flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm transition-all w-full
+        ${flash
+          ? "bg-amber-500 text-white scale-95"
+          : "bg-amber-800 hover:bg-amber-700 text-white active:scale-95"
+        }
+        ${isPending ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}
+      `}
+    >
+      <span className="text-2xl">{flash ? "✅" : "🔄"}</span>
+      <span>{flash ? "Added!" : isPending ? "Adding..." : "Add Revision"}</span>
+    </button>
+  );
+}
+
 // ─── Add Income Button ────────────────────────────────────────────────────────
 
 export function AddIncomeButton() {

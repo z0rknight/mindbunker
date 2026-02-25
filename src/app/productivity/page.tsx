@@ -1,5 +1,5 @@
 import { StatCard } from "@/components/ui/StatCard";
-import { FinishedVideoButton } from "@/components/ui/QuickActions";
+import { FinishedVideoButton, AddRevisionButton } from "@/components/ui/QuickActions";
 import { getVideoStats, getAllVideoLogs } from "@/modules/productivity/actions";
 import { formatDate, currentMonthName } from "@/utils/date";
 import { DeleteVideoLogButton } from "./DeleteVideoLogButton";
@@ -27,10 +27,13 @@ export default async function ProductivityPage() {
         <StatCard label="All Time" value={stats.total} accent="zinc" icon="🏆" />
       </div>
 
-      {/* Quick Action */}
+      {/* Quick Actions */}
       <div className="mb-8 max-w-xs">
-        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">Quick Log</h2>
-        <FinishedVideoButton />
+        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">Quick Actions</h2>
+        <div className="space-y-3">
+          <FinishedVideoButton />
+          <AddRevisionButton />
+        </div>
       </div>
 
       {/* Log Table */}

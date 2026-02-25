@@ -87,3 +87,8 @@ export async function getCRMSummary() {
 export async function getAllClients() {
   return db.select().from(clients).orderBy(clients.createdAt);
 }
+
+export async function getClientById(id: number) {
+  const result = await db.select().from(clients).where(eq(clients.id, id));
+  return result[0] ?? null;
+}

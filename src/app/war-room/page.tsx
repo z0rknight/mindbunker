@@ -3,9 +3,67 @@ import { formatCurrency } from "@/utils/date";
 
 export const dynamic = "force-dynamic";
 
+// Motivational quotes based on current state
+function getMotivationalQuote(
+  leverageScore: number,
+  crashDetected: boolean,
+  revenueStreak: number,
+  level: number
+): { quote: string; author: string; mood: string } {
+  const quotes = {
+    elite: [
+      { quote: "Excellence is not a destination; it is a continuous journey that never ends.", author: "Brian Tracy", mood: "focused" },
+      { quote: "The only way to do great work is to love what you do.", author: "Steve Jobs", mood: "focused" },
+      { quote: "Success is the sum of small efforts, repeated day in and day out.", author: "Robert Collier", mood: "focused" },
+    ],
+    high: [
+      { quote: "The harder I work, the luckier I get.", author: "Gary Player", mood: "motivated" },
+      { quote: "Don't watch the clock; do what it does. Keep going.", author: "Sam Levenson", mood: "motivated" },
+      { quote: "The future belongs to those who believe in the beauty of their dreams.", author: "Eleanor Roosevelt", mood: "motivated" },
+    ],
+    building: [
+      { quote: "Every expert was once a beginner. Every pro was once an amateur.", author: "Robin Sharma", mood: "building" },
+      { quote: "The secret of getting ahead is getting started.", author: "Mark Twain", mood: "building" },
+      { quote: "Small daily improvements are the key to staggering long-term results.", author: "Robin Sharma", mood: "building" },
+    ],
+    recovery: [
+      { quote: "Rest and self-care are so important. When you take time to replenish your spirit, it allows you to serve others from the overflow.", author: "Eleanor Brown", mood: "recovery" },
+      { quote: "Almost everything will work again if you unplug it for a few minutes, including you.", author: "Anne Lamott", mood: "recovery" },
+      { quote: "The time to relax is when you don't have time for it.", author: "Sydney J. Harris", mood: "recovery" },
+    ],
+    streak: [
+      { quote: "Consistency is what transforms average into excellence.", author: "Unknown", mood: "momentum" },
+      { quote: "Success is the result of perfection, hard work, learning from failure, loyalty, and persistence.", author: "Colin Powell", mood: "momentum" },
+      { quote: "The only limit to our realization of tomorrow will be our doubts of today.", author: "Franklin D. Roosevelt", mood: "momentum" },
+    ],
+  };
+
+  // Priority: crash detected > elite level > high streak > building
+  if (crashDetected) {
+    return quotes.recovery[Math.floor(Math.random() * quotes.recovery.length)];
+  }
+  if (level >= 8) {
+    return quotes.elite[Math.floor(Math.random() * quotes.elite.length)];
+  }
+  if (revenueStreak >= 7) {
+    return quotes.streak[Math.floor(Math.random() * quotes.streak.length)];
+  }
+  if (leverageScore >= 500) {
+    return quotes.high[Math.floor(Math.random() * quotes.high.length)];
+  }
+  return quotes.building[Math.floor(Math.random() * quotes.building.length)];
+}
+
 export default async function WarRoomPage() {
   const data = await getWarRoomData();
   const { income, efficiency, biological, momentum, leverage } = data;
+
+  const motivationalQuote = getMotivationalQuote(
+    leverage.score,
+    biological.crashDetected,
+    momentum.revenueStreak,
+    leverage.level
+  );
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -25,6 +83,35 @@ export default async function WarRoomPage() {
           <p className="text-zinc-400 text-xs font-mono">
             {new Date(data.generatedAt).toLocaleTimeString()}
           </p>
+        </div>
+      </div>
+
+      {/* ── MOTIVATIONAL QUOTE ─────────────────────────────────────────────── */}
+      <div className="mb-8 bg-gradient-to-r from-zinc-900 to-zinc-950 border border-zinc-800 rounded-xl p-6">
+        <div className="flex items-start gap-4">
+          <span className="text-3xl">
+            {motivationalQuote.mood === "recovery" ? "🌙" :
+             motivationalQuote.mood === "momentum" ? "🔥" :
+             motivationalQuote.mood === "focused" ? "🎯" :
+             motivationalQuote.mood === "motivated" ? "⚡" : "🌱"}
+          </span>
+          <div className="flex-1">
+            <p className="text-zinc-300 text-lg italic font-medium leading-relaxed">
+              &ldquo;{motivationalQuote.quote}&rdquo;
+            </p>
+            <p className="text-zinc-500 text-sm mt-2">— {motivationalQuote.author}</p>
+          </div>
+          <div className="text-right">
+            <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+              motivationalQuote.mood === "recovery" ? "bg-purple-900/50 text-purple-400 border border-purple-700/50" :
+              motivationalQuote.mood === "momentum" ? "bg-orange-900/50 text-orange-400 border border-orange-700/50" :
+              motivationalQuote.mood === "focused" ? "bg-cyan-900/50 text-cyan-400 border border-cyan-700/50" :
+              motivationalQuote.mood === "motivated" ? "bg-amber-900/50 text-amber-400 border border-amber-700/50" :
+              "bg-green-900/50 text-green-400 border border-green-700/50"
+            }`}>
+              {motivationalQuote.mood.toUpperCase()}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -382,6 +469,40 @@ export default async function WarRoomPage() {
               </div>
             </div>
           </div>
+
+          {/* Physical Activity Timeline */}
+          {biological.activityTimeline.length > 0 && (
+            <div className="mt-6 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+              <p className="text-zinc-400 text-xs uppercase tracking-widest font-semibold mb-3">
+                Physical Activity Timeline (Last 7 Days)
+              </p>
+              <div className="space-y-3">
+                {biological.activityTimeline.map((activity, i) => (
+                  <div key={activity.date} className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="text-zinc-500 text-xs font-mono">
+                        {new Date(activity.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                      </p>
+                      <p className="text-zinc-400 text-xs">
+                        {activity.cyclingKm !== null ? `${activity.cyclingKm}km cycling` : ''}
+                        {activity.cyclingKm !== null && activity.walkingMinutes !== null ? ' · ' : ''}
+                        {activity.walkingMinutes !== null ? `${activity.walkingMinutes}min walking` : ''}
+                      </p>
+                    </div>
+                    <div className="w-32 bg-zinc-800 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="h-2 rounded-full bg-gradient-to-r from-cyan-700 to-cyan-400 transition-all duration-700"
+                        style={{ width: `${(activity.totalActivity / 50) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-cyan-400 text-xs font-bold">
+                      {Math.round(activity.totalActivity * 10) / 10}/50
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

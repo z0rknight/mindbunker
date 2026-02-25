@@ -31,9 +31,9 @@ export async function upsertHealthLog(data: {
         caffeineMg: data.caffeineMg ?? existing[0].caffeineMg,
         substancesNotes: data.substancesNotes ?? existing[0].substancesNotes,
         screenTimeHours: data.screenTimeHours ?? existing[0].screenTimeHours,
-        cyclingKm: data.cyclingKm !== undefined ? data.cyclingKm : existing[0].cyclingKm,
-        cyclingMinutes: data.cyclingMinutes !== undefined ? data.cyclingMinutes : existing[0].cyclingMinutes,
-        walkingMinutes: data.walkingMinutes !== undefined ? data.walkingMinutes : existing[0].walkingMinutes,
+        cyclingKm: data.cyclingKm !== undefined ? (existing[0].cyclingKm ?? 0) + data.cyclingKm : existing[0].cyclingKm,
+        cyclingMinutes: data.cyclingMinutes !== undefined ? (existing[0].cyclingMinutes ?? 0) + data.cyclingMinutes : existing[0].cyclingMinutes,
+        walkingMinutes: data.walkingMinutes !== undefined ? (existing[0].walkingMinutes ?? 0) + data.walkingMinutes : existing[0].walkingMinutes,
         updatedAt: new Date(),
       })
       .where(eq(healthLogs.date, date));

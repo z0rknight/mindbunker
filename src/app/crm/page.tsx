@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { StatCard } from "@/components/ui/StatCard";
 import { getCRMSummary, getAllClients } from "@/modules/crm/actions";
 import { formatDate, formatCurrency, currentMonthName } from "@/utils/date";
@@ -121,7 +122,11 @@ function ClientTable({
         <tbody>
           {clients.map((client, i) => (
             <tr key={client.id} className={`border-b border-zinc-800/50 ${i % 2 === 0 ? "" : "bg-zinc-800/20"}`}>
-              <td className="px-4 py-3 text-white font-medium">{client.name}</td>
+              <td className="px-4 py-3">
+                <Link href={`/crm/${client.id}`} className="text-white font-medium hover:text-cyan-400 transition-colors">
+                  {client.name}
+                </Link>
+              </td>
               <td className="px-4 py-3 text-zinc-400 text-xs">{client.email ?? "—"}</td>
               <td className="px-4 py-3 text-zinc-300">{client.totalProjects}</td>
               <td className="px-4 py-3 text-emerald-400 font-mono">{formatCurrency(client.totalRevenue)}</td>
