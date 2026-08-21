@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mindbunker",
+  "main": ".open-next/worker.js",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "emmanueldarosa.com/mindbunker*",
+      "zone_name": "emmanueldarosa.com"
+    }
+  ],
+  "compatibility_date": "2026-08-19",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mindbunker",
+      "database_id": "d6ada5db-1f36-4ee9-9a05-01d131abf219",
+      "preview_database_id": "mindbunker-local",
+      "migrations_dir": "src/db/migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

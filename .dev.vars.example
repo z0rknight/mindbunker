@@ -1,0 +1,2 @@
+AUTH_PASSWORD_HASH=generate-a-pbkdf2-sha256-hash
+AUTH_SESSION_SECRET=generate-a-random-32-byte-secret
