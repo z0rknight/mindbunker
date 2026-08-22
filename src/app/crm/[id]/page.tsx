@@ -13,10 +13,23 @@ export const dynamic = "force-dynamic";
 
 export default async function ClientDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{
+    tab?: string | string[];
+    createProject?: string | string[];
+    returnTo?: string | string[];
+  }>;
 }) {
   const { id } = await params;
+  const query = await searchParams;
+  const requestedTab = query.tab;
+  const shouldCreateProject = query.createProject === "1";
+  const projectReturnTo =
+    query.returnTo === "/productivity?planVideo=1"
+      ? query.returnTo
+      : undefined;
   const clientId = parseInt(id, 10);
   if (isNaN(clientId)) {
     notFound();
@@ -117,6 +130,9 @@ export default async function ClientDetailPage({
         events={workspace.events}
         projects={projects}
         instagramImportConfigured={instagramStatus.configured}
+        initialTab={requestedTab === "projects" ? "projects" : undefined}
+        initialProjectCreation={shouldCreateProject}
+        projectReturnTo={projectReturnTo}
       />
     </div>
   );

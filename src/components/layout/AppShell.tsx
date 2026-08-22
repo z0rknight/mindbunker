@@ -11,8 +11,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     : pathname;
   const isLogin = normalizedPath === "/login";
   const isPublicGateway = normalizedPath.startsWith("/g/");
+  const isClientPortal = normalizedPath.startsWith("/client/");
 
-  if (isLogin || isPublicGateway) {
+  if (isLogin || isPublicGateway || isClientPortal) {
     return <>{children}</>;
   }
 

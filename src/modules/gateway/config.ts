@@ -38,6 +38,6 @@ export type ServiceInterest =
   (typeof SERVICE_INTEREST_OPTIONS)[number]["value"];
 
 export const GATEWAY_PATH_PREFIX = "/mindbunker/g";
+export const CLIENT_PORTAL_PATH_PREFIX = "/mindbunker/client";
 export const GATEWAY_TOKEN_BYTES = 32;
 export const GATEWAY_TOKEN_TTL_DAYS = 14;
-

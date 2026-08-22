@@ -1,37 +1,195 @@
 import {
   AddRevisionButton,
   FinishedVideoButton,
+  PlanVideoButton,
 } from "@/components/ui/QuickActions";
 import { StatCard } from "@/components/ui/StatCard";
 import {
   getAllVideoLogs,
+  getProductivityQuickOptions,
   getVideoStats,
 } from "@/modules/productivity/actions";
-import { currentMonthName, formatDate } from "@/utils/date";
+import {
+  groupOperationalVideos,
+  type ProductivityGroup,
+} from "@/modules/productivity/core";
+import { getWorkSessionOverview } from "@/modules/work-sessions/data";
+import {
+  WORK_SESSION_ACTIVITY_LABELS,
+  formatClosedDuration,
+} from "@/modules/work-sessions/core";
+import { currentMonthName, todayISO } from "@/utils/date";
 import Link from "next/link";
-import { DeleteVideoLogButton } from "./DeleteVideoLogButton";
-import { RevisionControls } from "./RevisionControls";
+import { VideoOperationsCard } from "./VideoOperationsCard";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProductivityPage() {
-  const [stats, logs] = await Promise.all([
+const sectionDetails: Record<
+  ProductivityGroup,
+  { eyebrow: string; title: string; description: string; empty: string }
+> = {
+  current: {
+    eyebrow: "Make",
+    title: "Current Work",
+    description: "Production already in motion. Open the workspace and keep the next step obvious.",
+    empty: "No videos are in production. Start a planned video when you are ready.",
+  },
+  attention: {
+    eyebrow: "Decide",
+    title: "Attention",
+    description: "Review, requested changes, or a planned project whose deadline has passed.",
+    empty: "Nothing needs an operational decision right now.",
+  },
+  planned: {
+    eyebrow: "Prepare",
+    title: "Planned Queue",
+    description: "Committed videos that have not entered production yet.",
+    empty: "No planned videos waiting in the queue.",
+  },
+  completed: {
+    eyebrow: "Result",
+    title: "Recent / Completed",
+    description: "Delivered work remains reachable without crowding the production floor.",
+    empty: "No completed videos yet.",
+  },
+};
+
+export default async function ProductivityPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    video?: string | string[];
+    planVideo?: string | string[];
+    projectId?: string | string[];
+  }>;
+}) {
+  const query = await searchParams;
+  const requestedVideo = query.video;
+  const initialVideoId =
+    typeof requestedVideo === "string" && /^\d+$/u.test(requestedVideo)
+      ? Number(requestedVideo)
+      : null;
+  const initialProjectId =
+    typeof query.projectId === "string" && /^\d+$/u.test(query.projectId)
+      ? Number(query.projectId)
+      : null;
+  const [stats, logs, options, workSessionOverview] = await Promise.all([
     getVideoStats(),
     getAllVideoLogs(),
+    getProductivityQuickOptions(),
+    getWorkSessionOverview(),
   ]);
   const recentLogs = logs.slice(0, 50);
+  const groups = groupOperationalVideos(recentLogs, {
+    today: todayISO(),
+    openSessionVideoId: workSessionOverview.openSession?.videoId,
+  });
+  const sessionSummaryByVideo = new Map(
+    workSessionOverview.summaries.map((summary) => [summary.videoId, summary]),
+  );
+
+  function workSessionStateFor(videoId: number) {
+    return {
+      summary: sessionSummaryByVideo.get(videoId) ?? {
+        videoId,
+        closedSeconds: 0,
+        sessionCount: 0,
+      },
+      openSession: workSessionOverview.openSession,
+    };
+  }
+
+  function renderSection(group: ProductivityGroup, compact = false) {
+    const details = sectionDetails[group];
+    const videos = groups[group];
+    return (
+      <section key={group} aria-labelledby={`${group}-videos`}>
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">
+              {details.eyebrow}
+            </p>
+            <h2 id={`${group}-videos`} className="mt-1 text-lg font-black text-white sm:text-xl">
+              {details.title} <span className="font-mono text-sm text-zinc-600">{videos.length}</span>
+            </h2>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-zinc-500">{details.description}</p>
+          </div>
+          {group === "planned" && (
+            <Link href="/projects" className="text-xs font-bold text-cyan-400 hover:text-cyan-300">
+              Review projects →
+            </Link>
+          )}
+        </div>
+
+        {videos.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/35 px-4 py-6 text-sm text-zinc-600">
+            {details.empty}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {videos.map((video) => (
+              <VideoOperationsCard
+                key={video.id}
+                video={video}
+                clients={options.clients}
+                projects={options.projects}
+                workSessionState={workSessionStateFor(video.id)}
+                initiallyOpen={initialVideoId === video.id}
+                compact={compact}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
-      <div className="mb-8">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">
-          Projects → videos → revisions
-        </p>
-        <h1 className="mt-1 text-2xl font-bold text-white">🎬 Productivity</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Every revision now belongs to a real video.
-        </p>
-      </div>
+    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
+      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">
+            Client → project → video → work → review → result
+          </p>
+          <h1 className="mt-1 text-2xl font-black text-white sm:text-3xl">🎬 Productivity</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
+            The RMEDIA production floor: what is moving, what needs a decision, and what comes next.
+          </p>
+        </div>
+        <nav className="flex flex-wrap gap-2 text-xs font-bold" aria-label="Productivity relationships">
+          <Link href="/projects" className="min-h-11 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-cyan-300 hover:border-cyan-500/40">
+            Projects
+          </Link>
+          <Link href="/crm" className="min-h-11 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-zinc-300 hover:border-zinc-600">
+            CRM
+          </Link>
+        </nav>
+      </header>
+
+      {workSessionOverview.openSession && (
+        <section className="mb-7 rounded-2xl border border-emerald-500/35 bg-emerald-500/[0.07] p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+                Work session active
+              </p>
+              <h2 className="mt-2 truncate text-lg font-black text-white">
+                {workSessionOverview.openSession.videoTitle}
+              </h2>
+              <p className="mt-1 text-xs text-zinc-400">
+                {WORK_SESSION_ACTIVITY_LABELS[workSessionOverview.openSession.activityType]} · recoverable after refresh
+              </p>
+            </div>
+            <Link
+              href={`/productivity?video=${workSessionOverview.openSession.videoId}`}
+              className="min-h-11 rounded-xl bg-emerald-500 px-4 py-3 text-center text-sm font-black text-zinc-950 hover:bg-emerald-400"
+            >
+              Open active workspace
+            </Link>
+          </div>
+        </section>
+      )}
 
       <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-5">
         <StatCard label="Today" value={stats.today} accent="violet" icon="🎬" />
@@ -41,105 +199,40 @@ export default async function ProductivityPage() {
         <StatCard label="All Videos" value={stats.total} accent="zinc" icon="🏆" />
       </div>
 
-      <div className="mb-8 max-w-md">
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400">
-          Quick Actions
-        </h2>
-        <div className="grid grid-cols-2 gap-3">
-          <FinishedVideoButton />
-          <AddRevisionButton />
-        </div>
+      <div className="space-y-10">
+        {renderSection("current")}
+        {renderSection("attention")}
+
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/45 p-4 sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">Capture</p>
+              <h2 className="mt-1 text-base font-black text-white">Quick actions</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Plan work first. Finished Video and revision corrections remain available as utilities.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:w-[560px]">
+              <PlanVideoButton
+                initialProjectId={initialProjectId}
+                initiallyOpen={query.planVideo === "1"}
+              />
+              <FinishedVideoButton />
+              <AddRevisionButton />
+            </div>
+          </div>
+        </section>
+
+        {renderSection("planned")}
+        {renderSection("completed", true)}
       </div>
 
-      <div>
-        <div className="mb-3 flex items-end justify-between gap-3">
-          <div>
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
-              Videos ({logs.length})
-            </h2>
-            <p className="mt-1 text-xs text-zinc-600">
-              Use − or + to correct the revision count directly.
-            </p>
-          </div>
-          <Link href="/crm" className="text-xs font-bold text-cyan-400 hover:text-cyan-300">
-            Manage projects →
-          </Link>
-        </div>
-
-        {recentLogs.length === 0 ? (
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-8 text-center">
-            <p className="text-sm text-zinc-500">
-              No videos yet. Log a named video to start.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-3 md:hidden">
-              {recentLogs.map((log) => (
-                <article key={log.id} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="truncate font-black text-white">
-                        {log.title ?? `Video ${formatDate(log.date)}`}
-                      </h3>
-                      <p className="mt-1 truncate text-xs text-zinc-500">
-                        {log.projectName ?? log.clientName ?? "Standalone"} · {formatDate(log.date)}
-                      </p>
-                    </div>
-                    <DeleteVideoLogButton id={log.id} />
-                  </div>
-                  <div className="mt-4 flex items-end justify-between gap-3 border-t border-zinc-800 pt-3">
-                    <div>
-                      <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-zinc-600">
-                        Revisions
-                      </p>
-                      <RevisionControls videoId={log.id} initialCount={log.revisionsCount} />
-                    </div>
-                    <span className="rounded-full bg-emerald-900/40 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-400">
-                      Delivered
-                    </span>
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            <div className="hidden overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 md:block">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-sm">
-                  <thead>
-                    <tr className="border-b border-zinc-800">
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">Video</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">Project / client</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">Revisions</th>
-                      <th className="px-4 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentLogs.map((log, index) => (
-                      <tr key={log.id} className={`border-b border-zinc-800/50 ${index % 2 === 0 ? "" : "bg-zinc-800/20"}`}>
-                        <td className="px-4 py-3">
-                          <p className="font-bold text-white">{log.title ?? `Video ${formatDate(log.date)}`}</p>
-                          {log.notes && <p className="mt-1 max-w-56 truncate text-xs text-zinc-600">{log.notes}</p>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="text-zinc-300">{log.projectName ?? "No project"}</p>
-                          <p className="mt-0.5 text-xs text-zinc-600">{log.clientName ?? "Standalone"}</p>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-zinc-500">{formatDate(log.date)}</td>
-                        <td className="px-4 py-3">
-                          <RevisionControls videoId={log.id} initialCount={log.revisionsCount} />
-                        </td>
-                        <td className="px-4 py-3"><DeleteVideoLogButton id={log.id} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </>
+      <footer className="mt-10 border-t border-zinc-800 pt-5 text-xs text-zinc-600">
+        Closed work is aggregated from raw Work Sessions. Open sessions never inflate tracked totals.
+        {workSessionOverview.summaries.length > 0 && (
+          <> Current tracked archive: {formatClosedDuration(workSessionOverview.summaries.reduce((sum, item) => sum + item.closedSeconds, 0))}.</>
         )}
-      </div>
+      </footer>
     </div>
   );
 }

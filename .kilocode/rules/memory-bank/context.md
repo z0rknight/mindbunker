@@ -10,6 +10,55 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **🎬 Productivity / Video Operations P1 local implementation (2026-08-22)**
+  - [x] Reorganized Productivity around exclusive Current Work, Attention, Planned Queue, and Recent/Completed groups with no schema change
+  - [x] Elevated the globally active Work Session, closed tracked time, session count, project deadline, next operational action, and Client → Project links
+  - [x] Replaced duplicate hidden mobile/desktop Video Editor instances with one responsive operational card per video
+  - [x] Expanded the desktop Video workspace into a two-column content-manager composition while preserving the compact mobile bottom sheet
+  - [x] Kept revisions and Finished Video reachable as secondary utilities without using them as the page's mental model
+  - [x] Added deterministic grouping/action tests; 52 tests, lint, typecheck, Next build, and OpenNext build pass
+  - [x] Verified 390×844, 768×1024, and 1440×900 with QA-only local fixtures, zero overflow, zero console errors, correct relationship links, and no lifecycle mutation; fixtures were removed
+  - [x] Production D1/Worker remained untouched; no migration or deploy was performed
+
+- [x] **⏱️ Work Session → Video P0 discovery and migration candidate (2026-08-22)**
+  - [x] Confirmed production remains exactly through `0010`; no work-session, timer, or Activity Sensor table exists
+  - [x] Traced the mobile Quick Log: it launches video/revision/finance/health actions but records no work interval
+  - [x] Confirmed `video_logs.started_at` is lifecycle onset, `crm_events` is audit history, Health is daily aggregate, and Finance is transaction-level; none can truthfully store editing sessions
+  - [x] Added local-only candidate `0011_brainy_ultimo.sql` for canonical `work_sessions` attached only to `video_logs.id`; client/project remain derived
+  - [x] Applied `0000`–`0011` to an isolated D1 and verified FK/check constraints, per-video/project/client aggregation, zero-session behavior, zero FK violations, and no temporary tables
+  - [x] Production migration, data, Worker, Vault, lifecycle, `/book`, and routing remain untouched pending explicit migration review
+
+- [x] **🔐 The Vault — Taryn client pilot local implementation (2026-08-22)**
+  - [x] Reused the existing hashed, expiring, revocable Gateway capability token for a read-only `/client/[token]` portal
+  - [x] Added additive local migration `0010_old_morgan_stark.sql` for nullable `video_logs.delivery_url`; no table rebuild or production mutation
+  - [x] Added a strict client-safe projection scoped only by the token-derived client identity; internal notes, IDs, CRM events, revenue, health, and productivity data are excluded
+  - [x] Added manual HTTPS-only delivery URL editing in Video Editor and a separate Vault link copy action in the CRM
+  - [x] Verified invalid, expired, revoked, and cross-client tokens fail closed; validated 390×844, 768×1024, and 1440×900 without overflow or console errors
+  - [x] Applied migrations `0000`–`0010` to an isolated local D1 with zero foreign-key violations; tests, lint, typecheck, Next build, and OpenNext build pass
+  - [x] Production migration `0010` and Worker version `f528d5fe-691b-48c5-93a4-75487de61676` were activated through a controlled 0% Version Override rollout
+  - [x] Pre-migration backup: `mindbunker-d6ada5db-20260822T065321Z-pre-0010.sql`, SHA-256 `11638326553ae34abe4455ff69b3940a578707eb9968806c9d62aad20c970111`, Time Travel bookmark `00000040-00000000-000050cf-0cf89b265e30987e1ae0905816514a98`
+  - [x] Post-activation D1 invariants remained `2 clients / 1 project / 3 videos / 0 gateway invitations`, all existing delivery URLs null, and zero FK violations
+
+- [x] **📁 First-class Projects surface — local implementation (2026-08-22)**
+  - [x] Added authenticated `/projects` overview using the existing `0000`–`0009` schema with no migration
+  - [x] Grouped active/review, planned, and delivered/archived projects and derived video progress from lifecycle status
+  - [x] Reused CRM as the project editor and Productivity as the video editor through stable deep links
+  - [x] Added Projects to desktop/mobile navigation; validated 390, 768, and 1440 px and corrected mobile labels/tablet breakpoints found during QA
+  - [x] Added project aggregation/unit coverage; 32 tests, lint, typecheck, Next build, and OpenNext build pass
+  - [x] Added Work Session integration-readiness and Video analytics data-gap documentation without authorizing future schema
+  - [x] Confirmed production D1 is already through `0009` and the lifecycle Worker version is active; this Projects build was not deployed
+
+- [x] **🎬 Canonical video lifecycle — Gates 3–10 local (2026-08-21)**
+  - [x] Added `PLANNED`, `IN_PROGRESS`, `READY_FOR_REVIEW`, `CHANGES_REQUESTED`, and `DONE`; legacy rows backfill to `DONE`, future rows default to `PLANNED`
+  - [x] Kept `video_logs.id` stable through editing, review, completion, reopening, and re-completion
+  - [x] Added editable title/client/project/notes, explicit validated transitions, and status badges to Productivity and project inventory
+  - [x] Restricted completed-output and revision-drag analytics to `DONE`
+  - [x] Linked compact video audit events through nullable `crm_events.video_id`; standalone/legacy videos are auditable through nullable `client_id`
+  - [x] Added local migrations `0007`–`0009`, applied the full chain to an isolated D1, and confirmed no foreign-key violations
+  - [x] Passed 27 tests, lint, typecheck, Next build, and OpenNext Cloudflare build
+  - [x] Exercised the full lifecycle at 390×844 and 1440×900; fixed stale cross-viewport editor state found during QA
+  - [x] Production remains at `0006`; no new migration or application code was deployed
+
 - [x] **🗓️ Client Gateway — Milestone 2 local implementation (2026-08-19)**
   - [x] Added editable booking availability with timezone, call duration, buffer, minimum notice, booking horizon, and one simple window per weekday
   - [x] Added incremental D1 migration `0005_amused_roughhouse.sql` for `booking_settings`, `availability_windows`, and `bookings`
@@ -142,14 +191,18 @@ The original February 2026 visual design is the canonical interface. The separat
 | `src/app/war-room/page.tsx` | War Room intelligence dashboard | ✅ Ready |
 | `src/app/page.tsx` | Dashboard overview | ✅ Ready |
 | `src/app/layout.tsx` | Root layout with sidebar | ✅ Ready |
-| `src/app/productivity/` | Video editing tracker | ✅ Ready |
+| `src/app/productivity/` | Current Work operations floor and responsive Video workspace | ✅ P1 local review candidate |
+| `src/app/projects/` | Cross-client project commitments, derived video progress, and dedicated Project workspace | ✅ Live overview + P1.1 local workspace |
 | `src/app/finance/` | Income/expense tracker | ✅ Ready |
 | `src/app/health/` | Daily habit tracker (+ cycling/walking) | ✅ Ready |
 | `src/app/crm/` | Clients & leads | ✅ Ready |
 | `src/app/crm/[id]/` | Client detail, opportunity, Gateway/booking status, briefing, and timeline | ✅ Milestone 2 local |
 | `src/app/crm/availability/` | Authenticated weekly call availability settings | ✅ Milestone 2 local |
 | `src/app/g/[token]/` | Narrow public Client Gateway, briefing, and optional call management | ✅ Milestone 2 local |
+| `src/app/client/[token]/` | Read-only, token-scoped client delivery portal (“The Vault”) | ✅ Live, awaiting first real pilot setup |
 | `src/modules/gateway/` | Gateway config, validation/token core, DAL, actions, and tests | ✅ Milestone 1 local |
+| `src/modules/client-portal/` | Strict client-safe projection and token-scoped D1 reads | ✅ Live, awaiting first real pilot setup |
+| `src/modules/work-sessions/` | Video-attributed Start/Stop, global active-session recovery, and closed-time aggregation | ✅ P0 live |
 | `src/modules/booking/` | Availability/slot core, provider boundary, D1 DAL, actions, and tests | ✅ Milestone 2 local |
 | `src/db/schema.ts` | All table definitions including Gateway and booking | ✅ Ready |
 | `src/db/index.ts` | Request-scoped Drizzle client over Cloudflare D1 | ✅ Ready |
@@ -175,11 +228,12 @@ The original February 2026 visual design is the canonical interface. The separat
 | `clients` | CRM | name, status (lead/active/inactive), totalRevenue |
 | `gateway_invitations` | Client Gateway | clientId, tokenHash, expiry, revocation, first open |
 | `intake_submissions` | Client Gateway | clientId, invitationId, short briefing fields |
-| `crm_events` | CRM / Gateway | clientId, event type, actor, description, timestamp |
+| `crm_events` | CRM / Gateway / Video audit | nullable clientId, nullable videoId, event type, actor, description, timestamp |
 | `booking_settings` | Booking | enabled, timezone, duration, buffer, minimum notice, horizon |
 | `availability_windows` | Booking | weekday, enabled, start and end minute |
 | `bookings` | Booking | client/invitation, provider event, status, times, attendee, cancellable slot key |
-| `video_logs` | Productivity | date, clientId, revisionsCount, delivered |
+| `video_logs` | Productivity | stable ID, title, client/project, status, startedAt, revisionsCount, delivered compatibility flag, optional HTTPS delivery URL (local `0010`) |
+| `work_sessions` | Productivity economics | live `0011`: videoId, startedAt, nullable endedAt, activityType, optional note; client/project derived |
 
 ## Architecture
 
@@ -197,6 +251,8 @@ The original February 2026 visual design is the canonical interface. The separat
 - **Gateway state**: Normal row-based state plus a small append-only operational timeline; no event sourcing or workflow engine
 - **Booking provider boundary**: A four-operation `CalendarProvider` currently uses a deterministic, side-effect-free mock; Google Calendar/Meet remains a future explicitly authorized integration
 - **Booking consistency**: Confirmed D1 bookings are the local busy-time source, unique slot keys prevent double booking, and booking/CRM/timeline changes are grouped in D1 batches
+- **Work-session authority**: A work session stores only `videoId` plus raw timestamps/activity; project/client context is derived through the canonical video. Start keeps its atomic conditional insert, while the partial unique expression index `work_sessions_one_open_idx` structurally permits only one globally open session
+- **Video operational memory**: Durable manual notes reuse append-only `crm_events` rows (`video.note_added`) linked only to the canonical video; project/client context is derived, notes stay out of CRM client activity, and videos with operational memory are protected from app-level deletion
 
 ## War Room Metric Domains
 
@@ -222,3 +278,12 @@ The original February 2026 visual design is the canonical interface. The separat
 | 2026-08-19 | Attached the production route, added the branded private login, implemented D1 throttling and signed sessions, and verified the real production login end to end |
 | 2026-08-19 | Completed Client Gateway Milestone 1 locally: opportunity state, secure invitations, briefing sync, timeline, mobile/desktop QA, and Cloudflare build; production unchanged |
 | 2026-08-19 | Completed Client Gateway Milestone 2 locally: editable availability, mock-backed booking/rescheduling/cancellation, CRM/timeline synchronization, responsive QA, and Cloudflare build; production unchanged |
+| 2026-08-21 | Completed canonical video lifecycle Gates 3–10 locally: truthful DONE-only analytics, stable-ID editing/transitions/reopen, video audit linkage, responsive QA, and Cloudflare build; production remains at 0006 pending approval |
+| 2026-08-21 | Activated canonical lifecycle in production after applying and verifying migrations 0007–0009 |
+| 2026-08-22 | Implemented first-class Projects locally with schema-free aggregation, CRM/Productivity drill-down, responsive QA, and telemetry-readiness documentation; deployment pending review |
+| 2026-08-22 | Promoted Projects to production, then implemented The Vault Taryn pilot locally with capability-link access, strict client projection, and optional HTTPS delivery URL; production remains at 0009 pending review |
+| 2026-08-22 | Applied production migration 0010, staged and smoke-tested The Vault through Version Override, activated Worker `f528d5fe-691b-48c5-93a4-75487de61676`, and stopped before Taryn's real URL/token setup |
+| 2026-08-22 | Implemented Work Session P0 locally: atomic Start/Stop plus a structural one-open partial unique index, refresh recovery, Video Editor timer and closed-time summary, concurrency regression coverage, responsive QA, and clean isolated migrations through 0011; production remains at 0010 |
+| 2026-08-22 | Activated Work Session P0 in production, then completed Productivity / Video Operations P1 locally with Current Work grouping, active-session prominence, one responsive card per video, and a wider desktop Video workspace; production remained untouched during P1 |
+| 2026-08-22 | Completed Productivity / Project Navigation P1.1 locally without schema changes: Client remains mandatory for Project, `/projects/[id]` owns Project operations, Client/Project/Video links follow the canonical hierarchy, Plan Video requires an existing Project with a safe create-and-return path, and Finished Video transitions an existing identity to DONE instead of inserting a duplicate; tests/builds/responsive QA green, production untouched |
+| 2026-08-22 | Completed Video Operational Memory P1.2 locally without schema changes: the Video Workspace can append durable chronological notes through `crm_events.video_id`, deterministic newest-first history preserves lifecycle/work-session boundaries, operational memory blocks app-level video deletion, temporary QA notes were removed, and production remained untouched |

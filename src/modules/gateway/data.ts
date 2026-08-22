@@ -139,6 +139,7 @@ export async function getAdminGatewayWorkspace(clientId: number) {
     db
       .select({
         id: crmEvents.id,
+        videoId: crmEvents.videoId,
         type: crmEvents.type,
         actor: crmEvents.actor,
         description: crmEvents.description,

@@ -5,12 +5,13 @@ import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/login/actions";
 
 const navItems = [
-  { href: "/war-room", label: "War Room", icon: "💎" },
-  { href: "/", label: "Dashboard", icon: "⬛" },
-  { href: "/productivity", label: "Productivity", icon: "🎬" },
-  { href: "/finance", label: "Finance", icon: "💰" },
-  { href: "/health", label: "Health", icon: "🫀" },
-  { href: "/crm", label: "CRM", icon: "👥" },
+  { href: "/war-room", label: "War Room", mobileLabel: "War", icon: "💎" },
+  { href: "/", label: "Dashboard", mobileLabel: "Home", icon: "⬛" },
+  { href: "/productivity", label: "Productivity", mobileLabel: "Work", icon: "🎬" },
+  { href: "/finance", label: "Finance", mobileLabel: "Money", icon: "💰" },
+  { href: "/health", label: "Health", mobileLabel: "Health", icon: "🫀" },
+  { href: "/crm", label: "CRM", mobileLabel: "CRM", icon: "👥" },
+  { href: "/projects", label: "Projects", mobileLabel: "Projects", icon: "📁" },
 ];
 
 export function Sidebar() {
@@ -109,7 +110,7 @@ export function Sidebar() {
       </div>
       </aside>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-zinc-800 bg-zinc-950/95 px-1 pb-safe backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-zinc-800 bg-zinc-950/95 px-1 pb-safe backdrop-blur md:hidden">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -122,7 +123,7 @@ export function Sidebar() {
               }`}
             >
               <span className="text-xl leading-none" aria-hidden="true">{item.icon}</span>
-              <span className="max-w-full truncate">{item.label === "Productivity" ? "Work" : item.label}</span>
+              <span className="max-w-full truncate">{item.mobileLabel}</span>
             </Link>
           );
         })}

@@ -7,6 +7,7 @@ import { upsertHealthLog } from "@/modules/health/actions";
 export {
   AddRevisionButton,
   FinishedVideoButton,
+  PlanVideoButton,
 } from "./ProductivityQuickActions";
 
 // ─── Add Income Button ────────────────────────────────────────────────────────

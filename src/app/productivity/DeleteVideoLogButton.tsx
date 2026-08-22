@@ -11,7 +11,8 @@ export function DeleteVideoLogButton({ id }: { id: number }) {
       onClick={() => {
         if (!confirm("Delete this log?")) return;
         startTransition(async () => {
-          await deleteVideoLog(id);
+          const result = await deleteVideoLog(id);
+          if (!result.success) alert(result.error);
         });
       }}
       disabled={isPending}

@@ -1,4 +1,5 @@
 import {
+  check,
   index,
   integer,
   real,
@@ -6,6 +7,7 @@ import {
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
 import { OPPORTUNITY_STAGES } from "../modules/gateway/config";
 import {
   BOOKING_STATUSES,
@@ -13,6 +15,7 @@ import {
   DEFAULT_BOOKING_SETTINGS,
 } from "../modules/booking/config";
 import { PROJECT_STATUSES } from "../modules/projects/config";
+import { VIDEO_STATUSES } from "../modules/productivity/config";
 
 // ─── PRIVATE ACCESS ──────────────────────────────────────────────────────────
 
@@ -139,9 +142,12 @@ export const crmEvents = sqliteTable(
   "crm_events",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    clientId: integer("client_id")
-      .notNull()
-      .references(() => clients.id, { onDelete: "cascade" }),
+    clientId: integer("client_id").references(() => clients.id, {
+      onDelete: "cascade",
+    }),
+    videoId: integer("video_id").references(() => videoLogs.id, {
+      onDelete: "set null",
+    }),
     type: text("type").notNull(),
     actor: text("actor", { enum: ["admin", "gateway", "system"] })
       .notNull()
@@ -153,6 +159,7 @@ export const crmEvents = sqliteTable(
   },
   (table) => [
     index("crm_events_client_created_idx").on(table.clientId, table.createdAt),
+    index("crm_events_video_created_idx").on(table.videoId, table.createdAt),
   ],
 );
 
@@ -282,10 +289,15 @@ export const videoLogs = sqliteTable(
     projectId: integer("project_id").references(() => projects.id, {
       onDelete: "set null",
     }),
+    status: text("status", { enum: VIDEO_STATUSES })
+      .notNull()
+      .default("PLANNED"),
+    startedAt: integer("started_at", { mode: "timestamp" }),
     revisionsCount: integer("revisions_count").notNull().default(0),
     delivered: integer("delivered", { mode: "boolean" })
       .notNull()
       .default(true),
+    deliveryUrl: text("delivery_url"),
     notes: text("notes"),
     createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
       () => new Date(),
@@ -300,5 +312,52 @@ export const videoLogs = sqliteTable(
       table.createdAt,
     ),
     index("video_logs_client_created_idx").on(table.clientId, table.createdAt),
+  ],
+);
+
+export const workSessions = sqliteTable(
+  "work_sessions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id")
+      .notNull()
+      .references(() => videoLogs.id, { onDelete: "restrict" }),
+    startedAt: integer("started_at", { mode: "timestamp" }).notNull(),
+    endedAt: integer("ended_at", { mode: "timestamp" }),
+    activityType: text("activity_type", {
+      enum: [
+        "EDITING",
+        "MOTION_GRAPHICS",
+        "COLOR",
+        "AUDIO",
+        "REVIEW",
+        "EXPORT",
+        "ADMIN",
+        "OTHER",
+      ],
+    })
+      .notNull()
+      .default("EDITING"),
+    note: text("note"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("work_sessions_one_open_idx")
+      .on(sql`(1)`)
+      .where(sql`${table.endedAt} is null`),
+    index("work_sessions_video_started_idx").on(
+      table.videoId,
+      table.startedAt,
+    ),
+    check(
+      "work_sessions_ended_after_started_check",
+      sql`${table.endedAt} is null or ${table.endedAt} > ${table.startedAt}`,
+    ),
+    check(
+      "work_sessions_activity_type_check",
+      sql`${table.activityType} in ('EDITING', 'MOTION_GRAPHICS', 'COLOR', 'AUDIO', 'REVIEW', 'EXPORT', 'ADMIN', 'OTHER')`,
+    ),
   ],
 );

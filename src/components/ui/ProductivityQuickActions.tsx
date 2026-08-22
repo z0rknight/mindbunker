@@ -2,10 +2,17 @@
 
 import {
   changeRevisionCount,
+  createVideoLog,
   getProductivityQuickOptions,
-  logFinishedVideo,
+  transitionVideoStatus,
 } from "@/modules/productivity/actions";
-import { useState, useTransition } from "react";
+import {
+  VIDEO_STATUS_LABELS,
+  isVideoDirectlyFinishable,
+} from "@/modules/productivity/config";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
 
 type QuickOptions = Awaited<ReturnType<typeof getProductivityQuickOptions>>;
 
@@ -49,75 +56,110 @@ function ActionSheet({
   );
 }
 
-async function loadOptions(
-  setOptions: (options: QuickOptions) => void,
-  setFeedback: (message: string) => void,
-) {
-  try {
-    setOptions(await getProductivityQuickOptions());
-  } catch {
-    setFeedback("Could not load projects and videos.");
-  }
-}
-
-export function FinishedVideoButton() {
+export function PlanVideoButton({
+  initialProjectId = null,
+  initiallyOpen = false,
+}: {
+  initialProjectId?: number | null;
+  initiallyOpen?: boolean;
+}) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [options, setOptions] = useState<QuickOptions | null>(null);
   const [title, setTitle] = useState("");
-  const [projectId, setProjectId] = useState("");
-  const [clientId, setClientId] = useState("");
+  const [projectId, setProjectId] = useState(initialProjectId?.toString() ?? "");
+  const [createUnderClientId, setCreateUnderClientId] = useState("");
   const [notes, setNotes] = useState("");
   const [feedback, setFeedback] = useState("");
+
+  async function fetchOptions() {
+    try {
+      const loaded = await getProductivityQuickOptions();
+      setOptions(loaded);
+      const requestedProject = initialProjectId
+        ? loaded.projects.find((project) => project.id === initialProjectId)
+        : null;
+      setProjectId((current) =>
+        requestedProject?.id.toString() ??
+        (current || loaded.projects[0]?.id.toString() || ""),
+      );
+      setCreateUnderClientId((current) => current || loaded.clients[0]?.id.toString() || "");
+    } catch {
+      setFeedback("Could not load projects.");
+    }
+  }
 
   function handleOpen() {
     setOpen(true);
     setFeedback("");
-    startTransition(() => loadOptions(setOptions, setFeedback));
+    startTransition(fetchOptions);
   }
+
+  function closePlan() {
+    setOpen(false);
+    if (initiallyOpen) router.replace("/productivity", { scroll: false });
+  }
+
+  useEffect(() => {
+    if (!initiallyOpen) return;
+    setOpen(true);
+    setFeedback("");
+    startTransition(fetchOptions);
+    // The query-driven opening is intentionally one-shot for this mounted button.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initiallyOpen, initialProjectId]);
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setFeedback("");
     startTransition(async () => {
-      const result = await logFinishedVideo({
+      const result = await createVideoLog({
         title,
         projectId: projectId ? Number(projectId) : null,
-        clientId: projectId ? null : clientId ? Number(clientId) : null,
+        clientId: null,
         notes,
+        status: "PLANNED",
       });
       if (!result.success) {
         setFeedback(result.error);
         return;
       }
       setTitle("");
-      setProjectId("");
-      setClientId("");
       setNotes("");
       setOpen(false);
+      if (initiallyOpen) {
+        router.replace("/productivity", { scroll: false });
+      } else {
+        router.refresh();
+      }
     });
   }
+
+  const createProjectHref = createUnderClientId
+    ? `/crm/${createUnderClientId}?tab=projects&createProject=1&returnTo=${encodeURIComponent("/productivity?planVideo=1")}`
+    : "/crm";
 
   return (
     <>
       <button
         type="button"
         onClick={handleOpen}
-        className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl bg-violet-600 px-6 py-5 text-sm font-bold text-white transition-all hover:bg-violet-500 active:scale-95"
+        className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl bg-cyan-800 px-5 py-5 text-sm font-bold text-white transition-all hover:bg-cyan-700 active:scale-95"
       >
-        <span className="text-2xl">🎬</span>
-        <span>Finished Video</span>
+        <span className="text-2xl">＋</span>
+        <span>Plan Video</span>
       </button>
 
       {open && (
-        <ActionSheet title="Log finished video" onClose={() => setOpen(false)}>
+        <ActionSheet title="Plan a video" onClose={closePlan}>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="quickVideoTitle" className="mb-1.5 block text-xs font-bold text-zinc-400">
+              <label htmlFor="plannedVideoTitle" className="mb-1.5 block text-xs font-bold text-zinc-400">
                 Video name
               </label>
               <input
-                id="quickVideoTitle"
+                id="plannedVideoTitle"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 maxLength={180}
@@ -128,20 +170,18 @@ export function FinishedVideoButton() {
               />
             </div>
             <div>
-              <label htmlFor="quickVideoProject" className="mb-1.5 block text-xs font-bold text-zinc-400">
+              <label htmlFor="plannedVideoProject" className="mb-1.5 block text-xs font-bold text-zinc-400">
                 Project
               </label>
               <select
-                id="quickVideoProject"
+                id="plannedVideoProject"
                 value={projectId}
-                onChange={(event) => {
-                  setProjectId(event.target.value);
-                  if (event.target.value) setClientId("");
-                }}
+                onChange={(event) => setProjectId(event.target.value)}
                 disabled={!options || isPending}
+                required
                 className={fieldClassName}
               >
-                <option value="">No project</option>
+                <option value="">Select a project</option>
                 {options?.projects.map((project) => (
                   <option key={project.id} value={project.id}>
                     {project.name} — {project.clientName}
@@ -149,33 +189,32 @@ export function FinishedVideoButton() {
                 ))}
               </select>
             </div>
-            {!projectId && (
-              <div>
-                <label htmlFor="quickVideoClient" className="mb-1.5 block text-xs font-bold text-zinc-400">
-                  Client <span className="font-normal text-zinc-600">optional</span>
-                </label>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/45 p-3">
+              <p className="text-xs leading-5 text-zinc-500">
+                Videos belong to Projects. If this commitment does not exist yet, create it under its Client and return here.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
                 <select
-                  id="quickVideoClient"
-                  value={clientId}
-                  onChange={(event) => setClientId(event.target.value)}
-                  disabled={!options || isPending}
+                  aria-label="Client for new project"
+                  value={createUnderClientId}
+                  onChange={(event) => setCreateUnderClientId(event.target.value)}
+                  disabled={!options || options.clients.length === 0}
                   className={fieldClassName}
                 >
-                  <option value="">Standalone / personal</option>
-                  {options?.clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name}
-                    </option>
-                  ))}
+                  {options?.clients.length === 0 && <option value="">No clients yet</option>}
+                  {options?.clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
                 </select>
+                <Link href={createProjectHref} className="flex min-h-12 items-center justify-center rounded-xl border border-cyan-500/30 px-4 text-sm font-black text-cyan-300">
+                  Create Project
+                </Link>
               </div>
-            )}
+            </div>
             <div>
-              <label htmlFor="quickVideoNotes" className="mb-1.5 block text-xs font-bold text-zinc-400">
+              <label htmlFor="plannedVideoNotes" className="mb-1.5 block text-xs font-bold text-zinc-400">
                 Notes <span className="font-normal text-zinc-600">optional</span>
               </label>
               <input
-                id="quickVideoNotes"
+                id="plannedVideoNotes"
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
                 maxLength={2_000}
@@ -186,10 +225,88 @@ export function FinishedVideoButton() {
             {feedback && <p aria-live="polite" className="text-sm text-amber-300">{feedback}</p>}
             <button
               type="submit"
-              disabled={isPending || !title.trim()}
+              disabled={isPending || !title.trim() || !projectId}
               className="min-h-12 w-full rounded-xl bg-violet-600 px-4 text-sm font-black text-white transition hover:bg-violet-500 disabled:opacity-50"
             >
-              {isPending ? "Saving…" : "Save video"}
+              {isPending ? "Saving…" : "Create planned video"}
+            </button>
+          </form>
+        </ActionSheet>
+      )}
+    </>
+  );
+}
+
+export function FinishedVideoButton() {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [options, setOptions] = useState<QuickOptions | null>(null);
+  const [videoId, setVideoId] = useState("");
+  const [feedback, setFeedback] = useState("");
+
+  const candidates = options?.videos.filter((video) => isVideoDirectlyFinishable(video.status)) ?? [];
+
+  function handleOpen() {
+    setOpen(true);
+    setFeedback("");
+    startTransition(async () => {
+      try {
+        const loaded = await getProductivityQuickOptions();
+        setOptions(loaded);
+        const first = loaded.videos.find((video) => isVideoDirectlyFinishable(video.status));
+        setVideoId(first?.id.toString() ?? "");
+      } catch {
+        setFeedback("Could not load active videos.");
+      }
+    });
+  }
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const selected = candidates.find((video) => video.id === Number(videoId));
+    if (!selected) return;
+    setFeedback("");
+    startTransition(async () => {
+      const result = await transitionVideoStatus(selected.id, selected.status, "DONE");
+      if (!result.success) {
+        setFeedback(result.error);
+        return;
+      }
+      setOpen(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <>
+      <button type="button" onClick={handleOpen} className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-5 text-sm font-bold text-white transition-all hover:bg-violet-500 active:scale-95">
+        <span className="text-2xl">🎬</span>
+        <span>Finished Video</span>
+      </button>
+      {open && (
+        <ActionSheet title="Finish an existing video" onClose={() => setOpen(false)}>
+          <p className="mb-4 rounded-xl border border-violet-500/20 bg-violet-500/5 p-3 text-xs leading-5 text-violet-200">
+            This moves the selected canonical Video to Done. It never creates a duplicate record.
+          </p>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="finishedVideoId" className="mb-1.5 block text-xs font-bold text-zinc-400">Video</label>
+              <select id="finishedVideoId" value={videoId} onChange={(event) => setVideoId(event.target.value)} disabled={!options || isPending || candidates.length === 0} required className={fieldClassName}>
+                {candidates.length === 0 && <option value="">No video is ready to finish</option>}
+                {candidates.map((video) => (
+                  <option key={video.id} value={video.id}>
+                    {video.title ?? `Video ${video.date}`} — {video.projectName ?? "Legacy / no project"} — {VIDEO_STATUS_LABELS[video.status]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="text-xs leading-5 text-zinc-500">
+              Planned videos must first enter production. Changes requested must return to production or review before completion.
+            </p>
+            {feedback && <p aria-live="polite" className="text-sm text-amber-300">{feedback}</p>}
+            <button type="submit" disabled={isPending || !videoId} className="min-h-12 w-full rounded-xl bg-violet-600 px-4 text-sm font-black text-white transition hover:bg-violet-500 disabled:opacity-50">
+              {isPending ? "Finishing…" : "Mark selected video Done"}
             </button>
           </form>
         </ActionSheet>
@@ -283,7 +400,7 @@ export function AddRevisionButton() {
                   >
                     {options?.videos.map((video) => (
                       <option key={video.id} value={video.id}>
-                        {video.title ?? `Video ${video.date}`} — {video.projectName ?? video.clientName ?? "Standalone"}
+                        {video.title ?? `Video ${video.date}`} — {VIDEO_STATUS_LABELS[video.status]} — {video.projectName ?? video.clientName ?? "Standalone"}
                       </option>
                     ))}
                   </select>

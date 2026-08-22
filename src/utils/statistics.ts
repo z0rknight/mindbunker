@@ -7,7 +7,7 @@
 
 import { getAuthenticatedDb } from "@/db";
 import { transactions, videoLogs, clients, healthLogs } from "@/db/schema";
-import { gte } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { startOfMonthISO, daysAgoISO, todayISO } from "@/utils/date";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
@@ -84,8 +84,21 @@ export async function getPerformanceStats(): Promise<PerformanceStats> {
       .select()
       .from(transactions)
       .where(gte(transactions.date, prevMonthStart)),
-    db.select().from(videoLogs).where(gte(videoLogs.date, monthStart)),
-    db.select().from(videoLogs).where(gte(videoLogs.date, prevMonthStart)),
+    db
+      .select()
+      .from(videoLogs)
+      .where(
+        and(gte(videoLogs.date, monthStart), eq(videoLogs.status, "DONE")),
+      ),
+    db
+      .select()
+      .from(videoLogs)
+      .where(
+        and(
+          gte(videoLogs.date, prevMonthStart),
+          eq(videoLogs.status, "DONE"),
+        ),
+      ),
     db.select().from(clients),
     db.select().from(healthLogs).where(gte(healthLogs.date, thirtyDaysAgo)),
     db.select().from(videoLogs).where(gte(videoLogs.date, thirtyDaysAgo)),

@@ -20,6 +20,7 @@ import {
   validateBriefingInput,
 } from "./core";
 import {
+  CLIENT_PORTAL_PATH_PREFIX,
   GATEWAY_PATH_PREFIX,
   GATEWAY_TOKEN_TTL_DAYS,
   type OpportunityStage,
@@ -127,7 +128,12 @@ export async function updateOpportunity(
 }
 
 export type GatewayActionState =
-  | { success: true; path?: string; expiresAt?: string }
+  | {
+      success: true;
+      path?: string;
+      clientPortalPath?: string;
+      expiresAt?: string;
+    }
   | { success: false; error: string };
 
 export async function generateGatewayInvitation(
@@ -191,6 +197,7 @@ export async function generateGatewayInvitation(
   return {
     success: true,
     path: `${GATEWAY_PATH_PREFIX}/${token}`,
+    clientPortalPath: `${CLIENT_PORTAL_PATH_PREFIX}/${token}`,
     expiresAt: expiresAt.toISOString(),
   };
 }

@@ -1,0 +1,8 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mindbunker",
+  "main": "ops/maintenance-worker.js",
+  "workers_dev": false,
+  "preview_urls": false,
+  "compatibility_date": "2026-08-19"
+}

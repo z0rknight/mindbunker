@@ -9,14 +9,54 @@ import { revalidatePath } from "next/cache";
 import { isPositiveId, validateProjectInput } from "./core";
 
 type ProjectActionResult =
-  | { success: true; message?: string }
+  | { success: true; message?: string; projectId?: number }
   | { success: false; error: string };
 
 function revalidateProjectViews(clientId: number) {
   revalidatePath("/");
   revalidatePath("/crm");
   revalidatePath(`/crm/${clientId}`);
+  revalidatePath("/projects");
   revalidatePath("/productivity");
+}
+
+export async function getProjectWorkspace(projectId: number) {
+  if (!isPositiveId(projectId)) return null;
+  const db = await getAuthenticatedDb();
+  const projectRows = await db
+    .select({
+      id: projects.id,
+      clientId: projects.clientId,
+      clientName: clients.name,
+      name: projects.name,
+      status: projects.status,
+      deadline: projects.deadline,
+      notes: projects.notes,
+      createdAt: projects.createdAt,
+      updatedAt: projects.updatedAt,
+    })
+    .from(projects)
+    .innerJoin(clients, eq(projects.clientId, clients.id))
+    .where(eq(projects.id, projectId))
+    .limit(1);
+  if (!projectRows[0]) return null;
+
+  const videos = await db
+    .select({
+      id: videoLogs.id,
+      title: videoLogs.title,
+      date: videoLogs.date,
+      status: videoLogs.status,
+      revisionsCount: videoLogs.revisionsCount,
+      deliveryUrl: videoLogs.deliveryUrl,
+      createdAt: videoLogs.createdAt,
+      updatedAt: videoLogs.updatedAt,
+    })
+    .from(videoLogs)
+    .where(eq(videoLogs.projectId, projectId))
+    .orderBy(desc(videoLogs.updatedAt), desc(videoLogs.createdAt), desc(videoLogs.id));
+
+  return { ...projectRows[0], videos };
 }
 
 function derivedProjectCount(clientId: number) {
@@ -41,6 +81,7 @@ export async function getProjectsForClient(clientId: number) {
         projectId: videoLogs.projectId,
         title: videoLogs.title,
         date: videoLogs.date,
+        status: videoLogs.status,
         revisionsCount: videoLogs.revisionsCount,
         delivered: videoLogs.delivered,
       })
@@ -52,6 +93,38 @@ export async function getProjectsForClient(clientId: number) {
   return projectRows.map((project) => ({
     ...project,
     videos: videoRows.filter((video) => video.projectId === project.id),
+  }));
+}
+
+export async function getProjectsOverview() {
+  const db = await getAuthenticatedDb();
+  const rows = await db
+    .select({
+      id: projects.id,
+      clientId: projects.clientId,
+      clientName: clients.name,
+      name: projects.name,
+      status: projects.status,
+      deadline: projects.deadline,
+      notes: projects.notes,
+      updatedAt: projects.updatedAt,
+      totalVideos: sql<number>`count(${videoLogs.id})`,
+      doneVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'DONE' then 1 else 0 end), 0)`,
+      inFlightVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} in ('IN_PROGRESS', 'READY_FOR_REVIEW', 'CHANGES_REQUESTED') then 1 else 0 end), 0)`,
+      plannedVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'PLANNED' then 1 else 0 end), 0)`,
+    })
+    .from(projects)
+    .innerJoin(clients, eq(projects.clientId, clients.id))
+    .leftJoin(videoLogs, eq(videoLogs.projectId, projects.id))
+    .groupBy(projects.id, clients.id)
+    .orderBy(desc(projects.updatedAt), desc(projects.id));
+
+  return rows.map((row) => ({
+    ...row,
+    totalVideos: Number(row.totalVideos),
+    doneVideos: Number(row.doneVideos),
+    inFlightVideos: Number(row.inFlightVideos),
+    plannedVideos: Number(row.plannedVideos),
   }));
 }
 
@@ -79,13 +152,16 @@ export async function createProject(
   if (!owner[0]) return { success: false, error: "Client not found." };
 
   const now = new Date();
-  await db.batch([
-    db.insert(projects).values({
-      clientId,
-      ...parsed.data,
-      createdAt: now,
-      updatedAt: now,
-    }),
+  const [inserted] = await db.batch([
+    db
+      .insert(projects)
+      .values({
+        clientId,
+        ...parsed.data,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning({ id: projects.id }),
     db
       .update(clients)
       .set({ totalProjects: derivedProjectCount(clientId) })
@@ -97,9 +173,13 @@ export async function createProject(
       description: `Project created: ${parsed.data.name}`,
     }),
   ]);
-
+  const projectId = inserted[0]?.id;
+  if (!projectId) {
+    return { success: false, error: "Project could not be created." };
+  }
   revalidateProjectViews(clientId);
-  return { success: true, message: "Project created." };
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true, message: "Project created.", projectId };
 }
 
 export async function updateProject(
@@ -148,6 +228,7 @@ export async function updateProject(
   }
 
   revalidateProjectViews(current[0].clientId);
+  revalidatePath(`/projects/${projectId}`);
   return { success: true, message: "Project saved." };
 }
 

@@ -65,6 +65,7 @@ export function OpportunityPanel({
     client.qualificationNotes ?? "",
   );
   const [gatewayUrl, setGatewayUrl] = useState("");
+  const [clientPortalUrl, setClientPortalUrl] = useState("");
   const [feedback, setFeedback] = useState("");
 
   function saveOpportunity() {
@@ -100,10 +101,13 @@ export function OpportunityPanel({
       if (result.path) {
         setGatewayUrl(`${window.location.origin}${result.path}`);
       }
+      if (result.clientPortalPath) {
+        setClientPortalUrl(`${window.location.origin}${result.clientPortalPath}`);
+      }
       if (stage === "new" || stage === "qualified") {
         setStage("invited");
       }
-      setFeedback("Private Gateway link created. Copy it now.");
+      setFeedback("Private links created. Copy the one you need now.");
       router.refresh();
     });
   }
@@ -117,16 +121,17 @@ export function OpportunityPanel({
       setFeedback(result.success ? "Gateway link revoked." : result.error);
       if (result.success) {
         setGatewayUrl("");
+        setClientPortalUrl("");
         router.refresh();
       }
     });
   }
 
-  async function copyGateway() {
-    if (!gatewayUrl) return;
+  async function copyPrivateLink(url: string, label: "Gateway" | "Vault") {
+    if (!url) return;
     try {
-      await navigator.clipboard.writeText(gatewayUrl);
-      setFeedback("Gateway link copied.");
+      await navigator.clipboard.writeText(url);
+      setFeedback(`${label} link copied.`);
     } catch {
       setFeedback("Copy failed. Select and copy the link below.");
     }
@@ -328,24 +333,46 @@ export function OpportunityPanel({
           )}
 
           {gatewayUrl ? (
-            <div className="space-y-2">
-              <label htmlFor="generatedGatewayUrl" className="text-xs font-bold text-zinc-500">
-                Copy this link now
-              </label>
-              <textarea
-                id="generatedGatewayUrl"
-                readOnly
-                value={gatewayUrl}
-                rows={3}
-                className="w-full resize-none rounded-xl border border-violet-500/30 bg-violet-500/5 p-3 text-xs leading-5 text-violet-200 outline-none"
-              />
-              <button
-                type="button"
-                onClick={copyGateway}
-                className="min-h-12 w-full rounded-xl bg-violet-600 px-4 text-sm font-black text-white transition hover:bg-violet-500 active:scale-[0.99]"
-              >
-                Copy Gateway link
-              </button>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <label htmlFor="generatedGatewayUrl" className="text-xs font-bold text-zinc-500">
+                  Briefing + call
+                </label>
+                <textarea
+                  id="generatedGatewayUrl"
+                  readOnly
+                  value={gatewayUrl}
+                  rows={2}
+                  className="w-full resize-none rounded-xl border border-violet-500/30 bg-violet-500/5 p-3 text-xs leading-5 text-violet-200 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => copyPrivateLink(gatewayUrl, "Gateway")}
+                  className="min-h-12 w-full rounded-xl border border-violet-500/40 px-4 text-sm font-black text-violet-200 transition hover:bg-violet-500/10 active:scale-[0.99]"
+                >
+                  Copy Gateway link
+                </button>
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-3">
+                <label htmlFor="generatedClientPortalUrl" className="text-xs font-bold text-cyan-300">
+                  The Vault · delivery status
+                </label>
+                <textarea
+                  id="generatedClientPortalUrl"
+                  readOnly
+                  value={clientPortalUrl}
+                  rows={2}
+                  className="w-full resize-none rounded-lg border border-cyan-500/20 bg-zinc-950/70 p-3 text-xs leading-5 text-cyan-100 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => copyPrivateLink(clientPortalUrl, "Vault")}
+                  className="min-h-12 w-full rounded-xl bg-cyan-500 px-4 text-sm font-black text-zinc-950 transition hover:bg-cyan-400 active:scale-[0.99]"
+                >
+                  Copy Vault link
+                </button>
+              </div>
             </div>
           ) : (
             <p className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3 text-xs leading-5 text-zinc-500">

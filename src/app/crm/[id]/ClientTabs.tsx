@@ -45,6 +45,9 @@ interface ClientTabsProps {
   }>;
   projects: ClientProjectView[];
   instagramImportConfigured: boolean;
+  initialTab?: Tab;
+  initialProjectCreation?: boolean;
+  projectReturnTo?: string;
 }
 
 type Tab = "overview" | "projects" | "notes" | "activity";
@@ -74,8 +77,17 @@ function BriefingField({
   );
 }
 
-export function ClientTabs({ client, briefing, events, projects, instagramImportConfigured }: ClientTabsProps) {
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
+export function ClientTabs({
+  client,
+  briefing,
+  events,
+  projects,
+  instagramImportConfigured,
+  initialTab,
+  initialProjectCreation,
+  projectReturnTo,
+}: ClientTabsProps) {
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? "overview");
   const [isEditing, setIsEditing] = useState(false);
   const [notes, setNotes] = useState(client.notes ?? "");
 
@@ -221,7 +233,12 @@ export function ClientTabs({ client, briefing, events, projects, instagramImport
         )}
 
         {activeTab === "projects" && (
-          <ProjectManager clientId={client.id} projects={projects} />
+          <ProjectManager
+            clientId={client.id}
+            projects={projects}
+            initiallyCreating={initialProjectCreation}
+            returnTo={projectReturnTo}
+          />
         )}
 
         {activeTab === "notes" && (

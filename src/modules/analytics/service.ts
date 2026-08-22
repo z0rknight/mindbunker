@@ -8,8 +8,9 @@
 
 import { getAuthenticatedDb } from "@/db";
 import { transactions, videoLogs, clients, healthLogs } from "@/db/schema";
-import { gte, lte, and } from "drizzle-orm";
-import { startOfMonthISO, daysAgoISO, todayISO } from "@/utils/date";
+import { gte } from "drizzle-orm";
+import { startOfMonthISO, daysAgoISO } from "@/utils/date";
+import { completedVideoLogs } from "@/modules/productivity/core";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -191,7 +192,6 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   const monthStart = startOfMonthISO();
   const prevMonthStart = startOfPrevMonthISO();
   const prevMonthEnd = endOfPrevMonthISO();
-  const today = todayISO();
   const sevenDaysAgo = daysAgoISO(7);
   const thirtyDaysAgo = daysAgoISO(30);
 
@@ -215,8 +215,9 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   const prevMonthTransactions = allTransactions.filter(
     (t) => t.date >= prevMonthStart && t.date <= prevMonthEnd
   );
-  const thisMonthVideos = allVideoLogs.filter((v) => v.date >= monthStart);
-  const prevMonthVideos = allVideoLogs.filter(
+  const allCompletedVideos = completedVideoLogs(allVideoLogs);
+  const thisMonthVideos = allCompletedVideos.filter((v) => v.date >= monthStart);
+  const prevMonthVideos = allCompletedVideos.filter(
     (v) => v.date >= prevMonthStart && v.date <= prevMonthEnd
   );
   const activeClients = allClients.filter((c) => c.status === "active");
@@ -250,8 +251,8 @@ export async function getWarRoomData(): Promise<WarRoomData> {
     .filter((t) => t.type === "income")
     .reduce((sum, t) => sum + t.amount, 0);
   const revenuePerVideoAllTime =
-    allVideoLogs.length > 0
-      ? Math.round(allTimeRevenue / allVideoLogs.length)
+    allCompletedVideos.length > 0
+      ? Math.round(allTimeRevenue / allCompletedVideos.length)
       : null;
 
   // Top clients by revenue (from CRM totalRevenue field)
@@ -314,12 +315,9 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   // Map health logs by date for correlation
   const healthByDate = new Map(last30HealthLogs.map((h) => [h.date, h]));
 
-  // For each video log date, find the health log
-  const videoDateSet = new Set(allVideoLogs.map((v) => v.date));
-
-  // Group video counts by date
+  // Group completed output by date. Inventory states must not inflate output.
   const videoCountByDate = new Map<string, number>();
-  allVideoLogs.forEach((v) => {
+  allCompletedVideos.forEach((v) => {
     videoCountByDate.set(v.date, (videoCountByDate.get(v.date) ?? 0) + 1);
   });
 
@@ -362,9 +360,11 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   const crashSleepCount = recentSleepLogs.length;
 
   // Output declining: compare last 7 days vs previous 7 days
-  const last7Videos = allVideoLogs.filter((v) => v.date >= sevenDaysAgo).length;
+  const last7Videos = allCompletedVideos.filter(
+    (v) => v.date >= sevenDaysAgo,
+  ).length;
   const prev7Start = daysAgoISO(14);
-  const prev7Videos = allVideoLogs.filter(
+  const prev7Videos = allCompletedVideos.filter(
     (v) => v.date >= prev7Start && v.date < sevenDaysAgo
   ).length;
   const outputDeclining = last7Videos < prev7Videos;
