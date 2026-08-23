@@ -11,6 +11,9 @@ const navItems = [
   { href: "/finance", label: "Finance", mobileLabel: "Money", icon: "💰" },
   { href: "/health", label: "Health", mobileLabel: "Health", icon: "🫀" },
   { href: "/crm", label: "CRM", mobileLabel: "CRM", icon: "👥" },
+  // Internal sales tool, occasional use -- desktop sidebar only, kept out
+  // of the mobile bottom tab bar so that bar stays at its fixed 7 destinations.
+  { href: "/pricing-lab", label: "Pricing Lab", mobileLabel: "Pricing", icon: "🧪", desktopOnly: true },
   { href: "/projects", label: "Projects", mobileLabel: "Projects", icon: "📁" },
   // Reference/reporting surface, not part of daily Productivity execution --
   // desktop sidebar only, deliberately excluded from the mobile bottom tab
