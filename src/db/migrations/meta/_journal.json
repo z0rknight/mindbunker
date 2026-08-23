@@ -85,6 +85,34 @@
       "when": 1787383958098,
       "tag": "0011_brainy_ultimo",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1787440732337,
+      "tag": "0012_melted_mole_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1787449936208,
+      "tag": "0013_demonic_paper_doll",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1787455462144,
+      "tag": "0014_first_shockwave",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1787486507580,
+      "tag": "0015_fixed_slipstream",
+      "breakpoints": true
     }
   ]
 }

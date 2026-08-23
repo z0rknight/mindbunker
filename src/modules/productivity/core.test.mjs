@@ -7,6 +7,7 @@ import {
   getVideoMetadataChanges,
   groupOperationalVideos,
   planVideoTransition,
+  validateCoverUrl,
   validateVideoAssignment,
   validateVideoCreateInput,
   validateDeliveryUrl,
@@ -82,6 +83,9 @@ test("video input preserves its project and client references", () => {
       clientId: 2,
       deliveryUrl: null,
       notes: "Vertical version",
+      coverUrl: null,
+      orientation: null,
+      contentType: null,
     });
   }
 });
@@ -274,4 +278,62 @@ test("the required lifecycle transition vocabulary is explicit", () => {
       assert.equal(result.delivered, targetStatus === "DONE");
     }
   }
+});
+
+
+test("cover URL follows the exact same HTTPS-only discipline as delivery URL", () => {
+  assert.deepEqual(validateCoverUrl(""), { success: true, value: null });
+  assert.deepEqual(validateCoverUrl(null), { success: true, value: null });
+  assert.deepEqual(validateCoverUrl("https://cdn.example.com/cover.jpg"), {
+    success: true,
+    value: "https://cdn.example.com/cover.jpg",
+  });
+
+  for (const unsafe of [
+    "http://example.com/cover.jpg",
+    "javascript:alert(1)",
+    "data:image/png;base64,aaaa",
+    "file:///etc/passwd",
+    "https://user:pass@example.com/cover.jpg",
+  ]) {
+    assert.equal(validateCoverUrl(unsafe).success, false, unsafe);
+  }
+});
+
+test("video visual metadata (cover/orientation/content type) is optional and validated together", () => {
+  const valid = validateVideoInput({
+    title: "Reel",
+    coverUrl: "https://cdn.example.com/reel.jpg",
+    orientation: "VERTICAL",
+    contentType: "short-form",
+  });
+  assert.equal(valid.success, true);
+  if (valid.success) {
+    assert.equal(valid.data.coverUrl, "https://cdn.example.com/reel.jpg");
+    assert.equal(valid.data.orientation, "VERTICAL");
+    assert.equal(valid.data.contentType, "short-form");
+  }
+
+  // Omitted entirely -- must default to null (unknown), never inferred.
+  const omitted = validateVideoInput({ title: "Reel" });
+  assert.equal(omitted.success, true);
+  if (omitted.success) {
+    assert.equal(omitted.data.coverUrl, null);
+    assert.equal(omitted.data.orientation, null);
+    assert.equal(omitted.data.contentType, null);
+  }
+
+  // Invalid enum values are rejected outright, not silently coerced.
+  assert.equal(
+    validateVideoInput({ title: "Reel", orientation: "DIAGONAL" }).success,
+    false,
+  );
+  assert.equal(
+    validateVideoInput({ title: "Reel", contentType: "vlog" }).success,
+    false,
+  );
+  assert.equal(
+    validateVideoInput({ title: "Reel", coverUrl: "javascript:alert(1)" }).success,
+    false,
+  );
 });

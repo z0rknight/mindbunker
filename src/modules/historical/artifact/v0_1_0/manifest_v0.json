@@ -1,0 +1,43 @@
+{
+  "contract_version": "0.1.0",
+  "generated_date": "2026-08-22",
+  "artifact_name": "rmedia-historical-data-lab reference artifact",
+  "purpose": "Historical REFERENCE data derived from RAW exports, for human review and potential future import as MindBunker historical reference data. This is NOT MindBunker data, NOT native MindBunker work_sessions, and NOT manually backfilled canonical objects -- see ARTIFACT_CONTRACT.md for the three-tier distinction.",
+  "files": {
+    "historical_facts_v0.json": "Long-format quantitative fact records (period, identity, source, metric, value, unit, confidence, canonical, provenance, derivation).",
+    "identity_map_v0.json": "Identity resolution nodes: HUMAN_CONFIRMED, SINGLE_SOURCE_ONLY, INTERNAL, NOT_AN_IDENTITY.",
+    "source_coverage_v0.json": "Month-by-month presence/absence per source, Jan 2023 - Aug 2026."
+  },
+  "raw_file_manifest": [
+    {
+      "path": "raw/upwork/upwork_weekly_summary_2023-2026.txt",
+      "sha256": "061e6187d0ede1e6d843065e0fb02b391fd56881dc958ad6fd8f6131f9ecd447",
+      "bytes": 73433
+    },
+    {
+      "path": "raw/upwork/upwork_lifetime_billings.csv",
+      "sha256": "0dc2efd873bbf54b233bf4f883474480a96e2fdd3b0bd61a589e9275713437b0",
+      "bytes": 566
+    },
+    {
+      "path": "raw/clockify/clockify_detailed_export_2023-2025.txt",
+      "sha256": "700ebc54ed2e88a051d305893643640cd9d5066a724cc773f7b1a37cbd2335c0",
+      "bytes": 16731
+    },
+    {
+      "path": "raw/activitywatch/aw-events-export-aw-watcher-afk_Mac-mini-de-Emmanuel.local_2026-08-22.csv",
+      "sha256": "44d83e4f6565f704b313a939c281ed4f09c8d31d3f8a694005944af9791025e3",
+      "bytes": 4869051
+    },
+    {
+      "path": "raw/activitywatch/aw-bucket-export_aw-watcher-afk_Mac-mini-de-Emmanuel.local.json",
+      "sha256": "bcee7d3a5970672c318ee56af2da4b861b97e03a07ec1074ad22c108e6dcaa40",
+      "bytes": 12059226
+    }
+  ],
+  "warnings": [
+    "activitywatch_afk facts with canonical=false or confidence='EXPERIMENTAL' must never be imported as worked hours, active hours, or MindBunker work_sessions.",
+    "client:sean_go 'tracked_hours_upper_bound' fact (canonical=false) must never be summed with 'tracked_hours_confident' or presented as an exact figure.",
+    "No fact in this artifact combines revenue from one source with hours from a different source into a cross-source rate. effective_billed_rate is Upwork-internal (Upwork revenue / Upwork hours) only."
+  ]
+}

@@ -39,7 +39,7 @@ interface ClientTabsProps {
   events: Array<{
     id: number;
     type: string;
-    actor: "admin" | "gateway" | "system";
+    actor: "admin" | "gateway" | "system" | "client";
     description: string;
     createdAt: Date | null;
   }>;
@@ -298,7 +298,7 @@ export function ClientTabs({
                   className="flex gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3.5 sm:p-4"
                 >
                   <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-xs text-violet-300">
-                    {event.actor === "gateway" ? "↗" : event.actor === "admin" ? "E" : "•"}
+                    {event.actor === "gateway" ? "↗" : event.actor === "admin" ? "E" : event.actor === "client" ? "C" : "•"}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-zinc-200">

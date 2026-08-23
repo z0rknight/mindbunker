@@ -13,10 +13,13 @@ import {
   groupOperationalVideos,
   type ProductivityGroup,
 } from "@/modules/productivity/core";
-import { getWorkSessionOverview } from "@/modules/work-sessions/data";
+import { getWorkSessionHistory, getWorkSessionOverview } from "@/modules/work-sessions/data";
 import {
   WORK_SESSION_ACTIVITY_LABELS,
   formatClosedDuration,
+  groupWorkSessionDaysByWeek,
+  groupWorkSessionsByDay,
+  mondayOfWeek,
 } from "@/modules/work-sessions/core";
 import { currentMonthName, todayISO } from "@/utils/date";
 import Link from "next/link";
@@ -73,11 +76,17 @@ export default async function ProductivityPage({
     typeof query.projectId === "string" && /^\d+$/u.test(query.projectId)
       ? Number(query.projectId)
       : null;
-  const [stats, logs, options, workSessionOverview] = await Promise.all([
+  const [stats, logs, options, workSessionOverview, sessionHistory] = await Promise.all([
     getVideoStats(),
     getAllVideoLogs(),
     getProductivityQuickOptions(),
     getWorkSessionOverview(),
+    // Local dogfooding consolidation (§6): read-only Today/This Week
+    // tracked-time visibility, reusing the exact same grouping the Session
+    // Ledger already uses — no new aggregation logic, no schema change.
+    // This is INPUT evidence (time spent), never a score, and is never
+    // compared against video output counts on this page.
+    getWorkSessionHistory(),
   ]);
   const recentLogs = logs.slice(0, 50);
   const groups = groupOperationalVideos(recentLogs, {
@@ -87,6 +96,13 @@ export default async function ProductivityPage({
   const sessionSummaryByVideo = new Map(
     workSessionOverview.summaries.map((summary) => [summary.videoId, summary]),
   );
+  const { openSessionElapsedSeconds, openSessionStale } = workSessionOverview;
+  const sessionDays = groupWorkSessionsByDay(sessionHistory);
+  const sessionWeeks = groupWorkSessionDaysByWeek(sessionDays);
+  const today = todayISO();
+  const todayTrackedSeconds = sessionDays[0]?.dayKey === today ? sessionDays[0].totalClosedSeconds : 0;
+  const thisWeekTrackedSeconds =
+    sessionWeeks[0]?.weekKey === mondayOfWeek(today) ? sessionWeeks[0].totalClosedSeconds : 0;
 
   function workSessionStateFor(videoId: number) {
     return {
@@ -167,25 +183,46 @@ export default async function ProductivityPage({
       </header>
 
       {workSessionOverview.openSession && (
-        <section className="mb-7 rounded-2xl border border-emerald-500/35 bg-emerald-500/[0.07] p-4 sm:p-5">
+        <section
+          className={`mb-7 rounded-2xl border p-4 sm:p-5 ${
+            openSessionStale
+              ? "border-amber-500/40 bg-amber-500/[0.08]"
+              : "border-emerald-500/35 bg-emerald-500/[0.07]"
+          }`}
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-                Work session active
+              <p
+                className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] ${
+                  openSessionStale ? "text-amber-300" : "text-emerald-300"
+                }`}
+              >
+                <span
+                  className={`h-2 w-2 animate-pulse rounded-full ${
+                    openSessionStale ? "bg-amber-400" : "bg-emerald-400"
+                  }`}
+                />
+                {openSessionStale
+                  ? "Work session still running — still working?"
+                  : "Work session active"}
               </p>
               <h2 className="mt-2 truncate text-lg font-black text-white">
                 {workSessionOverview.openSession.videoTitle}
               </h2>
               <p className="mt-1 text-xs text-zinc-400">
-                {WORK_SESSION_ACTIVITY_LABELS[workSessionOverview.openSession.activityType]} · recoverable after refresh
+                {WORK_SESSION_ACTIVITY_LABELS[workSessionOverview.openSession.activityType]} · running for{" "}
+                {formatClosedDuration(openSessionElapsedSeconds)} · recoverable after refresh
               </p>
             </div>
             <Link
               href={`/productivity?video=${workSessionOverview.openSession.videoId}`}
-              className="min-h-11 rounded-xl bg-emerald-500 px-4 py-3 text-center text-sm font-black text-zinc-950 hover:bg-emerald-400"
+              className={`min-h-11 rounded-xl px-4 py-3 text-center text-sm font-black text-zinc-950 ${
+                openSessionStale
+                  ? "bg-amber-500 hover:bg-amber-400"
+                  : "bg-emerald-500 hover:bg-emerald-400"
+              }`}
             >
-              Open active workspace
+              {openSessionStale ? "Review this session" : "Open active workspace"}
             </Link>
           </div>
         </section>
@@ -232,6 +269,16 @@ export default async function ProductivityPage({
         {workSessionOverview.summaries.length > 0 && (
           <> Current tracked archive: {formatClosedDuration(workSessionOverview.summaries.reduce((sum, item) => sum + item.closedSeconds, 0))}.</>
         )}
+        {/* Local dogfooding consolidation (§6): input evidence only — how
+            much time was tracked, not a judgment of output or performance.
+            Omitted entirely (not shown as "0m") when nothing has been
+            tracked yet today/this week, matching the ledger's own
+            evidence-only-when-it-exists convention. */}
+        {todayTrackedSeconds > 0 && <> Today: {formatClosedDuration(todayTrackedSeconds)}.</>}
+        {thisWeekTrackedSeconds > 0 && <> This week: {formatClosedDuration(thisWeekTrackedSeconds)}.</>}{" "}
+        <Link href="/productivity/sessions" className="font-semibold text-cyan-500 hover:text-cyan-400">
+          Session history →
+        </Link>
       </footer>
     </div>
   );

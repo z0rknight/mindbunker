@@ -10,6 +10,18 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **🧭 Dogfooding infrastructure consolidation — local only (2026-08-23)**
+  - [x] Added Home Start Tracking through the canonical Work Session Server Action and global one-open-session invariant; no second timer or schema change
+  - [x] Added lightweight inline Stop confirmation without changing server timestamps, SQL, or lifecycle
+  - [x] Added authenticated Client Portal total-video visibility and canonical content-type filtering over the existing client-safe projection
+  - [x] Added orientation-aware operator cover rendering and a validated external Preview / Watch affordance
+  - [x] Fixed a browser-discovered Video workspace render loop in idle Work Session synchronization
+  - [x] Verified Work Session Ledger, Video → filtered sessions, Video Memory collapse/narrative, client auth boundaries, covers, and Client Intelligence
+  - [x] Deferred coffee Quick Log because daily aggregate `health_logs` cannot store a timestamped coffee event honestly; deferred Pricing Lab because the canonical calculator is not in this repository
+  - [x] Passed 135 tests, scoped source ESLint, typecheck, Next build, OpenNext build, clean isolated migrations `0000`–`0015`, and zero FK violations
+  - [x] Rendered Home, Video workspace, and client login at 390×844, 768×1024, and 1440×900 with zero overflow and clean post-fix console; one fictitious local QA session was closed and left zero active sessions
+  - [x] Production/remote D1 remained untouched; **LOCAL ONLY — NOT DEPLOYED**
+
 - [x] **🎬 Productivity / Video Operations P1 local implementation (2026-08-22)**
   - [x] Reorganized Productivity around exclusive Current Work, Attention, Planned Queue, and Recent/Completed groups with no schema change
   - [x] Elevated the globally active Work Session, closed tracked time, session count, project deadline, next operational action, and Client → Project links

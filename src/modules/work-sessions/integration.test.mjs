@@ -7,14 +7,24 @@ import test from "node:test";
 import { Worker } from "node:worker_threads";
 
 import {
+  CORRECT_WORK_SESSION_SQL,
   OPEN_WORK_SESSION_SQL,
   START_WORK_SESSION_SQL,
+  STOP_WORK_SESSION_AT_SQL,
   STOP_WORK_SESSION_SQL,
   VIDEO_WORK_SESSION_SUMMARY_SQL,
+  WORK_SESSION_HISTORY_SQL,
 } from "./core.ts";
 
 const migration = readFileSync(
   new URL("../../db/migrations/0011_brainy_ultimo.sql", import.meta.url),
+  "utf8",
+);
+// Sprint 1.2.1 Ledger P1's additive migration (source + updated_at
+// columns). Applied on top of 0011 in the fixture below, exactly as it is
+// in the real migration chain.
+const ledgerMigration = readFileSync(
+  new URL("../../db/migrations/0014_first_shockwave.sql", import.meta.url),
   "utf8",
 );
 
@@ -53,6 +63,7 @@ function createFixtureDatabase(path = ":memory:") {
       (300, '2026-08-22', 'Zero sessions', 1, 10, 'PLANNED', NULL);
   `);
   db.exec(migration);
+  db.exec(ledgerMigration);
   return db;
 }
 
@@ -237,7 +248,17 @@ test("session attribution remains video-only and derives project and client", ()
       .prepare("PRAGMA table_info('work_sessions')")
       .all()
       .map(({ name }) => name),
-    ["id", "video_id", "started_at", "ended_at", "activity_type", "note", "created_at"],
+    [
+      "id",
+      "video_id",
+      "started_at",
+      "ended_at",
+      "activity_type",
+      "note",
+      "created_at",
+      "source",
+      "updated_at",
+    ],
   );
   assert.deepEqual(
     plain(
@@ -267,6 +288,59 @@ test("tracked work prevents accidental video deletion", () => {
   assert.equal(
     db.prepare("SELECT COUNT(*) AS count FROM video_logs WHERE id = 100").get().count,
     1,
+  );
+  db.close();
+});
+
+test("session history joins client/project, orders newest first, and leaves open sessions undated", () => {
+  const db = createFixtureDatabase();
+  assert.ok(start(db, 100, 1_000, "EDITING"));
+  assert.ok(stop(db, 100, 2_800));
+  assert.ok(start(db, 200, 3_000, "COLOR"));
+
+  const rows = db.prepare(WORK_SESSION_HISTORY_SQL).all(10).map(plain);
+  assert.deepEqual(
+    rows.map((row) => [row.video_id, row.client_name, row.project_name, row.ended_at]),
+    [
+      [200, "Client B", "Project B", null],
+      [100, "Client A", "Project A", 2_800],
+    ],
+  );
+  assert.equal(rows[0].started_at, 3_000);
+  db.close();
+});
+
+test("session history respects the LIMIT parameter", () => {
+  const db = createFixtureDatabase();
+  assert.ok(start(db, 100, 1_000));
+  assert.ok(stop(db, 100, 1_100));
+  assert.ok(start(db, 100, 1_200));
+  assert.ok(stop(db, 100, 1_300));
+  assert.ok(start(db, 100, 1_400));
+  assert.ok(stop(db, 100, 1_500));
+
+  const rows = db.prepare(WORK_SESSION_HISTORY_SQL).all(2).map(plain);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((row) => row.started_at), [1_400, 1_200]);
+  db.close();
+});
+
+test("session history video filter (local dogfooding consolidation) narrows to one video without changing the unfiltered query", () => {
+  const db = createFixtureDatabase();
+  assert.ok(start(db, 100, 1_000, "EDITING"));
+  assert.ok(stop(db, 100, 1_600));
+  assert.ok(start(db, 200, 2_000, "COLOR"));
+  assert.ok(stop(db, 200, 2_600));
+
+  const filtered = db.prepare(WORK_SESSION_HISTORY_SQL).all(10, 200).map(plain);
+  assert.deepEqual(filtered.map((row) => row.video_id), [200]);
+
+  // A NULL filter (the default when no video is chosen) must still return
+  // every video's sessions, exactly as before this filter existed.
+  const unfiltered = db.prepare(WORK_SESSION_HISTORY_SQL).all(10, null).map(plain);
+  assert.deepEqual(
+    unfiltered.map((row) => row.video_id).sort(),
+    [100, 200],
   );
   db.close();
 });
@@ -362,5 +436,141 @@ test("competing Start requests cannot create two open sessions", async () => {
     assert.equal(totalCount, 1);
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+function correct(db, id, videoId, startedAt, endedAt, activityType, note, updatedAt) {
+  return plain(
+    db
+      .prepare(CORRECT_WORK_SESSION_SQL)
+      .get(id, videoId, startedAt, endedAt, activityType, note, updatedAt),
+  );
+}
+
+function stopAt(db, videoId, endedAt, now) {
+  return plain(db.prepare(STOP_WORK_SESSION_AT_SQL).get(videoId, endedAt, now));
+}
+
+test("new columns default honestly: every session is WEB_TIMER, never corrected until it is", () => {
+  const db = createFixtureDatabase();
+  assert.ok(start(db, 100, 1_000));
+  assert.ok(stop(db, 100, 1_600));
+  const row = plain(
+    db.prepare("SELECT source, updated_at FROM work_sessions WHERE id = 1").get(),
+  );
+  assert.deepEqual(row, { source: "WEB_TIMER", updated_at: null });
+  db.close();
+});
+
+test("correction cannot touch the open session, only an already-closed one", () => {
+  const db = createFixtureDatabase();
+  assert.ok(start(db, 100, 1_000, "EDITING"));
+  // id 1 is still open — CORRECT_WORK_SESSION_SQL's own guard must refuse it.
+  assert.equal(
+    correct(db, 1, 100, 900, 1_500, "REVIEW", null, 5_000),
+    undefined,
+  );
+  assert.deepEqual(
+    plain(db.prepare("SELECT started_at, ended_at, activity_type FROM work_sessions WHERE id = 1").get()),
+    { started_at: 1_000, ended_at: null, activity_type: "EDITING" },
+  );
+  db.close();
+});
+
+test("correction updates values, sets updated_at, and can reassign the video", () => {
+  const db = createFixtureDatabase();
+  assert.ok(start(db, 100, 1_000, "EDITING"));
+  assert.ok(stop(db, 100, 1_600));
+
+  const corrected = correct(db, 1, 200, 900, 1_500, "REVIEW", "moved to the right video", 5_000);
+  assert.deepEqual(corrected, {
+    id: 1,
+    video_id: 200,
+    started_at: 900,
+    ended_at: 1_500,
+    activity_type: "REVIEW",
+    note: "moved to the right video",
+    updated_at: 5_000,
+  });
+  db.close();
+});
+
+test("correction rejects an inverted/zero duration and a nonexistent video, at the SQL level too", () => {
+  const db = createFixtureDatabase();
+  assert.ok(start(db, 100, 1_000, "EDITING"));
+  assert.ok(stop(db, 100, 1_600));
+
+  assert.equal(
+    correct(db, 1, 100, 1_500, 1_000, "EDITING", null, 5_000),
+    undefined,
+    "end before start must be rejected",
+  );
+  assert.equal(
+    correct(db, 1, 100, 1_000, 1_000, "EDITING", null, 5_000),
+    undefined,
+    "zero-length duration must be rejected",
+  );
+  assert.equal(
+    correct(db, 1, 999, 900, 1_500, "EDITING", null, 5_000),
+    undefined,
+    "reassigning to a nonexistent video must be rejected",
+  );
+  assert.deepEqual(
+    plain(db.prepare("SELECT started_at, ended_at, video_id FROM work_sessions WHERE id = 1").get()),
+    { started_at: 1_000, ended_at: 1_600, video_id: 100 },
+    "none of the rejected attempts wrote anything",
+  );
+  db.close();
+});
+
+test("correction is idempotent-safe: correcting to the same values twice succeeds both times", () => {
+  const db = createFixtureDatabase();
+  assert.ok(start(db, 100, 1_000, "EDITING"));
+  assert.ok(stop(db, 100, 1_600));
+
+  const first = correct(db, 1, 100, 1_000, 1_600, "REVIEW", "fixed activity", 5_000);
+  assert.ok(first);
+  const second = correct(db, 1, 100, 1_000, 1_600, "REVIEW", "fixed activity", 6_000);
+  assert.ok(second);
+  assert.equal(second.updated_at, 6_000);
+  db.close();
+});
+
+test("stale-session recovery stops at a chosen past time, never in the future", () => {
+  const db = createFixtureDatabase();
+  assert.ok(start(db, 100, 1_000, "EDITING"));
+
+  assert.equal(
+    stopAt(db, 100, 900, 10_000),
+    undefined,
+    "chosen end before the session's own start must be rejected",
+  );
+  assert.equal(
+    stopAt(db, 100, 11_000, 10_000),
+    undefined,
+    "chosen end after the passed-in now bound must be rejected",
+  );
+  const stopped = stopAt(db, 100, 5_000, 10_000);
+  assert.deepEqual(stopped, {
+    id: 1,
+    video_id: 100,
+    started_at: 1_000,
+    ended_at: 5_000,
+    activity_type: "EDITING",
+    note: null,
+  });
+  db.close();
+});
+
+test("Historical module code never references work_sessions — the tier boundary is structural, not just convention", () => {
+  const historicalDir = new URL("../historical/", import.meta.url);
+  const sourceFiles = ["actions.ts", "core.ts", "data.ts"];
+  for (const file of sourceFiles) {
+    const text = readFileSync(new URL(file, historicalDir), "utf8");
+    assert.doesNotMatch(
+      text,
+      /work_sessions|workSessions/u,
+      `${file} must never read or write work_sessions — historical reconstructed evidence and native Work Sessions must stay two separate authorities`,
+    );
   }
 });

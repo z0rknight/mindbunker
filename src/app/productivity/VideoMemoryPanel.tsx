@@ -21,11 +21,21 @@ function formatTimestamp(value: string) {
   }).format(new Date(value));
 }
 
+// Sprint 1.2 native intelligence audit, item D: capture and retrieval are
+// different UX problems. Write path (the textarea above) stays completely
+// unbounded and low-friction — this constant only bounds the READ path, so
+// a video with many notes does not distort the production floor page.
+// Pure client-side rendering change; the data layer still fetches every
+// entry (no query/schema change), so "Show all" never triggers a second
+// request.
+const COLLAPSED_ENTRY_COUNT = 5;
+
 export function VideoMemoryPanel({ videoId }: { videoId: number }) {
   const [entries, setEntries] = useState<MemoryEntry[]>([]);
   const [body, setBody] = useState("");
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -113,16 +123,36 @@ export function VideoMemoryPanel({ videoId }: { videoId: number }) {
             No operational memory yet. Add the first useful fact.
           </p>
         ) : (
-          <ol className="space-y-3">
-            {entries.map((entry) => (
-              <li key={entry.id} className="rounded-xl border border-zinc-800 bg-zinc-950/45 p-3.5">
-                <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-200">{entry.body}</p>
-                <time dateTime={entry.createdAt} className="mt-2 block text-[11px] font-bold text-zinc-600">
-                  {formatTimestamp(entry.createdAt)}
-                </time>
-              </li>
-            ))}
-          </ol>
+          <>
+            <ol className="space-y-3">
+              {(expanded ? entries : entries.slice(0, COLLAPSED_ENTRY_COUNT)).map((entry) => (
+                <li key={entry.id} className="rounded-xl border border-zinc-800 bg-zinc-950/45 p-3.5">
+                  <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-200">{entry.body}</p>
+                  <time dateTime={entry.createdAt} className="mt-2 block text-[11px] font-bold text-zinc-600">
+                    {formatTimestamp(entry.createdAt)}
+                  </time>
+                </li>
+              ))}
+            </ol>
+            {!expanded && entries.length > COLLAPSED_ENTRY_COUNT && (
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                className="mt-3 min-h-9 w-full rounded-xl border border-zinc-800 text-xs font-bold text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
+              >
+                Show {entries.length - COLLAPSED_ENTRY_COUNT} more
+              </button>
+            )}
+            {expanded && entries.length > COLLAPSED_ENTRY_COUNT && (
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                className="mt-3 min-h-9 w-full rounded-xl border border-zinc-800 text-xs font-bold text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
+              >
+                Show fewer
+              </button>
+            )}
+          </>
         )}
       </div>
     </section>

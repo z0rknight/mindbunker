@@ -2,9 +2,10 @@
 
 import "server-only";
 
-import { getAuthenticatedDb } from "@/db";
+import { getAuthenticatedDb, getDb } from "@/db";
+import { isClientAuthenticated } from "@/lib/client-portal-session";
 import { clients, crmEvents, projects, videoLogs, workSessions } from "@/db/schema";
-import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { startOfMonthISO, todayISO } from "@/utils/date";
 import {
@@ -48,6 +49,7 @@ function revalidateProductivityViews(...clientIds: Array<number | null | undefin
   revalidatePath("/projects");
   revalidatePath("/productivity");
   revalidatePath("/war-room");
+  revalidatePath("/client/dashboard");
   for (const clientId of new Set(clientIds.filter(Boolean))) {
     revalidatePath(`/crm/${clientId}`);
   }
@@ -116,6 +118,9 @@ export async function createVideoLog(
       delivered: deliveredForVideoStatus(parsed.data.status),
       deliveryUrl: parsed.data.deliveryUrl,
       notes: parsed.data.notes,
+      coverUrl: parsed.data.coverUrl,
+      orientation: parsed.data.orientation,
+      contentType: parsed.data.contentType,
       createdAt: now,
       updatedAt: now,
     })
@@ -199,12 +204,21 @@ export async function getAllVideoLogs() {
       delivered: videoLogs.delivered,
       deliveryUrl: videoLogs.deliveryUrl,
       notes: videoLogs.notes,
+      coverUrl: videoLogs.coverUrl,
+      orientation: videoLogs.orientation,
+      contentType: videoLogs.contentType,
       createdAt: videoLogs.createdAt,
       updatedAt: videoLogs.updatedAt,
     })
     .from(videoLogs)
     .leftJoin(clients, eq(videoLogs.clientId, clients.id))
     .leftJoin(projects, eq(videoLogs.projectId, projects.id))
+    // Geladeira (Sprint 1.2 P0): the Productivity overview is a P0
+    // visibility surface — a Geladeira client's Videos are hidden here by
+    // default. A Video with no Client at all (clientId null) is never
+    // affected. Direct navigation to a specific video is untouched — this
+    // only changes what getAllVideoLogs() returns for the grouped overview.
+    .where(or(isNull(videoLogs.clientId), ne(clients.archivalState, "GELADEIRA")))
     .orderBy(desc(videoLogs.createdAt), desc(videoLogs.id));
 }
 
@@ -220,12 +234,16 @@ export async function getProductivityQuickOptions() {
       })
       .from(projects)
       .innerJoin(clients, eq(projects.clientId, clients.id))
-      .where(ne(projects.status, "archived"))
+      // Geladeira (Sprint 1.2 P0): these are the Quick Actions client/project
+      // selectors used when planning new work — a Geladeira client should
+      // not be offered as a destination for new Projects/Videos by default.
+      .where(and(ne(projects.status, "archived"), ne(clients.archivalState, "GELADEIRA")))
       .orderBy(desc(projects.updatedAt), desc(projects.id))
       .limit(50),
     db
       .select({ id: clients.id, name: clients.name })
       .from(clients)
+      .where(ne(clients.archivalState, "GELADEIRA"))
       .orderBy(desc(clients.createdAt), desc(clients.id))
       .limit(100),
     db
@@ -235,6 +253,8 @@ export async function getProductivityQuickOptions() {
         date: videoLogs.date,
         status: videoLogs.status,
         revisionsCount: videoLogs.revisionsCount,
+        projectId: videoLogs.projectId,
+        clientId: videoLogs.clientId,
         projectName: projects.name,
         clientName: clients.name,
       })
@@ -267,6 +287,9 @@ export async function updateVideoMetadata(
       projectId: videoLogs.projectId,
       deliveryUrl: videoLogs.deliveryUrl,
       notes: videoLogs.notes,
+      coverUrl: videoLogs.coverUrl,
+      orientation: videoLogs.orientation,
+      contentType: videoLogs.contentType,
     })
     .from(videoLogs)
     .where(eq(videoLogs.id, videoId))
@@ -286,6 +309,9 @@ export async function updateVideoMetadata(
       projectId: current[0].projectId,
       deliveryUrl: current[0].deliveryUrl,
       notes: current[0].notes,
+      coverUrl: current[0].coverUrl,
+      orientation: current[0].orientation,
+      contentType: current[0].contentType,
     },
     next,
   );
@@ -316,6 +342,84 @@ export async function updateVideoMetadata(
   };
 }
 
+type VideoTransitionRow = {
+  id: number;
+  title: string | null;
+  clientId: number | null;
+  status: VideoStatus;
+  startedAt: Date | null;
+};
+
+async function applyVideoStatusTransition(
+  db: AuthenticatedDb,
+  videoId: number,
+  current: VideoTransitionRow,
+  expectedStatus: VideoStatus,
+  targetStatus: VideoStatus,
+  actor: "admin" | "client",
+): Promise<ProductivityActionResult> {
+  const transition = planVideoTransition({
+    currentStatus: current.status,
+    expectedStatus,
+    targetStatus,
+  });
+  if (!transition.success) return transition;
+  if (!transition.changed) {
+    return {
+      success: true,
+      status: transition.status,
+      message: "Video already has that status.",
+    };
+  }
+
+  const now = new Date();
+  const updated = await db
+    .update(videoLogs)
+    .set({
+      status: transition.status,
+      delivered: transition.delivered,
+      startedAt:
+        transition.status === "IN_PROGRESS" && !current.startedAt
+          ? now
+          : current.startedAt,
+      date: transition.status === "DONE" ? todayISO() : undefined,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(videoLogs.id, videoId),
+        eq(videoLogs.status, current.status),
+      ),
+    )
+    .returning({ id: videoLogs.id });
+  if (!updated[0]) {
+    return {
+      success: false,
+      error: "This video changed elsewhere. Refresh and try again.",
+    };
+  }
+
+  const title = current.title ?? `Video ${videoId}`;
+  await db.insert(crmEvents).values({
+    clientId: current.clientId,
+    videoId,
+    type: transition.eventType,
+    actor,
+    description:
+      actor === "client"
+        ? `Client moved ${title} to ${VIDEO_STATUS_LABELS[transition.status]}`
+        : `${title} moved to ${VIDEO_STATUS_LABELS[transition.status]}`,
+    createdAt: now,
+  });
+
+  revalidateProductivityViews(current.clientId);
+  return {
+    success: true,
+    status: transition.status,
+    message: `Moved to ${VIDEO_STATUS_LABELS[transition.status]}.`,
+  };
+}
+
 export async function transitionVideoStatus(
   videoId: number,
   expectedStatus: VideoStatus,
@@ -343,63 +447,76 @@ export async function transitionVideoStatus(
     .limit(1);
   if (!current[0]) return { success: false, error: "Video not found." };
 
-  const transition = planVideoTransition({
-    currentStatus: current[0].status,
+  return applyVideoStatusTransition(
+    db,
+    videoId,
+    current[0],
     expectedStatus,
     targetStatus,
-  });
-  if (!transition.success) return transition;
-  if (!transition.changed) {
-    return {
-      success: true,
-      status: transition.status,
-      message: "Video already has that status.",
-    };
+    "admin",
+  );
+}
+
+/**
+ * Client-facing lifecycle wrapper (Sprint 1.2.2). Deliberately NOT a second
+ * state machine: it delegates to the exact same applyVideoStatusTransition
+ * helper the admin surface uses. What's different is authentication (a
+ * verified client session, never a client-supplied clientId or videoId
+ * ownership claim) and scope -- a client may only act on a video that is
+ * currently READY_FOR_REVIEW, and only into DONE ("Approve") or
+ * CHANGES_REQUESTED ("Request changes"). Any other request is refused
+ * before touching the database.
+ *
+ * Uses getDb() (unauthenticated raw D1 access), NOT getAuthenticatedDb() --
+ * a client is never an admin, and this function must keep working when no
+ * admin session exists. Authorization here comes entirely from the
+ * mb_client_session cookie verified by isClientAuthenticated().
+ */
+export async function transitionVideoStatusAsClient(
+  videoId: number,
+  targetStatus: "DONE" | "CHANGES_REQUESTED",
+): Promise<ProductivityActionResult> {
+  const clientId = await isClientAuthenticated();
+  if (clientId === false) {
+    return { success: false, error: "Please log in to review this video." };
+  }
+  if (
+    !isPositiveId(videoId) ||
+    (targetStatus !== "DONE" && targetStatus !== "CHANGES_REQUESTED")
+  ) {
+    return { success: false, error: "Invalid request." };
   }
 
-  const now = new Date();
-  const updated = await db
-    .update(videoLogs)
-    .set({
-      status: transition.status,
-      delivered: transition.delivered,
-      startedAt:
-        transition.status === "IN_PROGRESS" && !current[0].startedAt
-          ? now
-          : current[0].startedAt,
-      date: transition.status === "DONE" ? todayISO() : undefined,
-      updatedAt: now,
+  const db = await getDb();
+  const current = await db
+    .select({
+      id: videoLogs.id,
+      title: videoLogs.title,
+      clientId: videoLogs.clientId,
+      status: videoLogs.status,
+      startedAt: videoLogs.startedAt,
     })
-    .where(
-      and(
-        eq(videoLogs.id, videoId),
-        eq(videoLogs.status, current[0].status),
-      ),
-    )
-    .returning({ id: videoLogs.id });
-  if (!updated[0]) {
-    return {
-      success: false,
-      error: "This video changed elsewhere. Refresh and try again.",
-    };
+    .from(videoLogs)
+    .where(eq(videoLogs.id, videoId))
+    .limit(1);
+  // Deliberately identical "not found" error whether the video doesn't
+  // exist or belongs to a different client -- never confirm to a client
+  // that a given videoId exists in someone else's account.
+  if (!current[0] || current[0].clientId !== clientId) {
+    return { success: false, error: "Video not found." };
+  }
+  if (current[0].status !== "READY_FOR_REVIEW") {
+    return { success: false, error: "This video isn't awaiting your review." };
   }
 
-  const title = current[0].title ?? `Video ${videoId}`;
-  await db.insert(crmEvents).values({
-    clientId: current[0].clientId,
+  return applyVideoStatusTransition(
+    db,
     videoId,
-    type: transition.eventType,
-    actor: "admin",
-    description: `${title} moved to ${VIDEO_STATUS_LABELS[transition.status]}`,
-    createdAt: now,
-  });
-
-  revalidateProductivityViews(current[0].clientId);
-  return {
-    success: true,
-    status: transition.status,
-    message: `Moved to ${VIDEO_STATUS_LABELS[transition.status]}.`,
-  };
+    current[0],
+    "READY_FOR_REVIEW",
+    targetStatus,
+    "client",
+  );
 }
 
 export async function changeRevisionCount(

@@ -1,10 +1,16 @@
 export const AUTH_COOKIE_NAME = "mb_session";
+export const CLIENT_AUTH_COOKIE_NAME = "mb_client_session";
 export const APP_BASE_PATH = "/mindbunker";
 export const LOGIN_ROUTE = "/login";
 export const LOGIN_PATH = `${APP_BASE_PATH}${LOGIN_ROUTE}`;
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+export const CLIENT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 const SESSION_VERSION = "v1";
+// Distinct version tag (not just a distinct cookie) so a client session
+// token and an admin session token can never be swapped/replayed against
+// the wrong verifier even if a cookie name were ever confused.
+const CLIENT_SESSION_VERSION = "cs1";
 const PASSWORD_HASH_VERSION = "pbkdf2-sha256";
 const PASSWORD_HASH_ITERATIONS = 310_000;
 const encoder = new TextEncoder();
@@ -100,6 +106,85 @@ export async function verifySessionToken(
       base64UrlToBytes(encodedSignature),
       secret,
     );
+  } catch {
+    return false;
+  }
+}
+
+// Client Portal Identity (Sprint 1.2.2) -----------------------------------
+//
+// Same signed-opaque-token construction as the admin session token above,
+// with two differences: the clientId is embedded IN the signed payload (so
+// it can never be trusted until the HMAC verifies -- a client cannot forge
+// or edit which clientId their cookie claims), and the version tag is
+// distinct ("cs1" vs "v1") so the two token families can never be confused
+// or cross-verified even though they may share the same signing secret.
+export async function createClientSessionToken(
+  clientId: number,
+  secret: string,
+  nowMilliseconds = Date.now(),
+) {
+  const expiresAt =
+    Math.floor(nowMilliseconds / 1000) + CLIENT_SESSION_MAX_AGE_SECONDS;
+  const nonce = crypto.getRandomValues(new Uint8Array(16));
+  const payload = `${CLIENT_SESSION_VERSION}.${clientId}.${expiresAt}.${bytesToBase64Url(nonce)}`;
+  const signature = await signHmac(payload, secret);
+
+  return `${payload}.${bytesToBase64Url(signature)}`;
+}
+
+export type VerifiedClientSession = {
+  clientId: number;
+  /** Unix seconds this token expires at -- expiresAt - CLIENT_SESSION_MAX_AGE_SECONDS
+   * recovers when it was issued, without needing a separate field in the payload. */
+  expiresAtSeconds: number;
+};
+
+/**
+ * Returns the verified session on success, or `false` on any failure
+ * (missing/expired/malformed/forged token). The returned clientId is only
+ * ever produced after the HMAC signature over the full payload -- including
+ * the clientId itself -- has verified, so callers can trust it directly for
+ * authorization without a second lookup. Callers that need to detect a
+ * password change/revocation that happened AFTER this token was issued
+ * (see client-portal-session.ts) can reconstruct the issue time from
+ * expiresAtSeconds - CLIENT_SESSION_MAX_AGE_SECONDS.
+ */
+export async function verifyClientSessionToken(
+  token: string | undefined,
+  secret: string | undefined,
+  nowMilliseconds = Date.now(),
+): Promise<VerifiedClientSession | false> {
+  if (!token || !secret) {
+    return false;
+  }
+
+  const [version, clientIdValue, expiresValue, nonce, encodedSignature, ...extra] =
+    token.split(".");
+  const clientId = Number(clientIdValue);
+  const expiresAt = Number(expiresValue);
+
+  if (
+    extra.length > 0 ||
+    version !== CLIENT_SESSION_VERSION ||
+    !Number.isSafeInteger(clientId) ||
+    clientId <= 0 ||
+    !Number.isSafeInteger(expiresAt) ||
+    expiresAt <= Math.floor(nowMilliseconds / 1000) ||
+    !nonce ||
+    !encodedSignature
+  ) {
+    return false;
+  }
+
+  try {
+    const payload = `${version}.${clientIdValue}.${expiresValue}.${nonce}`;
+    const valid = await verifyHmac(
+      payload,
+      base64UrlToBytes(encodedSignature),
+      secret,
+    );
+    return valid ? { clientId, expiresAtSeconds: expiresAt } : false;
   } catch {
     return false;
   }

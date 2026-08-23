@@ -5,14 +5,22 @@ import {
   transitionVideoStatus,
   updateVideoMetadata,
 } from "@/modules/productivity/actions";
+import { validateCoverUrl, validateDeliveryUrl } from "@/modules/productivity/core";
 import {
+  VIDEO_CONTENT_TYPE_LABELS,
+  VIDEO_CONTENT_TYPES,
+  VIDEO_ORIENTATION_LABELS,
+  VIDEO_ORIENTATIONS,
   VIDEO_STATUS_LABELS,
   getAllowedVideoTransitions,
+  type VideoContentType,
+  type VideoOrientation,
   type VideoStatus,
 } from "@/modules/productivity/config";
 import type { VideoWorkSessionState } from "@/modules/work-sessions/core";
 import { formatDate } from "@/utils/date";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { WorkSessionPanel } from "./WorkSessionPanel";
@@ -30,6 +38,9 @@ type VideoEditorProps = {
     projectDeadline: string | null;
     deliveryUrl: string | null;
     notes: string | null;
+    coverUrl: string | null;
+    orientation: VideoOrientation | null;
+    contentType: VideoContentType | null;
     status: VideoStatus;
     revisionsCount: number;
   };
@@ -68,12 +79,27 @@ export function VideoEditor({
   );
   const [deliveryUrl, setDeliveryUrl] = useState(video.deliveryUrl ?? "");
   const [notes, setNotes] = useState(video.notes ?? "");
+  const [coverUrl, setCoverUrl] = useState(video.coverUrl ?? "");
+  const [orientation, setOrientation] = useState(video.orientation ?? "");
+  const [contentType, setContentType] = useState(video.contentType ?? "");
   const [status, setStatus] = useState(video.status);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
 
   const displayTitle = video.title ?? `Video ${video.date}`;
   const allowedTransitions = getAllowedVideoTransitions(status);
+  const validatedDeliveryUrl = validateDeliveryUrl(video.deliveryUrl);
+  const safeDeliveryUrl = validatedDeliveryUrl.success
+    ? validatedDeliveryUrl.value
+    : null;
+  const validatedCoverUrl = validateCoverUrl(video.coverUrl);
+  const safeCoverUrl = validatedCoverUrl.success ? validatedCoverUrl.value : null;
+  const coverAspectClass =
+    video.orientation === "VERTICAL"
+      ? "aspect-[9/16] max-h-80"
+      : video.orientation === "SQUARE"
+        ? "aspect-square max-h-80"
+        : "aspect-video";
 
   function openEditor() {
     // Always rehydrate the draft from the latest server props. The workspace
@@ -83,6 +109,9 @@ export function VideoEditor({
     setClientId(video.clientId?.toString() ?? "");
     setDeliveryUrl(video.deliveryUrl ?? "");
     setNotes(video.notes ?? "");
+    setCoverUrl(video.coverUrl ?? "");
+    setOrientation(video.orientation ?? "");
+    setContentType(video.contentType ?? "");
     setStatus(video.status);
     setFeedback("");
     setError("");
@@ -105,6 +134,9 @@ export function VideoEditor({
         clientId: projectId ? null : clientId ? Number(clientId) : null,
         deliveryUrl,
         notes,
+        coverUrl,
+        orientation: (orientation || null) as VideoOrientation | null,
+        contentType: (contentType || null) as VideoContentType | null,
       });
       if (!result.success) {
         setError(result.error);
@@ -195,6 +227,34 @@ export function VideoEditor({
 
             <div className="grid gap-5 md:grid-cols-[minmax(280px,0.82fr)_minmax(0,1.35fr)] md:items-start">
               <aside className="space-y-4 md:sticky md:top-0">
+                <section className={`relative w-full overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 ${coverAspectClass}`}>
+                  {safeCoverUrl ? (
+                    <Image
+                      src={safeCoverUrl}
+                      alt=""
+                      fill
+                      unoptimized
+                      sizes="(max-width: 768px) 100vw, 34vw"
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 bg-gradient-to-br from-zinc-900 to-zinc-950 text-zinc-700">
+                      <span className="text-3xl" aria-hidden="true">🎬</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest">No cover yet</span>
+                    </div>
+                  )}
+                  {safeDeliveryUrl && (
+                    <a
+                      href={safeDeliveryUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute bottom-3 right-3 inline-flex min-h-11 items-center rounded-xl bg-violet-600 px-4 text-sm font-black text-white shadow-lg shadow-black/50 hover:bg-violet-500"
+                    >
+                      Preview / Watch ↗
+                    </a>
+                  )}
+                </section>
+
                 <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3 md:block">
                     <div>
@@ -324,6 +384,66 @@ export function VideoEditor({
                 <p className="mt-1.5 text-[11px] leading-4 text-zinc-600">
                   HTTPS only. This link becomes visible in the client portal.
                 </p>
+              </div>
+
+              <div>
+                <label htmlFor={`video-cover-url-${video.id}`} className="mb-1.5 block text-xs font-bold text-zinc-400">
+                  Cover image URL <span className="font-normal text-zinc-600">optional</span>
+                </label>
+                <input
+                  id={`video-cover-url-${video.id}`}
+                  type="url"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  value={coverUrl}
+                  onChange={(event) => setCoverUrl(event.target.value)}
+                  maxLength={2_048}
+                  placeholder="https://…"
+                  className={fieldClassName}
+                />
+                <p className="mt-1.5 text-[11px] leading-4 text-zinc-600">
+                  HTTPS only. Shown as the video&apos;s thumbnail on the client portal.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor={`video-orientation-${video.id}`} className="mb-1.5 block text-xs font-bold text-zinc-400">
+                    Orientation <span className="font-normal text-zinc-600">optional</span>
+                  </label>
+                  <select
+                    id={`video-orientation-${video.id}`}
+                    value={orientation}
+                    onChange={(event) => setOrientation(event.target.value as VideoOrientation | "")}
+                    className={fieldClassName}
+                  >
+                    <option value="">Unknown</option>
+                    {VIDEO_ORIENTATIONS.map((value) => (
+                      <option key={value} value={value}>
+                        {VIDEO_ORIENTATION_LABELS[value]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor={`video-content-type-${video.id}`} className="mb-1.5 block text-xs font-bold text-zinc-400">
+                    Content type <span className="font-normal text-zinc-600">optional</span>
+                  </label>
+                  <select
+                    id={`video-content-type-${video.id}`}
+                    value={contentType}
+                    onChange={(event) => setContentType(event.target.value as VideoContentType | "")}
+                    className={fieldClassName}
+                  >
+                    <option value="">Unclassified</option>
+                    {VIDEO_CONTENT_TYPES.map((value) => (
+                      <option key={value} value={value}>
+                        {VIDEO_CONTENT_TYPE_LABELS[value]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>

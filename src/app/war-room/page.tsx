@@ -635,8 +635,8 @@ export default async function WarRoomPage() {
                 positive
               />
               <BreakdownRow
-                label="Output (Deep Work)"
-                value={leverage.breakdown.deepWorkBonus}
+                label="Output Volume"
+                value={leverage.breakdown.outputVolumeBonus}
                 positive
               />
               <BreakdownRow

@@ -104,7 +104,7 @@ export interface LeverageScore {
   breakdown: {
     effectiveYieldBonus: number;
     revenueGrowthBonus: number;
-    deepWorkBonus: number;
+    outputVolumeBonus: number;
     revisionDragPenalty: number;
     crashPenalty: number;
     physicalActivityBonus: number;
@@ -220,7 +220,13 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   const prevMonthVideos = allCompletedVideos.filter(
     (v) => v.date >= prevMonthStart && v.date <= prevMonthEnd
   );
-  const activeClients = allClients.filter((c) => c.status === "active");
+  // Geladeira (Sprint 1.2 P0): War Room already scoped "active" to
+  // status === "active"; now also excludes Geladeira clients so an
+  // archived-but-still-status-active client stops appearing in top-client
+  // revenue rankings and client-drain ranking once archived.
+  const activeClients = allClients.filter(
+    (c) => c.status === "active" && c.archivalState !== "GELADEIRA",
+  );
 
   // ── INCOME INTELLIGENCE ───────────────────────────────────────────────────
 
@@ -462,9 +468,15 @@ export async function getWarRoomData(): Promise<WarRoomData> {
     ? Math.min(Math.max(revenueGrowthPct * 3, 0), 150)
     : 0;
 
-  // Deep work bonus: placeholder (ActivityWatch integration future)
-  // For now: +2 per video this month (capped at 100)
-  const deepWorkBonus = Math.min(thisMonthVideoCount * 2, 100);
+  // Output volume bonus: +2 per video delivered this month (capped at
+  // 100). Renamed from "deepWorkBonus" (Sunday Systems Round, Phase F,
+  // RMEDIA_OPERATIONAL_INVARIANTS.md rule on honest metric naming) --
+  // this has only ever counted completed videos, never time or effort, so
+  // it must not carry a name that implies a future time-based signal. If
+  // a real deep-work/focus-time metric is ever built from work_sessions or
+  // a sensor, it is a separate, honestly-named metric alongside this one,
+  // never a silent redefinition of it.
+  const outputVolumeBonus = Math.min(thisMonthVideoCount * 2, 100);
 
   // Revision drag penalty: -4 per 0.1 above 0.5 threshold
   const revisionDragPenalty =
@@ -484,7 +496,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   const rawScore =
     effectiveYieldBonus +
     revenueGrowthBonus +
-    deepWorkBonus +
+    outputVolumeBonus +
     physicalActivityBonus +
     streakBonus -
     revisionDragPenalty -
@@ -540,7 +552,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       breakdown: {
         effectiveYieldBonus,
         revenueGrowthBonus,
-        deepWorkBonus,
+        outputVolumeBonus,
         revisionDragPenalty,
         crashPenalty,
         physicalActivityBonus,

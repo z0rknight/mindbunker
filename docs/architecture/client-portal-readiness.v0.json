@@ -1,0 +1,145 @@
+{
+  "version": "0.1.0",
+  "generated": "2026-08-23",
+  "generated_by": "RMEDIA OS Client Portal Adversarial Research Round",
+  "scope": "local-only research + 4 targeted fixes, no deploy, no remote D1, no new external providers",
+  "auth": {
+    "doors": [
+      {
+        "name": "capability_token",
+        "route": "/client/[token]",
+        "status": "unchanged_preexisting",
+        "session": false,
+        "revocable": true,
+        "revocation_mechanism": "gateway_invitations.revokedAt"
+      },
+      {
+        "name": "persistent_password",
+        "route": "/client/login",
+        "status": "implemented_prior_round",
+        "session": true,
+        "cookie": "mb_client_session",
+        "token_version_tag": "cs1",
+        "revocable": true,
+        "revocation_mechanism": "live, via portalPasswordHash null-check + portalPasswordSetAt epoch comparison on every request"
+      }
+    ],
+    "password_hashing": "pbkdf2-sha256, 310000 iterations, reused verbatim from admin auth-core.ts",
+    "rate_limiting": {
+      "table": "auth_attempts",
+      "max_attempts": 5,
+      "window_seconds": 900,
+      "fingerprint_scope": "client:{ip}:{normalized_email}"
+    },
+    "cookie_flags": { "httpOnly": true, "secure": "production_only", "sameSite": "strict" },
+    "csrf_posture": "sameSite=strict cookie + Next.js Server Actions default Origin-check, not weakened in next.config.ts",
+    "timing_side_channel": {
+      "found": true,
+      "location": "verifyClientCredentials",
+      "status": "fixed_this_round",
+      "fix": "dummy PBKDF2 verification burned on the no-match path so response time doesn't distinguish unknown-email from wrong-password"
+    }
+  },
+  "authorization": {
+    "clientId_trust_source": "session-derived only (verified HMAC payload), never a route param/query/body value",
+    "ownership_reverification": "yes, in pure projection functions in addition to SQL WHERE scoping",
+    "idor_paths_checked": [
+      "dashboard access with another client's session",
+      "transitionVideoStatusAsClient on a videoId owned by a different client",
+      "capability token used to reach the session-only dashboard route"
+    ],
+    "idor_findings": "none — all attempted paths blocked at the server/data boundary",
+    "automated_e2e_authz_tests": false,
+    "automated_e2e_authz_tests_note": "no request-context (next/headers) mocking exists in this test harness for admin auth either — not a regression this round introduced"
+  },
+  "client_safe_fields": [
+    "client_name", "project_name", "project_status_label", "project_deadline",
+    "video_title", "video_status_label", "video_delivery_url", "video_cover_url",
+    "video_orientation", "video_content_type", "video_last_updated"
+  ],
+  "private_fields": [
+    "work_sessions.*", "clients.totalRevenue", "clients.notes", "clients.qualificationNotes",
+    "crm_events.description (raw)", "video_logs.notes", "video_logs.revisionsCount",
+    "health_logs.*", "war_room analytics", "hist_* (all tables, structurally unreachable from /client)"
+  ],
+  "metrics": [
+    { "name": "completed_videos_total", "classification": "SAFE_USEFUL_NOW", "shipped": true },
+    { "name": "in_production_count", "classification": "SAFE_USEFUL_NOW", "shipped": true },
+    { "name": "ready_for_review_count", "classification": "SAFE_USEFUL_NOW", "shipped": true },
+    { "name": "completed_this_week", "classification": "SAFE_USEFUL_NOW", "shipped": true },
+    { "name": "recent_deliveries", "classification": "SAFE_USEFUL_NOW", "shipped": true },
+    { "name": "active_projects_count", "classification": "SAFE_USEFUL_NOW", "shipped": true },
+    { "name": "content_type_breakdown_completed", "classification": "SAFE_USEFUL_NOW", "shipped": true },
+    { "name": "total_videos_all_states", "classification": "SAFE_LOW_VALUE", "shipped": false },
+    { "name": "videos_per_project", "classification": "SAFE_LOW_VALUE", "shipped": false },
+    { "name": "days_since_last_delivery", "classification": "SAFE_LOW_VALUE", "shipped": false },
+    { "name": "output_trend_week_over_week", "classification": "NEEDS_MORE_DATA", "shipped": false },
+    { "name": "average_delivery_cadence", "classification": "AMBIGUOUS_MISLEADING", "shipped": false },
+    { "name": "turnaround_time", "classification": "AMBIGUOUS", "shipped": false },
+    { "name": "revisions_count_client_facing", "classification": "PRIVATE_LEANING", "shipped": false },
+    { "name": "approval_rate", "classification": "MISLEADING", "shipped": false },
+    { "name": "delivery_streak", "classification": "MISLEADING_REJECTED", "shipped": false },
+    { "name": "backlog_size", "classification": "AMBIGUOUS_FRAMING", "shipped": false }
+  ],
+  "delivery_semantics": {
+    "done_evidence_paths": [
+      { "path": "IN_PROGRESS -> DONE (operator direct)", "client_label": "Delivered", "evidence": "video.finished, actor=admin", "ambiguity": "high", "risk": "medium" },
+      { "path": "READY_FOR_REVIEW -> DONE (client Approve)", "client_label": "Delivered", "evidence": "video.finished, actor=client", "ambiguity": "low", "risk": "low" },
+      { "path": "READY_FOR_REVIEW -> DONE (operator override)", "client_label": "Delivered", "evidence": "video.finished, actor=admin", "ambiguity": "high", "risk": "medium" }
+    ],
+    "delivery_url_required_for_done": false,
+    "finding": "actor field already distinguishes client-confirmed vs operator-only completion at the data level; the client-facing label does not yet use that distinction",
+    "recommendation": "documented, not implemented — product decision required",
+    "options": [
+      "label 'Delivered' only when deliveryUrl is present, else 'Completed'",
+      "distinguish client-approved vs operator-marked-done in the client label itself"
+    ]
+  },
+  "review_semantics": {
+    "allowed_client_transitions": ["READY_FOR_REVIEW->DONE", "READY_FOR_REVIEW->CHANGES_REQUESTED"],
+    "concurrency_control": "optimistic, UPDATE ... WHERE status = expected_status",
+    "adversarial_sequences_tested_by_reading": [
+      "approve then request-changes: second call rejected, no contradictory event",
+      "two simultaneous approvals: second loses the race, rejected, no duplicate event",
+      "cross-client action attempt: rejected identically to not-found, no existence oracle",
+      "revoked session mutation attempt: rejected before any DB write",
+      "replay of a successful approve: rejected, not silently idempotent"
+    ],
+    "actor_distinguishes_client_vs_admin": true
+  },
+  "threats": [
+    { "attack": "leaked capability/reset link", "severity": "medium", "defense": "token-hashed, TTL, revocable", "gap": "token lives in URL path (logs/history)", "status": "accepted_inherent" },
+    { "attack": "stolen/reused password", "severity": "low", "defense": "rate limit, PBKDF2-310k, live revocation", "gap": "none found" },
+    { "attack": "random attacker probing login", "severity": "low", "defense": "rate limit, generic error, timing side-channel fixed this round", "gap": "none found" },
+    { "attack": "cross-client IDOR via URL/id manipulation", "severity": "low", "defense": "session-derived clientId only, ownership re-derived", "gap": "none found" },
+    { "attack": "duplicate email across two portal-enabled clients", "severity": "low", "defense": "app-level collision check + read-time ambiguity refusal", "gap": "no DB-level uniqueness constraint, theoretical admin-side TOCTOU race" },
+    { "attack": "broken/malicious cover image URL", "severity": "low", "defense": "HTTPS-only validation, unoptimized render (no SSRF proxy)", "gap": "no onError fallback for a dead-but-valid-shaped URL" },
+    { "attack": "shared-cache leak of authenticated HTML", "severity": "was_medium_now_low", "defense": "force-dynamic now explicit on all 4 new routes (fixed this round), strict sameSite cookie", "gap": "none found after fix" }
+  ],
+  "production_blockers": [
+    { "item": "password reset has no real email delivery", "blocking": true, "design_complete": true },
+    { "item": "no rendered visual/responsive QA (sandbox cannot hold next dev alive)", "blocking": "soft", "design_complete": "n/a" },
+    { "item": "stale .git/index.lock blocks committing from this sandbox (unrelated to this round's code)", "blocking": false, "design_complete": "n/a" }
+  ],
+  "open_decisions": [
+    "Should the client-facing 'Delivered' label require deliveryUrl presence, or distinguish client-approved vs operator-marked-done, or both, or neither?",
+    "Should GeladeiraControl's active-access warning be extended to cover portal passwords in addition to gateway links?",
+    "Which email provider (if any) should back production password reset?",
+    "Is a minimal audit log (password-reset-completed only) worth adding, or is current logging (none for auth events) acceptable given it matches admin precedent?"
+  ],
+  "code_changed_this_round": [
+    "src/app/client/dashboard/page.tsx (+force-dynamic)",
+    "src/app/client/login/page.tsx (+force-dynamic)",
+    "src/app/client/reset/page.tsx (+force-dynamic)",
+    "src/app/client/reset/[token]/page.tsx (+force-dynamic)",
+    "src/modules/client-portal/auth-data.ts (timing side-channel fix)"
+  ],
+  "tests_run": {
+    "npm_test": "134/134 passing, no new tests added this round (research round, no new invariant required a new test)",
+    "typecheck": "clean",
+    "scoped_lint": "clean on all touched files",
+    "full_repo_lint": "not completed — exceeded this sandbox's per-command time budget, not claimed as passing",
+    "migration_reverify": "not re-run — no schema touched this round",
+    "visual_qa": "not performed — structural reading only, explicitly not claimed as rendered verification"
+  }
+}

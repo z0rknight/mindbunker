@@ -1,13 +1,16 @@
 import { getAdminBookingConfiguration } from "@/modules/booking/data";
-import { getClientById } from "@/modules/crm/actions";
+import { getClientById, getClientIntelligence } from "@/modules/crm/actions";
 import { getAdminGatewayWorkspace } from "@/modules/gateway/data";
 import { OPPORTUNITY_STAGE_LABELS } from "@/modules/gateway/config";
 import { getProjectsForClient } from "@/modules/projects/actions";
 import { getInstagramImportStatus } from "@/modules/crm/actions";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { ClientIntelligencePanel } from "./ClientIntelligencePanel";
 import { ClientTabs } from "./ClientTabs";
+import { GeladeiraControl } from "./GeladeiraControl";
 import { OpportunityPanel } from "./OpportunityPanel";
+import { PortalAccessPanel } from "./PortalAccessPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -39,12 +42,14 @@ export default async function ClientDetailPage({
   if (!client) {
     notFound();
   }
-  const [workspace, bookingConfiguration, projects, instagramStatus] = await Promise.all([
-    getAdminGatewayWorkspace(clientId),
-    getAdminBookingConfiguration(),
-    getProjectsForClient(clientId),
-    getInstagramImportStatus(),
-  ]);
+  const [workspace, bookingConfiguration, projects, instagramStatus, clientIntelligence] =
+    await Promise.all([
+      getAdminGatewayWorkspace(clientId),
+      getAdminBookingConfiguration(),
+      getProjectsForClient(clientId),
+      getInstagramImportStatus(),
+      getClientIntelligence(clientId),
+    ]);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
@@ -91,6 +96,17 @@ export default async function ClientDetailPage({
         </div>
       </div>
 
+      <GeladeiraControl
+        clientId={client.id}
+        archivalState={client.archivalState}
+        archivedAt={client.archivedAt ? client.archivedAt.toISOString() : null}
+        invitation={
+          workspace.invitation
+            ? { id: workspace.invitation.id, status: workspace.invitation.status }
+            : null
+        }
+      />
+
       <OpportunityPanel
         client={{
           id: client.id,
@@ -122,6 +138,22 @@ export default async function ClientDetailPage({
             : null
         }
       />
+
+      {/* Internal Client Intelligence (Sunday Systems Round, Phase H) --
+          never rendered on the client-facing Vault or Gateway. */}
+      <ClientIntelligencePanel summary={clientIntelligence} />
+
+      {/* Client Portal Identity (Sprint 1.2.2) -- operator-side setup for
+          the client's persistent /client/dashboard login. */}
+      <div className="mb-6">
+        <PortalAccessPanel
+          clientId={client.id}
+          clientEmail={client.email}
+          portalPasswordSetAt={
+            client.portalPasswordSetAt ? client.portalPasswordSetAt.toISOString() : null
+          }
+        />
+      </div>
 
       {/* Client Tabs */}
       <ClientTabs

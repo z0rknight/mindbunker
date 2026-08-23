@@ -1,6 +1,10 @@
 import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
 import type { OperationalVideoEntry } from "@/modules/productivity/core";
-import type { VideoStatus } from "@/modules/productivity/config";
+import type {
+  VideoContentType,
+  VideoOrientation,
+  VideoStatus,
+} from "@/modules/productivity/config";
 import {
   WORK_SESSION_ACTIVITY_LABELS,
   formatClosedDuration,
@@ -28,6 +32,9 @@ type VideoRow = {
   delivered: boolean;
   deliveryUrl: string | null;
   notes: string | null;
+  coverUrl: string | null;
+  orientation: VideoOrientation | null;
+  contentType: VideoContentType | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 };

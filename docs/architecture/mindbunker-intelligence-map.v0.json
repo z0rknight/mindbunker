@@ -1,0 +1,183 @@
+{
+  "version": "0.1.0",
+  "generated": "2026-08-23",
+  "generated_by": "MindBunker Sunday Deep Systems Round",
+  "sources": [
+    { "id": "d1_native", "label": "Cloudflare D1 (native tables)", "tier": "native", "confidence": "HIGH" },
+    { "id": "hist_reference_layer", "label": "Historical Reference Layer (hist_* tables)", "tier": "historical_reconstructed", "confidence": "MIXED — see hist_facts.confidence per row" },
+    { "id": "old_docs_notion_archaeology", "label": "Legacy Notion / old brainstorm documents", "tier": "context_only", "confidence": "N/A — never authoritative" }
+  ],
+  "entities": [
+    {
+      "name": "Client",
+      "table": "clients",
+      "source_of_truth": "d1_native",
+      "lifecycle": ["lead", "active", "inactive"],
+      "archival_state": ["ACTIVE_SURFACE", "GELADEIRA"],
+      "owns": ["Project", "WorkSession (indirectly via Video)", "GatewayInvitation", "IntakeSubmission", "Booking", "CrmEvent"],
+      "client_visible": false,
+      "notes": "archivalState (Geladeira) is a visibility flag orthogonal to status/opportunityStage/converted/contacted. Deletion refused once any real history exists (clientHasProtectedHistory)."
+    },
+    {
+      "name": "Project",
+      "table": "projects",
+      "source_of_truth": "d1_native",
+      "lifecycle": ["planned", "active", "review", "delivered", "archived"],
+      "owns": ["Video"],
+      "client_visible": true,
+      "client_visible_fields": ["name", "status_label", "deadline"]
+    },
+    {
+      "name": "Video",
+      "table": "video_logs",
+      "source_of_truth": "d1_native",
+      "lifecycle": ["PLANNED", "IN_PROGRESS", "READY_FOR_REVIEW", "CHANGES_REQUESTED", "DONE"],
+      "lifecycle_ambiguity": "READY_FOR_REVIEW does not distinguish operator-review from client-review; DONE (shown to clients as 'Delivered') means the operator marked it finished, not that delivery to the client has been confirmed. Documented, not resolved, this round.",
+      "owns": ["WorkSession", "VideoMemory (via crm_events)"],
+      "client_visible": true,
+      "client_visible_fields": ["title_or_fallback", "status_label", "last_updated", "delivery_url"]
+    },
+    {
+      "name": "WorkSession",
+      "table": "work_sessions",
+      "source_of_truth": "d1_native",
+      "invariant": "at most one globally open (ended_at IS NULL) row, enforced by a DB partial unique index",
+      "capture_source_vocabulary": ["WEB_TIMER"],
+      "capture_source_vocabulary_open_ended": true,
+      "client_visible": false,
+      "correction_audit_trail": "crm_events, type=work_session.corrected"
+    },
+    {
+      "name": "VideoMemory",
+      "table": "crm_events (type=video.note_added)",
+      "source_of_truth": "d1_native",
+      "is_own_table": false,
+      "capture_friction": "single unbounded textarea, no required classification",
+      "client_visible": false
+    },
+    {
+      "name": "CrmEvent",
+      "table": "crm_events",
+      "source_of_truth": "d1_native",
+      "overloaded": true,
+      "overloaded_uses": ["CRM lifecycle history", "VideoMemory notes", "WorkSession corrections"],
+      "architectural_debt": "P2 — flagged across multiple rounds, reused by design",
+      "client_visible": false
+    },
+    {
+      "name": "GatewayInvitation",
+      "table": "gateway_invitations",
+      "source_of_truth": "d1_native",
+      "capability_model": "token-hashed, TTL 14 days, revocable",
+      "client_visible": "indirectly — is the access credential for /g/[token] and /client/[token]"
+    },
+    {
+      "name": "IntakeSubmission",
+      "table": "intake_submissions",
+      "source_of_truth": "d1_native",
+      "written_by": "client via /g/[token] briefing form"
+    },
+    {
+      "name": "Booking",
+      "table": "bookings",
+      "source_of_truth": "d1_native"
+    },
+    {
+      "name": "Transaction",
+      "table": "transactions",
+      "source_of_truth": "d1_native",
+      "gap": "no clientId/projectId linkage — blocks 'revenue per tracked hour' and true per-client profitability derived from ledgered transactions; clients.totalRevenue is a separate, hand-maintained aggregate"
+    },
+    {
+      "name": "HistoricalFact",
+      "table": "hist_facts",
+      "source_of_truth": "hist_reference_layer",
+      "isolation": "never joined with any native table, enforced structurally and by a standing test",
+      "absence_semantics": "UNKNOWN, never zero"
+    }
+  ],
+  "events": [
+    { "type": "video.started", "table": "crm_events" },
+    { "type": "video.ready_for_review", "table": "crm_events" },
+    { "type": "video.changes_requested", "table": "crm_events" },
+    { "type": "video.finished", "table": "crm_events" },
+    { "type": "video.reopened", "table": "crm_events" },
+    { "type": "video.note_added", "table": "crm_events", "is": "VideoMemory" },
+    { "type": "work_session.corrected", "table": "crm_events" },
+    { "type": "client_archived", "table": "crm_events" },
+    { "type": "client_reactivated", "table": "crm_events" },
+    { "type": "gateway_created", "table": "crm_events" },
+    { "type": "gateway_opened", "table": "crm_events" },
+    { "type": "briefing_submitted", "table": "crm_events" },
+    { "type": "stage_changed", "table": "crm_events" }
+  ],
+  "relationships": [
+    { "from": "Client", "to": "Project", "kind": "one_to_many", "fk": "projects.clientId" },
+    { "from": "Project", "to": "Video", "kind": "one_to_many", "fk": "video_logs.projectId" },
+    { "from": "Client", "to": "Video", "kind": "one_to_many_denormalized", "fk": "video_logs.clientId", "note": "kept in sync with the owning project's client at write time" },
+    { "from": "Video", "to": "WorkSession", "kind": "one_to_many", "fk": "work_sessions.videoId" },
+    { "from": "Video", "to": "VideoMemory", "kind": "one_to_many", "fk": "crm_events.videoId (type=video.note_added)" },
+    { "from": "WorkSession", "to": "VideoMemory", "kind": "correlated_projection_not_a_fk", "basis": "same video_id + timestamp containment within [startedAt, endedAt]", "implemented_this_round": true, "function": "correlateSessionMemoryNotes (work-sessions/core.ts)" }
+  ],
+  "derived_metrics": [
+    { "name": "video_closed_seconds", "scope": "video", "status": "SAFE_NOW", "shipped": "prior round" },
+    { "name": "video_session_count", "scope": "video", "status": "SAFE_NOW", "shipped": "prior round" },
+    { "name": "session_narrative_notes", "scope": "work_session", "status": "SAFE_NOW", "shipped": "this round" },
+    { "name": "client_active_projects_count", "scope": "client", "status": "SAFE_NOW", "shipped": "this round" },
+    { "name": "client_tracked_production_seconds", "scope": "client", "status": "SAFE_NOW", "shipped": "this round" },
+    { "name": "client_last_worked_on", "scope": "client", "status": "SAFE_NOW", "shipped": "this round" },
+    { "name": "client_recent_memory_notes", "scope": "client", "status": "SAFE_NOW", "shipped": "this round" },
+    { "name": "revenue_per_video", "scope": "global", "status": "SAFE_NOW", "shipped": "prior (War Room)" },
+    { "name": "revision_drag_index", "scope": "global", "status": "SAFE_NOW", "shipped": "prior (War Room)" },
+    { "name": "output_volume_bonus", "scope": "global", "status": "SAFE_NOW", "renamed_this_round_from": "deepWorkBonus", "reason": "name must describe what it computes — an output count, not a time-based signal" },
+    { "name": "sessions_per_video_as_productivity_signal", "scope": "video", "status": "DERIVABLE_BUT_MISLEADING", "rejected": true, "reason": "operator explicitly pushed back on session count implying productivity, Aug 23 2026 dogfooding" },
+    { "name": "true_focus_time", "scope": "session", "status": "MISSING_DATA", "reason": "activity_type alone cannot distinguish focused work from idle time on the same tag" },
+    { "name": "client_sentiment_score", "scope": "client", "status": "MISSING_DATA", "reason": "no structured field exists" },
+    { "name": "revenue_per_tracked_hour", "scope": "client_or_global", "status": "FUTURE_CORRELATION_REQUIRED", "blocker": "transactions has no clientId/projectId linkage" },
+    { "name": "native_vs_historical_trend", "scope": "global", "status": "FUTURE_CORRELATION_REQUIRED", "constraint": "must remain two labeled series, never summed — see historical/native boundary invariant" }
+  ],
+  "operator_private_fields": [
+    "clients.totalRevenue",
+    "clients.notes",
+    "clients.qualificationNotes",
+    "video_logs.notes",
+    "crm_events.description (all types, including VideoMemory note bodies)",
+    "work_sessions.* (all fields)",
+    "ClientIntelligenceSummary.* (new this round — entire object is internal-only)",
+    "War Room analytics (income, efficiency, biological correlation, leverage score) in their entirety",
+    "health_logs.*"
+  ],
+  "client_safe_fields": [
+    "projects.name",
+    "projects.status (via CLIENT_PROJECT_STATUS_LABELS mapping)",
+    "projects.deadline",
+    "video_logs.title (or date-based fallback)",
+    "video_logs.status (via CLIENT_VIDEO_STATUS_LABELS mapping)",
+    "video_logs.deliveryUrl (validated HTTPS only)",
+    "video last-updated timestamp",
+    "clients.name (own name only, shown back to the authenticated client)"
+  ],
+  "historical_fields": [
+    "hist_facts.*",
+    "hist_identities.*",
+    "hist_identity_source_labels.*",
+    "hist_source_coverage.*",
+    "hist_import_batches.*"
+  ],
+  "native_fields": [
+    "clients.*", "projects.*", "video_logs.*", "work_sessions.*", "crm_events.*",
+    "gateway_invitations.*", "intake_submissions.*", "bookings.*", "transactions.*", "health_logs.*"
+  ],
+  "future_sources": [
+    { "name": "passive_desktop_sensor", "status": "explicitly_deferred", "condition": "must be designed (privacy boundary first) and justified by demonstrated bottleneck before any capture code is written" },
+    { "name": "ActivityWatch_import", "status": "explicitly_deferred", "existing_boundary": "hist_* artifact-import pattern already exists and is the correct landing point if/when built" },
+    { "name": "Frame.io_integration", "status": "explicitly_deferred", "note": "operator known to use Frame.io for review workflow today; not integrated, only noted" },
+    { "name": "Notion_sync", "status": "explicitly_deferred" }
+  ],
+  "unanswered_questions": [
+    "Should READY_FOR_REVIEW be split into an operator-review vs client-review distinction? (documented in §14 of the round report, not decided)",
+    "Should DONE require a separate, explicit 'delivered to client' confirmation before the Vault shows 'Delivered'? (same section, not decided)",
+    "Should transactions gain a clientId/projectId linkage to unlock revenue-per-tracked-hour? (schema change, out of this round's authority)",
+    "Is the War Room Leverage Score / XP / Level framing worth keeping as-is, given it gamifies business metrics rather than work-session activity? (flagged, not redesigned)"
+  ]
+}

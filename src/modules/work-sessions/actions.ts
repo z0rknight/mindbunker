@@ -3,19 +3,24 @@
 import "server-only";
 
 import { getAuthenticatedDb } from "@/db";
-import { videoLogs } from "@/db/schema";
+import { crmEvents, videoLogs } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
+  CORRECT_WORK_SESSION_SQL,
   START_WORK_SESSION_SQL,
+  STOP_WORK_SESSION_AT_SQL,
   STOP_WORK_SESSION_SQL,
+  describeSessionCorrection,
   isWorkSessionActivityType,
+  isWorkSessionId,
   isWorkSessionVideoId,
   toUnixSeconds,
+  validateSessionCorrection,
   type VideoWorkSessionState,
   type WorkSessionActivityType,
 } from "./core";
-import { getVideoWorkSessionState } from "./data";
+import { getVideoWorkSessionState, getWorkSessionById } from "./data";
 
 type RawMutationRow = {
   id: number;
@@ -25,6 +30,8 @@ type RawMutationRow = {
   activity_type: string;
   note: string | null;
 };
+
+type RawCorrectionRow = RawMutationRow & { updated_at: number | null };
 
 type WorkSessionActionResult =
   | {
@@ -37,6 +44,10 @@ type WorkSessionActionResult =
       error: string;
       state?: VideoWorkSessionState;
     };
+
+type CorrectionActionResult =
+  | { success: true; message: string }
+  | { success: false; error: string };
 
 async function videoExists(videoId: number) {
   const db = await getAuthenticatedDb();
@@ -51,6 +62,11 @@ async function videoExists(videoId: number) {
 function activeSessionMessage(state: VideoWorkSessionState) {
   if (!state.openSession) return "Another work session could not be started.";
   return `Work is already running on ${state.openSession.videoTitle}.`;
+}
+
+function revalidateWorkSessionSurfaces() {
+  revalidatePath("/productivity");
+  revalidatePath("/productivity/sessions");
 }
 
 export async function startWorkSession(
@@ -131,4 +147,163 @@ export async function stopWorkSession(
     message: "Work session stopped.",
     state: await getVideoWorkSessionState(videoId),
   };
+}
+
+// Stale-session recovery, §6 model B's "Correct end time" branch: stops the
+// one open session at an operator-chosen past timestamp instead of "now".
+// This is still the session's *first* close — not a correction of an
+// already-closed row — so it is not logged as a work_session.corrected
+// audit event; pressing Stop with a chosen time is exactly as authoritative
+// as pressing Stop with the implicit "now".
+export async function stopWorkSessionAt(
+  videoId: number,
+  endedAtIso: string,
+): Promise<WorkSessionActionResult> {
+  if (!isWorkSessionVideoId(videoId)) {
+    return { success: false, error: "Invalid video." };
+  }
+  const endedAt = new Date(endedAtIso);
+  if (Number.isNaN(endedAt.getTime())) {
+    return { success: false, error: "Choose a valid end time." };
+  }
+
+  const db = await getAuthenticatedDb();
+  const now = new Date();
+  const stopped = await db.$client
+    .prepare(STOP_WORK_SESSION_AT_SQL)
+    .bind(videoId, toUnixSeconds(endedAt), toUnixSeconds(now))
+    .first<RawMutationRow>();
+
+  if (!stopped) {
+    if (!(await videoExists(videoId))) {
+      return { success: false, error: "Video not found." };
+    }
+    const state = await getVideoWorkSessionState(videoId);
+    if (!state.openSession || state.openSession.videoId !== videoId) {
+      return {
+        success: false,
+        error: state.openSession
+          ? `No open session for this video. Work is active on ${state.openSession.videoTitle}.`
+          : "This work session is already stopped.",
+        state,
+      };
+    }
+    const startedAtMs = Date.parse(state.openSession.startedAt);
+    if (endedAt.getTime() <= startedAtMs) {
+      return { success: false, error: "End time must be after the session's start time.", state };
+    }
+    return { success: false, error: "End time cannot be in the future.", state };
+  }
+
+  revalidatePath("/productivity");
+  return {
+    success: true,
+    message: "Work session stopped.",
+    state: await getVideoWorkSessionState(videoId),
+  };
+}
+
+// Safe completed-session correction (Sprint 1.2.1 Ledger P1, §5). Only a
+// CLOSED session can be corrected — the open/live session is untouchable
+// here by construction (CORRECT_WORK_SESSION_SQL's own WHERE guard), so
+// this can never race the single-open-session invariant. Every correction
+// that changes a field is logged as a crm_events row (type
+// "work_session.corrected") rather than kept in a separate history table —
+// the smallest audit mechanism that fits the existing house pattern
+// (crm_events already carries CRM history and Video Memory notes the same
+// way), not a new event-sourcing system.
+export async function correctWorkSession(
+  sessionId: number,
+  input: {
+    videoId: number;
+    startedAt: string;
+    endedAt: string;
+    activityType: WorkSessionActivityType;
+    note: string | null;
+  },
+): Promise<CorrectionActionResult> {
+  if (!isWorkSessionId(sessionId)) {
+    return { success: false, error: "Invalid session." };
+  }
+
+  const existing = await getWorkSessionById(sessionId);
+  if (!existing) {
+    return { success: false, error: "Work session not found." };
+  }
+  if (existing.before.endedAt === null) {
+    return {
+      success: false,
+      error: "Stop this session before correcting it.",
+    };
+  }
+
+  const validated = validateSessionCorrection({
+    videoId: input.videoId,
+    startedAt: new Date(input.startedAt),
+    endedAt: new Date(input.endedAt),
+    activityType: input.activityType,
+    note: input.note,
+  });
+  if (!validated.success) return validated;
+
+  const db = await getAuthenticatedDb();
+
+  if (validated.data.videoId !== existing.before.videoId) {
+    if (!(await videoExists(validated.data.videoId))) {
+      return { success: false, error: "Chosen video not found." };
+    }
+  }
+
+  const corrected = await db.$client
+    .prepare(CORRECT_WORK_SESSION_SQL)
+    .bind(
+      sessionId,
+      validated.data.videoId,
+      toUnixSeconds(validated.data.startedAt),
+      toUnixSeconds(validated.data.endedAt),
+      validated.data.activityType,
+      validated.data.note,
+      toUnixSeconds(new Date()),
+    )
+    .first<RawCorrectionRow>();
+
+  if (!corrected) {
+    // The pre-checks above already ruled out "not found" and "still open";
+    // what's left is the SQL-level duration/video guard rejecting the
+    // write, or a race where the session was reopened between the checks
+    // and this statement (extremely unlikely — correction only targets
+    // already-closed rows, and nothing reopens a closed row). Fail closed
+    // with a generic, honest message rather than guessing which.
+    return {
+      success: false,
+      error: "Could not save this correction. Refresh and try again.",
+    };
+  }
+
+  const newVideo = await db
+    .select({ clientId: videoLogs.clientId, title: videoLogs.title, date: videoLogs.date })
+    .from(videoLogs)
+    .where(eq(videoLogs.id, validated.data.videoId))
+    .limit(1);
+  const newClientId = newVideo[0]?.clientId ?? null;
+  const newVideoTitle = newVideo[0]?.title ?? `Video ${newVideo[0]?.date ?? validated.data.videoId}`;
+
+  const description = describeSessionCorrection(
+    sessionId,
+    existing.before,
+    validated.data,
+    newVideoTitle,
+  );
+
+  await db.insert(crmEvents).values({
+    clientId: newClientId,
+    videoId: validated.data.videoId,
+    type: "work_session.corrected",
+    actor: "admin",
+    description,
+    createdAt: new Date(),
+  });
+
+  revalidateWorkSessionSurfaces();
+  return { success: true, message: "Session corrected." };
 }

@@ -1,0 +1,698 @@
+{
+  "contract_version": "0.1.0",
+  "generated_date": "2026-08-22",
+  "identities": [
+    {
+      "canonical_id": "client:sean_go",
+      "canonical_label": "Sean Go",
+      "identity_type": "client",
+      "resolution_status": "HUMAN_CONFIRMED",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Human-confirmed by Emmanuel da Rosa on 2026-08-22: \"Sean\" = \"Sean Go\". \"Sean\", \"Sean 2024-1\", and \"Sean 2024-2\" in Clockify and \"Sean Go\" in Upwork lifetime billings refer to the same real client. This is a human identity resolution, not a heuristic/algorithmic match -- prior to this confirmation the same link was surfaced as a MEDIUM-HIGH confidence CANDIDATE based on first-name substring matching alone (see IDENTITY_DICTIONARIES_V0.md from the previous round).",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Sean Go"
+        },
+        {
+          "source": "clockify_detailed_export",
+          "label": "Sean"
+        },
+        {
+          "source": "clockify_detailed_export",
+          "label": "Sean 2024-1"
+        },
+        {
+          "source": "clockify_detailed_export",
+          "label": "Sean 2024-2"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:4spaces",
+      "canonical_label": "4spaces",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "4spaces"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:accelerator_conseil",
+      "canonical_label": "ACCELERATOR CONSEIL",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "ACCELERATOR CONSEIL"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:barbr_ltd",
+      "canonical_label": "Barbr Ltd",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Barbr Ltd"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:bozzeh_e",
+      "canonical_label": "Bozzeh E",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Bozzeh E"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:cheng_zhi_lim",
+      "canonical_label": "Cheng Zhi Lim",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Cheng Zhi Lim"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:chris_m",
+      "canonical_label": "Chris M",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Chris M"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:fast_property_consultants",
+      "canonical_label": "Fast Property Consultants",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Fast Property Consultants"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:jordan",
+      "canonical_label": "Jordan",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Jordan"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:marina_arruda",
+      "canonical_label": "Marina Arruda",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Marina Arruda"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:martins_bike_shop",
+      "canonical_label": "Martins Bike Shop",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Martins Bike Shop"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:mitchell_humbert",
+      "canonical_label": "Mitchell Humbert",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Mitchell Humbert"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:nina_takesh_designs",
+      "canonical_label": "Nina Takesh Designs",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Nina Takesh Designs"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:nnsoftware_gmbh",
+      "canonical_label": "nnSoftware GmbH",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "nnSoftware GmbH"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:noble_scripts",
+      "canonical_label": "Noble Scripts",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Noble Scripts"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:oscar_hallerod",
+      "canonical_label": "Oscar Hallerod",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Oscar Hallerod"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:ra_digital",
+      "canonical_label": "RA Digital",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "RA Digital"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:rad_power_bikes",
+      "canonical_label": "Rad Power Bikes",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Rad Power Bikes"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:ricered_gmbh",
+      "canonical_label": "RiceRed GmbH",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "RiceRed GmbH"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:simply_buttered",
+      "canonical_label": "Simply Buttered",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Simply Buttered"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:socials_by_hb",
+      "canonical_label": "Socials by HB",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Socials by HB"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:taryn_dubreuil",
+      "canonical_label": "Taryn Dubreuil",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Taryn Dubreuil"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:tcc",
+      "canonical_label": "TCC",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "TCC"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:verziri_llc",
+      "canonical_label": "Verziri LLC",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Verziri LLC"
+        }
+      ]
+    },
+    {
+      "canonical_id": "client:zazmia",
+      "canonical_label": "Zazmia -",
+      "identity_type": "client",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in upwork_lifetime_billings. No textual match found against any Clockify label or Upwork contract title during the identity cross-check in the prior round. Not re-checked this round.",
+      "source_labels": [
+        {
+          "source": "upwork_lifetime_billings",
+          "label": "Zazmia -"
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:venda_publicicadeeu_mesmo",
+      "canonical_label": "VENDA / PUBLICICADEEU MESMO",
+      "identity_type": "internal_category",
+      "resolution_status": "INTERNAL",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Contains an internal-work marker (EU MESMO / INTERNO / CANAIS INTERNOS) -- treated as non-client internal work, not an unresolved external client.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "VENDA / PUBLICICADEEU MESMO",
+          "occurrences": 8
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:oneplan",
+      "canonical_label": "ONEPLAN",
+      "identity_type": "unresolved_clockify_label",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in clockify_detailed_export. No textual match found against any Upwork client name or contract title.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "ONEPLAN",
+          "occurrences": 22
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:produ_oupwork",
+      "canonical_label": "PRODUÇÃOUpwork",
+      "identity_type": "unresolved_clockify_label",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in clockify_detailed_export. No textual match found against any Upwork client name or contract title.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "PRODUÇÃOUpwork",
+          "occurrences": 77
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:poosh_media_groupalex_abazov",
+      "canonical_label": "Poosh Media GroupAlex Abazov",
+      "identity_type": "unresolved_clockify_label",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in clockify_detailed_export. No textual match found against any Upwork client name or contract title.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "Poosh Media GroupAlex Abazov",
+          "occurrences": 5
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:atendimentoupwork",
+      "canonical_label": "ATENDIMENTOUpwork",
+      "identity_type": "unresolved_clockify_label",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in clockify_detailed_export. No textual match found against any Upwork client name or contract title.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "ATENDIMENTOUpwork",
+          "occurrences": 9
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:planejamento_gest_oeu_mesmo",
+      "canonical_label": "PLANEJAMENTO / GESTÃOEU MESMO",
+      "identity_type": "internal_category",
+      "resolution_status": "INTERNAL",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Contains an internal-work marker (EU MESMO / INTERNO / CANAIS INTERNOS) -- treated as non-client internal work, not an unresolved external client.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "PLANEJAMENTO / GESTÃOEU MESMO",
+          "occurrences": 45
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:opera_odrone_porto_alegre",
+      "canonical_label": "OPERAÇÃODRONE PORTO ALEGRE",
+      "identity_type": "unresolved_clockify_label",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in clockify_detailed_export. No textual match found against any Upwork client name or contract title.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "OPERAÇÃODRONE PORTO ALEGRE",
+          "occurrences": 2
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:edi_o_de_v_deoag_ncias_porto_alegre",
+      "canonical_label": "EDIÇÃO DE VÍDEOAgências Porto Alegre",
+      "identity_type": "unresolved_clockify_label",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in clockify_detailed_export. No textual match found against any Upwork client name or contract title.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "EDIÇÃO DE VÍDEOAgências Porto Alegre",
+          "occurrences": 9
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:arte_cria_oeu_mesmo",
+      "canonical_label": "ARTE/CRIAÇÃOEU MESMO",
+      "identity_type": "internal_category",
+      "resolution_status": "INTERNAL",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Contains an internal-work marker (EU MESMO / INTERNO / CANAIS INTERNOS) -- treated as non-client internal work, not an unresolved external client.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "ARTE/CRIAÇÃOEU MESMO",
+          "occurrences": 6
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:agencia_preview",
+      "canonical_label": "Agencia Preview",
+      "identity_type": "unresolved_clockify_label",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in clockify_detailed_export. No textual match found against any Upwork client name or contract title.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "Agencia Preview",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:bonecao_youtubeclientes_marie",
+      "canonical_label": "Bonecao - YouTubeClientes Marie",
+      "identity_type": "unresolved_clockify_label",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in clockify_detailed_export. No textual match found against any Upwork client name or contract title.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "Bonecao - YouTubeClientes Marie",
+          "occurrences": 4
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:klashxklashx",
+      "canonical_label": "KLASHXKLASHX",
+      "identity_type": "unresolved_clockify_label",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in clockify_detailed_export. No textual match found against any Upwork client name or contract title.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "KLASHXKLASHX",
+          "occurrences": 9
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:edi_o_de_videodaniel_dalen",
+      "canonical_label": "Edição de VideoDaniel Dalen",
+      "identity_type": "unresolved_clockify_label",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in clockify_detailed_export. No textual match found against any Upwork client name or contract title.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "Edição de VideoDaniel Dalen",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:planejamentoag_ncias_porto_alegre",
+      "canonical_label": "PLANEJAMENTOAgências Porto Alegre",
+      "identity_type": "unresolved_clockify_label",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in clockify_detailed_export. No textual match found against any Upwork client name or contract title.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "PLANEJAMENTOAgências Porto Alegre",
+          "occurrences": 6
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:ads_ws",
+      "canonical_label": "ADS WS",
+      "identity_type": "unresolved_clockify_label",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in clockify_detailed_export. No textual match found against any Upwork client name or contract title.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "ADS WS",
+          "occurrences": 6
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:produ_o_pesquisaupwork",
+      "canonical_label": "PRODUÇÃO: pesquisaUpwork",
+      "identity_type": "unresolved_clockify_label",
+      "resolution_status": "SINGLE_SOURCE_ONLY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Present only in clockify_detailed_export. No textual match found against any Upwork client name or contract title.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "PRODUÇÃO: pesquisaUpwork",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:venda_publicicade_site_rosamedia_comeu_mesmo",
+      "canonical_label": "VENDA / PUBLICICADE: Site Rosamedia.comEU MESMO",
+      "identity_type": "internal_category",
+      "resolution_status": "INTERNAL",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Contains an internal-work marker (EU MESMO / INTERNO / CANAIS INTERNOS) -- treated as non-client internal work, not an unresolved external client.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "VENDA / PUBLICICADE: Site Rosamedia.comEU MESMO",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:interno",
+      "canonical_label": "INTERNO",
+      "identity_type": "internal_category",
+      "resolution_status": "INTERNAL",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Contains an internal-work marker (EU MESMO / INTERNO / CANAIS INTERNOS) -- treated as non-client internal work, not an unresolved external client.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "INTERNO",
+          "occurrences": 2
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:artecanais_internos",
+      "canonical_label": "ARTECANAIS INTERNOS",
+      "identity_type": "internal_category",
+      "resolution_status": "INTERNAL",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Contains an internal-work marker (EU MESMO / INTERNO / CANAIS INTERNOS) -- treated as non-client internal work, not an unresolved external client.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "ARTECANAIS INTERNOS",
+          "occurrences": 2
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_label:roteirocanais_internos",
+      "canonical_label": "ROTEIROCANAIS INTERNOS",
+      "identity_type": "internal_category",
+      "resolution_status": "INTERNAL",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Contains an internal-work marker (EU MESMO / INTERNO / CANAIS INTERNOS) -- treated as non-client internal work, not an unresolved external client.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "ROTEIROCANAIS INTERNOS",
+          "occurrences": 2
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_artifact:00_00_00",
+      "canonical_label": "00:00:00",
+      "identity_type": "extraction_artifact",
+      "resolution_status": "NOT_AN_IDENTITY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Not a real project/client label -- a Clockify UI/export artifact captured during label extraction (see IDENTITY_DICTIONARIES_V0.md limitations). Recorded here so it is never mistaken for a client.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "00:00:00",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "canonical_id": "clockify_artifact:1",
+      "canonical_label": "+1",
+      "identity_type": "extraction_artifact",
+      "resolution_status": "NOT_AN_IDENTITY",
+      "resolution_date": "2026-08-22",
+      "resolution_note": "Not a real project/client label -- a Clockify UI/export artifact captured during label extraction (see IDENTITY_DICTIONARIES_V0.md limitations). Recorded here so it is never mistaken for a client.",
+      "source_labels": [
+        {
+          "source": "clockify_detailed_export",
+          "label": "+1",
+          "occurrences": 18
+        }
+      ]
+    }
+  ]
+}

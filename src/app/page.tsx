@@ -10,23 +10,27 @@ import {
   AddRevisionButton,
 } from "@/components/ui/QuickActions";
 import { getFinanceSummary } from "@/modules/finance/actions";
-import { getVideoStats } from "@/modules/productivity/actions";
+import { getProductivityQuickOptions, getVideoStats } from "@/modules/productivity/actions";
+import { getWorkSessionOverview } from "@/modules/work-sessions/data";
 import { getHealthSummary } from "@/modules/health/actions";
 import { getCRMSummary } from "@/modules/crm/actions";
 import { getPerformanceStats } from "@/utils/statistics";
 import { getWarRoomData } from "@/modules/analytics/service";
 import { formatCurrency, currentMonthName } from "@/utils/date";
+import { HomeTrackingPanel } from "./HomeTrackingPanel";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [finance, video, health, crm, perfStats, warRoom] = await Promise.all([
+  const [finance, video, health, crm, perfStats, warRoom, trackingOptions, workSessionOverview] = await Promise.all([
     getFinanceSummary(),
     getVideoStats(),
     getHealthSummary(),
     getCRMSummary(),
     getPerformanceStats(),
     getWarRoomData(),
+    getProductivityQuickOptions(),
+    getWorkSessionOverview(),
   ]);
 
   const now = new Date();
@@ -41,6 +45,14 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-bold text-white mt-1">Dashboard</h1>
         <p className="text-zinc-500 text-sm mt-1">{currentMonthName()} {now.getFullYear()}</p>
       </div>
+
+      <HomeTrackingPanel
+        clients={trackingOptions.clients}
+        projects={trackingOptions.projects}
+        videos={trackingOptions.videos}
+        openSession={workSessionOverview.openSession}
+        openSessionElapsedSeconds={workSessionOverview.openSessionElapsedSeconds}
+      />
 
       {/* Quick Actions */}
       <div className="mb-8">

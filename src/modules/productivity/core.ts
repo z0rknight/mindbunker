@@ -1,7 +1,11 @@
 import {
   VIDEO_STATUS_TRANSITIONS,
   deliveredForVideoStatus,
+  isVideoContentType,
+  isVideoOrientation,
   isVideoStatus,
+  type VideoContentType,
+  type VideoOrientation,
   type VideoStatus,
 } from "./config.ts";
 
@@ -11,6 +15,9 @@ export type VideoInputValues = {
   clientId?: number | null;
   deliveryUrl?: string | null;
   notes?: string;
+  coverUrl?: string | null;
+  orientation?: VideoOrientation | null;
+  contentType?: VideoContentType | null;
 };
 
 export type VideoCreateInputValues = VideoInputValues & {
@@ -23,6 +30,9 @@ export type ValidatedVideoMetadata = {
   clientId: number | null;
   deliveryUrl: string | null;
   notes: string | null;
+  coverUrl: string | null;
+  orientation: VideoOrientation | null;
+  contentType: VideoContentType | null;
 };
 
 type VideoInputResult =
@@ -44,7 +54,10 @@ export type VideoMetadataField =
   | "clientId"
   | "projectId"
   | "deliveryUrl"
-  | "notes";
+  | "notes"
+  | "coverUrl"
+  | "orientation"
+  | "contentType";
 
 export type VideoLifecycleEventType =
   | "video.started"
@@ -97,6 +110,58 @@ export function validateDeliveryUrl(value: unknown) {
   }
 }
 
+export function validateCoverUrl(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return { success: true as const, value: null };
+  }
+  if (typeof value !== "string") {
+    return { success: false as const, error: "Enter a valid HTTPS cover image URL." };
+  }
+
+  const candidate = value.trim();
+  if (!candidate) {
+    return { success: true as const, value: null };
+  }
+  if (candidate.length > 2_048) {
+    return { success: false as const, error: "Cover image URL is too long." };
+  }
+
+  try {
+    const url = new URL(candidate);
+    if (
+      url.protocol !== "https:" ||
+      !url.hostname ||
+      url.username ||
+      url.password
+    ) {
+      return { success: false as const, error: "Cover image URL must use HTTPS." };
+    }
+    return { success: true as const, value: url.toString() };
+  } catch {
+    return { success: false as const, error: "Enter a valid HTTPS cover image URL." };
+  }
+}
+
+function validateOrientation(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return { success: true as const, value: null };
+  }
+  if (!isVideoOrientation(value)) {
+    return { success: false as const, error: "Choose a valid orientation." };
+  }
+  return { success: true as const, value };
+}
+
+function validateContentType(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return { success: true as const, value: null };
+  }
+  if (!isVideoContentType(value)) {
+    return { success: false as const, error: "Choose a valid content type." };
+  }
+  return { success: true as const, value };
+}
+
 export function validateVideoInput(values: VideoInputValues): VideoInputResult {
   const title = typeof values.title === "string"
     ? values.title.trim().slice(0, 180)
@@ -112,6 +177,15 @@ export function validateVideoInput(values: VideoInputValues): VideoInputResult {
   const deliveryUrl = validateDeliveryUrl(values.deliveryUrl);
   if (!deliveryUrl.success) return deliveryUrl;
 
+  const coverUrl = validateCoverUrl(values.coverUrl);
+  if (!coverUrl.success) return coverUrl;
+
+  const orientation = validateOrientation(values.orientation);
+  if (!orientation.success) return orientation;
+
+  const contentType = validateContentType(values.contentType);
+  if (!contentType.success) return contentType;
+
   const notes = typeof values.notes === "string"
     ? values.notes.trim().slice(0, 2_000) || null
     : null;
@@ -123,6 +197,9 @@ export function validateVideoInput(values: VideoInputValues): VideoInputResult {
       clientId,
       deliveryUrl: deliveryUrl.value,
       notes,
+      coverUrl: coverUrl.value,
+      orientation: orientation.value,
+      contentType: contentType.value,
     },
   };
 }
@@ -160,6 +237,9 @@ export function getVideoMetadataChanges(
     "projectId",
     "deliveryUrl",
     "notes",
+    "coverUrl",
+    "orientation",
+    "contentType",
   ];
   return fields.filter((field) => current[field] !== next[field]);
 }

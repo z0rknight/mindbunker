@@ -12,6 +12,10 @@ const navItems = [
   { href: "/health", label: "Health", mobileLabel: "Health", icon: "🫀" },
   { href: "/crm", label: "CRM", mobileLabel: "CRM", icon: "👥" },
   { href: "/projects", label: "Projects", mobileLabel: "Projects", icon: "📁" },
+  // Reference/reporting surface, not part of daily Productivity execution --
+  // desktop sidebar only, deliberately excluded from the mobile bottom tab
+  // bar so that bar stays at its current 7 destinations.
+  { href: "/all-history", label: "All History", mobileLabel: "History", icon: "🗄️", desktopOnly: true },
 ];
 
 export function Sidebar() {
@@ -111,7 +115,7 @@ export function Sidebar() {
       </aside>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-zinc-800 bg-zinc-950/95 px-1 pb-safe backdrop-blur md:hidden">
-        {navItems.map((item) => {
+        {navItems.filter((item) => !item.desktopOnly).map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link

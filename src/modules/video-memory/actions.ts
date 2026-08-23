@@ -4,7 +4,7 @@ import "server-only";
 
 import { getAuthenticatedDb } from "@/db";
 import { crmEvents, videoLogs } from "@/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   VIDEO_OPERATIONAL_NOTE_EVENT_TYPE,
@@ -65,6 +65,48 @@ export async function getVideoOperationalMemory(
       createdAt: (row.createdAt ?? new Date(0)).toISOString(),
     })),
   };
+}
+
+// Session Narrative (Sunday Systems Round, Phase B/C): batch read across
+// many videos at once, for correlating with a page of Work Session
+// history without an N+1 query per session row. Read-only and additive —
+// getVideoOperationalMemory() above (the Video Memory panel own data
+// path) is unchanged.
+export type VideoOperationalMemoryEntryWithVideo = VideoOperationalMemoryEntry & {
+  videoId: number;
+};
+
+export async function getVideoOperationalMemoryForVideos(
+  videoIds: readonly number[],
+): Promise<VideoOperationalMemoryEntryWithVideo[]> {
+  const uniqueIds = [...new Set(videoIds)].filter(isVideoMemoryVideoId);
+  if (uniqueIds.length === 0) return [];
+
+  const db = await getAuthenticatedDb();
+  const rows = await db
+    .select({
+      id: crmEvents.id,
+      videoId: crmEvents.videoId,
+      body: crmEvents.description,
+      createdAt: crmEvents.createdAt,
+    })
+    .from(crmEvents)
+    .where(
+      and(
+        inArray(crmEvents.videoId, uniqueIds),
+        eq(crmEvents.type, VIDEO_OPERATIONAL_NOTE_EVENT_TYPE),
+      ),
+    )
+    .orderBy(desc(crmEvents.createdAt), desc(crmEvents.id));
+
+  return rows
+    .filter((row): row is typeof row & { videoId: number } => row.videoId !== null)
+    .map((row) => ({
+      id: row.id,
+      videoId: row.videoId,
+      body: row.body,
+      createdAt: (row.createdAt ?? new Date(0)).toISOString(),
+    }));
 }
 
 export async function addVideoOperationalNote(

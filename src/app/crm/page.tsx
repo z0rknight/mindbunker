@@ -13,9 +13,14 @@ export default async function CRMPage() {
     getAllClients(),
   ]);
 
-  const activeClients = clients.filter((c) => c.status === "active");
-  const leads = clients.filter((c) => c.status === "lead");
-  const inactiveClients = clients.filter((c) => c.status === "inactive");
+  // Geladeira (Sprint 1.2 P0): the CRM main list is a P0 visibility
+  // surface — Geladeira clients are excluded from the three operational
+  // groups below by default and shown only in their own collapsed section.
+  const visibleClients = clients.filter((c) => c.archivalState !== "GELADEIRA");
+  const activeClients = visibleClients.filter((c) => c.status === "active");
+  const leads = visibleClients.filter((c) => c.status === "lead");
+  const inactiveClients = visibleClients.filter((c) => c.status === "inactive");
+  const geladeiraClients = clients.filter((c) => c.archivalState === "GELADEIRA");
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
@@ -33,7 +38,7 @@ export default async function CRMPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
         <StatCard
           label="Active Clients"
           value={summary.activeClientsCount}
@@ -52,6 +57,12 @@ export default async function CRMPage() {
           value={summary.totalClients}
           accent="zinc"
           icon="📋"
+        />
+        <StatCard
+          label="Geladeira"
+          value={summary.geladeiraCount}
+          accent="zinc"
+          icon="🧊"
         />
       </div>
 
@@ -88,6 +99,20 @@ export default async function CRMPage() {
           </h2>
           <ClientTable clients={inactiveClients} />
         </div>
+      )}
+
+      {/* Geladeira — collapsed by default. Preserved history, hidden from
+          the default operational view. Reactivate on the client's own
+          detail page. */}
+      {geladeiraClients.length > 0 && (
+        <details className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/40">
+          <summary className="cursor-pointer select-none px-4 py-3 text-zinc-400 text-xs font-semibold uppercase tracking-widest">
+            🧊 Geladeira ({geladeiraClients.length}) — archived, not deleted
+          </summary>
+          <div className="px-4 pb-4">
+            <ClientTable clients={geladeiraClients} />
+          </div>
+        </details>
       )}
 
       {clients.length === 0 && (

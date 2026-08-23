@@ -4,7 +4,7 @@ import "server-only";
 
 import { getAuthenticatedDb } from "@/db";
 import { clients, crmEvents, projects, videoLogs } from "@/db/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { isPositiveId, validateProjectInput } from "./core";
 
@@ -116,6 +116,11 @@ export async function getProjectsOverview() {
     .from(projects)
     .innerJoin(clients, eq(projects.clientId, clients.id))
     .leftJoin(videoLogs, eq(videoLogs.projectId, projects.id))
+    // Geladeira (Sprint 1.2 P0): the Projects overview is a P0 visibility
+    // surface — a Geladeira client's Projects are hidden here by default.
+    // Direct navigation to /projects/[id] (getProjectWorkspace, below) is
+    // untouched and always works regardless of archival state.
+    .where(ne(clients.archivalState, "GELADEIRA"))
     .groupBy(projects.id, clients.id)
     .orderBy(desc(projects.updatedAt), desc(projects.id));
 
