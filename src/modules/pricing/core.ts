@@ -148,3 +148,104 @@ export function buildPackageSummaryText(result: PackagePricingResult): string {
 
   return lines.join("\n");
 }
+
+// ─── À la carte hourly-effort estimator (Monday Local Intelligence Lab §A) ──
+//
+// A DIFFERENT concept from computeALaCarteLineCents above (N units at
+// canonical list price). This estimates a single flat suggested price from
+// an internal effort target: hours x an experimental $/hour rate x a
+// complexity multiplier, plus optional add-ons -- never a client-facing
+// hourly rate, never persisted, always returned with a full breakdown so
+// nothing about the number is a black box.
+
+export interface ALaCarteHourlyConfig {
+  hourlyRateCents: number;
+  thumbnailUnitPriceCents: number;
+  rushSurchargeRate: number;
+  revisionRoundHours: number;
+}
+
+export interface ALaCarteHourlyInput {
+  estimatedHours: number;
+  complexityMultiplier: number;
+  includeRush: boolean;
+  extraRevisionRounds: number;
+  thumbnailCount: number;
+}
+
+export interface ALaCarteHourlyBreakdown {
+  baseHours: number;
+  complexityMultiplier: number;
+  adjustedHours: number;
+  extraRevisionRounds: number;
+  revisionHours: number;
+  totalHours: number;
+  laborCents: number;
+  includeRush: boolean;
+  rushSurchargeCents: number;
+  thumbnailCount: number;
+  thumbnailCents: number;
+  totalCents: number;
+}
+
+function sanitizeNonNegativeNumber(value: number | undefined | null): number {
+  if (value == null || !Number.isFinite(value) || value < 0) return 0;
+  return value;
+}
+
+function sanitizeNonNegativeInt(value: number | undefined | null): number {
+  return Math.floor(sanitizeNonNegativeNumber(value));
+}
+
+/**
+ * Pure, deterministic breakdown -- the same discipline as
+ * computePackagePricing: one multiply-then-round for the labor total
+ * (never a sum of independently-rounded parts), every input sanitized so a
+ * bad/missing value degrades to 0 rather than propagating NaN or a
+ * negative price.
+ */
+export function computeALaCarteHourlyEstimate(
+  config: ALaCarteHourlyConfig,
+  input: ALaCarteHourlyInput,
+): ALaCarteHourlyBreakdown {
+  const baseHours = sanitizeNonNegativeNumber(input.estimatedHours);
+  const complexityMultiplier =
+    Number.isFinite(input.complexityMultiplier) &&
+    input.complexityMultiplier > 0
+      ? input.complexityMultiplier
+      : 1;
+  const adjustedHours = baseHours * complexityMultiplier;
+
+  const extraRevisionRounds = sanitizeNonNegativeInt(
+    input.extraRevisionRounds,
+  );
+  const revisionHours = extraRevisionRounds * config.revisionRoundHours;
+
+  const totalHours = adjustedHours + revisionHours;
+  const laborCents = Math.round(totalHours * config.hourlyRateCents);
+
+  const includeRush = Boolean(input.includeRush);
+  const rushSurchargeCents = includeRush
+    ? Math.round(laborCents * config.rushSurchargeRate)
+    : 0;
+
+  const thumbnailCount = sanitizeNonNegativeInt(input.thumbnailCount);
+  const thumbnailCents = thumbnailCount * config.thumbnailUnitPriceCents;
+
+  const totalCents = laborCents + rushSurchargeCents + thumbnailCents;
+
+  return {
+    baseHours,
+    complexityMultiplier,
+    adjustedHours,
+    extraRevisionRounds,
+    revisionHours,
+    totalHours,
+    laborCents,
+    includeRush,
+    rushSurchargeCents,
+    thumbnailCount,
+    thumbnailCents,
+    totalCents,
+  };
+}

@@ -262,3 +262,68 @@ export function mapCoverageStatus(
 ): "DATA_PRESENT" | "UNKNOWN_NO_SOURCE_DATA" {
   return raw === "DATA PRESENT" ? "DATA_PRESENT" : "UNKNOWN_NO_SOURCE_DATA";
 }
+
+// ─── All History BI visuals (Monday Local Intelligence Lab §C) ────────────
+//
+// Pure derived-metric functions over the same AllHistoryYearRow shape
+// data.ts's getAllHistorySummary() already returns -- no new DB queries, no
+// new hist_* reads, nothing that touches the native/historical evidence
+// boundary. Both functions honor the same hard rule the rest of this module
+// already follows: a year with unknown revenue is never treated as $0.
+
+export type AllHistoryVisualRow = {
+  year: number;
+  revenueUsd: number | null;
+};
+
+export type YoYRevenueEntry = { year: number; changePct: number | null };
+
+// null whenever either side of the comparison (this year or the prior
+// year) is unknown, or the prior year's revenue was exactly 0 (division by
+// zero would produce a meaningless / infinite percentage) -- never
+// substituted with 0 or interpolated.
+export function computeYoYRevenueChange(
+  rows: readonly AllHistoryVisualRow[],
+): YoYRevenueEntry[] {
+  const sorted = [...rows].sort((a, b) => a.year - b.year);
+  return sorted.map((row, i) => {
+    const prev = i > 0 ? sorted[i - 1] : null;
+    if (
+      !prev ||
+      prev.revenueUsd === null ||
+      row.revenueUsd === null ||
+      prev.revenueUsd === 0
+    ) {
+      return { year: row.year, changePct: null };
+    }
+    const changePct = ((row.revenueUsd - prev.revenueUsd) / prev.revenueUsd) * 100;
+    return { year: row.year, changePct: Math.round(changePct * 10) / 10 };
+  });
+}
+
+export type CumulativeRevenueEntry = {
+  year: number;
+  cumulativeUsd: number | null;
+};
+
+// Honest cumulative sum: once a year in the (year-sorted) sequence has
+// unknown revenue, every year from that point on is null too -- summing
+// past a gap as if the missing year contributed $0 would understate the
+// true lifetime total while presenting it as complete. The result is
+// always either "fully known so far" or "unknown from here on," never a
+// silently-approximated running total.
+export function computeCumulativeRevenue(
+  rows: readonly AllHistoryVisualRow[],
+): CumulativeRevenueEntry[] {
+  const sorted = [...rows].sort((a, b) => a.year - b.year);
+  let running = 0;
+  let broken = false;
+  return sorted.map((row) => {
+    if (broken || row.revenueUsd === null) {
+      broken = true;
+      return { year: row.year, cumulativeUsd: null };
+    }
+    running += row.revenueUsd;
+    return { year: row.year, cumulativeUsd: running };
+  });
+}

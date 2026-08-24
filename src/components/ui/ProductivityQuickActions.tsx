@@ -10,9 +10,16 @@ import {
   VIDEO_STATUS_LABELS,
   isVideoDirectlyFinishable,
 } from "@/modules/productivity/config";
+import { startWorkSession } from "@/modules/work-sessions/actions";
+import {
+  DEFAULT_WORK_SESSION_ACTIVITY,
+  WORK_SESSION_ACTIVITY_LABELS,
+  WORK_SESSION_ACTIVITY_TYPES,
+  type WorkSessionActivityType,
+} from "@/modules/work-sessions/core";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 type QuickOptions = Awaited<ReturnType<typeof getProductivityQuickOptions>>;
 
@@ -229,6 +236,188 @@ export function PlanVideoButton({
               className="min-h-12 w-full rounded-xl bg-violet-600 px-4 text-sm font-black text-white transition hover:bg-violet-500 disabled:opacity-50"
             >
               {isPending ? "Saving…" : "Create planned video"}
+            </button>
+          </form>
+        </ActionSheet>
+      )}
+    </>
+  );
+}
+
+// Dashboard "Start Work" primary action (Sprint 1.2.x local dogfooding
+// round): the same Client → Project → Video → Activity → Start flow that
+// used to sit permanently exposed on the Dashboard as HomeTrackingPanel's
+// inline form, now behind a compact modal so the Dashboard's default state
+// is two buttons, not a four-field form. Reuses startWorkSession() and the
+// single-open-session database guard exactly as before -- no new timer, no
+// new work-session table, no new activity subsystem. HomeTrackingPanel
+// still owns the "a session is already active" surfacing (the Tracking Now
+// banner) and renders this button only when nothing is running.
+export function StartWorkButton() {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [options, setOptions] = useState<QuickOptions | null>(null);
+  const [clientId, setClientId] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [videoId, setVideoId] = useState("");
+  const [activityType, setActivityType] =
+    useState<WorkSessionActivityType>(DEFAULT_WORK_SESSION_ACTIVITY);
+  const [feedback, setFeedback] = useState("");
+
+  const availableProjects = useMemo(
+    () =>
+      options?.projects.filter(
+        (project) => project.clientId.toString() === clientId,
+      ) ?? [],
+    [clientId, options],
+  );
+  const availableVideos = useMemo(
+    () =>
+      options?.videos.filter(
+        (video) =>
+          video.projectId !== null && video.projectId.toString() === projectId,
+      ) ?? [],
+    [projectId, options],
+  );
+
+  function handleOpen() {
+    setOpen(true);
+    setFeedback("");
+    startTransition(async () => {
+      try {
+        setOptions(await getProductivityQuickOptions());
+      } catch {
+        setFeedback("Could not load clients and projects.");
+      }
+    });
+  }
+
+  function handleClose() {
+    setOpen(false);
+    setClientId("");
+    setProjectId("");
+    setVideoId("");
+    setActivityType(DEFAULT_WORK_SESSION_ACTIVITY);
+    setFeedback("");
+  }
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const selectedVideoId = Number(videoId);
+    if (!Number.isSafeInteger(selectedVideoId) || selectedVideoId <= 0) {
+      setFeedback("Choose a client, project, and video first.");
+      return;
+    }
+    setFeedback("");
+    startTransition(async () => {
+      const result = await startWorkSession(selectedVideoId, activityType);
+      if (!result.success) {
+        setFeedback(result.error);
+        return;
+      }
+      setOpen(false);
+      router.push(`/productivity?video=${selectedVideoId}`);
+    });
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-5 text-sm font-bold text-white transition-all hover:bg-emerald-500 active:scale-95"
+      >
+        <span className="text-2xl">▶</span>
+        <span>Start Work</span>
+      </button>
+
+      {open && (
+        <ActionSheet title="What are you working on?" onClose={handleClose}>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="startWorkClient" className="mb-1.5 block text-xs font-bold text-zinc-400">
+                Client
+              </label>
+              <select
+                id="startWorkClient"
+                value={clientId}
+                onChange={(event) => {
+                  setClientId(event.target.value);
+                  setProjectId("");
+                  setVideoId("");
+                }}
+                disabled={!options || isPending}
+                className={fieldClassName}
+              >
+                <option value="">Choose client</option>
+                {options?.clients.map((client) => (
+                  <option key={client.id} value={client.id}>{client.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="startWorkProject" className="mb-1.5 block text-xs font-bold text-zinc-400">
+                Project
+              </label>
+              <select
+                id="startWorkProject"
+                value={projectId}
+                onChange={(event) => {
+                  setProjectId(event.target.value);
+                  setVideoId("");
+                }}
+                disabled={!clientId || isPending}
+                className={fieldClassName}
+              >
+                <option value="">Choose project</option>
+                {availableProjects.map((project) => (
+                  <option key={project.id} value={project.id}>{project.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="startWorkVideo" className="mb-1.5 block text-xs font-bold text-zinc-400">
+                Video
+              </label>
+              <select
+                id="startWorkVideo"
+                value={videoId}
+                onChange={(event) => setVideoId(event.target.value)}
+                disabled={!projectId || isPending}
+                className={fieldClassName}
+              >
+                <option value="">Choose video</option>
+                {availableVideos.map((video) => (
+                  <option key={video.id} value={video.id}>
+                    {video.title ?? `Video ${video.date}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="startWorkActivity" className="mb-1.5 block text-xs font-bold text-zinc-400">
+                Activity
+              </label>
+              <select
+                id="startWorkActivity"
+                value={activityType}
+                onChange={(event) => setActivityType(event.target.value as WorkSessionActivityType)}
+                disabled={isPending}
+                className={fieldClassName}
+              >
+                {WORK_SESSION_ACTIVITY_TYPES.map((type) => (
+                  <option key={type} value={type}>{WORK_SESSION_ACTIVITY_LABELS[type]}</option>
+                ))}
+              </select>
+            </div>
+            {feedback && <p aria-live="polite" className="text-sm text-amber-300">{feedback}</p>}
+            <button
+              type="submit"
+              disabled={isPending || !videoId}
+              className="min-h-12 w-full rounded-xl bg-emerald-600 px-4 text-sm font-black text-white transition hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {isPending ? "Starting…" : "Start"}
             </button>
           </form>
         </ActionSheet>

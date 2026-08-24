@@ -1,0 +1,824 @@
+{
+  "schema_version": "1",
+  "generated_from_artifact_version": "0.1.0",
+  "generated_from_artifact_generated_date": "2026-08-22",
+  "local_import": {
+    "batch_id": 1,
+    "fingerprint": "932047bd8bdbf0f3b14672ce7fa9bf88a18e83e4de76e25fa30df3f74d987390",
+    "fact_count": 209,
+    "identity_count": 47,
+    "coverage_month_count": 44,
+    "status": "ACTIVE"
+  },
+  "window": {
+    "start": "2023-01",
+    "end": "2026-08"
+  },
+  "months": [
+    {
+      "year": 2023,
+      "month": 1,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 80,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2023,
+      "month": 2,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 20,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2023,
+      "month": 3,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 48.33,
+        "billed_hours": 1.67
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2023,
+      "month": 4,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 50,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 11.63
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2023,
+      "month": 5,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 0,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 36.37
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2023,
+      "month": 6,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 0,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 46.27
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2023,
+      "month": 7,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 0,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 35.51
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2023,
+      "month": 8,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 779.18,
+        "billed_hours": 31.17
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 14.77
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2023,
+      "month": 9,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 2716.7,
+        "billed_hours": 106.17
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2023,
+      "month": 10,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 1909.88,
+        "billed_hours": 76.67
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2023,
+      "month": 11,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 2275,
+        "billed_hours": 91
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2023,
+      "month": 12,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 1737.48,
+        "billed_hours": 69.5
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 5.62
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2024,
+      "month": 1,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 2004.16,
+        "billed_hours": 80.17
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 7.06
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2024,
+      "month": 2,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 1079.14,
+        "billed_hours": 43.17
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 0.75
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2024,
+      "month": 3,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 0,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2024,
+      "month": 4,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 73.33,
+        "billed_hours": 2.17
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2024,
+      "month": 5,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 0,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2024,
+      "month": 6,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 16.67,
+        "billed_hours": 0.67
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2024,
+      "month": 7,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 0,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 17.92
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2024,
+      "month": 8,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 10,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 28.24
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2024,
+      "month": 9,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 140,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2024,
+      "month": 10,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 60,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 3.36
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2024,
+      "month": 11,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 0,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 7.69
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2024,
+      "month": 12,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 0,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 73.67
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2025,
+      "month": 1,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 236.33,
+        "billed_hours": 6.67
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 67.76
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2025,
+      "month": 2,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 0,
+        "billed_hours": 0
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 2.53
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2025,
+      "month": 3,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 93.33,
+        "billed_hours": 4.67
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2025,
+      "month": 4,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 969.68,
+        "billed_hours": 42
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2025,
+      "month": 5,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 2828.33,
+        "billed_hours": 114
+      },
+      "clockify_detailed_export": {
+        "status": "DATA_PRESENT",
+        "tracked_hours": 0.86
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2025,
+      "month": 6,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 1512.49,
+        "billed_hours": 60.5
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2025,
+      "month": 7,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 1133.34,
+        "billed_hours": 45.33
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2025,
+      "month": 8,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 1619.15,
+        "billed_hours": 62.17
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2025,
+      "month": 9,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 1829.16,
+        "billed_hours": 73.17
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2025,
+      "month": 10,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 1720.85,
+        "billed_hours": 68.83
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "raw_event_count": null,
+        "days_with_any_event": null
+      }
+    },
+    {
+      "year": 2025,
+      "month": 11,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 2137.5,
+        "billed_hours": 85.5
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "DATA_PRESENT",
+        "raw_event_count": 12616,
+        "days_with_any_event": 29
+      }
+    },
+    {
+      "year": 2025,
+      "month": 12,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 758.33,
+        "billed_hours": 30.33
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "DATA_PRESENT",
+        "raw_event_count": 17246,
+        "days_with_any_event": 31
+      }
+    },
+    {
+      "year": 2026,
+      "month": 1,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 1000,
+        "billed_hours": 40
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "DATA_PRESENT",
+        "raw_event_count": 13750,
+        "days_with_any_event": 31
+      }
+    },
+    {
+      "year": 2026,
+      "month": 2,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 804.17,
+        "billed_hours": 32.17
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "DATA_PRESENT",
+        "raw_event_count": 2487,
+        "days_with_any_event": 22
+      }
+    },
+    {
+      "year": 2026,
+      "month": 3,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 775.01,
+        "billed_hours": 31
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "DATA_PRESENT",
+        "raw_event_count": 3951,
+        "days_with_any_event": 31
+      }
+    },
+    {
+      "year": 2026,
+      "month": 4,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 395.83,
+        "billed_hours": 15.83
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "DATA_PRESENT",
+        "raw_event_count": 12669,
+        "days_with_any_event": 30
+      }
+    },
+    {
+      "year": 2026,
+      "month": 5,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 1162.5,
+        "billed_hours": 46.5
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "DATA_PRESENT",
+        "raw_event_count": 15385,
+        "days_with_any_event": 31
+      }
+    },
+    {
+      "year": 2026,
+      "month": 6,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 662.49,
+        "billed_hours": 26.5
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "DATA_PRESENT",
+        "raw_event_count": 16422,
+        "days_with_any_event": 30
+      }
+    },
+    {
+      "year": 2026,
+      "month": 7,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 600.01,
+        "billed_hours": 24
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "DATA_PRESENT",
+        "raw_event_count": 13160,
+        "days_with_any_event": 30
+      }
+    },
+    {
+      "year": 2026,
+      "month": 8,
+      "upwork_weekly_summary": {
+        "status": "DATA_PRESENT",
+        "revenue_usd": 1016.66,
+        "billed_hours": 40.67
+      },
+      "clockify_detailed_export": {
+        "status": "UNKNOWN_NO_SOURCE_DATA",
+        "tracked_hours": null
+      },
+      "activitywatch_afk": {
+        "status": "DATA_PRESENT",
+        "raw_event_count": 10138,
+        "days_with_any_event": 22
+      }
+    }
+  ],
+  "known_gaps": [
+    {
+      "period": "2025-06 to 2025-10",
+      "description": "No time-tracking source (Clockify or ActivityWatch) has coverage for these 5 months -- only Upwork revenue/billed_hours (billing, not raw time) exists for this window.",
+      "severity": "P1"
+    },
+    {
+      "period": "throughout 2023-2024, most months",
+      "description": "Clockify coverage is sparse (16 of 44 months total) -- most months have Upwork revenue/hours but no independent tracked-time cross-check.",
+      "severity": "P2"
+    }
+  ],
+  "production_readiness": "READY_FOR_PRODUCTION_IMPORT"
+}

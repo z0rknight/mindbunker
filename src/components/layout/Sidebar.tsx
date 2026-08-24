@@ -19,6 +19,12 @@ const navItems = [
   // desktop sidebar only, deliberately excluded from the mobile bottom tab
   // bar so that bar stays at its current 7 destinations.
   { href: "/all-history", label: "All History", mobileLabel: "History", icon: "🗄️", desktopOnly: true },
+  // Monday Local Intelligence Lab §B: the Work Session Ledger already
+  // exists at /productivity/sessions but had no nav entry anywhere --
+  // discoverable only by URL. Same treatment as Pricing Lab/All History:
+  // desktop sidebar only, so the mobile bottom tab bar keeps its current
+  // fixed 7-destination slot count instead of squeezing in an 8th.
+  { href: "/productivity/sessions", label: "Sessions", mobileLabel: "Sessions", icon: "📜", desktopOnly: true },
 ];
 
 export function Sidebar() {

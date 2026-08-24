@@ -56,3 +56,39 @@ export const PRICING_CONFIG: PricingConfig = {
   })),
   packageDiscountRate: PACKAGE_DISCOUNT_RATE,
 };
+
+/**
+ * À la carte HOURLY EFFORT ESTIMATOR (Monday Local Intelligence Lab, §A) --
+ * a completely separate experiment from PRICING_PRODUCTS/PRICING_CONFIG
+ * above. This is an INTERNAL production-cost target, never a client-facing
+ * hourly rate: it estimates a single flat suggested price from an assumed
+ * effort (hours), not a rate someone is billed by the hour against. All of
+ * this is EXPERIMENTAL CONFIGURATION, operator-supplied 2026-08-24, and
+ * none of it changes the Monthly Package numbers above.
+ */
+export const A_LA_CARTE_HOURLY_RATE_CENTS = 5_000; // $50/effective-production-hour
+
+export const A_LA_CARTE_CONTENT_TYPES = [
+  { id: "short-form", label: "Short-form video", estimatedHours: 3 },
+  { id: "long-form", label: "Long-form video", estimatedHours: 8 },
+  { id: "mini-doc", label: "Mini-doc", estimatedHours: 20 },
+  { id: "testimonial", label: "Testimonial", estimatedHours: 4 },
+  { id: "custom", label: "Custom / other", estimatedHours: 5 },
+] as const;
+
+export const A_LA_CARTE_COMPLEXITY_LEVELS = [
+  { id: "simple", label: "Simple", multiplier: 0.8 },
+  { id: "standard", label: "Standard", multiplier: 1.0 },
+  { id: "complex", label: "Complex", multiplier: 1.3 },
+  { id: "very-complex", label: "Very complex", multiplier: 1.6 },
+] as const;
+
+export const A_LA_CARTE_RUSH_SURCHARGE_RATE = 0.25; // +25% -- EXPERIMENTAL
+export const A_LA_CARTE_REVISION_ROUND_HOURS = 1.5; // hours added per extra revision round beyond the included ones
+export const A_LA_CARTE_INCLUDED_REVISION_ROUNDS = 2;
+// Reuses the canonical thumbnail price from PRICING_PRODUCTS above -- one
+// place a thumbnail price is ever defined, same discipline as the Monthly
+// Package's line items.
+export const A_LA_CARTE_THUMBNAIL_UNIT_PRICE_CENTS = PRICING_PRODUCTS.find(
+  (p) => p.id === "thumbnail",
+)!.unitPriceCents;

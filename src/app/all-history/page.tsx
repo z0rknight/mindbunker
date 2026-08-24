@@ -1,4 +1,6 @@
 import { getActiveHistBatch, getAllHistorySummary } from "@/modules/historical/data";
+import { AllHistoryVisuals } from "./AllHistoryVisuals";
+import { HistoricalReviewReminder } from "./HistoricalReviewReminder";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +64,10 @@ export default async function AllHistoryPage() {
         </div>
       ) : (
         <>
+          <HistoricalReviewReminder />
+
+          <AllHistoryVisuals rows={rows} />
+
           <div className="mb-6 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden overflow-x-auto">
             <table className="w-full text-sm min-w-[640px]">
               <thead>

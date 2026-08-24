@@ -1,27 +1,56 @@
+import Link from "next/link";
 import { StatCard } from "@/components/ui/StatCard";
 import { LogTodayButton, LogBikeRideButton, LogWalkButton } from "@/components/ui/QuickActions";
+import { LastNightSleepButton, CoffeeQuickLogButton } from "@/components/ui/HealthQuickActions";
+import { ActivityTimeline } from "@/components/health/ActivityTimeline";
 import { getHealthSummary, getAllHealthLogs } from "@/modules/health/actions";
-import { formatDate } from "@/utils/date";
+import { getCaffeineSummary, getCaffeineDayCountsForTimeline } from "@/modules/caffeine/actions";
+import { buildActivityTimelineDays } from "@/modules/health/core";
+import { formatDate, todayISO } from "@/utils/date";
 
 export const dynamic = "force-dynamic";
 
+const ACTIVITY_TIMELINE_DAYS = 84; // 12 weeks
+
 export default async function HealthPage() {
-  const [summary, logs] = await Promise.all([
+  const [summary, logs, caffeineSummary, caffeineDayCounts] = await Promise.all([
     getHealthSummary(),
     getAllHealthLogs(),
+    getCaffeineSummary(),
+    getCaffeineDayCountsForTimeline(ACTIVITY_TIMELINE_DAYS + 7),
   ]);
 
   const recentLogs = [...logs].reverse().slice(0, 30);
+  const today = todayISO();
+  const timelineDays = buildActivityTimelineDays(
+    logs.map((l) => ({
+      date: l.date,
+      sleepHours: l.sleepHours,
+      walkingMinutes: l.walkingMinutes,
+      cyclingKm: l.cyclingKm,
+    })),
+    caffeineDayCounts,
+    today,
+    ACTIVITY_TIMELINE_DAYS,
+  );
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">🫀 Health</h1>
-        <p className="text-zinc-500 text-sm mt-1">Daily habit tracker · Sleep · Caffeine · Movement</p>
+      <div className="mb-8 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white">🫀 Health</h1>
+          <p className="text-zinc-500 text-sm mt-1">Daily habit tracker · Sleep · Caffeine · Movement</p>
+        </div>
+        <Link
+          href="/health/screen-time"
+          className="shrink-0 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-400 hover:border-zinc-600 hover:text-white"
+        >
+          🖥️ Screen Time
+        </Link>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
         <StatCard
           label="Avg Sleep (7d)"
           value={summary.avgSleep7Days !== null ? `${summary.avgSleep7Days}h` : "—"}
@@ -32,6 +61,13 @@ export default async function HealthPage() {
         <StatCard
           label="Caffeine Today"
           value={summary.caffeineToday !== null ? `${summary.caffeineToday}mg` : "—"}
+          accent="amber"
+          icon="☕"
+        />
+        <StatCard
+          label="Coffees Today"
+          value={caffeineSummary.todayCount}
+          sub={`${caffeineSummary.weekCount} this week`}
           accent="amber"
           icon="☕"
         />
@@ -72,10 +108,17 @@ export default async function HealthPage() {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <LastNightSleepButton todayISODate={today} />
+          <CoffeeQuickLogButton todayCount={caffeineSummary.todayCount} />
           <LogTodayButton />
           <LogBikeRideButton />
           <LogWalkButton />
         </div>
+      </div>
+
+      {/* Activity Timeline */}
+      <div className="mb-8">
+        <ActivityTimeline days={timelineDays} />
       </div>
 
       {/* Log History */}

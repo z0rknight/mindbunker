@@ -29,15 +29,63 @@ export default async function CRMPage() {
           <h1 className="text-2xl font-bold text-white">👥 CRM</h1>
           <p className="text-zinc-500 text-sm mt-1">Clients & leads management</p>
         </div>
-        <Link
-          href="/crm/availability"
-          className="flex min-h-11 w-full items-center justify-center rounded-xl border border-cyan-900/70 bg-cyan-950/30 px-4 text-sm font-bold text-cyan-300 transition hover:border-cyan-700 hover:bg-cyan-950/50 sm:w-auto"
-        >
-          Call availability
-        </Link>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Link
+            href="/projects"
+            className="flex min-h-11 w-full items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 px-4 text-sm font-bold text-zinc-300 transition hover:border-zinc-600 sm:w-auto"
+          >
+            Projects & videos →
+          </Link>
+          <Link
+            href="/crm/availability"
+            className="flex min-h-11 w-full items-center justify-center rounded-xl border border-cyan-900/70 bg-cyan-950/30 px-4 text-sm font-bold text-cyan-300 transition hover:border-cyan-700 hover:bg-cyan-950/50 sm:w-auto"
+          >
+            Call availability
+          </Link>
+        </div>
       </div>
 
-      {/* Stats */}
+      {/* Add Client */}
+      <div className="mb-8">
+        <AddClientButton />
+      </div>
+
+      {/* Local dogfooding round: CRM visual order now leads with Leads
+          (top of funnel, the thing most likely to need action), then the
+          rest of the active roster, then summary Metrics, with Geladeira
+          pushed intentionally to the very bottom -- "it is the fridge." */}
+
+      {/* Leads */}
+      {leads.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
+            Leads ({leads.length})
+          </h2>
+          <ClientTable clients={leads} showConvert />
+        </div>
+      )}
+
+      {/* Active Clients */}
+      {activeClients.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
+            Active Clients ({activeClients.length})
+          </h2>
+          <ClientTable clients={activeClients} />
+        </div>
+      )}
+
+      {/* Inactive */}
+      {inactiveClients.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
+            Inactive ({inactiveClients.length})
+          </h2>
+          <ClientTable clients={inactiveClients} />
+        </div>
+      )}
+
+      {/* Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
         <StatCard
           label="Active Clients"
@@ -65,41 +113,6 @@ export default async function CRMPage() {
           icon="🧊"
         />
       </div>
-
-      {/* Add Client */}
-      <div className="mb-8">
-        <AddClientButton />
-      </div>
-
-      {/* Active Clients */}
-      {activeClients.length > 0 && (
-        <div className="mb-6">
-          <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
-            Active Clients ({activeClients.length})
-          </h2>
-          <ClientTable clients={activeClients} />
-        </div>
-      )}
-
-      {/* Leads */}
-      {leads.length > 0 && (
-        <div className="mb-6">
-          <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
-            Leads ({leads.length})
-          </h2>
-          <ClientTable clients={leads} showConvert />
-        </div>
-      )}
-
-      {/* Inactive */}
-      {inactiveClients.length > 0 && (
-        <div className="mb-6">
-          <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
-            Inactive ({inactiveClients.length})
-          </h2>
-          <ClientTable clients={inactiveClients} />
-        </div>
-      )}
 
       {/* Geladeira — collapsed by default. Preserved history, hidden from
           the default operational view. Reactivate on the client's own

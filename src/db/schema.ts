@@ -659,3 +659,80 @@ export const histSourceCoverage = sqliteTable(
     ),
   ],
 );
+
+// ─── CAFFEINE EVENTS (Monday Local Intelligence Lab, §I) ───────────────────
+//
+// Deliberately a separate, minimal, coarse-grained event log -- NOT a
+// universal life-event architecture. health_logs.caffeineMg stays exactly
+// as-is (a daily aggregate, overwrite-on-upsert) for whatever coarse manual
+// mg entry someone wants to keep making; this table is the honest place to
+// record "I drank a coffee right now," one row per serving-event, so
+// COFFEES TODAY / COFFEES THIS WEEK can be a real count instead of a fake
+// timestamp derived from a daily total. `source` intentionally has no CHECK
+// (same reasoning as work_sessions.source): QUICK_LOG is the only value any
+// code path produces this round, but the vocabulary is expected to grow
+// (e.g. a future MANUAL backfill entry) without needing a migration.
+export const caffeineEvents = sqliteTable(
+  "caffeine_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    occurredAt: integer("occurred_at", { mode: "timestamp" }).notNull(),
+    // 1 event = 1 coffee serving by default. Intentionally coarse -- no mg
+    // inference. A rare "logged 2 at once" case is a quantity, not two rows.
+    servings: integer("servings").notNull().default(1),
+    source: text("source").notNull().default("QUICK_LOG"),
+    note: text("note"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("caffeine_events_occurred_at_idx").on(table.occurredAt),
+    check("caffeine_events_servings_check", sql`${table.servings} > 0`),
+  ],
+);
+
+// ─── SCREEN TIME SNAPSHOTS (Monday Local Intelligence Lab, §M) ─────────────
+//
+// A manual-import prototype only -- labeled "MANUAL APPLE SCREEN TIME
+// SNAPSHOT" everywhere it's shown, never claiming automatic sensing. Each
+// row is one pasted structured JSON payload (periodStart/periodEnd/device/
+// totalMinutes/categories/apps), preserved verbatim in rawPayload so the
+// original evidence is never lost even if the normalized columns above it
+// turn out to need reshaping later. A JSON payload column is an accepted P0
+// shortcut per the brief -- categories/apps are not separately normalized
+// into their own tables this round.
+export const screenTimeSnapshots = sqliteTable(
+  "screen_time_snapshots",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    periodStart: text("period_start").notNull(), // ISO date YYYY-MM-DD
+    periodEnd: text("period_end").notNull(), // ISO date YYYY-MM-DD
+    device: text("device").notNull(),
+    totalMinutes: integer("total_minutes").notNull(),
+    source: text("source")
+      .notNull()
+      .default("MANUAL_APPLE_SCREEN_TIME_SNAPSHOT"),
+    // Original pasted payload (validated, normalized shape), preserved as
+    // JSON text -- see src/modules/screen-time/core.ts for the schema it
+    // must satisfy before this row is ever written.
+    rawPayload: text("raw_payload").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("screen_time_snapshots_period_idx").on(
+      table.periodStart,
+      table.periodEnd,
+    ),
+    check(
+      "screen_time_snapshots_period_check",
+      sql`${table.periodEnd} >= ${table.periodStart}`,
+    ),
+    check(
+      "screen_time_snapshots_total_minutes_check",
+      sql`${table.totalMinutes} >= 0`,
+    ),
+  ],
+);

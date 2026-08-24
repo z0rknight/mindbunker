@@ -1,7 +1,6 @@
 import { StatCard } from "@/components/ui/StatCard";
 import { PerformanceStatsSection } from "@/components/ui/PerformanceStats";
 import {
-  FinishedVideoButton,
   AddIncomeButton,
   AddExpenseButton,
   LogTodayButton,
@@ -10,28 +9,31 @@ import {
   AddRevisionButton,
 } from "@/components/ui/QuickActions";
 import { getFinanceSummary } from "@/modules/finance/actions";
-import { getProductivityQuickOptions, getVideoStats } from "@/modules/productivity/actions";
+import { getVideoStats } from "@/modules/productivity/actions";
 import { getWorkSessionOverview } from "@/modules/work-sessions/data";
 import { getHealthSummary } from "@/modules/health/actions";
+import { getCaffeineSummary } from "@/modules/caffeine/actions";
 import { getCRMSummary } from "@/modules/crm/actions";
 import { getPerformanceStats } from "@/utils/statistics";
 import { getWarRoomData } from "@/modules/analytics/service";
 import { formatCurrency, currentMonthName } from "@/utils/date";
 import { HomeTrackingPanel } from "./HomeTrackingPanel";
+import { CoffeeQuickLogButton } from "@/components/ui/HealthQuickActions";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [finance, video, health, crm, perfStats, warRoom, trackingOptions, workSessionOverview] = await Promise.all([
-    getFinanceSummary(),
-    getVideoStats(),
-    getHealthSummary(),
-    getCRMSummary(),
-    getPerformanceStats(),
-    getWarRoomData(),
-    getProductivityQuickOptions(),
-    getWorkSessionOverview(),
-  ]);
+  const [finance, video, health, crm, perfStats, warRoom, workSessionOverview, caffeineSummary] =
+    await Promise.all([
+      getFinanceSummary(),
+      getVideoStats(),
+      getHealthSummary(),
+      getCRMSummary(),
+      getPerformanceStats(),
+      getWarRoomData(),
+      getWorkSessionOverview(),
+      getCaffeineSummary(),
+    ]);
 
   const now = new Date();
   const greeting =
@@ -47,18 +49,28 @@ export default async function DashboardPage() {
       </div>
 
       <HomeTrackingPanel
-        clients={trackingOptions.clients}
-        projects={trackingOptions.projects}
-        videos={trackingOptions.videos}
         openSession={workSessionOverview.openSession}
         openSessionElapsedSeconds={workSessionOverview.openSessionElapsedSeconds}
       />
+
+      {/* Today info block (§P: secondary to Start Work/Finished Video above,
+          only the data that's actually available -- coffees and last
+          night's sleep, both cheap reads already fetched for this page). */}
+      <div className="mb-8 flex flex-wrap items-center gap-3">
+        <div className="w-40">
+          <CoffeeQuickLogButton todayCount={caffeineSummary.todayCount} />
+        </div>
+        {health.todayLog?.sleepHours != null && (
+          <span className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
+            😴 Last night: <span className="font-semibold text-white">{health.todayLog.sleepHours}h</span>
+          </span>
+        )}
+      </div>
 
       {/* Quick Actions */}
       <div className="mb-8">
         <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">Quick Actions</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-          <FinishedVideoButton />
           <AddIncomeButton />
           <AddExpenseButton />
           <LogTodayButton />
