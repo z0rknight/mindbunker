@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   FinishedVideoButton,
+  NewWorkButton,
   StartWorkButton,
 } from "@/components/ui/ProductivityQuickActions";
 import {
@@ -54,7 +55,8 @@ export function HomeTrackingPanel({
   return (
     <section className="mb-8">
       <h2 className="mb-3 text-zinc-400 text-xs font-semibold uppercase tracking-widest">Primary Actions</h2>
-      <div className="grid grid-cols-2 gap-3 sm:max-w-md">
+      <div className="grid grid-cols-2 gap-3 sm:max-w-lg sm:grid-cols-3">
+        <NewWorkButton />
         <StartWorkButton />
         <FinishedVideoButton />
       </div>

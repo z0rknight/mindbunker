@@ -53,24 +53,25 @@ export default async function DashboardPage() {
         openSessionElapsedSeconds={workSessionOverview.openSessionElapsedSeconds}
       />
 
-      {/* Today info block (§P: secondary to Start Work/Finished Video above,
-          only the data that's actually available -- coffees and last
-          night's sleep, both cheap reads already fetched for this page). */}
-      <div className="mb-8 flex flex-wrap items-center gap-3">
-        <div className="w-40">
-          <CoffeeQuickLogButton todayCount={caffeineSummary.todayCount} />
-        </div>
-        {health.todayLog?.sleepHours != null && (
+      {/* Monday Money Lab P0 §12: +1 Coffee moved back into the Quick
+          Actions grid (former secondary quick-action position) rather than
+          floating beside the primary Start Work/Finished Video controls
+          above. The coffee *count* stays in its metric/stat surface
+          (Health section of Detailed Statistics below, "Caffeine Today"),
+          not here -- this row is only the sleep readout now. */}
+      {health.todayLog?.sleepHours != null && (
+        <div className="mb-8">
           <span className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
             😴 Last night: <span className="font-semibold text-white">{health.todayLog.sleepHours}h</span>
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div className="mb-8">
         <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-7">
+          <CoffeeQuickLogButton todayCount={caffeineSummary.todayCount} />
           <AddIncomeButton />
           <AddExpenseButton />
           <LogTodayButton />

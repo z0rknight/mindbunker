@@ -288,11 +288,23 @@ function SessionRow({
             hover-only title attribute, which does not work on touch
             devices — this session's own visual QA includes a 390px mobile
             width. Nothing invented: source is only ever what the row
-            actually recorded (WORK_SESSION_SOURCES has one real value
-            today, WEB_TIMER). */}
+            actually recorded (WEB_TIMER or MAC_SENSOR_APPROVED). */}
         <p className="mt-1 text-[10px] text-zinc-600">
           {session.source}
           {session.updatedAt && <> · corrected {formatDateTime(session.updatedAt)}</>}
+          {/* Brief C §13: reuse the existing Sensor Session detail route --
+              no duplicate UI, just a link where the correlation exists. */}
+          {session.sensorSessionId !== null && (
+            <>
+              {" · "}
+              <Link
+                href={`/productivity/sensor/sessions/${session.sensorSessionId}`}
+                className="font-bold text-violet-400 hover:text-violet-300"
+              >
+                Sensor detail →
+              </Link>
+            </>
+          )}
         </p>
         {narrativeNotes.length > 0 && (
           <button

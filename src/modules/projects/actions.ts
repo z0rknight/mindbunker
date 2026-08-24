@@ -6,7 +6,11 @@ import { getAuthenticatedDb } from "@/db";
 import { clients, crmEvents, projects, videoLogs } from "@/db/schema";
 import { desc, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { isPositiveId, validateProjectInput } from "./core";
+import {
+  isPositiveId,
+  sortProjectWorkspaceVideos,
+  validateProjectInput,
+} from "./core";
 
 type ProjectActionResult =
   | { success: true; message?: string; projectId?: number }
@@ -49,6 +53,9 @@ export async function getProjectWorkspace(projectId: number) {
       status: videoLogs.status,
       revisionsCount: videoLogs.revisionsCount,
       deliveryUrl: videoLogs.deliveryUrl,
+      reviewUrl: videoLogs.reviewUrl,
+      publishedUrl: videoLogs.publishedUrl,
+      batchLabel: videoLogs.batchLabel,
       createdAt: videoLogs.createdAt,
       updatedAt: videoLogs.updatedAt,
     })
@@ -56,7 +63,11 @@ export async function getProjectWorkspace(projectId: number) {
     .where(eq(videoLogs.projectId, projectId))
     .orderBy(desc(videoLogs.updatedAt), desc(videoLogs.createdAt), desc(videoLogs.id));
 
-  return { ...projectRows[0], videos };
+  // Brief C §9: deterministic ordering (batch label, then historical date,
+  // then natural numeric-aware name order) replaces the previous
+  // updatedAt-based order, which made bulk-generated batches appear in a
+  // confusing sequence.
+  return { ...projectRows[0], videos: sortProjectWorkspaceVideos(videos) };
 }
 
 function derivedProjectCount(clientId: number) {

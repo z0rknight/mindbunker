@@ -1,13 +1,14 @@
 import { getAdminBookingConfiguration } from "@/modules/booking/data";
 import { getClientById, getClientIntelligence } from "@/modules/crm/actions";
 import { getAdminGatewayWorkspace } from "@/modules/gateway/data";
-import { OPPORTUNITY_STAGE_LABELS } from "@/modules/gateway/config";
 import { getProjectsForClient } from "@/modules/projects/actions";
+import { PROJECT_STATUS_GROUPS } from "@/modules/projects/config";
 import { getInstagramImportStatus } from "@/modules/crm/actions";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ClientIntelligencePanel } from "./ClientIntelligencePanel";
 import { ClientTabs } from "./ClientTabs";
+import { RenameClientButton } from "./RenameClientButton";
 import { GeladeiraControl } from "./GeladeiraControl";
 import { OpportunityPanel } from "./OpportunityPanel";
 import { PortalAccessPanel } from "./PortalAccessPanel";
@@ -70,8 +71,11 @@ export default async function ClientDetailPage({
               client.name.slice(0, 2).toUpperCase()
             )}
           </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-2xl font-bold text-white">{client.name}</h1>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="truncate text-2xl font-bold text-white">{client.name}</h1>
+              <RenameClientButton clientId={client.id} currentName={client.name} />
+            </div>
             {client.instagramUsername && <p className="mt-0.5 text-xs font-bold text-fuchsia-400">@{client.instagramUsername}</p>}
           </div>
         </div>
@@ -87,14 +91,55 @@ export default async function ClientDetailPage({
           >
             {client.status}
           </span>
-          <span className="rounded bg-violet-500/15 px-2 py-1 text-xs font-semibold uppercase tracking-wider text-violet-300">
-            {OPPORTUNITY_STAGE_LABELS[client.opportunityStage]}
-          </span>
+          {/* Brief C §11A: the opportunity-stage badge that used to render
+              here duplicated the exact same label OpportunityPanel already
+              shows in its own header just below -- when opportunityStage is
+              "active" the page visibly said "ACTIVE" twice. Removed here;
+              OpportunityPanel remains the one place that stage renders. */}
           {client.source && (
             <span className="text-zinc-500 text-xs">via {client.source}</span>
           )}
+          <Link
+            href={`/crm/${client.id}/preview`}
+            className="ml-auto rounded-full border border-amber-700/40 bg-amber-950/30 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-amber-300 hover:bg-amber-900/40"
+          >
+            👁 View as client
+          </Link>
         </div>
       </div>
+
+      {/* Brief C ("Final Local Ingest / Live Readiness") §11B: real QA
+          found Active Projects "too buried" -- reachable only inside the
+          Projects tab several clicks down. This surfaces them right at the
+          top, using the exact same `projects` data already fetched below
+          for ProjectManager (no new query), and links straight into each
+          Project workspace. Compact operational metrics (active project
+          count, total videos, tracked hours) already exist and are shown
+          just below in ClientIntelligencePanel -- not duplicated here. */}
+      {(() => {
+        const activeProjects = projects.filter(
+          (project) => PROJECT_STATUS_GROUPS[project.status] === "active",
+        );
+        if (activeProjects.length === 0) return null;
+        return (
+          <div className="mb-6 rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-4">
+            <p className="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">
+              Active projects ({activeProjects.length})
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {activeProjects.map((project) => (
+                <Link
+                  key={project.id}
+                  href={`/projects/${project.id}`}
+                  className="rounded-xl border border-cyan-700/40 bg-zinc-950/50 px-3 py-2 text-xs font-bold text-cyan-200 transition hover:bg-cyan-900/30"
+                >
+                  {project.name}
+                </Link>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       <GeladeiraControl
         clientId={client.id}

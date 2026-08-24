@@ -25,6 +25,19 @@ Browser
   → D1 database
 ```
 
+The optional native Sensor is a separate local-first process:
+
+```text
+macOS Sensor SQLite (durability + outbox)
+  → scoped Bearer device API
+  → sensor_sessions (native intentional evidence; pending review)
+  → explicit Approve → canonical work_sessions (source MAC_SENSOR_APPROVED)
+  → device_activity_observations (passive evidence)
+  → timestamp-overlap correlation (derived only)
+```
+
+Only `video_id` is accepted as Sensor attribution authority. Client/Project are derived through the canonical graph. Device/local UUID uniqueness makes ingestion and approval retries safe. Archive/Delete are evidence states rather than physical telemetry deletion. The existing partial unique index still enforces at most one globally open canonical Work Session.
+
 `src/db/index.ts` creates a D1-backed Drizzle client per request using the `DB` binding. Data-backed pages are dynamic, and Server Actions perform mutations followed by route revalidation.
 
 ## Key Design Patterns

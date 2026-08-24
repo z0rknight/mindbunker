@@ -7,10 +7,11 @@
  */
 
 import { getAuthenticatedDb } from "@/db";
-import { transactions, videoLogs, clients, healthLogs } from "@/db/schema";
+import { transactions, videoLogs, clients, healthLogs, caffeineEvents } from "@/db/schema";
 import { gte } from "drizzle-orm";
 import { startOfMonthISO, daysAgoISO } from "@/utils/date";
 import { completedVideoLogs } from "@/modules/productivity/core";
+import { caffeineDayKey, reconcileDailyCaffeineMg } from "@/modules/caffeine/core";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -202,12 +203,17 @@ export async function getWarRoomData(): Promise<WarRoomData> {
     allClients,
     last30HealthLogs,
     last7HealthLogs,
+    thisMonthCaffeineEvents,
   ] = await Promise.all([
     db.select().from(transactions),
     db.select().from(videoLogs),
     db.select().from(clients),
     db.select().from(healthLogs).where(gte(healthLogs.date, thirtyDaysAgo)),
     db.select().from(healthLogs).where(gte(healthLogs.date, sevenDaysAgo)),
+    db
+      .select({ occurredAt: caffeineEvents.occurredAt, servings: caffeineEvents.servings })
+      .from(caffeineEvents)
+      .where(gte(caffeineEvents.occurredAt, new Date(monthStart))),
   ]);
 
   // Partition data
@@ -348,11 +354,37 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   const avgVideosCrashSleep = avg(crashSleepDays);
   const avgVideosVampireNights = avg(vampireNightDays);
 
-  // Caffeine metrics
+  // Caffeine metrics — reconciled across BOTH tracking paths (manual
+  // health_logs.caffeineMg entries and "+1 Coffee" quick-log events), see
+  // reconcileDailyCaffeineMg for why these are max()'d per day rather than
+  // summed. Monday Real-Operation Pre-Freeze §14 fix: previously this only
+  // read health_logs.caffeineMg, so quick-logged coffee never moved this
+  // number even though it was visible elsewhere (Health page "Coffees
+  // Today").
   const thisMonthHealthLogs = last30HealthLogs.filter((h) => h.date >= monthStart);
-  const totalCaffeineMonth = thisMonthHealthLogs.reduce(
-    (sum, h) => sum + (h.caffeineMg ?? 0),
-    0
+  const manualCaffeineMgByDay = new Map(
+    thisMonthHealthLogs.map((h) => [h.date, h.caffeineMg ?? 0]),
+  );
+  const quickLogServingsByDay = new Map<string, number>();
+  for (const event of thisMonthCaffeineEvents) {
+    const dayKey = caffeineDayKey(event.occurredAt.toISOString());
+    quickLogServingsByDay.set(
+      dayKey,
+      (quickLogServingsByDay.get(dayKey) ?? 0) + event.servings,
+    );
+  }
+  const caffeineDayKeys = new Set([
+    ...manualCaffeineMgByDay.keys(),
+    ...quickLogServingsByDay.keys(),
+  ]);
+  const totalCaffeineMonth = Array.from(caffeineDayKeys).reduce(
+    (sum, day) =>
+      sum +
+      reconcileDailyCaffeineMg(
+        manualCaffeineMgByDay.get(day) ?? null,
+        quickLogServingsByDay.get(day) ?? 0,
+      ),
+    0,
   );
   const caffeinePerRevenue =
     monthlyRevenue > 0

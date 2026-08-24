@@ -147,3 +147,58 @@ export function validateProjectInput(values: {
     },
   };
 }
+
+// Brief C ("Final Local Ingest / Live Readiness") §9: deterministic Project
+// workspace video ordering. Real bulk-generated names ("Bonnie Content
+// Waterfall_1" ... "_9") must not lexically sort as 1, 10 (n/a here but
+// still), 2, 3... i.e. "_2" must sort before "_10" whenever both exist.
+// This is a pure string comparator (numeric-aware "natural sort"), applied
+// after the batch-label/date grouping described in §9 -- see
+// sortProjectWorkspaceVideos below for how the three keys combine.
+export function naturalCompare(a: string, b: string): number {
+  const chunk = /(\d+|\D+)/g;
+  const aParts = a.match(chunk) ?? [a];
+  const bParts = b.match(chunk) ?? [b];
+  const len = Math.max(aParts.length, bParts.length);
+  for (let i = 0; i < len; i++) {
+    const aPart = aParts[i] ?? "";
+    const bPart = bParts[i] ?? "";
+    const aNum = /^\d+$/.test(aPart) ? Number(aPart) : null;
+    const bNum = /^\d+$/.test(bPart) ? Number(bPart) : null;
+    if (aNum !== null && bNum !== null) {
+      if (aNum !== bNum) return aNum - bNum;
+      continue;
+    }
+    const cmp = aPart.localeCompare(bPart);
+    if (cmp !== 0) return cmp;
+  }
+  return 0;
+}
+
+export type ProjectWorkspaceVideoOrderInput = {
+  id: number;
+  title: string | null;
+  date: string;
+  batchLabel: string | null;
+};
+
+// Preferred order per §9: batch label (grouping batches together, videos
+// with no batch label first), then historical date, then natural
+// numeric-aware name ordering. Falls back to id for total determinism when
+// every other key ties (never leaves ordering to insertion/query-plan
+// accident).
+export function sortProjectWorkspaceVideos<
+  T extends ProjectWorkspaceVideoOrderInput,
+>(videos: readonly T[]): T[] {
+  return [...videos].sort((a, b) => {
+    const batchA = a.batchLabel ?? "";
+    const batchB = b.batchLabel ?? "";
+    if (batchA !== batchB) return batchA.localeCompare(batchB);
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    const titleA = a.title ?? "";
+    const titleB = b.title ?? "";
+    const titleCmp = naturalCompare(titleA, titleB);
+    if (titleCmp !== 0) return titleCmp;
+    return a.id - b.id;
+  });
+}

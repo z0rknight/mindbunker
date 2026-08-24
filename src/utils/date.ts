@@ -39,12 +39,16 @@ export function formatDate(dateStr: string): string {
 }
 
 /**
- * Format currency
+ * Format currency. Monday Money Lab P0: accepts an optional explicit
+ * currency code (ISO 4217, e.g. "USD", "BRL") -- every call site that
+ * already knows its currency should pass it. Defaults to "USD" only
+ * because that has always been the only currency this app has ever
+ * entered or displayed, preserving every existing call site unchanged.
  */
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number, currency: string = "USD"): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency,
     minimumFractionDigits: 2,
   }).format(amount);
 }

@@ -7,6 +7,8 @@ import {
   groupProjectsForOverview,
   isPositiveId,
   isProjectOverdue,
+  naturalCompare,
+  sortProjectWorkspaceVideos,
   validateProjectInput,
 } from "./core.ts";
 
@@ -110,4 +112,43 @@ test("overdue is derived from deadline and excludes completed work", () => {
     isProjectOverdue(project({ deadline: null }), "2026-08-22"),
     false,
   );
+});
+
+// Brief C ("Final Local Ingest / Live Readiness") §9: bulk-generated names
+// like "Bonnie Content Waterfall_1" ... "_9" must not lexically sort as
+// "_1", "_10", "_2" ... -- natural (numeric-aware) sort is required.
+test("naturalCompare puts _2 before _10", () => {
+  const names = [
+    "Bonnie Content Waterfall_10",
+    "Bonnie Content Waterfall_2",
+    "Bonnie Content Waterfall_1",
+    "Bonnie Content Waterfall_9",
+  ];
+  const sorted = [...names].sort(naturalCompare);
+  assert.deepEqual(sorted, [
+    "Bonnie Content Waterfall_1",
+    "Bonnie Content Waterfall_2",
+    "Bonnie Content Waterfall_9",
+    "Bonnie Content Waterfall_10",
+  ]);
+});
+
+test("sortProjectWorkspaceVideos groups by batch label, then date, then natural name order", () => {
+  const videos = [
+    { id: 3, title: "Bonnie Content Waterfall_9", date: "2026-08-24", batchLabel: "Batch 1" },
+    { id: 1, title: "Bonnie Content Waterfall_10", date: "2026-08-24", batchLabel: "Batch 1" },
+    { id: 2, title: "Bonnie Content Waterfall_2", date: "2026-08-24", batchLabel: "Batch 1" },
+    { id: 4, title: "Standalone cut", date: "2026-08-20", batchLabel: null },
+  ];
+  const sorted = sortProjectWorkspaceVideos(videos);
+  assert.deepEqual(sorted.map((v) => v.id), [4, 2, 3, 1]);
+});
+
+test("sortProjectWorkspaceVideos falls back to id for total determinism", () => {
+  const videos = [
+    { id: 9, title: "", date: "2026-01-01", batchLabel: null },
+    { id: 2, title: "", date: "2026-01-01", batchLabel: null },
+  ];
+  const sorted = sortProjectWorkspaceVideos(videos);
+  assert.deepEqual(sorted.map((v) => v.id), [2, 9]);
 });

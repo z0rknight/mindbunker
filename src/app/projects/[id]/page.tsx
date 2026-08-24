@@ -1,11 +1,17 @@
 import { PlanVideoButton } from "@/components/ui/QuickActions";
 import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
-import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
 import { getProjectWorkspace } from "@/modules/projects/actions";
 import { formatDate } from "@/utils/date";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProjectWorkspaceControls } from "./ProjectWorkspaceControls";
+import { AddVideoButton } from "./AddVideoButton";
+import { BulkAddVideosButton } from "./BulkAddVideosButton";
+import { ProjectVideoList } from "./ProjectVideoList";
+import { AssetsPanel } from "./AssetsPanel";
+import { SourceMediaPanel } from "./SourceMediaPanel";
+import { getAssetsForProject } from "@/modules/assets/actions";
+import { getSourceMediaForProject } from "@/modules/assets/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +25,11 @@ export default async function ProjectWorkspacePage({
 
   const project = await getProjectWorkspace(Number(id));
   if (!project) notFound();
+
+  const [assets, sourceMediaReferences] = await Promise.all([
+    getAssetsForProject(project.id),
+    getSourceMediaForProject(project.id),
+  ]);
 
   const doneVideos = project.videos.filter((video) => video.status === "DONE").length;
   const inFlightVideos = project.videos.filter((video) =>
@@ -82,37 +93,25 @@ export default async function ProjectWorkspacePage({
               Videos <span className="font-mono text-sm text-zinc-600">{project.videos.length}</span>
             </h2>
           </div>
-          <div className="w-full pr-36 sm:w-[180px] sm:pr-0">
-            <PlanVideoButton initialProjectId={project.id} />
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <AddVideoButton projectId={project.id} />
+            <BulkAddVideosButton projectId={project.id} />
+            <div className="w-full sm:w-[180px]">
+              <PlanVideoButton initialProjectId={project.id} />
+            </div>
           </div>
         </div>
 
-        {project.videos.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-900/40 p-8 text-center">
-            <p className="font-black text-white">No videos planned yet</p>
-            <p className="mt-1 text-sm text-zinc-500">Plan the first production unit inside this Project.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {project.videos.map((video) => (
-              <Link
-                key={video.id}
-                href={`/productivity?video=${video.id}`}
-                className="flex min-h-20 flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 transition hover:border-violet-500/35 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-black text-white">{video.title ?? `Video ${formatDate(video.date)}`}</p>
-                  <p className="mt-1 text-xs text-zinc-600">{formatDate(video.date)} · {video.revisionsCount} revision{video.revisionsCount === 1 ? "" : "s"}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <VideoStatusBadge status={video.status} />
-                  <span className="text-sm font-black text-violet-300">Open video →</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
+        <ProjectVideoList projectId={project.id} videos={project.videos} />
       </section>
+
+      <AssetsPanel
+        projectId={project.id}
+        videos={project.videos.map((v) => ({ id: v.id, title: v.title }))}
+        assets={assets}
+      />
+
+      <SourceMediaPanel projectId={project.id} references={sourceMediaReferences} />
     </div>
   );
 }

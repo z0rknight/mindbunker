@@ -12,8 +12,27 @@ type CardData = {
   orientation: "LANDSCAPE" | "VERTICAL" | "SQUARE" | null;
   coverUrl: string | null;
   deliveryUrl: string | null;
+  reviewUrl: string | null;
+  publishedUrl: string | null;
   lastUpdated: string | null;
 };
+
+// Monday Real-Operation Pre-Freeze §6: READY FOR REVIEW -> reviewUrl,
+// PUBLISHED -> publishedUrl, otherwise (delivered) -> deliveryUrl.
+// Provider-independent everywhere -- this just picks the right FACT for
+// the video's current state, never a provider name.
+function primaryLink(video: CardData): { href: string; label: string } | null {
+  if (video.status === "READY_FOR_REVIEW" && video.reviewUrl) {
+    return { href: video.reviewUrl, label: "Review video" };
+  }
+  if (video.publishedUrl) {
+    return { href: video.publishedUrl, label: "View published" };
+  }
+  if (video.deliveryUrl) {
+    return { href: video.deliveryUrl, label: "Watch" };
+  }
+  return null;
+}
 
 const STATUS_CLASSES: Record<VideoStatus, string> = {
   PLANNED: "border-zinc-600/50 bg-zinc-700/30 text-zinc-300",
@@ -98,14 +117,14 @@ export function VideoCard({
           )}
         </div>
 
-        {video.deliveryUrl && (
+        {primaryLink(video) && (
           <a
-            href={video.deliveryUrl}
+            href={primaryLink(video)!.href}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-1 inline-flex min-h-10 w-full items-center justify-center rounded-xl bg-violet-600 px-3 text-xs font-black text-white transition hover:bg-violet-500"
           >
-            Watch
+            {primaryLink(video)!.label}
           </a>
         )}
 

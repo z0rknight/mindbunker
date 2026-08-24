@@ -14,14 +14,35 @@ export type VideoInputValues = {
   projectId?: number | null;
   clientId?: number | null;
   deliveryUrl?: string | null;
+  // §5/§6: provider-independent review and publish links -- see the
+  // reviewUrl column comment in db/schema.ts.
+  reviewUrl?: string | null;
+  publishedUrl?: string | null;
   notes?: string;
   coverUrl?: string | null;
   orientation?: VideoOrientation | null;
   contentType?: VideoContentType | null;
+  // Taryn August Ingest Readiness §6: an optional historical date
+  // (YYYY-MM-DD), only meaningful at creation. Undefined/null means "use
+  // today", exactly the previous hardcoded behavior -- existing callers
+  // (PlanVideoButton, NewWorkButton) never set this and are unaffected.
+  // Needed so bulk/manual ingest of already-completed August work is
+  // dated when it actually happened, not the day it's typed in.
+  date?: string | null;
 };
 
 export type VideoCreateInputValues = VideoInputValues & {
   status: VideoStatus;
+  // Brief C ("Final Local Ingest / Live Readiness") §3: historical bulk
+  // ingest must be allowed to create a Video directly in a later canonical
+  // lifecycle state (some of August's real work is already Delivered, not
+  // freshly Planned). Defaults to false/undefined everywhere except the
+  // explicit bulk/historical create path in actions.ts -- NORMAL prospective
+  // single-video creation keeps defaulting to PLANNED-only, unchanged. This
+  // flag is never read from client input directly; only the bulk action sets
+  // it, and only after the row already carries an explicit, validated status
+  // value (never inferred from absence).
+  allowExplicitStatus?: boolean;
 };
 
 export type ValidatedVideoMetadata = {
@@ -29,10 +50,13 @@ export type ValidatedVideoMetadata = {
   projectId: number | null;
   clientId: number | null;
   deliveryUrl: string | null;
+  reviewUrl: string | null;
+  publishedUrl: string | null;
   notes: string | null;
   coverUrl: string | null;
   orientation: VideoOrientation | null;
   contentType: VideoContentType | null;
+  date?: string | null;
 };
 
 type VideoInputResult =
@@ -45,7 +69,7 @@ type VideoInputResult =
 type VideoCreateInputResult =
   | {
       success: true;
-      data: ValidatedVideoMetadata & { status: "PLANNED" };
+      data: ValidatedVideoMetadata & { status: VideoStatus };
     }
   | { success: false; error: string };
 
@@ -54,6 +78,8 @@ export type VideoMetadataField =
   | "clientId"
   | "projectId"
   | "deliveryUrl"
+  | "reviewUrl"
+  | "publishedUrl"
   | "notes"
   | "coverUrl"
   | "orientation"
@@ -177,6 +203,14 @@ export function validateVideoInput(values: VideoInputValues): VideoInputResult {
   const deliveryUrl = validateDeliveryUrl(values.deliveryUrl);
   if (!deliveryUrl.success) return deliveryUrl;
 
+  // reviewUrl/publishedUrl reuse the exact same HTTPS-only validator as
+  // deliveryUrl -- provider-independent, same discipline.
+  const reviewUrl = validateDeliveryUrl(values.reviewUrl);
+  if (!reviewUrl.success) return reviewUrl;
+
+  const publishedUrl = validateDeliveryUrl(values.publishedUrl);
+  if (!publishedUrl.success) return publishedUrl;
+
   const coverUrl = validateCoverUrl(values.coverUrl);
   if (!coverUrl.success) return coverUrl;
 
@@ -189,6 +223,15 @@ export function validateVideoInput(values: VideoInputValues): VideoInputResult {
   const notes = typeof values.notes === "string"
     ? values.notes.trim().slice(0, 2_000) || null
     : null;
+
+  let date: string | null = null;
+  if (values.date !== undefined && values.date !== null && values.date !== "") {
+    if (typeof values.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(values.date) || Number.isNaN(Date.parse(values.date))) {
+      return { success: false, error: "Enter a valid date (YYYY-MM-DD)." };
+    }
+    date = values.date;
+  }
+
   return {
     success: true,
     data: {
@@ -196,10 +239,13 @@ export function validateVideoInput(values: VideoInputValues): VideoInputResult {
       projectId,
       clientId,
       deliveryUrl: deliveryUrl.value,
+      reviewUrl: reviewUrl.value,
+      publishedUrl: publishedUrl.value,
       notes,
       coverUrl: coverUrl.value,
       orientation: orientation.value,
       contentType: contentType.value,
+      date,
     },
   };
 }
@@ -215,15 +261,51 @@ export function validateVideoCreateInput(
       error: "Choose an existing project before planning a video.",
     };
   }
-  if (values.status !== "PLANNED") {
+  // Brief C §3: two distinct create paths, one invariant each.
+  // - NORMAL prospective single-video creation (allowExplicitStatus unset/
+  //   false): unchanged from every prior round -- must start PLANNED.
+  // - EXPLICIT historical/bulk ingest (allowExplicitStatus true): may
+  //   specify any canonical VideoStatus, but the value must still be an
+  //   explicit, valid member of VIDEO_STATUSES. Absence of a valid status
+  //   is always rejected here, never silently defaulted to a completed
+  //   state -- the bulk-ingest UI is responsible for supplying an explicit
+  //   status (its own safe default is PLANNED, not inferred completion).
+  if (!values.allowExplicitStatus) {
+    if (values.status !== "PLANNED") {
+      return {
+        success: false,
+        error: "New videos must start as planned.",
+      };
+    }
+    return {
+      success: true,
+      data: { ...metadata.data, status: "PLANNED" },
+    };
+  }
+  if (!isVideoStatus(values.status)) {
     return {
       success: false,
-      error: "New videos must start as planned.",
+      error: "Choose a valid video status for this batch.",
+    };
+  }
+  // Single Historical Video Ingest Gap round: the same "no
+  // AWAITING_CLIENT_APPROVAL without a review URL" invariant enforced on
+  // status TRANSITIONS (planVideoTransition, below) must also hold when an
+  // explicit historical/bulk create targets READY_FOR_REVIEW directly --
+  // otherwise a Video could be born in that state with no review link,
+  // exactly the semantically-invalid state the transition check exists to
+  // prevent. Not a new rule, just the existing one applied at the one
+  // create path that can now reach that status without going through a
+  // transition first.
+  if (values.status === "READY_FOR_REVIEW" && !(metadata.data.reviewUrl && metadata.data.reviewUrl.trim())) {
+    return {
+      success: false,
+      error: "A review link is required before a video can be marked Ready for review.",
     };
   }
   return {
     success: true,
-    data: { ...metadata.data, status: "PLANNED" },
+    data: { ...metadata.data, status: values.status },
   };
 }
 
@@ -236,6 +318,8 @@ export function getVideoMetadataChanges(
     "clientId",
     "projectId",
     "deliveryUrl",
+    "reviewUrl",
+    "publishedUrl",
     "notes",
     "coverUrl",
     "orientation",
@@ -291,10 +375,19 @@ function lifecycleEventType(
   return "video.finished";
 }
 
+// Monday Real-Operation Pre-Freeze §5: "A video/work unit may ONLY enter
+// AWAITING_CLIENT_APPROVAL if a valid review URL exists." READY_FOR_REVIEW
+// is this repo's existing name for that concept (see VIDEO_STATUS_TRANSITIONS
+// above) -- reviewUrl is the video's CURRENT reviewUrl (or one supplied in
+// the same request that also sets the URL, see actions.ts), never inferred
+// or defaulted. Enforced here (app layer) rather than as a DB CHECK
+// constraint -- see the reviewUrl column comment in db/schema.ts for why
+// D1 can't host that CHECK on this particular table.
 export function planVideoTransition(input: {
   currentStatus: unknown;
   expectedStatus: unknown;
   targetStatus: unknown;
+  reviewUrl?: string | null;
 }) {
   if (
     !isVideoStatus(input.currentStatus) ||
@@ -324,6 +417,16 @@ export function planVideoTransition(input: {
     return {
       success: false as const,
       error: `Cannot move ${input.currentStatus} to ${input.targetStatus}.`,
+    };
+  }
+  if (
+    input.targetStatus === "READY_FOR_REVIEW" &&
+    !(input.reviewUrl && input.reviewUrl.trim())
+  ) {
+    return {
+      success: false as const,
+      error:
+        "A review link is required before a video can be marked Ready for review.",
     };
   }
   return {

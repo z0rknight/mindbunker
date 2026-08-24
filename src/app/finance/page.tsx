@@ -1,25 +1,242 @@
+import Link from "next/link";
 import { StatCard } from "@/components/ui/StatCard";
 import { AddIncomeButton, AddExpenseButton } from "@/components/ui/QuickActions";
-import { getFinanceSummary, getAllTransactions } from "@/modules/finance/actions";
+import {
+  getFinanceSummary,
+  getAllTransactions,
+  getRmediaCashSummary,
+  getTaxReserveSettings,
+  getRecentIncome,
+  getReconciliationRequiringAttention,
+  getDebts,
+  getSubscriptionSummary,
+} from "@/modules/finance/actions";
 import { formatCurrency, formatDate, currentMonthName } from "@/utils/date";
+import { formatMinutesAsHours } from "@/modules/finance/core";
 import { DeleteTransactionButton } from "./DeleteTransactionButton";
+import { RecordOwnerPayButton } from "./RecordOwnerPayButton";
+import { TaxReserveControl } from "./TaxReserveControl";
+import { getAllClients } from "@/modules/crm/actions";
+import { getOperatingReserveSummary } from "@/modules/finance/actions";
+import { OperatingReserveControl } from "./OperatingReserveControl";
 
 export const dynamic = "force-dynamic";
 
 export default async function FinancePage() {
-  const [summary, transactions] = await Promise.all([
+  const [
+    summary,
+    transactions,
+    rmediaCash,
+    taxReserveSettings,
+    recentIncome,
+    reconciliationAttention,
+    allClients,
+    operatingReserve,
+    debts,
+    subscriptionSummary,
+  ] = await Promise.all([
     getFinanceSummary(),
     getAllTransactions(),
+    getRmediaCashSummary(),
+    getTaxReserveSettings(),
+    getRecentIncome(8),
+    getReconciliationRequiringAttention(),
+    getAllClients(),
+    getOperatingReserveSummary(),
+    getDebts(),
+    getSubscriptionSummary(),
   ]);
+  const activeDebts = debts.filter((d) => d.status === "ACTIVE");
+  const remainingByCurrency = new Map<string, number>();
+  for (const d of activeDebts) {
+    remainingByCurrency.set(d.currency, (remainingByCurrency.get(d.currency) ?? 0) + d.remainingBalance);
+  }
+  const clientOptions = allClients.map((c) => ({ id: c.id, name: c.name }));
 
   const recentTransactions = [...transactions].reverse().slice(0, 100);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">💰 Finance</h1>
-        <p className="text-zinc-500 text-sm mt-1">Income & expense tracker</p>
+      <div className="mb-8 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white">💰 Finance</h1>
+          <p className="text-zinc-500 text-sm mt-1">Income & expense tracker</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Link
+            href="/finance/contracts"
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            🧾 Contracts & Billing Evidence
+          </Link>
+          <Link
+            href="/finance/debts"
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            💳 Debts
+          </Link>
+          <Link
+            href="/finance/subscriptions"
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            🔁 Subscriptions
+          </Link>
+        </div>
       </div>
+
+      {/* ── FINANCE COCKPIT: DEBTS + SUBSCRIPTIONS (Taryn August Ingest §4) ─
+          Compact summary only -- full payment history / record-charge
+          management stays on the dedicated pages this links to. Tax
+          Reserve and Operating Reserve are the other two cockpit
+          concerns; they already live as compact, directly-editable
+          controls in the RMEDIA Cash section immediately below. */}
+      <div className="mb-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-zinc-500 text-xs uppercase tracking-wider">💳 Debts</p>
+            <Link href="/finance/debts" className="text-red-400 hover:text-red-300 text-xs font-semibold">
+              View debts →
+            </Link>
+          </div>
+          {activeDebts.length === 0 ? (
+            <p className="text-zinc-600 text-sm">No active debts.</p>
+          ) : (
+            <>
+              <p className="text-white font-bold text-lg">
+                {activeDebts.length} active
+              </p>
+              <div className="mt-1 space-y-0.5">
+                {[...remainingByCurrency.entries()].map(([currency, amount]) => (
+                  <p key={currency} className="text-zinc-400 text-xs">
+                    {formatCurrency(amount, currency)} remaining
+                  </p>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-zinc-500 text-xs uppercase tracking-wider">🔁 Subscriptions</p>
+            <Link href="/finance/subscriptions" className="text-cyan-400 hover:text-cyan-300 text-xs font-semibold">
+              View subscriptions →
+            </Link>
+          </div>
+          {subscriptionSummary.byCurrency.length === 0 ? (
+            <p className="text-zinc-600 text-sm">No active subscriptions.</p>
+          ) : (
+            <div className="space-y-0.5">
+              {subscriptionSummary.byCurrency.map((c) => (
+                <p key={c.currency} className="text-white text-sm">
+                  <span className="font-bold">{formatCurrency(c.monthlyEquivalent, c.currency)}</span>
+                  <span className="text-zinc-500 text-xs"> /mo equivalent</span>
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── RMEDIA CASH (Monday Money Lab P0) ─────────────────────────────── */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest">
+            RMEDIA Cash
+          </h2>
+          <TaxReserveControl currentPercent={taxReserveSettings.taxReservePercent} />
+        </div>
+        <div className="mb-4">
+          <OperatingReserveControl
+            targetAmount={operatingReserve.targetAmount}
+            reservedSoFar={operatingReserve.reservedSoFar}
+            remainingToTarget={operatingReserve.remainingToTarget}
+            currency={operatingReserve.currency}
+          />
+        </div>
+        {rmediaCash.length === 0 ? (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
+            <p className="text-zinc-500 text-sm">No transactions yet — nothing to summarize.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {rmediaCash.map((row) => (
+              <div key={row.currency}>
+                {rmediaCash.length > 1 && (
+                  <p className="text-zinc-500 text-xs font-semibold uppercase tracking-widest mb-2">
+                    {row.currency}
+                  </p>
+                )}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <StatCard
+                    label="Business Cash"
+                    value={formatCurrency(row.businessCash, row.currency)}
+                    sub="Real cash position — not profit"
+                    accent={row.businessCash >= 0 ? "green" : "red"}
+                    icon="🏢"
+                  />
+                  <StatCard
+                    label="Tax Reserve"
+                    value={formatCurrency(row.taxReserve, row.currency)}
+                    sub="Experimental — not tax advice"
+                    accent="amber"
+                    icon="🧯"
+                  />
+                  <StatCard
+                    label="Available Business Cash"
+                    value={formatCurrency(row.availableBusinessCash, row.currency)}
+                    sub="Business Cash − Tax Reserve"
+                    accent={row.availableBusinessCash >= 0 ? "green" : "red"}
+                    icon="✅"
+                  />
+                  <StatCard
+                    label="Owner Pay (all time)"
+                    value={formatCurrency(row.totalOwnerPay, row.currency)}
+                    sub="Not revenue, not an expense"
+                    accent="violet"
+                    icon="🏦"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── RECONCILIATION REQUIRING ATTENTION ────────────────────────────── */}
+      {reconciliationAttention.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
+            ⚠️ Reconciliation Requiring Attention
+          </h2>
+          <div className="space-y-2">
+            {reconciliationAttention.map((r) => (
+              <Link
+                key={`${r.contractId}-${r.periodStart}-${r.periodEnd}`}
+                href={`/finance/contracts/${r.contractId}`}
+                className="block bg-zinc-900 border border-amber-900/40 rounded-xl p-4 hover:border-amber-700/60 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-white text-sm font-semibold">
+                    {r.clientName} — {r.platform}
+                  </p>
+                  <p className="text-amber-400 text-xs font-bold">
+                    {r.differenceMinutes.value !== null
+                      ? `${r.differenceMinutes.value >= 0 ? "+" : ""}${formatMinutesAsHours(
+                          Math.abs(r.differenceMinutes.value),
+                        )} mismatch`
+                      : "—"}
+                  </p>
+                </div>
+                <p className="text-zinc-500 text-xs mt-1">
+                  {formatDate(r.periodStart)} – {formatDate(r.periodEnd)} · tracked{" "}
+                  {formatMinutesAsHours(r.operationalMinutes.value)} · billed{" "}
+                  {r.billedMinutes.value !== null ? formatMinutesAsHours(r.billedMinutes.value) : "—"}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
@@ -54,10 +271,50 @@ export default async function FinancePage() {
       {/* Quick Actions */}
       <div className="mb-8">
         <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">Add Transaction</h2>
-        <div className="grid max-w-sm grid-cols-2 gap-3">
-          <AddIncomeButton />
+        <div className="grid max-w-2xl grid-cols-2 sm:grid-cols-3 gap-3">
+          <AddIncomeButton clients={clientOptions} />
           <AddExpenseButton />
+          <RecordOwnerPayButton />
         </div>
+      </div>
+
+      {/* Recent Income */}
+      <div className="mb-8">
+        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
+          Recent Income
+        </h2>
+        {recentIncome.length === 0 ? (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
+            <p className="text-zinc-500 text-sm">No income recorded yet.</p>
+          </div>
+        ) : (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs uppercase tracking-wider">Date</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs uppercase tracking-wider">Category</th>
+                  <th className="text-right text-zinc-500 font-medium px-4 py-2.5 text-xs uppercase tracking-wider">Amount</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs uppercase tracking-wider">Linked Evidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentIncome.map((t, i) => (
+                  <tr key={t.id} className={`border-b border-zinc-800/50 ${i % 2 === 0 ? "" : "bg-zinc-800/20"}`}>
+                    <td className="px-4 py-2.5 text-white">{formatDate(t.date)}</td>
+                    <td className="px-4 py-2.5 text-zinc-300">{t.category}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-medium text-emerald-400">
+                      +{formatCurrency(t.amount, t.currency)}
+                    </td>
+                    <td className="px-4 py-2.5 text-zinc-500 text-xs">
+                      {t.billingEvidenceId ? `#${t.billingEvidenceId}` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Transactions Table */}
@@ -90,16 +347,18 @@ export default async function FinancePage() {
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                         t.type === "income"
                           ? "bg-emerald-900/50 text-emerald-400"
+                          : t.type === "owner_pay"
+                          ? "bg-indigo-900/50 text-indigo-400"
                           : "bg-red-900/50 text-red-400"
                       }`}>
-                        {t.type === "income" ? "Income" : "Expense"}
+                        {t.type === "income" ? "Income" : t.type === "owner_pay" ? "Owner Pay" : "Expense"}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-zinc-300">{t.category}</td>
                     <td className={`px-4 py-3 text-right font-mono font-medium ${
-                      t.type === "income" ? "text-emerald-400" : "text-red-400"
+                      t.type === "income" ? "text-emerald-400" : t.type === "owner_pay" ? "text-indigo-400" : "text-red-400"
                     }`}>
-                      {t.type === "income" ? "+" : "-"}{formatCurrency(t.amount)}
+                      {t.type === "income" ? "+" : "-"}{formatCurrency(t.amount, t.currency)}
                     </td>
                     <td className="px-4 py-3 text-zinc-500 text-xs">{t.notes ?? "—"}</td>
                     <td className="px-4 py-3">

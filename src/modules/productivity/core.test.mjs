@@ -82,10 +82,13 @@ test("video input preserves its project and client references", () => {
       projectId: 4,
       clientId: 2,
       deliveryUrl: null,
+      reviewUrl: null,
+      publishedUrl: null,
       notes: "Vertical version",
       coverUrl: null,
       orientation: null,
       contentType: null,
+      date: null,
     });
   }
 });
@@ -119,6 +122,8 @@ test("video input rejects nameless videos and invalid references", () => {
 });
 
 test("new video status is explicit and cannot silently become completed", () => {
+  // NORMAL prospective single-video creation (allowExplicitStatus unset) --
+  // unchanged: must start PLANNED, exactly as every prior round.
   assert.equal(
     validateVideoCreateInput({
       title: "Planned cut",
@@ -142,6 +147,116 @@ test("new video status is explicit and cannot silently become completed", () => 
     }).success,
     false,
   );
+});
+
+// Brief C ("Final Local Ingest / Live Readiness") §3: EXPLICIT
+// historical/bulk ingest (allowExplicitStatus: true) may create a Video
+// directly in a later canonical lifecycle stage -- deliberately a
+// different, narrower carve-out than the test above, not a replacement of
+// it. Absence of a valid status is still always rejected, never silently
+// inferred as completion.
+test("explicit historical/bulk ingest may set a later canonical status, but never silently", () => {
+  const delivered = validateVideoCreateInput({
+    title: "August delivered cut",
+    projectId: 4,
+    status: "DONE",
+    allowExplicitStatus: true,
+  });
+  assert.equal(delivered.success, true);
+  assert.equal(delivered.data.status, "DONE");
+
+  const inProgress = validateVideoCreateInput({
+    title: "August WIP cut",
+    projectId: 4,
+    status: "IN_PROGRESS",
+    allowExplicitStatus: true,
+  });
+  assert.equal(inProgress.success, true);
+  assert.equal(inProgress.data.status, "IN_PROGRESS");
+
+  // Still PLANNED-safe by explicit choice, not by silent inference.
+  const planned = validateVideoCreateInput({
+    title: "August planned cut",
+    projectId: 4,
+    status: "PLANNED",
+    allowExplicitStatus: true,
+  });
+  assert.equal(planned.success, true);
+  assert.equal(planned.data.status, "PLANNED");
+
+  // An invalid/garbage status is rejected outright -- never defaulted to
+  // anything, completed or otherwise.
+  assert.equal(
+    validateVideoCreateInput({
+      title: "Bad status",
+      projectId: 4,
+      status: "NOT_A_REAL_STATUS",
+      allowExplicitStatus: true,
+    }).success,
+    false,
+  );
+
+  // The single-create (non-bulk) invariant is untouched by the flag's mere
+  // presence when it's false -- same as the test above, re-asserted here
+  // for the explicit-vs-implicit contrast.
+  assert.equal(
+    validateVideoCreateInput({
+      title: "Still must be planned",
+      projectId: 4,
+      status: "DONE",
+      allowExplicitStatus: false,
+    }).success,
+    false,
+  );
+});
+
+// "Final Single Video Ingest Gap" round §5/§10: Add Video (and Add Multiple
+// Videos, which shares this exact validator) can create a Video directly
+// in READY_FOR_REVIEW, but the same "no AWAITING_CLIENT_APPROVAL without a
+// review URL" invariant that already governs status TRANSITIONS
+// (planVideoTransition) must hold here too -- otherwise a video could be
+// born in that state with no review link.
+test("explicit historical create into READY_FOR_REVIEW still requires a review URL", () => {
+  const withoutReviewUrl = validateVideoCreateInput({
+    title: "Needs review",
+    projectId: 4,
+    status: "READY_FOR_REVIEW",
+    allowExplicitStatus: true,
+  });
+  assert.equal(withoutReviewUrl.success, false);
+
+  const withReviewUrl = validateVideoCreateInput({
+    title: "Needs review",
+    projectId: 4,
+    status: "READY_FOR_REVIEW",
+    reviewUrl: "https://frame.io/review/123",
+    allowExplicitStatus: true,
+  });
+  assert.equal(withReviewUrl.success, true);
+});
+
+// §6: for statuses where a review URL isn't required (PLANNED, DONE, ...),
+// every URL field stays genuinely optional -- an explicit historical
+// create with no links at all must still succeed.
+test("optional URLs remain optional for statuses that don't require one", () => {
+  const planned = validateVideoCreateInput({
+    title: "No links yet",
+    projectId: 4,
+    status: "PLANNED",
+    allowExplicitStatus: true,
+  });
+  assert.equal(planned.success, true);
+  assert.equal(planned.data.deliveryUrl, null);
+  assert.equal(planned.data.reviewUrl, null);
+  assert.equal(planned.data.publishedUrl, null);
+
+  const done = validateVideoCreateInput({
+    title: "Delivered, no link on file",
+    projectId: 4,
+    status: "DONE",
+    allowExplicitStatus: true,
+  });
+  assert.equal(done.success, true);
 });
 
 test("Finished Video can only complete an existing directly finishable identity", () => {
@@ -271,6 +386,12 @@ test("the required lifecycle transition vocabulary is explicit", () => {
       currentStatus,
       expectedStatus: currentStatus,
       targetStatus,
+      // Monday Real-Operation Pre-Freeze §5: entering READY_FOR_REVIEW
+      // (this repo's AWAITING_CLIENT_APPROVAL) requires a review URL --
+      // supply one here so this vocabulary-coverage test still exercises
+      // every transition; the invariant itself is tested separately below.
+      reviewUrl:
+        targetStatus === "READY_FOR_REVIEW" ? "https://example.com/review" : null,
     });
     assert.equal(result.success, true);
     if (result.success && result.changed) {
@@ -278,6 +399,40 @@ test("the required lifecycle transition vocabulary is explicit", () => {
       assert.equal(result.delivered, targetStatus === "DONE");
     }
   }
+});
+
+test("a video cannot enter READY_FOR_REVIEW (AWAITING_CLIENT_APPROVAL) without a review URL", () => {
+  const withoutUrl = planVideoTransition({
+    currentStatus: "IN_PROGRESS",
+    expectedStatus: "IN_PROGRESS",
+    targetStatus: "READY_FOR_REVIEW",
+  });
+  assert.equal(withoutUrl.success, false);
+
+  const withBlankUrl = planVideoTransition({
+    currentStatus: "IN_PROGRESS",
+    expectedStatus: "IN_PROGRESS",
+    targetStatus: "READY_FOR_REVIEW",
+    reviewUrl: "   ",
+  });
+  assert.equal(withBlankUrl.success, false);
+
+  const withUrl = planVideoTransition({
+    currentStatus: "IN_PROGRESS",
+    expectedStatus: "IN_PROGRESS",
+    targetStatus: "READY_FOR_REVIEW",
+    reviewUrl: "https://frame.io/review/abc",
+  });
+  assert.equal(withUrl.success, true);
+
+  // Transitions that do NOT target READY_FOR_REVIEW are unaffected by a
+  // missing reviewUrl -- the invariant is scoped to that one transition.
+  const unaffected = planVideoTransition({
+    currentStatus: "READY_FOR_REVIEW",
+    expectedStatus: "READY_FOR_REVIEW",
+    targetStatus: "DONE",
+  });
+  assert.equal(unaffected.success, true);
 });
 
 

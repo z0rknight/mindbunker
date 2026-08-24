@@ -1,0 +1,1 @@
+ALTER TABLE `video_logs` ADD `batch_label` text;

@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "name": "mindbunker-monday-curated-real-data-2026-08-24",
+  "production": {
+    "accountId": "a2511426086f83bc2d6031478dbf2e69",
+    "databaseName": "mindbunker",
+    "databaseId": "d6ada5db-1f36-4ee9-9a05-01d131abf219",
+    "requiredMigrations": [
+      "0000_ancient_callisto.sql",
+      "0001_daily_nightmare.sql",
+      "0002_add_cycling_walking_to_health.sql",
+      "0003_petite_ezekiel_stane.sql",
+      "0004_wonderful_karen_page.sql",
+      "0005_amused_roughhouse.sql",
+      "0006_narrow_puppet_master.sql",
+      "0007_overrated_landau.sql",
+      "0008_nappy_skrulls.sql",
+      "0009_colossal_phantom_reporter.sql",
+      "0010_old_morgan_stark.sql",
+      "0011_brainy_ultimo.sql",
+      "0012_melted_mole_man.sql",
+      "0013_demonic_paper_doll.sql",
+      "0014_first_shockwave.sql",
+      "0015_fixed_slipstream.sql",
+      "0016_graceful_the_enforcers.sql",
+      "0017_sensor_sync.sql",
+      "0018_monday_money_lab_p0.sql",
+      "0019_clumsy_nicolaos.sql",
+      "0020_sensor_inbox_p11.sql",
+      "0021_easy_jocasta.sql",
+      "0022_pale_forge.sql",
+      "0023_panoramic_firedrake.sql"
+    ],
+    "expectedBefore": {
+      "clients": 3,
+      "projects": 2,
+      "video_logs": 4,
+      "work_sessions": 6,
+      "assets": 0,
+      "source_media_references": 0,
+      "commercial_contracts": 0,
+      "debts": 0,
+      "subscriptions": 0,
+      "transactions": 0
+    },
+    "expectedAfter": {
+      "clients": 3,
+      "projects": 5,
+      "video_logs": 23,
+      "work_sessions": 6,
+      "assets": 1,
+      "source_media_references": 1,
+      "commercial_contracts": 1,
+      "debts": 2,
+      "subscriptions": 1,
+      "transactions": 1
+    }
+  },
+  "alreadyExistsProduction": [
+    {
+      "table": "clients",
+      "localId": 990002,
+      "productionId": 2,
+      "expected": { "name": "Taryn Dubreuil", "status": "active" },
+      "policy": "PRODUCTION_WINS"
+    },
+    {
+      "table": "clients",
+      "localId": 9101,
+      "productionId": 3,
+      "expected": { "name": "RMEDIA", "status": "active" },
+      "policy": "PRODUCTION_WINS"
+    },
+    {
+      "table": "projects",
+      "localId": 990018,
+      "productionId": 1,
+      "expected": { "client_id": 2, "name": "MINI SERIES", "status": "active" },
+      "policy": "PRODUCTION_WINS"
+    },
+    {
+      "table": "video_logs",
+      "localId": 9210,
+      "productionId": 4,
+      "expected": {
+        "client_id": 2,
+        "project_id": 1,
+        "title": "Video 1 - MINI SERIES",
+        "status": "READY_FOR_REVIEW"
+      },
+      "policy": "PRODUCTION_WINS"
+    }
+  ],
+  "imports": {
+    "projects": [
+      { "sourceId": 990016, "targetId": 3 },
+      { "sourceId": 990017, "targetId": 4 },
+      { "sourceId": 990020, "targetId": 5 }
+    ],
+    "video_logs": [
+      { "sourceId": 9211, "targetId": 6 },
+      { "sourceId": 9212, "targetId": 7 },
+      { "sourceId": 9213, "targetId": 8 },
+      { "sourceId": 9214, "targetId": 9 },
+      { "sourceId": 9215, "targetId": 10 },
+      { "sourceId": 9216, "targetId": 11 },
+      { "sourceId": 9217, "targetId": 12 },
+      { "sourceId": 9218, "targetId": 13 },
+      { "sourceId": 9219, "targetId": 14 },
+      { "sourceId": 9220, "targetId": 15 },
+      { "sourceId": 9221, "targetId": 16 },
+      { "sourceId": 9222, "targetId": 17 },
+      { "sourceId": 9223, "targetId": 18 },
+      { "sourceId": 9224, "targetId": 19 },
+      { "sourceId": 9225, "targetId": 20 },
+      { "sourceId": 9226, "targetId": 21 },
+      { "sourceId": 9227, "targetId": 22 },
+      { "sourceId": 9228, "targetId": 23 },
+      { "sourceId": 9229, "targetId": 24 }
+    ],
+    "assets": [{ "sourceId": 1, "targetId": 1 }],
+    "source_media_references": [{ "sourceId": 1, "targetId": 1 }],
+    "commercial_contracts": [{ "sourceId": 1, "targetId": 1 }],
+    "debts": [
+      { "sourceId": 1, "targetId": 1 },
+      { "sourceId": 2, "targetId": 2 }
+    ],
+    "subscriptions": [{ "sourceId": 1, "targetId": 1 }],
+    "transactions": [
+      {
+        "sourceId": 1,
+        "targetId": 1,
+        "idempotencyKey": "curated-2026-08-24-transaction-1"
+      }
+    ]
+  },
+  "sourceFingerprints": {
+    "projects": "03d17c6e4a7cd01ec4beed00ae499db9a5ba3063fe85742c655b5be9e172d72b",
+    "video_logs": "d54382fbdacd08a02ebecf0e5243955d321a54694a7a9299c05e86e1249bcb53",
+    "assets": "bcbfe33c6c28b3376d6d831fa1f850e07ab0088105ac761b50678cfd31af8b5e",
+    "source_media_references": "f6cc71aab8d223894d17dff6b2f7ce6329d427628daa3d85a140d1e3f2f289bc",
+    "commercial_contracts": "6c9f1fb08348c3864e980a7edfa484c6171bec63a838611cef3eb8061d35d71a",
+    "debts": "2729fa00ea441a6fa8f055ae052655dc0f53ceb5df49b9c30541aaf69794f9e4",
+    "subscriptions": "3b5746ae0aa9afdd67866066c0bcd8ec9c183decb517e3d499377e92ceaf5cab",
+    "transactions": "c0ae9d345ce52c410174c75c422ff36b76abfe39549a9dfeb43d4ee041be34af"
+  },
+  "skipQa": {
+    "clients": [4],
+    "projects": [1, 990019],
+    "sensor_devices": [1, 2, 3, 4],
+    "sensor_sessions": [1, 2, 3, 4, 5, 6, 7, 8],
+    "work_sessions": [9003, 9004, 9006, 9008],
+    "tables": [
+      "device_activity_observations",
+      "hist_import_batches",
+      "hist_identities",
+      "hist_facts",
+      "hist_source_coverage",
+      "hist_identity_source_labels"
+    ]
+  },
+  "requiresReconciliation": {
+    "projects": [9104],
+    "video_logs": [9209],
+    "work_sessions": [9005, 9007, 9009, 9010, 9011],
+    "tables": ["caffeine_events", "health_logs"]
+  }
+}

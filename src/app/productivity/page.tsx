@@ -24,6 +24,7 @@ import {
 import { currentMonthName, todayISO } from "@/utils/date";
 import Link from "next/link";
 import { VideoOperationsCard } from "./VideoOperationsCard";
+import { isSafeInternalPath } from "@/utils/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,7 @@ export default async function ProductivityPage({
     video?: string | string[];
     planVideo?: string | string[];
     projectId?: string | string[];
+    returnTo?: string | string[];
   }>;
 }) {
   const query = await searchParams;
@@ -76,6 +78,16 @@ export default async function ProductivityPage({
     typeof query.projectId === "string" && /^\d+$/u.test(query.projectId)
       ? Number(query.projectId)
       : null;
+  // Brief C §8: Project -> Video -> save/close must return to that
+  // Project; Productivity -> Video -> close keeps returning to Productivity
+  // (no returnTo present in that link). isSafeInternalPath is the single
+  // open-redirect gate -- an unsafe or absent value is simply never
+  // forwarded, and VideoEditor's own fallback is "/productivity".
+  const rawReturnTo = query.returnTo;
+  const safeReturnTo =
+    typeof rawReturnTo === "string" && isSafeInternalPath(rawReturnTo)
+      ? rawReturnTo
+      : undefined;
   const [stats, logs, options, workSessionOverview, sessionHistory] = await Promise.all([
     getVideoStats(),
     getAllVideoLogs(),
@@ -151,6 +163,7 @@ export default async function ProductivityPage({
                 projects={options.projects}
                 workSessionState={workSessionStateFor(video.id)}
                 initiallyOpen={initialVideoId === video.id}
+                returnTo={initialVideoId === video.id ? safeReturnTo : undefined}
                 compact={compact}
               />
             ))}

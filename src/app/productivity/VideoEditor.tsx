@@ -25,6 +25,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { WorkSessionPanel } from "./WorkSessionPanel";
 import { VideoMemoryPanel } from "./VideoMemoryPanel";
+import { ProjectReferencesPanel } from "./ProjectReferencesPanel";
 
 type VideoEditorProps = {
   video: {
@@ -37,6 +38,8 @@ type VideoEditorProps = {
     projectName: string | null;
     projectDeadline: string | null;
     deliveryUrl: string | null;
+    reviewUrl: string | null;
+    publishedUrl: string | null;
     notes: string | null;
     coverUrl: string | null;
     orientation: VideoOrientation | null;
@@ -53,6 +56,11 @@ type VideoEditorProps = {
   }>;
   initialWorkSessionState: VideoWorkSessionState;
   initiallyOpen?: boolean;
+  // Brief C §8: only ever an already-validated internal path (see
+  // isSafeInternalPath in utils/navigation.ts, applied where the query
+  // param is first read). Falls back to "/productivity" when absent --
+  // this is what keeps the Productivity -> Video -> close regression sane.
+  returnTo?: string;
   triggerLabel?: string;
 };
 
@@ -65,6 +73,7 @@ export function VideoEditor({
   projects,
   initialWorkSessionState,
   initiallyOpen = false,
+  returnTo,
   triggerLabel,
 }: VideoEditorProps) {
   const router = useRouter();
@@ -78,6 +87,8 @@ export function VideoEditor({
     video.clientId?.toString() ?? "",
   );
   const [deliveryUrl, setDeliveryUrl] = useState(video.deliveryUrl ?? "");
+  const [reviewUrl, setReviewUrl] = useState(video.reviewUrl ?? "");
+  const [publishedUrl, setPublishedUrl] = useState(video.publishedUrl ?? "");
   const [notes, setNotes] = useState(video.notes ?? "");
   const [coverUrl, setCoverUrl] = useState(video.coverUrl ?? "");
   const [orientation, setOrientation] = useState(video.orientation ?? "");
@@ -108,6 +119,8 @@ export function VideoEditor({
     setProjectId(video.projectId?.toString() ?? "");
     setClientId(video.clientId?.toString() ?? "");
     setDeliveryUrl(video.deliveryUrl ?? "");
+    setReviewUrl(video.reviewUrl ?? "");
+    setPublishedUrl(video.publishedUrl ?? "");
     setNotes(video.notes ?? "");
     setCoverUrl(video.coverUrl ?? "");
     setOrientation(video.orientation ?? "");
@@ -120,7 +133,10 @@ export function VideoEditor({
 
   function closeEditor() {
     setOpen(false);
-    if (initiallyOpen) router.replace("/productivity", { scroll: false });
+    // Brief C §8: honor an already-validated internal returnTo (e.g. the
+    // Project this video was opened from) when present; otherwise keep the
+    // exact previous behavior of returning to Productivity.
+    if (initiallyOpen) router.replace(returnTo ?? "/productivity", { scroll: false });
   }
 
   function saveMetadata(event: React.FormEvent) {
@@ -133,6 +149,8 @@ export function VideoEditor({
         projectId: projectId ? Number(projectId) : null,
         clientId: projectId ? null : clientId ? Number(clientId) : null,
         deliveryUrl,
+        reviewUrl,
+        publishedUrl,
         notes,
         coverUrl,
         orientation: (orientation || null) as VideoOrientation | null,
@@ -151,7 +169,11 @@ export function VideoEditor({
     setError("");
     setFeedback("");
     startTransition(async () => {
-      const result = await transitionVideoStatus(video.id, status, targetStatus);
+      // Monday Real-Operation Pre-Freeze §5: entering READY_FOR_REVIEW
+      // (AWAITING_CLIENT_APPROVAL) requires a review URL -- pass the
+      // current draft's reviewUrl so "paste the link and mark ready" works
+      // as one action even if it hasn't been saved via saveMetadata yet.
+      const result = await transitionVideoStatus(video.id, status, targetStatus, reviewUrl || null);
       if (!result.success) {
         setError(result.error);
         return;
@@ -297,6 +319,10 @@ export function VideoEditor({
                     </p>
                   </div>
                 </section>
+
+                {video.projectId && (
+                  <ProjectReferencesPanel projectId={video.projectId} active={open} />
+                )}
               </aside>
 
               <div className="space-y-4">
@@ -383,6 +409,48 @@ export function VideoEditor({
                 />
                 <p className="mt-1.5 text-[11px] leading-4 text-zinc-600">
                   HTTPS only. This link becomes visible in the client portal.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor={`video-review-url-${video.id}`} className="mb-1.5 block text-xs font-bold text-zinc-400">
+                  Review URL <span className="font-normal text-zinc-600">required before Ready for review</span>
+                </label>
+                <input
+                  id={`video-review-url-${video.id}`}
+                  type="url"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  value={reviewUrl}
+                  onChange={(event) => setReviewUrl(event.target.value)}
+                  maxLength={2_048}
+                  placeholder="https://frame.io/…"
+                  className={fieldClassName}
+                />
+                <p className="mt-1.5 text-[11px] leading-4 text-zinc-600">
+                  HTTPS only. Today this is usually a Frame.io link — the field itself is provider-independent.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor={`video-published-url-${video.id}`} className="mb-1.5 block text-xs font-bold text-zinc-400">
+                  Published URL <span className="font-normal text-zinc-600">optional</span>
+                </label>
+                <input
+                  id={`video-published-url-${video.id}`}
+                  type="url"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  value={publishedUrl}
+                  onChange={(event) => setPublishedUrl(event.target.value)}
+                  maxLength={2_048}
+                  placeholder="https://…"
+                  className={fieldClassName}
+                />
+                <p className="mt-1.5 text-[11px] leading-4 text-zinc-600">
+                  HTTPS only. Where the finished content actually lives once published.
                 </p>
               </div>
 

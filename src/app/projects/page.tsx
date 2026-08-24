@@ -1,5 +1,6 @@
 import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
 import { getProjectsOverview } from "@/modules/projects/actions";
+import { getProductivityQuickOptions } from "@/modules/productivity/actions";
 import {
   PROJECT_GROUP_LABELS,
   PROJECT_GROUPS,
@@ -13,6 +14,8 @@ import {
 } from "@/modules/projects/core";
 import { formatDate, todayISO } from "@/utils/date";
 import Link from "next/link";
+import { ClientFilter } from "./ClientFilter";
+import { NewProjectButton } from "./NewProjectButton";
 
 export const dynamic = "force-dynamic";
 
@@ -123,8 +126,29 @@ function ProjectCard({
   );
 }
 
-export default async function ProjectsPage() {
-  const projects = await getProjectsOverview();
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ client?: string | string[] }>;
+}) {
+  const query = await searchParams;
+  const clientFilterId =
+    typeof query.client === "string" && query.client ? parseInt(query.client, 10) : null;
+
+  const [allProjects, quickOptions] = await Promise.all([
+    getProjectsOverview(),
+    getProductivityQuickOptions(),
+  ]);
+  const clientOptions = Array.from(
+    new Map(allProjects.map((p) => [p.clientId, p.clientName])).entries(),
+  )
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const projects =
+    clientFilterId !== null
+      ? allProjects.filter((p) => p.clientId === clientFilterId)
+      : allProjects;
   const groups = groupProjectsForOverview(projects);
   const today = todayISO();
 
@@ -138,7 +162,8 @@ export default async function ProjectsPage() {
         <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">
           What work commitments are active across all clients right now?
         </p>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <NewProjectButton clients={quickOptions.clients} />
           <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-black text-cyan-300">
             {groups.active.length} active
           </span>
@@ -148,6 +173,11 @@ export default async function ProjectsPage() {
           <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs font-black text-zinc-600">
             {groups.completed.length} completed
           </span>
+          {clientOptions.length > 1 && (
+            <div className="ml-auto">
+              <ClientFilter clients={clientOptions} />
+            </div>
+          )}
         </div>
       </header>
 

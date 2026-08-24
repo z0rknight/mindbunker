@@ -53,6 +53,15 @@ function createFixtureDatabase(path = ":memory:") {
       status TEXT NOT NULL,
       started_at INTEGER
     );
+    -- Brief C ("Final Local Ingest / Live Readiness") §13: minimal shape of
+    -- the real sensor_sessions table, just enough for
+    -- WORK_SESSION_HISTORY_SQL's LEFT JOIN (added by §13's Sensor-detail
+    -- link) to resolve -- no row ever needs to exist in it for this
+    -- fixture's own tests, none of which assert on sensor_session_id.
+    CREATE TABLE sensor_sessions (
+      id INTEGER PRIMARY KEY,
+      approved_work_session_id INTEGER
+    );
     INSERT INTO clients VALUES (1, 'Client A'), (2, 'Client B');
     INSERT INTO projects VALUES
       (10, 1, 'Project A'),

@@ -12,25 +12,49 @@ export {
 
 // ─── Add Income Button ────────────────────────────────────────────────────────
 
-export function AddIncomeButton() {
+// Monday Real-Operation Pre-Freeze §6: a Freelance income row must name a
+// client (transactions_freelance_requires_client_check at the DB level,
+// validateFreelanceIncomeInput at the app level -- see modules/finance/core.ts
+// and actions.ts). This is the ONE form that has ever defaulted its
+// category to "Freelance", so it is the one that needs the client picker.
+export function AddIncomeButton({
+  clients = [],
+}: {
+  clients?: Array<{ id: number; name: string }>;
+}) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("Freelance");
+  const [clientId, setClientId] = useState("");
   const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const isFreelance = category.trim().toLowerCase() === "freelance";
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
     if (!amount || isNaN(Number(amount))) return;
+    if (isFreelance && !clientId) {
+      setError("Freelance income must be associated with a client.");
+      return;
+    }
     startTransition(async () => {
-      await addTransaction({
+      const result = await addTransaction({
         type: "income",
         amount: Number(amount),
         category,
         notes,
+        clientId: clientId ? Number(clientId) : null,
       });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
       setAmount("");
       setNotes("");
+      setClientId("");
       setOpen(false);
     });
   }
@@ -74,6 +98,26 @@ export function AddIncomeButton() {
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
               />
             </div>
+            {isFreelance && (
+              <div>
+                <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">
+                  Client (required for Freelance income)
+                </label>
+                <select
+                  value={clientId}
+                  onChange={(e) => setClientId(e.target.value)}
+                  required
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+                >
+                  <option value="">Select a client…</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Notes (optional)</label>
               <input
@@ -84,6 +128,7 @@ export function AddIncomeButton() {
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
               />
             </div>
+            {error && <p className="text-red-400 text-xs">{error}</p>}
             <button
               type="submit"
               disabled={isPending}

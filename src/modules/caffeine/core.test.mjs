@@ -7,6 +7,7 @@ import {
   daysInWeekOf,
   sumCaffeineForDays,
   computeCaffeineSummary,
+  resolveCaffeineTodayDisplay,
 } from "./core.ts";
 
 test("caffeineDayKey buckets by America/Sao_Paulo day, not UTC day", () => {
@@ -58,4 +59,25 @@ test("computeCaffeineSummary: a day with zero events is 0, not undefined/null", 
   const summary = computeCaffeineSummary({}, "2026-08-27");
   assert.strictEqual(summary.todayCount, 0);
   assert.strictEqual(summary.weekCount, 0);
+});
+
+// Taryn August Ingest Readiness §17: regression coverage for the Dashboard
+// "Caffeine Today" root cause -- a quick-logged coffee (servings, no
+// manual health_logs.caffeineMg entry) must move this number, not just
+// the War Room monthly total.
+test("resolveCaffeineTodayDisplay: a quick-logged coffee with no manual entry still registers", () => {
+  assert.strictEqual(resolveCaffeineTodayDisplay(null, 1), 90);
+  assert.strictEqual(resolveCaffeineTodayDisplay(null, 2), 180);
+});
+
+test("resolveCaffeineTodayDisplay: nothing recorded either way is null, not 0", () => {
+  assert.strictEqual(resolveCaffeineTodayDisplay(null, 0), null);
+});
+
+test("resolveCaffeineTodayDisplay: a manual entry higher than the quick-log estimate wins, never summed", () => {
+  assert.strictEqual(resolveCaffeineTodayDisplay(300, 1), 300);
+});
+
+test("resolveCaffeineTodayDisplay: a quick-log estimate higher than a small manual entry wins", () => {
+  assert.strictEqual(resolveCaffeineTodayDisplay(50, 1), 90);
 });

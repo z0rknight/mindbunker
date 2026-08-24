@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **🛰️ Sensor P1.1 Inbox + observation sync audit — local only (2026-08-24)**
+  - [x] Split native intentional evidence into `sensor_sessions` review state while preserving passive observations as an independent stream
+  - [x] Added explicit Approve → exactly one `MAC_SENSOR_APPROVED` canonical Work Session; Archive and confirmed manual soft Delete preserve evidence
+  - [x] Added session detail with timestamp-overlap app totals, idle time, and NULL-safe aggregate input counters
+  - [x] Diagnosed missing apps as legacy `LOCAL_ONLY` observations without outbox rows plus absent active local sync configuration, not a web projection bug
+  - [x] Added native outbox repair and local/uploaded/pending/rejected/last-success diagnostics; proved Notion, Claude, ChatGPT, Finder, Safari, and Premiere end to end locally
+  - [x] Added migration `0020_sensor_inbox_p11.sql`; clean isolated `0000`–`0020`, FK check, 217 web tests, 19 native tests, typecheck, and scoped ESLint pass
+  - [x] Production remained untouched; no deploy or remote migration
+
 - [x] **🧭 Dogfooding infrastructure consolidation — local only (2026-08-23)**
   - [x] Added Home Start Tracking through the canonical Work Session Server Action and global one-open-session invariant; no second timer or schema change
   - [x] Added lightweight inline Stop confirmation without changing server timestamps, SQL, or lifecycle
@@ -215,6 +224,8 @@ The original February 2026 visual design is the canonical interface. The separat
 | `src/modules/gateway/` | Gateway config, validation/token core, DAL, actions, and tests | ✅ Milestone 1 local |
 | `src/modules/client-portal/` | Strict client-safe projection and token-scoped D1 reads | ✅ Live, awaiting first real pilot setup |
 | `src/modules/work-sessions/` | Video-attributed Start/Stop, global active-session recovery, and closed-time aggregation | ✅ P0 live |
+| `src/modules/sensor/` | Scoped native-device auth, Sensor Inbox review, idempotent observation ingestion, explicit Work Session approval, and overlap projections | ✅ P1.1 local candidate |
+| `src/app/productivity/sensor/` | Sensor Inbox, session detail, passive evidence, diagnostics, and device credential management | ✅ P1.1 local candidate |
 | `src/modules/booking/` | Availability/slot core, provider boundary, D1 DAL, actions, and tests | ✅ Milestone 2 local |
 | `src/db/schema.ts` | All table definitions including Gateway and booking | ✅ Ready |
 | `src/db/index.ts` | Request-scoped Drizzle client over Cloudflare D1 | ✅ Ready |
@@ -246,6 +257,8 @@ The original February 2026 visual design is the canonical interface. The separat
 | `bookings` | Booking | client/invitation, provider event, status, times, attendee, cancellable slot key |
 | `video_logs` | Productivity | stable ID, title, client/project, status, startedAt, revisionsCount, delivered compatibility flag, optional HTTPS delivery URL (local `0010`) |
 | `work_sessions` | Productivity economics | live `0011`: videoId, startedAt, nullable endedAt, activityType, optional note; client/project derived |
+| `sensor_devices` | Native Sensor auth | public device UUID, token hash, fixed scopes, last seen, revocation; local `0017` only |
+| `device_activity_observations` | Passive Mac evidence | stable device/local UUID, app/bundle/title, raw interval, idle, optional aggregate input counts; local `0017` only |
 
 ## Architecture
 
@@ -265,6 +278,8 @@ The original February 2026 visual design is the canonical interface. The separat
 - **Booking consistency**: Confirmed D1 bookings are the local busy-time source, unique slot keys prevent double booking, and booking/CRM/timeline changes are grouped in D1 batches
 - **Work-session authority**: A work session stores only `videoId` plus raw timestamps/activity; project/client context is derived through the canonical video. Start keeps its atomic conditional insert, while the partial unique expression index `work_sessions_one_open_idx` structurally permits only one globally open session
 - **Video operational memory**: Durable manual notes reuse append-only `crm_events` rows (`video.note_added`) linked only to the canonical video; project/client context is derived, notes stay out of CRM client activity, and videos with operational memory are protected from app-level deletion
+- **Sensor truth boundary**: Native `MAC_SENSOR` Work Sessions reuse the canonical `work_sessions` table and global-open invariant; passive device observations use a separate append-only table, sync by stable UUID through a durable local outbox, and correlate only as a timestamp-derived projection
+- **Sensor privacy**: device secrets live in macOS Keychain and only their SHA-256 hashes reach D1; title upload and aggregate key/mouse-count upload are independently opt-in, while raw keys/text/coordinates are neither represented nor accepted
 
 ## War Room Metric Domains
 
@@ -299,3 +314,4 @@ The original February 2026 visual design is the canonical interface. The separat
 | 2026-08-22 | Activated Work Session P0 in production, then completed Productivity / Video Operations P1 locally with Current Work grouping, active-session prominence, one responsive card per video, and a wider desktop Video workspace; production remained untouched during P1 |
 | 2026-08-22 | Completed Productivity / Project Navigation P1.1 locally without schema changes: Client remains mandatory for Project, `/projects/[id]` owns Project operations, Client/Project/Video links follow the canonical hierarchy, Plan Video requires an existing Project with a safe create-and-return path, and Finished Video transitions an existing identity to DONE instead of inserting a duplicate; tests/builds/responsive QA green, production untouched |
 | 2026-08-22 | Completed Video Operational Memory P1.2 locally without schema changes: the Video Workspace can append durable chronological notes through `crm_events.video_id`, deterministic newest-first history preserves lifecycle/work-session boundaries, operational memory blocks app-level video deletion, temporary QA notes were removed, and production remained untouched |
+| 2026-08-24 | Implemented MindBunker Sensor P1 locally: revocable scoped device credentials, cached canonical Client → Project → Video hydration, Keychain storage, durable offline outbox, idempotent MAC_SENSOR Work Sessions, separate passive observation batches, derived correlation, optional privacy-safe aggregate key/mouse counters, and Sensor Activity diagnostics; production remains exactly 0000–0015 |

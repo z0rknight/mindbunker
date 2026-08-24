@@ -1,6 +1,28 @@
 import type { Metadata } from "next";
 import { getClientPortalView } from "@/modules/client-portal/data";
 
+// Monday Real-Operation Pre-Freeze §6: same reviewUrl/publishedUrl/deliveryUrl
+// precedence as the dashboard VideoCard (client/dashboard/VideoCard.tsx) --
+// "Review" is this legacy token flow's label for READY_FOR_REVIEW (see
+// CLIENT_VIDEO_STATUS_LABELS).
+function primaryPortalLink(video: {
+  status: string;
+  reviewUrl: string | null;
+  publishedUrl: string | null;
+  deliveryUrl: string | null;
+}): { href: string; label: string } | null {
+  if (video.status === "Review" && video.reviewUrl) {
+    return { href: video.reviewUrl, label: "Review video ↗" };
+  }
+  if (video.publishedUrl) {
+    return { href: video.publishedUrl, label: "View published ↗" };
+  }
+  if (video.deliveryUrl) {
+    return { href: video.deliveryUrl, label: "Watch delivery ↗" };
+  }
+  return null;
+}
+
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
@@ -174,15 +196,15 @@ export default async function ClientPortalPage({
                             )}
                           </div>
                         </div>
-                        {video.deliveryUrl && (
+                        {primaryPortalLink(video) && (
                           <a
-                            href={video.deliveryUrl}
+                            href={primaryPortalLink(video)!.href}
                             target="_blank"
                             rel="noreferrer noopener"
                             referrerPolicy="no-referrer"
                             className="mt-4 flex min-h-12 w-full items-center justify-center rounded-xl bg-white px-5 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 sm:mt-0 sm:w-auto sm:shrink-0"
                           >
-                            Watch delivery ↗
+                            {primaryPortalLink(video)!.label}
                           </a>
                         )}
                       </article>

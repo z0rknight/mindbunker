@@ -10,6 +10,7 @@ import {
   VIDEO_STATUS_LABELS,
   isVideoDirectlyFinishable,
 } from "@/modules/productivity/config";
+import { PROJECT_STATUS_GROUPS } from "@/modules/projects/config";
 import { startWorkSession } from "@/modules/work-sessions/actions";
 import {
   DEFAULT_WORK_SESSION_ACTIVITY,
@@ -418,6 +419,168 @@ export function StartWorkButton() {
               className="min-h-12 w-full rounded-xl bg-emerald-600 px-4 text-sm font-black text-white transition hover:bg-emerald-500 disabled:opacity-50"
             >
               {isPending ? "Starting…" : "Start"}
+            </button>
+          </form>
+        </ActionSheet>
+      )}
+    </>
+  );
+}
+
+// Taryn August Ingest Readiness §5: the Dashboard's second primary
+// action. This is deliberately NOT a parallel data model -- it is the
+// same Client -> Project -> Video creation path as PlanVideoButton above
+// (createVideoLog, resolveVideoAssignment), just entered Client-first and
+// filtered to that client's ACTIVE projects, then redirecting straight
+// into the new video's workspace instead of staying on the Dashboard.
+// Eliminates the old Dashboard -> Productivity -> Projects -> Project ->
+// Plan Video chain for the single most common action: starting a new
+// piece of work.
+export function NewWorkButton() {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [options, setOptions] = useState<QuickOptions | null>(null);
+  const [clientId, setClientId] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [title, setTitle] = useState("");
+  const [feedback, setFeedback] = useState("");
+
+  const availableProjects = useMemo(
+    () =>
+      (options?.projects ?? []).filter(
+        (project) =>
+          project.clientId.toString() === clientId &&
+          PROJECT_STATUS_GROUPS[project.status] === "active",
+      ),
+    [clientId, options],
+  );
+
+  function handleOpen() {
+    setOpen(true);
+    setFeedback("");
+    startTransition(async () => {
+      try {
+        setOptions(await getProductivityQuickOptions());
+      } catch {
+        setFeedback("Could not load clients and projects.");
+      }
+    });
+  }
+
+  function handleClose() {
+    setOpen(false);
+    setClientId("");
+    setProjectId("");
+    setTitle("");
+    setFeedback("");
+  }
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!projectId) {
+      setFeedback("Choose a client and an active project first.");
+      return;
+    }
+    if (!title.trim()) {
+      setFeedback("Name the video.");
+      return;
+    }
+    setFeedback("");
+    startTransition(async () => {
+      const result = await createVideoLog({
+        title: title.trim(),
+        projectId: Number(projectId),
+        clientId: null,
+        notes: "",
+        status: "PLANNED",
+      });
+      if (!result.success) {
+        setFeedback(result.error);
+        return;
+      }
+      setOpen(false);
+      router.push(`/productivity?video=${result.videoId}`);
+    });
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl bg-cyan-700 px-5 py-5 text-sm font-bold text-white transition-all hover:bg-cyan-600 active:scale-95"
+      >
+        <span className="text-2xl">＋</span>
+        <span>New Work</span>
+      </button>
+
+      {open && (
+        <ActionSheet title="Start new work" onClose={handleClose}>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="newWorkClient" className="mb-1.5 block text-xs font-bold text-zinc-400">
+                Client
+              </label>
+              <select
+                id="newWorkClient"
+                value={clientId}
+                onChange={(event) => {
+                  setClientId(event.target.value);
+                  setProjectId("");
+                }}
+                disabled={!options || isPending}
+                className={fieldClassName}
+              >
+                <option value="">Choose client</option>
+                {options?.clients.map((client) => (
+                  <option key={client.id} value={client.id}>{client.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="newWorkProject" className="mb-1.5 block text-xs font-bold text-zinc-400">
+                Project (active only)
+              </label>
+              <select
+                id="newWorkProject"
+                value={projectId}
+                onChange={(event) => setProjectId(event.target.value)}
+                disabled={!clientId || isPending}
+                className={fieldClassName}
+              >
+                <option value="">Choose project</option>
+                {availableProjects.map((project) => (
+                  <option key={project.id} value={project.id}>{project.name}</option>
+                ))}
+              </select>
+              {clientId && availableProjects.length === 0 && (
+                <p className="mt-1.5 text-xs text-zinc-500">
+                  This client has no active/in-review project yet — create one from their CRM page first.
+                </p>
+              )}
+            </div>
+            <div>
+              <label htmlFor="newWorkTitle" className="mb-1.5 block text-xs font-bold text-zinc-400">
+                Video name
+              </label>
+              <input
+                id="newWorkTitle"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                maxLength={180}
+                required
+                placeholder="Episode 04, Cut 1.0…"
+                className={fieldClassName}
+              />
+            </div>
+            {feedback && <p aria-live="polite" className="text-sm text-amber-300">{feedback}</p>}
+            <button
+              type="submit"
+              disabled={isPending || !projectId || !title.trim()}
+              className="min-h-12 w-full rounded-xl bg-cyan-600 px-4 text-sm font-black text-white transition hover:bg-cyan-500 disabled:opacity-50"
+            >
+              {isPending ? "Creating…" : "Create & open"}
             </button>
           </form>
         </ActionSheet>

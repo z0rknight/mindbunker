@@ -120,6 +120,55 @@
       "when": 1787542671513,
       "tag": "0016_graceful_the_enforcers",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1787542671514,
+      "tag": "0017_sensor_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1787542671515,
+      "tag": "0018_monday_money_lab_p0",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1787551009502,
+      "tag": "0019_clumsy_nicolaos",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1787556233196,
+      "tag": "0020_sensor_inbox_p11",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1787561899670,
+      "tag": "0021_easy_jocasta",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1787566875372,
+      "tag": "0022_pale_forge",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1787573318292,
+      "tag": "0023_panoramic_firedrake",
+      "breakpoints": true
     }
   ]
 }

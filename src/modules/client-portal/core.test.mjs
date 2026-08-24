@@ -87,6 +87,8 @@ test("portal projection cannot expand beyond the token-bound client", () => {
           status: "In production",
           lastUpdated: "2026-08-22T03:00:00.000Z",
           deliveryUrl: "https://video.example/taryn",
+          reviewUrl: null,
+          publishedUrl: null,
         },
       ],
     },

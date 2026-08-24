@@ -47,6 +47,7 @@ type RawHistoryRow = {
   note: string | null;
   source: string;
   updated_at: number | null;
+  sensor_session_id: number | null;
 };
 
 type RawSessionByIdRow = {
@@ -176,6 +177,7 @@ function mapHistoryEntry(row: RawHistoryRow): WorkSessionHistoryEntry | null {
     source,
     updatedAt:
       row.updated_at === null ? null : new Date(Number(row.updated_at) * 1_000).toISOString(),
+    sensorSessionId: row.sensor_session_id === null ? null : Number(row.sensor_session_id),
   };
 }
 

@@ -47,6 +47,8 @@ export type ClientPortalVideoRow = {
   date: string;
   status: VideoStatus;
   deliveryUrl: string | null;
+  reviewUrl: string | null;
+  publishedUrl: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 };
@@ -60,6 +62,8 @@ export type ClientPortalProject = {
     status: string;
     lastUpdated: string | null;
     deliveryUrl: string | null;
+    reviewUrl: string | null;
+    publishedUrl: string | null;
   }>;
 };
 
@@ -107,11 +111,15 @@ export function buildClientPortalProjects(
       )
       .map((video) => {
         const deliveryUrl = validateDeliveryUrl(video.deliveryUrl);
+        const reviewUrl = validateDeliveryUrl(video.reviewUrl);
+        const publishedUrl = validateDeliveryUrl(video.publishedUrl);
         return {
           title: video.title?.trim() || `Video ${video.date}`,
           status: CLIENT_VIDEO_STATUS_LABELS[video.status],
           lastUpdated: lastMeaningfulUpdate(video),
           deliveryUrl: deliveryUrl.success ? deliveryUrl.value : null,
+          reviewUrl: reviewUrl.success ? reviewUrl.value : null,
+          publishedUrl: publishedUrl.success ? publishedUrl.value : null,
         };
       }),
   }));
@@ -142,6 +150,8 @@ export type ClientDashboardVideoRow = {
   date: string;
   status: VideoStatus;
   deliveryUrl: string | null;
+  reviewUrl: string | null;
+  publishedUrl: string | null;
   coverUrl: string | null;
   orientation: VideoOrientation | null;
   contentType: VideoContentType | null;
@@ -177,6 +187,8 @@ export type ClientDashboardVideoCard = {
   orientation: VideoOrientation | null;
   coverUrl: string | null;
   deliveryUrl: string | null;
+  reviewUrl: string | null;
+  publishedUrl: string | null;
   lastUpdated: string | null;
 };
 
@@ -206,6 +218,8 @@ function toCard(
   projectNameById: Map<number, string>,
 ): ClientDashboardVideoCard {
   const deliveryUrl = validateDeliveryUrl(video.deliveryUrl);
+  const reviewUrl = validateDeliveryUrl(video.reviewUrl);
+  const publishedUrl = validateDeliveryUrl(video.publishedUrl);
   const coverUrl = validateDeliveryUrl(video.coverUrl);
   const updated = video.updatedAt ?? video.createdAt;
   return {
@@ -221,6 +235,8 @@ function toCard(
     orientation: video.orientation,
     coverUrl: coverUrl.success ? coverUrl.value : null,
     deliveryUrl: deliveryUrl.success ? deliveryUrl.value : null,
+    reviewUrl: reviewUrl.success ? reviewUrl.value : null,
+    publishedUrl: publishedUrl.success ? publishedUrl.value : null,
     lastUpdated:
       updated instanceof Date && !Number.isNaN(updated.getTime())
         ? updated.toISOString()

@@ -30,15 +30,14 @@ export const WORK_SESSION_ACTIVITY_LABELS: Record<
 
 // Sprint 1.2.1 Ledger P1: capture-method vocabulary. Open-ended by design —
 // see the comment on work_sessions.source in schema.ts for why this column
-// carries no CHECK constraint. WEB_TIMER is the only value any code path
-// can currently produce (starting/stopping the on-screen timer, or
-// correcting an already-closed session — a correction changes the *values*
-// of a WEB_TIMER-captured row, it does not change how the row was
-// originally captured). MANUAL (a session entered after the fact with no
-// prior timer row) and IMPORTED (from historical reconstruction) are
-// listed here as the documented next values, per the brief's own capture
-// method list — neither is produced by any code in this round.
-export const WORK_SESSION_SOURCES = ["WEB_TIMER"] as const;
+// carries no CHECK constraint. WEB_TIMER remains the browser capture path;
+// MAC_SENSOR identifies the native macOS bridge without changing correction
+// semantics. Future MANUAL/IMPORTED values remain deliberately deferred.
+export const WORK_SESSION_SOURCES = [
+  "WEB_TIMER",
+  "MAC_SENSOR",
+  "MAC_SENSOR_APPROVED",
+] as const;
 export type WorkSessionSource = (typeof WORK_SESSION_SOURCES)[number];
 export const DEFAULT_WORK_SESSION_SOURCE: WorkSessionSource = "WEB_TIMER";
 
@@ -205,11 +204,13 @@ export const WORK_SESSION_HISTORY_SQL = `
     ws.ended_at,
     ws.note,
     ws.source,
-    ws.updated_at
+    ws.updated_at,
+    ss.id AS sensor_session_id
   FROM work_sessions ws
   INNER JOIN video_logs v ON v.id = ws.video_id
   LEFT JOIN projects p ON p.id = v.project_id
   LEFT JOIN clients c ON c.id = v.client_id
+  LEFT JOIN sensor_sessions ss ON ss.approved_work_session_id = ws.id
   WHERE (?2 IS NULL OR ws.video_id = ?2)
   ORDER BY ws.started_at DESC
   LIMIT ?1
@@ -229,6 +230,16 @@ export type WorkSessionHistoryEntry = {
   note: string | null;
   source: WorkSessionSource;
   updatedAt: string | null;
+  // Brief C ("Final Local Ingest / Live Readiness") §13: present only when
+  // this Work Session was captured/approved from a Sensor evidence session
+  // (sensor_sessions.approved_work_session_id is unique per work session,
+  // so this is a straight 1:1 reverse lookup, not a new correlation). Lets
+  // the ledger link to the existing Sensor Session detail route instead of
+  // duplicating that UI. SENSOR FREEZE (§14): this only reads the existing
+  // approved_work_session_id relationship -- nothing about Sensor
+  // ingestion, its endpoint, port 3011 behavior, approval semantics,
+  // evidence correlation, or provenance rules is touched.
+  sensorSessionId: number | null;
 };
 
 // One row for a single work_sessions record, joined the same way the

@@ -148,6 +148,15 @@ bun deploy         # Build and deploy to Cloudflare Workers
 - `ASSETS`: OpenNext static-asset binding
 - Bindings are declared in `wrangler.jsonc` and typed in `cloudflare-env.d.ts`
 
+### Native Sensor bridge (local candidate)
+
+- Separate Swift/SwiftUI menu-bar app in `/Users/emmanueldarosadillenburg/Documents/New project/mindbunker-sensor`
+- Local SQLite WAL database and durable outbox
+- macOS `NSWorkspace`, Accessibility AX APIs, `CGEventSource`, optional aggregate `NSEvent` monitoring, Keychain/Security, and `SMAppService`
+- Narrow Next Route Handler API under `/api/sensor/v1`; revocable token hashes stored in D1
+- Additive `0020_sensor_inbox_p11.sql` separates native Sensor review evidence from canonical Work Sessions; explicit approval uses `MAC_SENSOR_APPROVED`
+- Native startup repairs historical closed unsynced observations into the durable outbox and exposes local/uploaded/pending/rejected/last-success diagnostics
+
 ### Deployment
 
 - OpenNext output: `.open-next/`

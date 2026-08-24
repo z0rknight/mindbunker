@@ -57,10 +57,12 @@ test("closed production time uses the compact operator format", () => {
   assert.equal(formatClosedDuration(6_138), "1h 42m");
 });
 
-test("the source vocabulary is a single honest value today, deliberately open-ended", () => {
-  assert.deepEqual(WORK_SESSION_SOURCES, ["WEB_TIMER"]);
+test("the source vocabulary distinguishes browser and native Sensor capture", () => {
+  assert.deepEqual(WORK_SESSION_SOURCES, ["WEB_TIMER", "MAC_SENSOR", "MAC_SENSOR_APPROVED"]);
   assert.equal(DEFAULT_WORK_SESSION_SOURCE, "WEB_TIMER");
   assert.equal(isWorkSessionSource("WEB_TIMER"), true);
+  assert.equal(isWorkSessionSource("MAC_SENSOR"), true);
+  assert.equal(isWorkSessionSource("MAC_SENSOR_APPROVED"), true);
   assert.equal(isWorkSessionSource("DESKTOP_SENSOR"), false);
   assert.equal(isWorkSessionSource(""), false);
 });

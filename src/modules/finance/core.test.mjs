@@ -1,0 +1,364 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  buildBillingEvidenceIdempotencyKey,
+  computeReconciliation,
+  computeRmediaCashSummary,
+  formatMinutesAsHours,
+  validateBillingEvidenceInput,
+  validateContractInput,
+} from "./core.ts";
+
+// Real Taryn Dubreuil / Upwork fixture from the Monday Money Lab P0 brief:
+//   Period 2026-08-10..2026-08-16, Upwork billed 15h10 (910 min), rate
+//   USD 25/hour, gross USD 379.17. MindBunker operational tracked 16h02
+//   (962 min) for the same window, per the brief's worked example.
+const TARYN_BILLED_MINUTES = 15 * 60 + 10; // 910
+const TARYN_OPERATIONAL_MINUTES = 16 * 60 + 2; // 962
+const TARYN_RATE = 25;
+const TARYN_GROSS = 379.17;
+
+test("formatMinutesAsHours matches the brief's exact display convention", () => {
+  assert.equal(formatMinutesAsHours(TARYN_BILLED_MINUTES), "15h10");
+  assert.equal(formatMinutesAsHours(TARYN_OPERATIONAL_MINUTES), "16h02");
+  assert.equal(formatMinutesAsHours(52), "0h52");
+  assert.equal(formatMinutesAsHours(0), "0h00");
+});
+
+test("computeReconciliation reproduces the real Taryn worked example", () => {
+  const result = computeReconciliation({
+    operationalMinutes: TARYN_OPERATIONAL_MINUTES,
+    billingEvidence: {
+      billableMinutes: TARYN_BILLED_MINUTES,
+      rate: TARYN_RATE,
+      grossAmount: TARYN_GROSS,
+      currency: "USD",
+    },
+  });
+
+  assert.equal(result.operationalMinutes.value, 962);
+  assert.equal(result.operationalMinutes.provenance, "SOURCE_FACT");
+  assert.equal(result.billedMinutes.value, 910);
+  assert.equal(result.billedMinutes.provenance, "SOURCE_FACT");
+  // Difference is 52 minutes -- an observed mismatch, not an error.
+  assert.equal(result.differenceMinutes.value, 52);
+  assert.equal(result.differenceMinutes.provenance, "DERIVED");
+  assert.equal(result.contractRate.value, 25);
+  assert.equal(result.grossBilled.value, 379.17);
+  // Gross / operational hour = 379.17 / (962/60) = 23.648856... -> 23.65
+  assert.equal(result.grossPerOperationalHour.value, 23.65);
+  assert.equal(result.grossPerOperationalHour.provenance, "DERIVED");
+  assert.equal(result.currency, "USD");
+});
+
+test("computeReconciliation never fabricates a value when no billing evidence exists yet", () => {
+  const result = computeReconciliation({
+    operationalMinutes: TARYN_OPERATIONAL_MINUTES,
+    billingEvidence: null,
+  });
+
+  assert.equal(result.operationalMinutes.value, 962);
+  assert.equal(result.operationalMinutes.provenance, "SOURCE_FACT");
+  assert.equal(result.billedMinutes.value, null);
+  assert.equal(result.billedMinutes.provenance, "UNATTRIBUTED");
+  assert.equal(result.differenceMinutes.value, null);
+  assert.equal(result.grossPerOperationalHour.value, null);
+  assert.equal(result.currency, null);
+});
+
+test("computeReconciliation returns null (not Infinity/NaN) gross-per-hour when zero operational minutes", () => {
+  const result = computeReconciliation({
+    operationalMinutes: 0,
+    billingEvidence: {
+      billableMinutes: TARYN_BILLED_MINUTES,
+      rate: TARYN_RATE,
+      grossAmount: TARYN_GROSS,
+      currency: "USD",
+    },
+  });
+
+  assert.equal(result.grossPerOperationalHour.value, null);
+  assert.equal(result.grossPerOperationalHour.provenance, "UNATTRIBUTED");
+  // The mismatch itself is still an observed, reportable fact.
+  assert.equal(result.differenceMinutes.value, -910);
+});
+
+test("buildBillingEvidenceIdempotencyKey is deterministic and re-import-safe", () => {
+  const base = {
+    contractId: 1,
+    periodStart: "2026-08-10",
+    periodEnd: "2026-08-16",
+    source: "MANUAL",
+    externalReference: null,
+  };
+  const key1 = buildBillingEvidenceIdempotencyKey(base);
+  const key2 = buildBillingEvidenceIdempotencyKey({ ...base });
+  assert.equal(key1, key2);
+
+  // A different period produces a different key.
+  const key3 = buildBillingEvidenceIdempotencyKey({
+    ...base,
+    periodStart: "2026-08-17",
+    periodEnd: "2026-08-23",
+  });
+  assert.notEqual(key1, key3);
+
+  // Blank vs missing external reference normalize to the same key.
+  const key4 = buildBillingEvidenceIdempotencyKey({ ...base, externalReference: "  " });
+  assert.equal(key1, key4);
+});
+
+test("computeRmediaCashSummary keeps Business Cash, Tax Reserve, and Owner Pay distinct", () => {
+  const summary = computeRmediaCashSummary({
+    totalIncome: 1000,
+    totalExpense: 0,
+    totalOwnerPay: 0,
+    taxReservePercent: 10,
+  });
+  assert.equal(summary.businessCash, 1000);
+  assert.equal(summary.taxReserve, 100);
+  assert.equal(summary.availableBusinessCash, 900);
+});
+
+test("computeRmediaCashSummary: Owner Pay reduces Business Cash without touching income/Tax Reserve base", () => {
+  const summary = computeRmediaCashSummary({
+    totalIncome: 1000,
+    totalExpense: 50,
+    totalOwnerPay: 300,
+    taxReservePercent: 10,
+  });
+  // Business Cash = 1000 - 50 - 300 = 650 (owner pay already left the account)
+  assert.equal(summary.businessCash, 650);
+  // Tax Reserve is still derived from income only, not from what's left.
+  assert.equal(summary.taxReserve, 100);
+  assert.equal(summary.availableBusinessCash, 550);
+});
+
+test("validateContractInput enforces the real Taryn fixture shape", () => {
+  const tarynContract = {
+    clientId: 1,
+    platform: "Upwork",
+    billingType: "HOURLY",
+    hourlyRate: 25,
+    currency: "USD",
+  };
+  assert.equal(validateContractInput(tarynContract), null);
+
+  assert.match(
+    validateContractInput({ ...tarynContract, clientId: null }) ?? "",
+    /client/i,
+  );
+  assert.match(
+    validateContractInput({ ...tarynContract, hourlyRate: null }) ?? "",
+    /hourly rate/i,
+  );
+  assert.match(
+    validateContractInput({ ...tarynContract, billingType: "WEIRD" }) ?? "",
+    /HOURLY or FIXED/i,
+  );
+});
+
+test("validateContractInput allows FIXED contracts without an hourly rate", () => {
+  assert.equal(
+    validateContractInput({
+      clientId: 1,
+      platform: "Direct",
+      billingType: "FIXED",
+      hourlyRate: null,
+      currency: "USD",
+    }),
+    null,
+  );
+});
+
+test("validateBillingEvidenceInput enforces the real Taryn fixture shape", () => {
+  const tarynEvidence = {
+    periodStart: "2026-08-10",
+    periodEnd: "2026-08-16",
+    billableMinutes: TARYN_BILLED_MINUTES,
+    rate: TARYN_RATE,
+    grossAmount: TARYN_GROSS,
+    currency: "USD",
+  };
+  assert.equal(validateBillingEvidenceInput(tarynEvidence), null);
+
+  assert.match(
+    validateBillingEvidenceInput({
+      ...tarynEvidence,
+      periodEnd: "2026-08-01",
+    }) ?? "",
+    /before period start/i,
+  );
+  assert.match(
+    validateBillingEvidenceInput({ ...tarynEvidence, billableMinutes: -1 }) ?? "",
+    /billable minutes/i,
+  );
+});
+
+// ─── Monday Pre-Freeze Consolidation P0 ────────────────────────────────────
+
+import {
+  computeCashReconciliation,
+  computeDebtRemainingBalance,
+  computeDerivedProportionAllocation,
+  computeMonthlyEquivalent,
+  validateBillingAllocationInput,
+  validateDebtInput,
+  validateFreelanceIncomeInput,
+  validatePlatformFeeInput,
+  validateSubscriptionInput,
+} from "./core.ts";
+
+// Real Taryn platform-fee/cash fixture from the Monday Pre-Freeze brief:
+//   Gross billed USD 379.17, platform fee USD 37.92 -> derived net
+//   379.17 - 37.92 = 341.25, while USD 343.75 actually arrives in Wise.
+//   This is a REAL, deliberately-unresolved discrepancy.
+test("computeCashReconciliation reproduces the real Taryn gross/fee/cash discrepancy without hiding it", () => {
+  const result = computeCashReconciliation({
+    grossBilled: 379.17,
+    platformFees: [37.92],
+    cashReceived: 343.75,
+    currency: "USD",
+  });
+
+  assert.equal(result.grossBilled.value, 379.17);
+  assert.equal(result.grossBilled.provenance, "SOURCE_FACT");
+  assert.equal(result.platformFeesTotal.value, 37.92);
+  assert.equal(result.platformFeesTotal.provenance, "SOURCE_FACT");
+  assert.equal(result.derivedNetProceeds.value, 341.25);
+  assert.equal(result.derivedNetProceeds.provenance, "DERIVED");
+  assert.equal(result.cashReceived.value, 343.75);
+  // The discrepancy: 343.75 - 341.25 = 2.50, exposed, not "fixed".
+  assert.equal(result.differenceFromDerivedNet.value, 2.5);
+  assert.equal(result.differenceFromDerivedNet.provenance, "DERIVED");
+});
+
+test("computeCashReconciliation never fabricates cash received before a transaction is linked", () => {
+  const result = computeCashReconciliation({
+    grossBilled: 379.17,
+    platformFees: [37.92],
+    cashReceived: null,
+    currency: "USD",
+  });
+  assert.equal(result.cashReceived.value, null);
+  assert.equal(result.cashReceived.provenance, "UNATTRIBUTED");
+  assert.equal(result.differenceFromDerivedNet.value, null);
+  // Net proceeds are still computable from gross + fee alone.
+  assert.equal(result.derivedNetProceeds.value, 341.25);
+});
+
+test("computeCashReconciliation marks platform fees UNATTRIBUTED when none recorded yet", () => {
+  const result = computeCashReconciliation({
+    grossBilled: 379.17,
+    platformFees: [],
+    cashReceived: null,
+    currency: "USD",
+  });
+  assert.equal(result.platformFeesTotal.value, 0);
+  assert.equal(result.platformFeesTotal.provenance, "UNATTRIBUTED");
+  // No hardcoded 10% (or any) fee rule -- absent evidence means zero fees
+  // known so far, not an assumed fee.
+  assert.equal(result.derivedNetProceeds.value, 379.17);
+});
+
+test("validatePlatformFeeInput rejects negative fees", () => {
+  assert.equal(validatePlatformFeeInput({ amount: 37.92, currency: "USD" }), null);
+  assert.match(
+    validatePlatformFeeInput({ amount: -1, currency: "USD" }) ?? "",
+    /zero or positive/i,
+  );
+});
+
+test("validateFreelanceIncomeInput requires a client only for Freelance income, case-insensitively", () => {
+  assert.match(
+    validateFreelanceIncomeInput({ category: "Freelance", type: "income", clientId: null }) ?? "",
+    /client/i,
+  );
+  assert.match(
+    validateFreelanceIncomeInput({ category: "FREELANCE", type: "income", clientId: null }) ?? "",
+    /client/i,
+  );
+  assert.equal(
+    validateFreelanceIncomeInput({ category: "Freelance", type: "income", clientId: 1 }),
+    null,
+  );
+  // Non-Freelance income, and non-income transactions, are unaffected.
+  assert.equal(
+    validateFreelanceIncomeInput({ category: "Other", type: "income", clientId: null }),
+    null,
+  );
+  assert.equal(
+    validateFreelanceIncomeInput({ category: "Freelance", type: "expense", clientId: null }),
+    null,
+  );
+});
+
+test("computeDerivedProportionAllocation splits gross by tracked-minute share and always labels DERIVED at the call site", () => {
+  // 0434 + 0435 account for 70% of tracked client time in the brief's example.
+  const slices = computeDerivedProportionAllocation({
+    grossAmount: 379.17,
+    videoMinutes: [
+      { videoId: 434, minutes: 420 }, // 7h
+      { videoId: 435, minutes: 240 }, // 4h -> together 660/943 min = 70%
+      { videoId: 999, minutes: 283 }, // remaining 30%
+    ],
+  });
+  const total = slices.reduce((s, x) => s + x.derivedAmount, 0);
+  assert.ok(Math.abs(total - 379.17) < 0.02);
+  const v434 = slices.find((s) => s.videoId === 434);
+  assert.ok(v434.proportion > 0.4 && v434.proportion < 0.46);
+});
+
+test("computeDerivedProportionAllocation returns nothing (not divide-by-zero) when no operational minutes exist", () => {
+  const slices = computeDerivedProportionAllocation({
+    grossAmount: 379.17,
+    videoMinutes: [],
+  });
+  assert.deepEqual(slices, []);
+});
+
+test("validateBillingAllocationInput enforces non-negative amount and currency", () => {
+  assert.equal(
+    validateBillingAllocationInput({ method: "MANUAL_AMOUNT", amount: 100, currency: "USD" }),
+    null,
+  );
+  assert.match(
+    validateBillingAllocationInput({ method: "MANUAL_AMOUNT", amount: -5, currency: "USD" }) ?? "",
+    /zero or positive/i,
+  );
+});
+
+test("computeDebtRemainingBalance derives from original amount minus real payments, never a stored mutable field", () => {
+  assert.equal(
+    computeDebtRemainingBalance({ originalAmount: 2000, paymentsTotal: 200 }),
+    1800,
+  );
+  assert.equal(
+    computeDebtRemainingBalance({ originalAmount: 2000, paymentsTotal: 0 }),
+    2000,
+  );
+  assert.equal(
+    computeDebtRemainingBalance({ originalAmount: 2000, paymentsTotal: 2000 }),
+    0,
+  );
+});
+
+test("validateDebtInput requires name, creditor, positive amount, currency", () => {
+  const good = { name: "Camera gear loan", creditor: "Mom", originalAmount: 2000, currency: "USD" };
+  assert.equal(validateDebtInput(good), null);
+  assert.match(validateDebtInput({ ...good, name: "" }) ?? "", /name/i);
+  assert.match(validateDebtInput({ ...good, originalAmount: 0 }) ?? "", /positive/i);
+});
+
+test("computeMonthlyEquivalent divides ANNUAL by 12 and never charges MONTHLY subscriptions differently", () => {
+  assert.equal(computeMonthlyEquivalent({ amount: 120, cadence: "ANNUAL" }), 10);
+  assert.equal(computeMonthlyEquivalent({ amount: 15, cadence: "MONTHLY" }), 15);
+});
+
+test("validateSubscriptionInput enforces required fields and a real cadence", () => {
+  const good = { name: "Creative Cloud", vendor: "Adobe", amount: 120, currency: "USD", cadence: "ANNUAL" };
+  assert.equal(validateSubscriptionInput(good), null);
+  assert.match(validateSubscriptionInput({ ...good, cadence: "WEEKLY" }) ?? "", /MONTHLY or ANNUAL/i);
+  assert.match(validateSubscriptionInput({ ...good, amount: 0 }) ?? "", /positive/i);
+});

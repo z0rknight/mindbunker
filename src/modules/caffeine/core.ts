@@ -71,3 +71,45 @@ export function computeCaffeineSummary(
     weekCount: sumCaffeineForDays(counts, daysInWeekOf(todayKey)),
   };
 }
+
+// Monday Real-Operation Pre-Freeze §14 — the "+1 Coffee" quick action
+// (logCaffeineEvent in actions.ts) deliberately never touches
+// health_logs.caffeineMg (see that action's own comment), but the War Room
+// "Caffeine Ratio" / "Total Caffeine This Month" metric (analytics/service.ts)
+// was reading ONLY health_logs.caffeineMg — so a quick-logged coffee never
+// moved the ratio. This is an explicit, documented estimate (Emmanuel's own
+// figure), not laboratory truth: 1 serving ≈ 200mL ≈ 90mg caffeine.
+export const CAFFEINE_MG_PER_SERVING_ESTIMATE = 90;
+
+export function estimateCaffeineMgFromServings(servings: number): number {
+  return servings * CAFFEINE_MG_PER_SERVING_ESTIMATE;
+}
+
+// One real day of caffeine intake, reconciled from two independent tracking
+// paths: a manually-typed health_logs.caffeineMg total (precise, when
+// entered) and quick-logged caffeineEvents servings (fast, estimate-based).
+// These are NOT additive — they are two different ways of recording the
+// SAME real-world quantity — so the day's contribution is whichever source
+// reports a higher figure, never their sum (which would silently double
+// count a day where both a manual note AND a quick-log exist).
+export function reconcileDailyCaffeineMg(
+  manualMg: number | null,
+  quickLogServings: number,
+): number {
+  return Math.max(manualMg ?? 0, estimateCaffeineMgFromServings(quickLogServings));
+}
+
+// Taryn August Ingest Readiness §17: the same reconcile-don't-sum logic,
+// but returning null (display "-- Not measured") when NEITHER source has
+// anything for the day, instead of a misleading 0mg. This is what the
+// Dashboard's "Caffeine Today" stat should have used from the start --
+// the earlier Monday Real-Operation Pre-Freeze §14 fix only reached the
+// War Room's monthly total, so the daily Dashboard number kept reading
+// health_logs.caffeineMg alone and never moved for a quick-logged coffee.
+export function resolveCaffeineTodayDisplay(
+  manualMg: number | null,
+  quickLogServings: number,
+): number | null {
+  if (manualMg === null && quickLogServings <= 0) return null;
+  return reconcileDailyCaffeineMg(manualMg, quickLogServings);
+}

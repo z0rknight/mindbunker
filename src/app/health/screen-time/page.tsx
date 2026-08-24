@@ -35,6 +35,20 @@ export default async function ScreenTimePage() {
         pasted export, not automatic sensing.
       </p>
 
+      {/* Monday Real-Operation Pre-Freeze §13: Sensor P1.1 now produces its
+          own desktop activity evidence (device_activity_observations /
+          sensor_sessions). A defensible dedup between that and these manual
+          Apple snapshots is NOT implemented this round -- summing them
+          would risk inventing a combined total that double-counts overlap
+          on the primary Mac. Presented separately instead, per the brief's
+          own explicit fallback for this exact situation. */}
+      <Link
+        href="/productivity/sensor"
+        className="mb-6 block rounded-md border border-cyan-800/50 bg-cyan-950/30 px-3 py-2 text-xs text-cyan-300 hover:bg-cyan-900/40 transition-colors"
+      >
+        🖲 Sensor-derived desktop activity is tracked separately (not summed with these snapshots — see Sensor Activity →)
+      </Link>
+
       {!latest ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center">
           <p className="text-zinc-300 text-sm font-medium">No snapshots imported yet.</p>

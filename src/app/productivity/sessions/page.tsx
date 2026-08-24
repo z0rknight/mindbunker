@@ -60,6 +60,9 @@ export default async function WorkSessionHistoryPage({
           closed session if the times, video, activity, or note were wrong —
           corrections are logged, not silent (Sprint 1.2.1).
         </p>
+        <Link href="/productivity/sensor" className="mt-3 inline-flex text-xs font-bold text-violet-300 hover:text-violet-200">
+          Open observed Sensor Activity →
+        </Link>
         {sessions.length > 0 && (
           <p className="mt-2 text-xs font-semibold text-zinc-400">
             {sessions.length} session{sessions.length === 1 ? "" : "s"} shown ·{" "}
@@ -85,8 +88,9 @@ export default async function WorkSessionHistoryPage({
 
       <div className="mb-6 rounded-xl border border-amber-800/50 bg-amber-950/20 p-4 text-xs leading-5 text-amber-200">
         <span className="font-bold uppercase tracking-wide">Provenance note —</span>{" "}
-        every row below was captured via the MindBunker web timer (source{" "}
-        <code className="rounded bg-black/30 px-1">WEB_TIMER</code>) unless
+        every row below records its capture source: web timer{" "}
+        <code className="rounded bg-black/30 px-1">WEB_TIMER</code> or explicitly approved Sensor evidence{" "}
+        <code className="rounded bg-black/30 px-1">MAC_SENSOR_APPROVED</code>, unless
         marked <span className="font-bold">Corrected</span>. A future passive
         desktop sensor would write to its own, separate observation stream —
         never into this table.

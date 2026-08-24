@@ -8,13 +8,18 @@ const navItems = [
   { href: "/war-room", label: "War Room", mobileLabel: "War", icon: "💎" },
   { href: "/", label: "Dashboard", mobileLabel: "Home", icon: "⬛" },
   { href: "/productivity", label: "Productivity", mobileLabel: "Work", icon: "🎬" },
+  // Brief C ("Final Local Ingest / Live Readiness") §1A: real QA showed the
+  // operator forgot where Projects was TWICE and naturally tried
+  // Projects -> New Project -> Add Multiple Videos right after
+  // Productivity. Moved immediately adjacent to Productivity rather than
+  // retraining the human -- no other reordering, this is the one change.
+  { href: "/projects", label: "Projects", mobileLabel: "Projects", icon: "📁" },
   { href: "/finance", label: "Finance", mobileLabel: "Money", icon: "💰" },
   { href: "/health", label: "Health", mobileLabel: "Health", icon: "🫀" },
   { href: "/crm", label: "CRM", mobileLabel: "CRM", icon: "👥" },
   // Internal sales tool, occasional use -- desktop sidebar only, kept out
   // of the mobile bottom tab bar so that bar stays at its fixed 7 destinations.
   { href: "/pricing-lab", label: "Pricing Lab", mobileLabel: "Pricing", icon: "🧪", desktopOnly: true },
-  { href: "/projects", label: "Projects", mobileLabel: "Projects", icon: "📁" },
   // Reference/reporting surface, not part of daily Productivity execution --
   // desktop sidebar only, deliberately excluded from the mobile bottom tab
   // bar so that bar stays at its current 7 destinations.
@@ -25,6 +30,11 @@ const navItems = [
   // desktop sidebar only, so the mobile bottom tab bar keeps its current
   // fixed 7-destination slot count instead of squeezing in an 8th.
   { href: "/productivity/sessions", label: "Sessions", mobileLabel: "Sessions", icon: "📜", desktopOnly: true },
+  // Monday Real-Operation Pre-Freeze §9: Commercial Contracts becomes a
+  // first-class operational surface, reachable directly from main nav
+  // (previously only one click deep inside /finance). Same
+  // desktop-only/mobile-tab-count treatment as Sessions right above it.
+  { href: "/finance/contracts", label: "Contracts", mobileLabel: "Contracts", icon: "🧾", desktopOnly: true },
 ];
 
 export function Sidebar() {

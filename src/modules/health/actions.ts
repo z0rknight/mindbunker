@@ -1,10 +1,11 @@
 "use server";
 
 import { getAuthenticatedDb } from "@/db";
-import { healthLogs } from "@/db/schema";
+import { healthLogs, caffeineEvents } from "@/db/schema";
 import { eq, gte } from "drizzle-orm";
 import { todayISO, daysAgoISO } from "@/utils/date";
 import { revalidatePath } from "next/cache";
+import { caffeineDayKey, resolveCaffeineTodayDisplay } from "@/modules/caffeine/core";
 
 export async function upsertHealthLog(data: {
   date?: string;
@@ -69,13 +70,28 @@ export async function getTodayHealthLog() {
 export async function getHealthSummary() {
   const db = await getAuthenticatedDb();
   const sevenDaysAgo = daysAgoISO(7);
-  const logs = await db
-    .select()
-    .from(healthLogs)
-    .where(gte(healthLogs.date, sevenDaysAgo));
+  const [logs, recentCaffeineEvents] = await Promise.all([
+    db.select().from(healthLogs).where(gte(healthLogs.date, sevenDaysAgo)),
+    // Taryn August Ingest Readiness §17: root cause of "caffeine ratio /
+    // caffeine today still not registering correctly" -- the Monday
+    // Real-Operation Pre-Freeze §14 fix reconciled quick-logged coffee
+    // into the War Room's MONTHLY total (analytics/service.ts), but this
+    // Dashboard "Caffeine Today" stat -- the number actually checked
+    // day-to-day -- was never touched and still read health_logs.caffeineMg
+    // alone. A 2-day window covers the America/Sao_Paulo day-bucketing
+    // used by caffeineDayKey even right around midnight UTC.
+    db
+      .select({ occurredAt: caffeineEvents.occurredAt, servings: caffeineEvents.servings })
+      .from(caffeineEvents)
+      .where(gte(caffeineEvents.occurredAt, new Date(daysAgoISO(2)))),
+  ]);
 
   const today = todayISO();
   const todayLog = logs.find((l) => l.date === today);
+  const todayServings = recentCaffeineEvents
+    .filter((e) => caffeineDayKey(e.occurredAt.toISOString()) === today)
+    .reduce((sum, e) => sum + e.servings, 0);
+  const caffeineToday = resolveCaffeineTodayDisplay(todayLog?.caffeineMg ?? null, todayServings);
 
   const sleepLogs = logs.filter((l) => l.sleepHours !== null);
   const avgSleep =
@@ -91,7 +107,7 @@ export async function getHealthSummary() {
 
   return {
     avgSleep7Days: avgSleep ? Math.round(avgSleep * 10) / 10 : null,
-    caffeineToday: todayLog?.caffeineMg ?? null,
+    caffeineToday,
     screenTimeToday: todayLog?.screenTimeHours ?? null,
     cyclingKmToday: todayLog?.cyclingKm ?? null,
     walkingMinutesToday: todayLog?.walkingMinutes ?? null,

@@ -31,6 +31,8 @@ type VideoRow = {
   revisionsCount: number;
   delivered: boolean;
   deliveryUrl: string | null;
+  reviewUrl: string | null;
+  publishedUrl: string | null;
   notes: string | null;
   coverUrl: string | null;
   orientation: VideoOrientation | null;
@@ -50,6 +52,10 @@ type VideoOperationsCardProps = {
   }>;
   workSessionState: VideoWorkSessionState;
   initiallyOpen: boolean;
+  // Brief C §8: internal-only redirect target for "close" when this card
+  // was reached from a Project workspace link; already validated by
+  // isSafeInternalPath in the page before it ever reaches here.
+  returnTo?: string;
   compact?: boolean;
 };
 
@@ -59,6 +65,7 @@ export function VideoOperationsCard({
   projects,
   workSessionState,
   initiallyOpen,
+  returnTo,
   compact = false,
 }: VideoOperationsCardProps) {
   const title = video.title ?? `Video ${formatDate(video.date)}`;
@@ -192,6 +199,7 @@ export function VideoOperationsCard({
             projects={projects}
             initialWorkSessionState={workSessionState}
             initiallyOpen={initiallyOpen}
+            returnTo={returnTo}
             triggerLabel={isThisVideoActive ? "Open active workspace" : "Open workspace"}
           />
         </div>

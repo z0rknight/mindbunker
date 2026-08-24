@@ -44,6 +44,8 @@ export async function getClientPortalView(
         date: videoLogs.date,
         status: videoLogs.status,
         deliveryUrl: videoLogs.deliveryUrl,
+        reviewUrl: videoLogs.reviewUrl,
+        publishedUrl: videoLogs.publishedUrl,
         createdAt: videoLogs.createdAt,
         updatedAt: videoLogs.updatedAt,
       })
@@ -118,6 +120,8 @@ export async function getClientDashboardView(
         date: videoLogs.date,
         status: videoLogs.status,
         deliveryUrl: videoLogs.deliveryUrl,
+        reviewUrl: videoLogs.reviewUrl,
+        publishedUrl: videoLogs.publishedUrl,
         coverUrl: videoLogs.coverUrl,
         orientation: videoLogs.orientation,
         contentType: videoLogs.contentType,

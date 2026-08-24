@@ -5,7 +5,7 @@ import "server-only";
 import { getAuthenticatedDb, getDb } from "@/db";
 import { isClientAuthenticated } from "@/lib/client-portal-session";
 import { clients, crmEvents, projects, videoLogs, workSessions } from "@/db/schema";
-import { and, desc, eq, gte, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { startOfMonthISO, todayISO } from "@/utils/date";
 import {
@@ -13,15 +13,18 @@ import {
   getVideoMetadataChanges,
   isPositiveId,
   planVideoTransition,
+  validateDeliveryUrl,
   validateVideoAssignment,
   validateVideoCreateInput,
   validateVideoInput,
   type VideoCreateInputValues,
   type VideoInputValues,
+  type ValidatedVideoMetadata,
 } from "./core";
 import {
   VIDEO_STATUS_LABELS,
   deliveredForVideoStatus,
+  isVideoContentType,
   isVideoStatus,
   type VideoStatus,
 } from "./config";
@@ -108,7 +111,7 @@ export async function createVideoLog(
   const inserted = await db
     .insert(videoLogs)
     .values({
-      date: todayISO(),
+      date: parsed.data.date ?? todayISO(),
       title: parsed.data.title,
       clientId: assignment.clientId,
       projectId: parsed.data.projectId,
@@ -145,6 +148,277 @@ export async function createVideoLog(
     videoId,
     status: parsed.data.status,
     message: "Planned video created.",
+  };
+}
+
+export type CreateVideoLogsBulkResult =
+  | { success: true; videoIds: number[]; message: string }
+  | { success: false; error: string };
+
+export type CreateVideoLogsBulkRow = {
+  title: string;
+  date?: string | null;
+  status?: string | null;
+  deliveryUrl?: string | null;
+  reviewUrl?: string | null;
+  // Single Historical Video Ingest Gap round: threaded through so the new
+  // "Add Video" (single-row) entry point can set it -- publishedUrl was
+  // already a fully validated, canonical field on every other create/edit
+  // path (validateVideoInput, VideoEditor), just never wired into this one.
+  publishedUrl?: string | null;
+};
+
+// Taryn August Ingest Readiness §6, extended by Brief C ("Final Local
+// Ingest / Live Readiness") §2/§3/§4/§5/§6: "ADD MULTIPLE VIDEOS" on the
+// Project workspace -- a lightweight repeatable-row create, explicitly NOT
+// a CSV import. Every row is validated with the exact same
+// validateVideoCreateInput() rules as the single-video create path (same
+// VIDEO != DELIVERABLE != ASSET model). Brief C §3 explicitly widens this
+// ONE path (bulk/historical ingest only, via allowExplicitStatus: true) to
+// accept any canonical VideoStatus per row, while validateVideoCreateInput
+// keeps the single-create path (allowExplicitStatus unset) PLANNED-only --
+// see the invariant note there and "new video status is explicit and
+// cannot silently become completed" / "historical bulk ingest may
+// explicitly select another canonical status" in core.test.mjs. Every row
+// still requires an explicit status string (defaulted to "PLANNED" by the
+// bulk-ingest UI when the operator hasn't chosen a batch default) --
+// absence of a valid status is rejected, never silently treated as
+// completion. D1 has no interactive multi-statement transaction available
+// here (nothing else in this codebase uses db.transaction/db.batch for
+// that reason), so the inserts run sequentially with a best-effort
+// compensating rollback: if a row fails mid-loop despite passing
+// validation, every video already inserted in this same submission is
+// deleted again rather than left as an ambiguous partial batch.
+export async function createVideoLogsBulk(
+  projectId: number,
+  rows: Array<CreateVideoLogsBulkRow>,
+  batchLabel?: string | null,
+): Promise<CreateVideoLogsBulkResult> {
+  if (!isPositiveId(projectId)) {
+    return { success: false, error: "Choose a project first." };
+  }
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { success: false, error: "Add at least one video row." };
+  }
+  if (rows.length > 50) {
+    return { success: false, error: "Create at most 50 videos at a time." };
+  }
+
+  const cleanBatchLabel =
+    typeof batchLabel === "string" ? batchLabel.trim().slice(0, 160) || null : null;
+
+  const validatedRows: Array<ValidatedVideoMetadata & { status: VideoStatus }> = [];
+  for (let i = 0; i < rows.length; i++) {
+    const parsed = validateVideoCreateInput({
+      title: rows[i].title,
+      projectId,
+      clientId: null,
+      date: rows[i].date ?? null,
+      deliveryUrl: rows[i].deliveryUrl ?? null,
+      reviewUrl: rows[i].reviewUrl ?? null,
+      publishedUrl: rows[i].publishedUrl ?? null,
+      status: (rows[i].status ?? "PLANNED") as VideoStatus,
+      allowExplicitStatus: true,
+    });
+    if (!parsed.success) {
+      return { success: false, error: `Row ${i + 1}: ${parsed.error}` };
+    }
+    validatedRows.push(parsed.data);
+  }
+
+  const db = await getAuthenticatedDb();
+  const assignment = await resolveVideoAssignment(db, { projectId, clientId: null });
+  if (!assignment.success) return assignment;
+
+  const now = new Date();
+  const videoIds: number[] = [];
+  try {
+    for (const row of validatedRows) {
+      const inserted = await db
+        .insert(videoLogs)
+        .values({
+          date: row.date ?? todayISO(),
+          title: row.title,
+          clientId: assignment.clientId,
+          projectId: row.projectId as number,
+          status: row.status,
+          startedAt: null,
+          revisionsCount: 0,
+          delivered: deliveredForVideoStatus(row.status),
+          deliveryUrl: row.deliveryUrl,
+          reviewUrl: row.reviewUrl,
+          publishedUrl: row.publishedUrl,
+          notes: row.notes,
+          coverUrl: row.coverUrl,
+          orientation: row.orientation,
+          contentType: row.contentType,
+          batchLabel: cleanBatchLabel,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning({ id: videoLogs.id });
+      const videoId = inserted[0]?.id;
+      if (!videoId) throw new Error("insert did not return an id");
+      videoIds.push(videoId);
+      await db.insert(crmEvents).values({
+        clientId: assignment.clientId,
+        videoId,
+        type: "video.created",
+        actor: "admin",
+        description: `Video created (bulk): ${row.title}`,
+        createdAt: now,
+      });
+    }
+  } catch {
+    for (const id of videoIds) {
+      try {
+        await db.delete(videoLogs).where(eq(videoLogs.id, id));
+      } catch {
+        // Best-effort cleanup; surfaced via the error message below either way.
+      }
+    }
+    return {
+      success: false,
+      error: "Could not create all videos -- the batch was rolled back, nothing was saved.",
+    };
+  }
+
+  revalidateProductivityViews(assignment.clientId);
+  revalidatePath(`/projects/${projectId}`);
+  return {
+    success: true,
+    videoIds,
+    message: `Created ${videoIds.length} video${videoIds.length === 1 ? "" : "s"}.`,
+  };
+}
+
+export type UpdateVideoLogsBulkPatch = {
+  // Brief C §7: "NEVER overwrite a field unless the operator explicitly
+  // chose to change it" / "a blank bulk-edit field must mean 'leave
+  // unchanged', not 'erase'". Every field here is a discriminated tri-state
+  // rather than a plain optional value:
+  //   - key absent / undefined  -> leave unchanged
+  //   - { clear: true }          -> explicit destructive clear (only offered
+  //                                 in the UI for genuinely nullable fields)
+  //   - { value: X }             -> set to X
+  // status/date are NOT NULL columns and so never accept { clear: true };
+  // the UI only ever offers Change/Don't-change for those two.
+  status?: { value: string };
+  date?: { value: string };
+  contentType?: { value: string } | { clear: true };
+  deliveryUrl?: { value: string } | { clear: true };
+  reviewUrl?: { value: string } | { clear: true };
+  batchLabel?: { value: string } | { clear: true };
+};
+
+export type UpdateVideoLogsBulkResult =
+  | { success: true; updatedCount: number; message: string }
+  | { success: false; error: string };
+
+// Brief C §7: Project workspace bulk-edit for videos already created --
+// select one or more rows, change only the fields explicitly touched. This
+// is a boring UPDATE-only path: it never inserts or deletes a row, so
+// video IDs and row count are always preserved 1:1 with the selection.
+// Every touched field is re-validated with the exact same validators the
+// single-video edit path uses (validateDeliveryUrl et al, via
+// validateVideoInput below) -- no parallel, looser bulk-only validation.
+export async function updateVideoLogsBulk(
+  videoIds: number[],
+  patch: UpdateVideoLogsBulkPatch,
+): Promise<UpdateVideoLogsBulkResult> {
+  if (!Array.isArray(videoIds) || videoIds.length === 0) {
+    return { success: false, error: "Select at least one video." };
+  }
+  if (videoIds.length > 200) {
+    return { success: false, error: "Edit at most 200 videos at a time." };
+  }
+  for (const id of videoIds) {
+    if (!isPositiveId(id)) {
+      return { success: false, error: "Invalid video selection." };
+    }
+  }
+
+  const set: Record<string, unknown> = {};
+
+  if (patch.status) {
+    if (!isVideoStatus(patch.status.value)) {
+      return { success: false, error: "Choose a valid video status." };
+    }
+    set.status = patch.status.value;
+    set.delivered = deliveredForVideoStatus(patch.status.value);
+  }
+  if (patch.date) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(patch.date.value) || Number.isNaN(Date.parse(patch.date.value))) {
+      return { success: false, error: "Enter a valid date (YYYY-MM-DD)." };
+    }
+    set.date = patch.date.value;
+  }
+  if (patch.contentType) {
+    if ("clear" in patch.contentType) {
+      set.contentType = null;
+    } else {
+      if (!isVideoContentType(patch.contentType.value)) {
+        return { success: false, error: "Choose a valid content type." };
+      }
+      set.contentType = patch.contentType.value;
+    }
+  }
+  if (patch.deliveryUrl) {
+    if ("clear" in patch.deliveryUrl) {
+      set.deliveryUrl = null;
+    } else {
+      const parsed = validateDeliveryUrl(patch.deliveryUrl.value);
+      if (!parsed.success) return parsed;
+      set.deliveryUrl = parsed.value;
+    }
+  }
+  if (patch.reviewUrl) {
+    if ("clear" in patch.reviewUrl) {
+      set.reviewUrl = null;
+    } else {
+      const parsed = validateDeliveryUrl(patch.reviewUrl.value);
+      if (!parsed.success) return parsed;
+      set.reviewUrl = parsed.value;
+    }
+  }
+  if (patch.batchLabel) {
+    if ("clear" in patch.batchLabel) {
+      set.batchLabel = null;
+    } else {
+      set.batchLabel = patch.batchLabel.value.trim().slice(0, 160) || null;
+    }
+  }
+
+  if (Object.keys(set).length === 0) {
+    return { success: false, error: "Change at least one field before saving." };
+  }
+
+  const db = await getAuthenticatedDb();
+  const existing = await db
+    .select({ id: videoLogs.id, clientId: videoLogs.clientId, projectId: videoLogs.projectId })
+    .from(videoLogs)
+    .where(inArray(videoLogs.id, videoIds));
+  if (existing.length === 0) {
+    return { success: false, error: "No matching videos found." };
+  }
+
+  const now = new Date();
+  await db
+    .update(videoLogs)
+    .set({ ...set, updatedAt: now })
+    .where(inArray(videoLogs.id, existing.map((row) => row.id)));
+
+  const clientIds = new Set(existing.map((row) => row.clientId).filter(Boolean));
+  const projectIds = new Set(existing.map((row) => row.projectId).filter(Boolean));
+  revalidateProductivityViews(...Array.from(clientIds));
+  for (const projectId of projectIds) {
+    revalidatePath(`/projects/${projectId}`);
+  }
+
+  return {
+    success: true,
+    updatedCount: existing.length,
+    message: `Updated ${existing.length} video${existing.length === 1 ? "" : "s"}.`,
   };
 }
 
@@ -203,6 +477,8 @@ export async function getAllVideoLogs() {
       revisionsCount: videoLogs.revisionsCount,
       delivered: videoLogs.delivered,
       deliveryUrl: videoLogs.deliveryUrl,
+      reviewUrl: videoLogs.reviewUrl,
+      publishedUrl: videoLogs.publishedUrl,
       notes: videoLogs.notes,
       coverUrl: videoLogs.coverUrl,
       orientation: videoLogs.orientation,
@@ -231,6 +507,11 @@ export async function getProductivityQuickOptions() {
         name: projects.name,
         clientId: projects.clientId,
         clientName: clients.name,
+        // Taryn August Ingest Readiness §5: New Work needs to filter a
+        // client's projects down to the ones actually being worked --
+        // status travels with the option so the client picking UI does
+        // not need a second query.
+        status: projects.status,
       })
       .from(projects)
       .innerJoin(clients, eq(projects.clientId, clients.id))
@@ -286,6 +567,8 @@ export async function updateVideoMetadata(
       clientId: videoLogs.clientId,
       projectId: videoLogs.projectId,
       deliveryUrl: videoLogs.deliveryUrl,
+      reviewUrl: videoLogs.reviewUrl,
+      publishedUrl: videoLogs.publishedUrl,
       notes: videoLogs.notes,
       coverUrl: videoLogs.coverUrl,
       orientation: videoLogs.orientation,
@@ -308,6 +591,8 @@ export async function updateVideoMetadata(
       clientId: current[0].clientId,
       projectId: current[0].projectId,
       deliveryUrl: current[0].deliveryUrl,
+      reviewUrl: current[0].reviewUrl,
+      publishedUrl: current[0].publishedUrl,
       notes: current[0].notes,
       coverUrl: current[0].coverUrl,
       orientation: current[0].orientation,
@@ -320,9 +605,15 @@ export async function updateVideoMetadata(
   }
 
   const now = new Date();
+  // `date` is create-time-only (see the VideoInputValues.date comment in
+  // core.ts) -- updateVideoMetadata never changes a video's date, so it's
+  // stripped before the update .set() rather than writing a possibly-null
+  // value onto the NOT NULL video_logs.date column.
+  const { date: _updateIgnoresDate, ...metadataForUpdate } = next;
+  void _updateIgnoresDate;
   await db
     .update(videoLogs)
-    .set({ ...next, updatedAt: now })
+    .set({ ...metadataForUpdate, updatedAt: now })
     .where(eq(videoLogs.id, videoId));
 
   await db.insert(crmEvents).values({
@@ -348,6 +639,7 @@ type VideoTransitionRow = {
   clientId: number | null;
   status: VideoStatus;
   startedAt: Date | null;
+  reviewUrl?: string | null;
 };
 
 async function applyVideoStatusTransition(
@@ -357,11 +649,19 @@ async function applyVideoStatusTransition(
   expectedStatus: VideoStatus,
   targetStatus: VideoStatus,
   actor: "admin" | "client",
+  // Optional: set/replace the review URL in the SAME write that marks the
+  // video READY_FOR_REVIEW -- the common real flow is "paste the Frame.io
+  // link and mark ready" as one action. Falls back to the video's existing
+  // reviewUrl (current.reviewUrl) when omitted.
+  reviewUrlInput?: string | null,
 ): Promise<ProductivityActionResult> {
+  const effectiveReviewUrl =
+    reviewUrlInput !== undefined ? reviewUrlInput : current.reviewUrl ?? null;
   const transition = planVideoTransition({
     currentStatus: current.status,
     expectedStatus,
     targetStatus,
+    reviewUrl: effectiveReviewUrl,
   });
   if (!transition.success) return transition;
   if (!transition.changed) {
@@ -383,6 +683,8 @@ async function applyVideoStatusTransition(
           ? now
           : current.startedAt,
       date: transition.status === "DONE" ? todayISO() : undefined,
+      reviewUrl:
+        reviewUrlInput !== undefined ? reviewUrlInput : undefined,
       updatedAt: now,
     })
     .where(
@@ -424,6 +726,7 @@ export async function transitionVideoStatus(
   videoId: number,
   expectedStatus: VideoStatus,
   targetStatus: VideoStatus,
+  reviewUrl?: string | null,
 ): Promise<ProductivityActionResult> {
   if (
     !isPositiveId(videoId) ||
@@ -441,6 +744,7 @@ export async function transitionVideoStatus(
       clientId: videoLogs.clientId,
       status: videoLogs.status,
       startedAt: videoLogs.startedAt,
+      reviewUrl: videoLogs.reviewUrl,
     })
     .from(videoLogs)
     .where(eq(videoLogs.id, videoId))
@@ -454,6 +758,7 @@ export async function transitionVideoStatus(
     expectedStatus,
     targetStatus,
     "admin",
+    reviewUrl,
   );
 }
 
