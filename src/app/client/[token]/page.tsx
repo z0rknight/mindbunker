@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getClientPortalView } from "@/modules/client-portal/data";
+import { CoverImage } from "./CoverImage";
 
 // Monday Real-Operation Pre-Freeze §6: same reviewUrl/publishedUrl/deliveryUrl
 // precedence as the dashboard VideoCard (client/dashboard/VideoCard.tsx) --
@@ -45,6 +46,10 @@ const videoStatusClass: Record<string, string> = {
   Review: "bg-amber-400/10 text-amber-200",
   "Updates in progress": "bg-fuchsia-400/10 text-fuchsia-200",
   Delivered: "bg-emerald-400/10 text-emerald-200",
+  // Client Portal Reality round §K: clientVideoStatusLabel now emits
+  // "Completed" for a DONE video with no deliveryUrl yet -- needs its own
+  // style or it silently falls through to the Planned style below.
+  Completed: "bg-emerald-400/10 text-emerald-200",
 };
 
 function formatPortalDate(value: string) {
@@ -173,40 +178,57 @@ export default async function ClientPortalPage({
                     Production details will appear here soon.
                   </p>
                 ) : (
-                  <div className="space-y-3">
-                    {project.videos.map((video, videoIndex) => (
+                  // Strategic Reality Cleanup II §4 / Lunch Reality Patch §4:
+                  // the Vault used to render each video as a 56px inline
+                  // thumbnail next to a text row -- for a video editor's own
+                  // delivery surface, that throws away the most useful
+                  // recognition signal in the system. Same canonical cover
+                  // (CoverImage, same fallback chain already resolved
+                  // server-side in buildClientPortalProjects: video cover ->
+                  // project cover -> placeholder), just presented as an
+                  // actual ~16:9 card instead of a postage stamp.
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {project.videos.map((video) => (
                       <article
-                        key={`${video.title}-${videoIndex}`}
-                        className="rounded-2xl border border-zinc-800 bg-zinc-950/45 p-4 sm:flex sm:items-center sm:justify-between sm:gap-5 sm:p-5"
+                        key={video.id}
+                        className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/45"
                       >
-                        <div className="min-w-0">
+                        <div className="relative aspect-video w-full overflow-hidden bg-zinc-900">
+                          {video.coverUrl ? (
+                            <CoverImage src={video.coverUrl} />
+                          ) : (
+                            <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-zinc-700">
+                              <span className="text-2xl" aria-hidden="true">🎬</span>
+                              <span className="text-[10px] font-bold uppercase tracking-widest">No preview yet</span>
+                            </div>
+                          )}
+                          <span
+                            className={`absolute left-2.5 top-2.5 rounded-full px-2.5 py-1 text-[10px] font-black backdrop-blur ${videoStatusClass[video.status] ?? videoStatusClass.Planned}`}
+                          >
+                            {video.status}
+                          </span>
+                        </div>
+                        <div className="space-y-2 p-4">
                           <h3 className="break-words font-black text-zinc-100">
                             {video.title}
                           </h3>
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-[10px] font-black ${videoStatusClass[video.status] ?? videoStatusClass.Planned}`}
+                          {video.lastUpdated && (
+                            <p className="text-[11px] text-zinc-600">
+                              Updated {formatPortalTimestamp(video.lastUpdated)}
+                            </p>
+                          )}
+                          {primaryPortalLink(video) && (
+                            <a
+                              href={primaryPortalLink(video)!.href}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              referrerPolicy="no-referrer"
+                              className="mt-1 flex min-h-12 w-full items-center justify-center rounded-xl bg-white px-5 text-sm font-black text-zinc-950 transition hover:bg-zinc-200"
                             >
-                              {video.status}
-                            </span>
-                            {video.lastUpdated && (
-                              <span className="text-[11px] text-zinc-600">
-                                Updated {formatPortalTimestamp(video.lastUpdated)}
-                              </span>
-                            )}
-                          </div>
+                              {primaryPortalLink(video)!.label}
+                            </a>
+                          )}
                         </div>
-                        {primaryPortalLink(video) && (
-                          <a
-                            href={primaryPortalLink(video)!.href}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            referrerPolicy="no-referrer"
-                            className="mt-4 flex min-h-12 w-full items-center justify-center rounded-xl bg-white px-5 text-sm font-black text-zinc-950 transition hover:bg-zinc-200 sm:mt-0 sm:w-auto sm:shrink-0"
-                          >
-                            {primaryPortalLink(video)!.label}
-                          </a>
-                        )}
                       </article>
                     ))}
                   </div>

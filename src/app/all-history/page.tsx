@@ -28,11 +28,23 @@ export default async function AllHistoryPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">🗄️ All History</h1>
-        <p className="text-zinc-500 text-sm mt-1">
-          Reconstructed historical reference data · 2023–2026
-        </p>
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white">🗄️ All History</h1>
+          <p className="text-zinc-500 text-sm mt-1">
+            Reconstructed historical reference data · 2023–2026
+          </p>
+        </div>
+        {/* Pre-Operation Reality Hardening — ActivityWatch Import round:
+            the operator should never need to know a secret URL to reach
+            /all-history/import -- this is the one visible, discoverable
+            entry point into it. */}
+        <a
+          href="/mindbunker/all-history/import"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-sm font-bold text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800"
+        >
+          Import history →
+        </a>
       </div>
 
       <div className="mb-8 p-4 rounded-xl border border-amber-800/40 bg-amber-950/20">

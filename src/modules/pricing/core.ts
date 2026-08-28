@@ -149,6 +149,62 @@ export function buildPackageSummaryText(result: PackagePricingResult): string {
   return lines.join("\n");
 }
 
+// ─── Client Presentation (Client Service Reality Patch, 25 Aug 2026) ───────
+//
+// "One engine. Two views: INTERNAL CALCULATION / CLIENT PRESENTATION."
+// (brief §4). These functions compute NOTHING -- they only format fields
+// Emmanuel already has: the investment amount comes straight from
+// computeALaCarteHourlyEstimate's totalCents (the one calculation engine
+// above), and turnaround/complexity/revisions/scope are presentation-only
+// choices that never feed back into the price. There is exactly one
+// place a price is computed in this module; this is just its second
+// rendering.
+
+export interface ClientQuotePresentation {
+  contentTypeLabel: string;
+  turnaroundLabel: string;
+  complexityLabel: string;
+  revisionsIncluded: number;
+  scopeLines: string[];
+  investmentCents: number;
+}
+
+/**
+ * Plain text, suitable for Slack/Email/WhatsApp -- matches the brief's
+ * example format verbatim (brief §4/§5).
+ */
+export function buildClientQuoteText(input: ClientQuotePresentation): string {
+  const lines = [
+    `Content type: ${input.contentTypeLabel}`,
+    `ETA: ${input.turnaroundLabel}`,
+    `Complexity: ${input.complexityLabel}`,
+    `Revisions included: ${input.revisionsIncluded}`,
+    "What I will do:",
+    ...input.scopeLines.map((line) => `\u2022 ${line}`),
+    `Investment: ${centsToDollarsString(input.investmentCents)}`,
+    "Sounds good to you?",
+  ];
+  return lines.join("\n");
+}
+
+/** Same content, Markdown-formatted -- trivial once the text version exists (brief §5). */
+export function buildClientQuoteMarkdown(input: ClientQuotePresentation): string {
+  const lines = [
+    `**Content type:** ${input.contentTypeLabel}`,
+    `**ETA:** ${input.turnaroundLabel}`,
+    `**Complexity:** ${input.complexityLabel}`,
+    `**Revisions included:** ${input.revisionsIncluded}`,
+    "",
+    "**What I will do:**",
+    ...input.scopeLines.map((line) => `- ${line}`),
+    "",
+    `**Investment:** ${centsToDollarsString(input.investmentCents)}`,
+    "",
+    "Sounds good to you?",
+  ];
+  return lines.join("\n");
+}
+
 // ─── À la carte hourly-effort estimator (Monday Local Intelligence Lab §A) ──
 //
 // A DIFFERENT concept from computeALaCarteLineCents above (N units at

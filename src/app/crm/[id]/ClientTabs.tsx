@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { formatCurrency, formatDate } from "@/utils/date";
-import { updateClient } from "@/modules/crm/actions";
+import { updateClient, logCrmActivity } from "@/modules/crm/actions";
+import { CRM_ACTIVITY_TYPES, isValidClientEmail } from "@/modules/crm/core";
 import { ProjectManager, type ClientProjectView } from "./ProjectManager";
 import { InstagramProfileCard } from "./InstagramProfileCard";
 
@@ -18,12 +19,15 @@ interface ClientTabsProps {
     instagramProfilePictureUrl: string | null;
     notes: string | null;
     source: string | null;
-    totalProjects: number;
-    totalRevenue: number;
     contacted: boolean;
     converted: boolean;
     createdAt: Date | null;
   };
+  // Sprint 3 P0: live-computed, replacing the stale
+  // clients.totalProjects / clients.totalRevenue cached columns. Grouped
+  // by currency -- never summed across currencies.
+  totalProjectsCount: number;
+  totalRevenueByCurrency: Array<{ currency: string; amount: number }>;
   briefing: {
     id: number;
     serviceInterest: string;
@@ -79,6 +83,8 @@ function BriefingField({
 
 export function ClientTabs({
   client,
+  totalProjectsCount,
+  totalRevenueByCurrency,
   briefing,
   events,
   projects,
@@ -90,6 +96,19 @@ export function ClientTabs({
   const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? "overview");
   const [isEditing, setIsEditing] = useState(false);
   const [notes, setNotes] = useState(client.notes ?? "");
+  const [activityType, setActivityType] = useState<string>("note");
+  const [activityDescription, setActivityDescription] = useState("");
+  const [activityPending, setActivityPending] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const [isEditingContact, setIsEditingContact] = useState(false);
+  const [contactEmail, setContactEmail] = useState(client.email ?? "");
+  const [contactPhone, setContactPhone] = useState(client.phone ?? "");
+  const [contactPending, setContactPending] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
+  const [isEditingMetadata, setIsEditingMetadata] = useState(false);
+  const [metadataStatus, setMetadataStatus] = useState(client.status);
+  const [metadataSource, setMetadataSource] = useState(client.source ?? "");
+  const [metadataPending, setMetadataPending] = useState(false);
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: "overview", label: "Overview", icon: "📊" },
@@ -101,6 +120,62 @@ export function ClientTabs({
   async function handleSaveNotes() {
     await updateClient(client.id, { notes });
     setIsEditing(false);
+  }
+
+  // Sprint 3 P0 (client contact editing): updateClient already accepted
+  // email/phone -- only the UI was missing. Deliberately does nothing
+  // else: adding contact information and granting portal access
+  // (PortalAccessPanel, elsewhere on this page) are separate actions.
+  async function handleSaveContact() {
+    const email = contactEmail.trim();
+    if (email && !isValidClientEmail(email)) {
+      setContactError("Enter a valid email address.");
+      return;
+    }
+    setContactPending(true);
+    setContactError(null);
+    await updateClient(client.id, {
+      email: email || undefined,
+      phone: contactPhone.trim() || undefined,
+    });
+    setContactPending(false);
+    setIsEditingContact(false);
+  }
+
+  // Sprint 3 P2: status/source were the two client fields updateClient
+  // already accepted with no UI path to edit them at all -- in
+  // particular a client could never be moved to "inactive" (the CRM
+  // list's own Inactive section existed but was permanently empty).
+  // Separate from Geladeira archival (an orthogonal visibility axis) and
+  // from convertLeadToClient (lead -> active only) -- this is the one
+  // place all three status values are reachable directly.
+  async function handleSaveMetadata() {
+    setMetadataPending(true);
+    await updateClient(client.id, {
+      status: metadataStatus as "lead" | "active" | "inactive",
+      source: metadataSource.trim() || undefined,
+    });
+    setMetadataPending(false);
+    setIsEditingMetadata(false);
+  }
+
+  async function handleLogActivity() {
+    if (!activityDescription.trim()) {
+      setActivityError("Enter a note before logging this activity.");
+      return;
+    }
+    setActivityPending(true);
+    setActivityError(null);
+    const result = await logCrmActivity(client.id, {
+      type: activityType,
+      description: activityDescription,
+    });
+    setActivityPending(false);
+    if (!result.success) {
+      setActivityError(result.error);
+      return;
+    }
+    setActivityDescription("");
   }
 
   return (
@@ -165,19 +240,87 @@ export function ClientTabs({
 
             {/* Contact Info */}
             <div>
-              <h3 className="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-3">
-                Contact Information
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-zinc-800/50 rounded-lg p-4">
-                  <p className="text-zinc-500 text-xs mb-1">Email</p>
-                  <p className="text-white">{client.email || "—"}</p>
-                </div>
-                <div className="bg-zinc-800/50 rounded-lg p-4">
-                  <p className="text-zinc-500 text-xs mb-1">Phone</p>
-                  <p className="text-white">{client.phone || "—"}</p>
-                </div>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">
+                  Contact Information
+                </h3>
+                {!isEditingContact && (
+                  <button
+                    onClick={() => {
+                      setContactEmail(client.email ?? "");
+                      setContactPhone(client.phone ?? "");
+                      setContactError(null);
+                      setIsEditingContact(true);
+                    }}
+                    className="text-xs font-bold text-cyan-400 hover:text-cyan-300"
+                  >
+                    Edit
+                  </button>
+                )}
               </div>
+              {isEditingContact ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <label htmlFor="contact-email" className="mb-1 block text-xs text-zinc-500">
+                        Email
+                      </label>
+                      <input
+                        id="contact-email"
+                        type="email"
+                        value={contactEmail}
+                        onChange={(e) => setContactEmail(e.target.value)}
+                        placeholder="client@example.com"
+                        className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="contact-phone" className="mb-1 block text-xs text-zinc-500">
+                        Phone
+                      </label>
+                      <input
+                        id="contact-phone"
+                        type="tel"
+                        value={contactPhone}
+                        onChange={(e) => setContactPhone(e.target.value)}
+                        placeholder="+1 555 000 0000"
+                        className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      />
+                    </div>
+                  </div>
+                  {contactError && (
+                    <p role="alert" className="text-xs font-medium text-red-300">
+                      {contactError}
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveContact}
+                      disabled={contactPending}
+                      className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-cyan-700 disabled:cursor-wait disabled:opacity-70"
+                    >
+                      {contactPending ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      onClick={() => setIsEditingContact(false)}
+                      className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-zinc-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="bg-zinc-800/50 rounded-lg p-4">
+                    <p className="text-zinc-500 text-xs mb-1">Email</p>
+                    <p className="text-white">{client.email || "—"}</p>
+                  </div>
+                  <div className="bg-zinc-800/50 rounded-lg p-4">
+                    <p className="text-zinc-500 text-xs mb-1">Phone</p>
+                    <p className="text-white">{client.phone || "—"}</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Stats */}
@@ -188,13 +331,19 @@ export function ClientTabs({
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-zinc-800/50 rounded-lg p-4">
                   <p className="text-zinc-500 text-xs mb-1">Total Projects</p>
-                  <p className="text-2xl font-bold text-white">{client.totalProjects}</p>
+                  <p className="text-2xl font-bold text-white">{totalProjectsCount}</p>
                 </div>
                 <div className="bg-zinc-800/50 rounded-lg p-4">
                   <p className="text-zinc-500 text-xs mb-1">Total Revenue</p>
-                  <p className="text-2xl font-bold text-emerald-400">
-                    {formatCurrency(client.totalRevenue)}
-                  </p>
+                  {totalRevenueByCurrency.length === 0 ? (
+                    <p className="text-2xl font-bold text-emerald-400">{formatCurrency(0)}</p>
+                  ) : (
+                    <p className="text-2xl font-bold text-emerald-400 space-x-2">
+                      {totalRevenueByCurrency.map((row) => (
+                        <span key={row.currency}>{formatCurrency(row.amount, row.currency)}</span>
+                      ))}
+                    </p>
+                  )}
                 </div>
                 <div className="bg-zinc-800/50 rounded-lg p-4">
                   <p className="text-zinc-500 text-xs mb-1">Contacted</p>
@@ -213,21 +362,90 @@ export function ClientTabs({
 
             {/* Metadata */}
             <div>
-              <h3 className="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-3">
-                Metadata
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-zinc-800/50 rounded-lg p-4">
-                  <p className="text-zinc-500 text-xs mb-1">Source</p>
-                  <p className="text-white">{client.source || "—"}</p>
-                </div>
-                <div className="bg-zinc-800/50 rounded-lg p-4">
-                  <p className="text-zinc-500 text-xs mb-1">Added On</p>
-                  <p className="text-white">
-                    {client.createdAt ? formatDate(client.createdAt.toISOString().split("T")[0]) : "—"}
-                  </p>
-                </div>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">
+                  Metadata
+                </h3>
+                {!isEditingMetadata && (
+                  <button
+                    onClick={() => {
+                      setMetadataStatus(client.status);
+                      setMetadataSource(client.source ?? "");
+                      setIsEditingMetadata(true);
+                    }}
+                    className="text-xs font-bold text-cyan-400 hover:text-cyan-300"
+                  >
+                    Edit
+                  </button>
+                )}
               </div>
+              {isEditingMetadata ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <label htmlFor="metadata-status" className="mb-1 block text-xs text-zinc-500">
+                        Status
+                      </label>
+                      <select
+                        id="metadata-status"
+                        value={metadataStatus}
+                        onChange={(e) => setMetadataStatus(e.target.value as typeof metadataStatus)}
+                        className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      >
+                        <option value="lead">Lead</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="metadata-source" className="mb-1 block text-xs text-zinc-500">
+                        Source
+                      </label>
+                      <input
+                        id="metadata-source"
+                        type="text"
+                        value={metadataSource}
+                        onChange={(e) => setMetadataSource(e.target.value)}
+                        maxLength={160}
+                        placeholder="Instagram DM, referral, /book…"
+                        className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveMetadata}
+                      disabled={metadataPending}
+                      className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-cyan-700 disabled:cursor-wait disabled:opacity-70"
+                    >
+                      {metadataPending ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      onClick={() => setIsEditingMetadata(false)}
+                      className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-zinc-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="bg-zinc-800/50 rounded-lg p-4">
+                    <p className="text-zinc-500 text-xs mb-1">Status</p>
+                    <p className="text-white capitalize">{client.status}</p>
+                  </div>
+                  <div className="bg-zinc-800/50 rounded-lg p-4">
+                    <p className="text-zinc-500 text-xs mb-1">Source</p>
+                    <p className="text-white">{client.source || "—"}</p>
+                  </div>
+                  <div className="bg-zinc-800/50 rounded-lg p-4">
+                    <p className="text-zinc-500 text-xs mb-1">Added On</p>
+                    <p className="text-white">
+                      {client.createdAt ? formatDate(client.createdAt.toISOString().split("T")[0]) : "—"}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -235,6 +453,7 @@ export function ClientTabs({
         {activeTab === "projects" && (
           <ProjectManager
             clientId={client.id}
+            clientAvatarUrl={client.instagramProfilePictureUrl}
             projects={projects}
             initiallyCreating={initialProjectCreation}
             returnTo={projectReturnTo}
@@ -291,6 +510,52 @@ export function ClientTabs({
 
         {activeTab === "activity" && (
           <div className="space-y-3">
+            {/* Sprint 3: fast quick-log — the only write path in this tab
+                before this was other flows (gateway briefings, stage
+                changes, /book submissions) writing crm_events; this lets
+                the operator log a call/email/meeting/note directly. */}
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3.5 sm:p-4">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <select
+                  value={activityType}
+                  onChange={(e) => setActivityType(e.target.value)}
+                  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white sm:w-40"
+                >
+                  {CRM_ACTIVITY_TYPES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={activityDescription}
+                  onChange={(e) => setActivityDescription(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !activityPending) {
+                      e.preventDefault();
+                      handleLogActivity();
+                    }
+                  }}
+                  maxLength={2_000}
+                  placeholder="What happened?"
+                  className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+                <button
+                  onClick={handleLogActivity}
+                  disabled={activityPending}
+                  className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-cyan-700 disabled:cursor-wait disabled:opacity-70"
+                >
+                  {activityPending ? "Logging…" : "Log"}
+                </button>
+              </div>
+              {activityError && (
+                <p role="alert" className="mt-2 text-xs font-medium text-red-300">
+                  {activityError}
+                </p>
+              )}
+            </div>
+
             {events.length > 0 ? (
               events.map((event) => (
                 <article

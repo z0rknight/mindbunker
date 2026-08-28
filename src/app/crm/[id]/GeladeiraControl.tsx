@@ -18,16 +18,23 @@ export function GeladeiraControl({
   archivalState,
   archivedAt,
   invitation,
+  hasPortalPassword,
 }: {
   clientId: number;
   archivalState: "ACTIVE_SURFACE" | "GELADEIRA";
   archivedAt: string | null;
   invitation: { id: number; status: "active" | "expired" | "revoked" } | null;
+  // Client Portal Reality round §K (historical friction sweep, item 1):
+  // a live client-portal login password is separate access from a Gateway
+  // invitation -- archiving must warn about both, not just the one this
+  // check used to look at.
+  hasPortalPassword: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState("");
   const hasActiveCapability = invitation?.status === "active";
+  const hasActiveAccess = hasActiveCapability || hasPortalPassword;
 
   function archive() {
     if (
@@ -115,20 +122,25 @@ export function GeladeiraControl({
           {isPending ? "Working…" : "Move to Geladeira"}
         </button>
       </div>
-      {hasActiveCapability && (
+      {hasActiveAccess && (
         <div className="mt-3 flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-5 text-amber-200">
-            This client still has active private access. Archiving does not
-            revoke it.
+            {hasActiveCapability && hasPortalPassword
+              ? "This client still has an active Gateway link and a client portal password. Archiving revokes neither."
+              : hasActiveCapability
+                ? "This client still has active private access. Archiving does not revoke it."
+                : "This client still has a client portal password set. Archiving does not revoke it — remove it in Portal Access below if needed."}
           </p>
-          <button
-            type="button"
-            onClick={revokeAccess}
-            disabled={isPending}
-            className="min-h-9 shrink-0 rounded-lg border border-amber-500/40 px-3 text-xs font-bold text-amber-200 transition hover:bg-amber-500/10 disabled:opacity-60"
-          >
-            Revoke access
-          </button>
+          {hasActiveCapability && (
+            <button
+              type="button"
+              onClick={revokeAccess}
+              disabled={isPending}
+              className="min-h-9 shrink-0 rounded-lg border border-amber-500/40 px-3 text-xs font-bold text-amber-200 transition hover:bg-amber-500/10 disabled:opacity-60"
+            >
+              Revoke access
+            </button>
+          )}
         </div>
       )}
       {feedback && (

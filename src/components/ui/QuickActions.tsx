@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { addTransaction } from "@/modules/finance/actions";
 import { upsertHealthLog } from "@/modules/health/actions";
+import { todayISO } from "@/utils/date";
 
 export {
   AddRevisionButton,
@@ -233,23 +234,32 @@ export function AddExpenseButton() {
 
 // ─── Log Today (Health) Button ────────────────────────────────────────────────
 
-export function LogTodayButton() {
+export function LogTodayButton({ todayISODate }: { todayISODate?: string } = {}) {
+  const defaultDate = todayISODate ?? todayISO();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [date, setDate] = useState(defaultDate);
   const [sleep, setSleep] = useState("");
   const [caffeine, setCaffeine] = useState("");
   const [screenTime, setScreenTime] = useState("");
   const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
     startTransition(async () => {
-      await upsertHealthLog({
+      const result = await upsertHealthLog({
+        date,
         sleepHours: sleep ? Number(sleep) : undefined,
         caffeineMg: caffeine ? Number(caffeine) : undefined,
         screenTimeHours: screenTime ? Number(screenTime) : undefined,
         substancesNotes: notes || undefined,
       });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
       setOpen(false);
     });
   }
@@ -257,7 +267,12 @@ export function LogTodayButton() {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        type="button"
+        onClick={() => {
+          setDate(defaultDate);
+          setError(null);
+          setOpen(true);
+        }}
         className="flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm bg-blue-800 hover:bg-blue-700 text-white active:scale-95 transition-all w-full cursor-pointer"
       >
         <span className="text-2xl">🫀</span>
@@ -267,6 +282,7 @@ export function LogTodayButton() {
       {open && (
         <Modal title="Log Today's Health" onClose={() => setOpen(false)}>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <HistoricalDateField value={date} max={defaultDate} onChange={setDate} />
             <div>
               <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Sleep (hours)</label>
               <input
@@ -317,6 +333,7 @@ export function LogTodayButton() {
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
               />
             </div>
+            {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
             <button
               type="submit"
               disabled={isPending}
@@ -333,20 +350,29 @@ export function LogTodayButton() {
 
 // ─── Log Bike Ride Button ─────────────────────────────────────────────────────
 
-export function LogBikeRideButton() {
+export function LogBikeRideButton({ todayISODate }: { todayISODate?: string } = {}) {
+  const defaultDate = todayISODate ?? todayISO();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [date, setDate] = useState(defaultDate);
   const [km, setKm] = useState("");
   const [minutes, setMinutes] = useState("");
   const [flash, setFlash] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
     startTransition(async () => {
-      await upsertHealthLog({
+      const result = await upsertHealthLog({
+        date,
         cyclingKm: km ? Number(km) : undefined,
         cyclingMinutes: minutes ? Number(minutes) : undefined,
       });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
       setFlash(true);
       setTimeout(() => setFlash(false), 1500);
       setKm("");
@@ -358,7 +384,12 @@ export function LogBikeRideButton() {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        type="button"
+        onClick={() => {
+          setDate(defaultDate);
+          setError(null);
+          setOpen(true);
+        }}
         disabled={isPending}
         className={`flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm transition-all w-full
           ${flash
@@ -375,6 +406,7 @@ export function LogBikeRideButton() {
       {open && (
         <Modal title="🚴‍♂️ Log Bike Ride" onClose={() => setOpen(false)}>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <HistoricalDateField value={date} max={defaultDate} onChange={setDate} />
             <div>
               <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Distance (km)</label>
               <input
@@ -401,6 +433,7 @@ export function LogBikeRideButton() {
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500"
               />
             </div>
+            {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
             <button
               type="submit"
               disabled={isPending}
@@ -417,19 +450,28 @@ export function LogBikeRideButton() {
 
 // ─── Log Walk Button ──────────────────────────────────────────────────────────
 
-export function LogWalkButton() {
+export function LogWalkButton({ todayISODate }: { todayISODate?: string } = {}) {
+  const defaultDate = todayISODate ?? todayISO();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [date, setDate] = useState(defaultDate);
   const [minutes, setMinutes] = useState("");
   const [flash, setFlash] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!minutes) return;
+    setError(null);
     startTransition(async () => {
-      await upsertHealthLog({
+      const result = await upsertHealthLog({
+        date,
         walkingMinutes: Number(minutes),
       });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
       setFlash(true);
       setTimeout(() => setFlash(false), 1500);
       setMinutes("");
@@ -440,7 +482,12 @@ export function LogWalkButton() {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        type="button"
+        onClick={() => {
+          setDate(defaultDate);
+          setError(null);
+          setOpen(true);
+        }}
         disabled={isPending}
         className={`flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm transition-all w-full
           ${flash
@@ -457,6 +504,7 @@ export function LogWalkButton() {
       {open && (
         <Modal title="🚶‍♂️ Log Walk" onClose={() => setOpen(false)}>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <HistoricalDateField value={date} max={defaultDate} onChange={setDate} />
             <div>
               <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Duration (minutes)</label>
               <input
@@ -471,6 +519,7 @@ export function LogWalkButton() {
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-teal-500"
               />
             </div>
+            {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
             <button
               type="submit"
               disabled={isPending}
@@ -482,6 +531,36 @@ export function LogWalkButton() {
         </Modal>
       )}
     </>
+  );
+}
+
+function HistoricalDateField({
+  value,
+  max,
+  onChange,
+}: {
+  value: string;
+  max: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
+        Happened on
+      </label>
+      <input
+        type="date"
+        value={value}
+        max={max}
+        onChange={(event) => onChange(event.target.value)}
+        onInput={(event) => onChange(event.currentTarget.value)}
+        required
+        className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+      />
+      <p className="mt-1 text-[11px] text-zinc-600">
+        When it happened, even if you are logging it later.
+      </p>
+    </div>
   );
 }
 

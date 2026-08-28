@@ -8,8 +8,10 @@ import {
   clientHasProtectedHistory,
   describeProtectedHistory,
   isActiveSurface,
+  isCrmActivityType,
   isPositiveId,
   planArchivalTransition,
+  validateLogCrmActivityInput,
 } from "./core.ts";
 
 test("isActiveSurface treats ACTIVE_SURFACE as visible and GELADEIRA as hidden", () => {
@@ -104,4 +106,35 @@ test("a client with real accumulated history across every dimension is protected
     }),
     true,
   );
+});
+
+
+// Sprint 3 (CRM Lead Workspace — fast activity quick-log).
+test("isCrmActivityType accepts only the fixed vocabulary", () => {
+  assert.equal(isCrmActivityType("call"), true);
+  assert.equal(isCrmActivityType("note"), true);
+  assert.equal(isCrmActivityType("workflow_triggered"), false);
+  assert.equal(isCrmActivityType(""), false);
+  assert.equal(isCrmActivityType(undefined), false);
+});
+
+test("validateLogCrmActivityInput rejects an empty note", () => {
+  const result = validateLogCrmActivityInput({ type: "call", description: "   " });
+  assert.equal(result.success, false);
+});
+
+test("validateLogCrmActivityInput trims the note and defaults an unknown type to note", () => {
+  const result = validateLogCrmActivityInput({
+    type: "not-a-real-type",
+    description: "  Called about the invoice  ",
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data.type, "note");
+  assert.equal(result.data.description, "Called about the invoice");
+});
+
+test("validateLogCrmActivityInput preserves a valid explicit type", () => {
+  const result = validateLogCrmActivityInput({ type: "meeting", description: "Kickoff call" });
+  assert.equal(result.success, true);
+  assert.equal(result.data.type, "meeting");
 });

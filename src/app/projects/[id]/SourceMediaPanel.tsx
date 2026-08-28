@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createSourceMediaReference, deleteSourceMediaReference } from "@/modules/assets/actions";
+import { CopyLinkButton } from "@/components/ui/CopyLinkButton";
 
 type SourceMediaRow = {
   id: number;
@@ -60,6 +61,13 @@ export function SourceMediaPanel({
   }
 
   function remove(id: number) {
+    // Sprint 3 P2: this is the operator's record of where large source
+    // footage actually lives -- every other delete/revoke action in the
+    // app confirms first (ProjectWorkspaceControls, AssetsPanel,
+    // ClientActions, etc.); this one didn't.
+    if (!confirm("Remove this source media reference? This does not delete the actual footage, only this record of where it is.")) {
+      return;
+    }
     startTransition(async () => {
       await deleteSourceMediaReference(id, projectId);
       router.refresh();
@@ -94,14 +102,17 @@ export function SourceMediaPanel({
                 </p>
                 <p className="mt-0.5 text-xs text-zinc-600">{r.location ?? "Location unknown"}</p>
                 {r.sourceUrl && (
-                  <a
-                    href={r.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-1 inline-block truncate max-w-full text-xs text-zinc-400 hover:text-white underline"
-                  >
-                    {r.sourceUrl}
-                  </a>
+                  <span className="mt-1 flex items-center gap-2">
+                    <a
+                      href={r.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block truncate max-w-full text-xs text-zinc-400 hover:text-white underline"
+                    >
+                      {r.sourceUrl}
+                    </a>
+                    <CopyLinkButton url={r.sourceUrl} className="shrink-0 text-xs text-zinc-600 hover:text-white transition" />
+                  </span>
                 )}
                 {r.notes && <p className="mt-1 text-xs text-zinc-500">{r.notes}</p>}
               </div>

@@ -5,6 +5,7 @@ import {
   type ProjectGroup,
   type ProjectStatus,
 } from "./config.ts";
+import { validateCoverUrl } from "../productivity/core.ts";
 
 export type ProjectOverviewItem = {
   id: number;
@@ -19,6 +20,13 @@ export type ProjectOverviewItem = {
   doneVideos: number;
   inFlightVideos: number;
   plannedVideos: number;
+  // Sprint 3 P1 (Project + Video visual covers).
+  coverUrl: string | null;
+  clientAvatarUrl: string | null;
+  // MICRO PATCH §2 (Last Active): ISO instant of the most recent closed,
+  // attributed Work Session for this project, unbounded lookback. null
+  // when the project has never had one -- never fabricated as "now".
+  lastActiveAt: string | null;
 };
 
 export type ProjectOverviewGroups = Record<
@@ -31,6 +39,7 @@ export type ProjectInput = {
   status: ProjectStatus;
   deadline: string | null;
   notes: string | null;
+  coverUrl: string | null;
 };
 
 type ProjectInputResult =
@@ -123,6 +132,7 @@ export function validateProjectInput(values: {
   status: unknown;
   deadline?: unknown;
   notes?: unknown;
+  coverUrl?: unknown;
 }): ProjectInputResult {
   const name = cleanOptionalText(values.name, 160);
   if (!name) {
@@ -137,6 +147,14 @@ export function validateProjectInput(values: {
     return { success: false, error: "Choose a valid project deadline." };
   }
 
+  // Sprint 3 P1: same HTTPS-only validator videoLogs.coverUrl already
+  // uses (modules/productivity/core.ts) -- one cover-URL safety rule,
+  // not two.
+  const coverUrl = validateCoverUrl(values.coverUrl);
+  if (!coverUrl.success) {
+    return { success: false, error: coverUrl.error };
+  }
+
   return {
     success: true,
     data: {
@@ -144,6 +162,7 @@ export function validateProjectInput(values: {
       status: values.status,
       deadline,
       notes: cleanOptionalText(values.notes, 5_000),
+      coverUrl: coverUrl.value,
     },
   };
 }
@@ -201,4 +220,52 @@ export function sortProjectWorkspaceVideos<
     if (titleCmp !== 0) return titleCmp;
     return a.id - b.id;
   });
+}
+
+
+// ─── NIGHT SHIFT REALITY PATCH §7 ──────────────────────────────────────────
+// "Current WIP / review link" -- derived, never a new dedicated field. The
+// project workspace already fetches every video's reviewUrl/deliveryUrl/
+// publishedUrl (see getProjectWorkspace); this is pure derivation logic
+// over that existing data, with no new query and no schema change.
+
+export type CurrentWorkVideoCandidate = {
+  id: number;
+  status: string;
+  reviewUrl: string | null;
+  updatedAt: Date | null;
+  createdAt: Date | null;
+};
+
+const ACTIVE_WORK_STATUSES = new Set(["IN_PROGRESS", "CHANGES_REQUESTED"]);
+
+function byRecency<T extends { updatedAt: Date | null; createdAt: Date | null }>(
+  a: T,
+  b: T,
+): number {
+  const aTime = a.updatedAt?.getTime() ?? a.createdAt?.getTime() ?? 0;
+  const bTime = b.updatedAt?.getTime() ?? b.createdAt?.getTime() ?? 0;
+  return bTime - aTime;
+}
+
+// Preference order per §7: (A) the most recently updated video the operator
+// is actively working on right now (IN_PROGRESS / CHANGES_REQUESTED) --
+// READY_FOR_REVIEW is deliberately excluded from this tier, since that's
+// work waiting on the client, not work in progress. Falls back to (B) the
+// most recently updated video that has a reviewUrl at all, so a project
+// sitting entirely in review still surfaces something. Returns null rather
+// than fabricating a "current work" video for a project with nothing
+// in-flight and nothing reviewable (e.g. all DONE, all PLANNED, or empty).
+export function resolveCurrentWorkVideo<T extends CurrentWorkVideoCandidate>(
+  videos: readonly T[],
+): T | null {
+  const inFlight = videos
+    .filter((video) => ACTIVE_WORK_STATUSES.has(video.status))
+    .toSorted(byRecency);
+  if (inFlight[0]) return inFlight[0];
+
+  const reviewable = videos
+    .filter((video) => video.reviewUrl !== null)
+    .toSorted(byRecency);
+  return reviewable[0] ?? null;
 }

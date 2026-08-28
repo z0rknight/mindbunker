@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   completedVideoLogs,
+  computeRevisionCount,
   getVideoNextAction,
   getVideoMetadataChanges,
   groupOperationalVideos,
@@ -12,6 +13,7 @@ import {
   validateVideoCreateInput,
   validateDeliveryUrl,
   validateVideoInput,
+  validateVideoPriorityInput,
 } from "./core.ts";
 import { isVideoDirectlyFinishable } from "./config.ts";
 
@@ -310,6 +312,38 @@ test("client and project assignment must agree", () => {
   );
 });
 
+test("project-local video creation derives the client from its locked project context", () => {
+  assert.deepEqual(
+    validateVideoAssignment({
+      requestedClientId: null,
+      projectId: 12,
+      project: { clientId: 7, status: "active" },
+    }),
+    { success: true, clientId: 7 },
+  );
+});
+
+test("project-local video creation cannot be redirected to an unrelated client", () => {
+  const result = validateVideoAssignment({
+    requestedClientId: 8,
+    projectId: 12,
+    project: { clientId: 7, status: "active" },
+  });
+  assert.equal(result.success, false);
+  assert.match(result.error, /different client/);
+});
+
+test("global video creation without a project keeps its explicit client flow", () => {
+  assert.deepEqual(
+    validateVideoAssignment({
+      requestedClientId: 7,
+      projectId: null,
+      project: null,
+    }),
+    { success: true, clientId: 7 },
+  );
+});
+
 test("metadata diff emits one compact change set and ignores replay", () => {
   const current = {
     title: "Launch cut",
@@ -443,6 +477,13 @@ test("cover URL follows the exact same HTTPS-only discipline as delivery URL", (
     success: true,
     value: "https://cdn.example.com/cover.jpg",
   });
+  assert.deepEqual(
+    validateCoverUrl("/mindbunker/media/covers/123e4567-e89b-42d3-a456-426614174000.png"),
+    {
+      success: true,
+      value: "/mindbunker/media/covers/123e4567-e89b-42d3-a456-426614174000.png",
+    },
+  );
 
   for (const unsafe of [
     "http://example.com/cover.jpg",
@@ -491,4 +532,25 @@ test("video visual metadata (cover/orientation/content type) is optional and val
     validateVideoInput({ title: "Reel", coverUrl: "javascript:alert(1)" }).success,
     false,
   );
+});
+
+// Lunch Reality Patch P1 §7: client-settable "priority now" video, one per
+// project.
+test("validateVideoPriorityInput: marking priority requires the video to belong to a project", () => {
+  assert.match(validateVideoPriorityInput(true, null) ?? "", /project/i);
+  assert.equal(validateVideoPriorityInput(true, 42), null);
+});
+
+test("validateVideoPriorityInput: clearing priority never requires a project", () => {
+  assert.equal(validateVideoPriorityInput(false, null), null);
+  assert.equal(validateVideoPriorityInput(false, 42), null);
+});
+
+test("computeRevisionCount: counts the revisions rows belonging to one video", () => {
+  const rows = [{ videoId: 1 }, { videoId: 1 }, { videoId: 2 }];
+  assert.equal(computeRevisionCount(rows.filter((r) => r.videoId === 1)), 2);
+});
+
+test("computeRevisionCount: zero rows is an honest 0", () => {
+  assert.equal(computeRevisionCount([]), 0);
 });

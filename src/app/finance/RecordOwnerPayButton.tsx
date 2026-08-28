@@ -13,32 +13,56 @@ export function RecordOwnerPayButton() {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
   const router = useRouter();
+
+  function openModal() {
+    setAmount("");
+    setCurrency(DEFAULT_CURRENCY);
+    setNotes("");
+    setError(null);
+    setSubmitted(false);
+    // Client Portal Reality round §C: minted once per form-open, same
+    // convention as RecordDebtPaymentButton -- a double-click/retry of
+    // the same submit cannot create a second Owner Pay.
+    setIdempotencyKey(
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `owner-pay-${Date.now()}-${Math.random()}`,
+    );
+    setOpen(true);
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitted) return;
     setError(null);
     const parsed = Number(amount);
     if (!amount || isNaN(parsed) || parsed <= 0) {
       setError("Enter a positive amount.");
       return;
     }
+    setSubmitted(true);
     startTransition(async () => {
-      try {
-        await recordOwnerPay({
-          amount: parsed,
-          currency: DEFAULT_CURRENCY,
-          notes: notes || undefined,
-        });
-        setAmount("");
-        setNotes("");
-        setOpen(false);
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not record Owner Pay.");
+      const result = await recordOwnerPay({
+        amount: parsed,
+        currency,
+        notes: notes || undefined,
+        idempotencyKey,
+      });
+      if (!result.success) {
+        setError(result.error);
+        setSubmitted(false);
+        return;
       }
+      setAmount("");
+      setNotes("");
+      setOpen(false);
+      router.refresh();
     });
   }
 
@@ -46,7 +70,7 @@ export function RecordOwnerPayButton() {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openModal}
         className="flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm bg-indigo-800 hover:bg-indigo-700 text-white active:scale-95 transition-all w-full cursor-pointer"
       >
         <span className="text-2xl">🏦</span>
@@ -77,7 +101,7 @@ export function RecordOwnerPayButton() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">
-                  Amount ({DEFAULT_CURRENCY})
+                  Amount ({currency})
                 </label>
                 <input
                   type="number"
@@ -91,6 +115,19 @@ export function RecordOwnerPayButton() {
                   autoFocus
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
                 />
+              </div>
+              <div>
+                <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">
+                  Currency
+                </label>
+                <select
+                  value={currency}
+                  onChange={(event) => setCurrency(event.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="USD">USD</option>
+                  <option value="BRL">BRL</option>
+                </select>
               </div>
               <div>
                 <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Notes</label>

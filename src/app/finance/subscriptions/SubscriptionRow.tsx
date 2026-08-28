@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { recordSubscriptionPayment, updateSubscriptionStatus } from "@/modules/finance/actions";
 import { formatCurrency, todayISO } from "@/utils/date";
 
@@ -90,16 +91,25 @@ export function SubscriptionRow({ subscription }: { subscription: Subscription }
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-      <div className="min-w-0">
-        <p className="text-white font-semibold text-sm truncate">{subscription.name}</p>
-        <p className="text-zinc-500 text-xs mt-0.5">
-          {subscription.vendor} · {subscription.cadence === "MONTHLY" ? "Monthly" : "Annual"}
-          {subscription.renewalDate ? ` · renews ${subscription.renewalDate}` : ""}
-        </p>
-      </div>
+    <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-900 border border-zinc-800 rounded-xl p-3 sm:p-4">
+      <Link
+        href={`/finance/subscriptions/${subscription.id}`}
+        className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg p-1 hover:bg-zinc-800/60"
+        aria-label={`Open ${subscription.name} subscription details`}
+      >
+        <div className="min-w-0">
+          <p className="text-white font-semibold text-sm truncate">{subscription.name}</p>
+          <p className="text-zinc-500 text-xs mt-0.5">
+            {subscription.vendor} · {subscription.cadence === "MONTHLY" ? "Monthly" : "Annual"}
+            {subscription.renewalDate ? ` · renews ${subscription.renewalDate}` : ""}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <p className="text-white font-bold text-sm">{formatCurrency(subscription.amount, subscription.currency)}</p>
+          <span className="text-zinc-600" aria-hidden="true">→</span>
+        </div>
+      </Link>
       <div className="flex shrink-0 items-center gap-2">
-        <p className="text-white font-bold text-sm">{formatCurrency(subscription.amount, subscription.currency)}</p>
         {subscription.status === "ACTIVE" ? (
           <>
             <button type="button" onClick={openModal} disabled={isPending} className="rounded-lg border border-cyan-700/50 bg-cyan-950/30 text-cyan-300 hover:bg-cyan-900/40 font-semibold px-2.5 py-1 text-xs transition-colors disabled:opacity-50">

@@ -5,6 +5,7 @@ import "server-only";
 import { getAuthenticatedDb } from "@/db";
 import { clients, crmEvents, projects, videoLogs } from "@/db/schema";
 import { desc, eq, ne, sql } from "drizzle-orm";
+import { getLastActiveByProject } from "../work-sessions/data";
 import { revalidatePath } from "next/cache";
 import {
   isPositiveId,
@@ -32,10 +33,14 @@ export async function getProjectWorkspace(projectId: number) {
       id: projects.id,
       clientId: projects.clientId,
       clientName: clients.name,
+      // Sprint 3 P1: cover fallback chain tier 3 -- see
+      // modules/media/core.ts.
+      clientAvatarUrl: clients.instagramProfilePictureUrl,
       name: projects.name,
       status: projects.status,
       deadline: projects.deadline,
       notes: projects.notes,
+      coverUrl: projects.coverUrl,
       createdAt: projects.createdAt,
       updatedAt: projects.updatedAt,
     })
@@ -55,7 +60,14 @@ export async function getProjectWorkspace(projectId: number) {
       deliveryUrl: videoLogs.deliveryUrl,
       reviewUrl: videoLogs.reviewUrl,
       publishedUrl: videoLogs.publishedUrl,
+      coverUrl: videoLogs.coverUrl,
+      orientation: videoLogs.orientation,
       batchLabel: videoLogs.batchLabel,
+      // Quick Morning Reality Patch §4/§7: read-only here (priority is
+      // client-settable, see PriorityToggle) -- the operator command-card
+      // view just needs to display the same canonical state the client
+      // sees, never a second copy of it.
+      isPriority: videoLogs.isPriority,
       createdAt: videoLogs.createdAt,
       updatedAt: videoLogs.updatedAt,
     })
@@ -95,6 +107,10 @@ export async function getProjectsForClient(clientId: number) {
         status: videoLogs.status,
         revisionsCount: videoLogs.revisionsCount,
         delivered: videoLogs.delivered,
+        coverUrl: videoLogs.coverUrl,
+        // Lunch Reality Patch P1 §7: client-settable "priority now" video,
+        // reflected read-only here for the operator.
+        isPriority: videoLogs.isPriority,
       })
       .from(videoLogs)
       .where(eq(videoLogs.clientId, clientId))
@@ -103,21 +119,30 @@ export async function getProjectsForClient(clientId: number) {
 
   return projectRows.map((project) => ({
     ...project,
-    videos: videoRows.filter((video) => video.projectId === project.id),
+    // Priority video floats to the front (stable sort -- otherwise
+    // preserves the existing most-recent-first order) so it's always
+    // visible in ProjectManager's slice(0, 6) preview, never pushed off
+    // by newer non-priority videos.
+    videos: videoRows
+      .filter((video) => video.projectId === project.id)
+      .sort((a, b) => Number(b.isPriority) - Number(a.isPriority)),
   }));
 }
 
 export async function getProjectsOverview() {
   const db = await getAuthenticatedDb();
-  const rows = await db
+  const [rows, lastActiveByProject] = await Promise.all([
+    db
     .select({
       id: projects.id,
       clientId: projects.clientId,
       clientName: clients.name,
+      clientAvatarUrl: clients.instagramProfilePictureUrl,
       name: projects.name,
       status: projects.status,
       deadline: projects.deadline,
       notes: projects.notes,
+      coverUrl: projects.coverUrl,
       updatedAt: projects.updatedAt,
       totalVideos: sql<number>`count(${videoLogs.id})`,
       doneVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'DONE' then 1 else 0 end), 0)`,
@@ -133,7 +158,9 @@ export async function getProjectsOverview() {
     // untouched and always works regardless of archival state.
     .where(ne(clients.archivalState, "GELADEIRA"))
     .groupBy(projects.id, clients.id)
-    .orderBy(desc(projects.updatedAt), desc(projects.id));
+    .orderBy(desc(projects.updatedAt), desc(projects.id)),
+    getLastActiveByProject(),
+  ]);
 
   return rows.map((row) => ({
     ...row,
@@ -141,6 +168,10 @@ export async function getProjectsOverview() {
     doneVideos: Number(row.doneVideos),
     inFlightVideos: Number(row.inFlightVideos),
     plannedVideos: Number(row.plannedVideos),
+    // MICRO PATCH §2: derived from explicit attributable Work Sessions
+    // only, unbounded lookback (a project touched 40+ days ago must still
+    // report its real date) -- never a persisted counter.
+    lastActiveAt: lastActiveByProject.get(row.id) ?? null,
   }));
 }
 
@@ -151,6 +182,7 @@ export async function createProject(
     status: string;
     deadline?: string;
     notes?: string;
+    coverUrl?: string;
   },
 ): Promise<ProjectActionResult> {
   if (!isPositiveId(clientId)) {
@@ -205,6 +237,7 @@ export async function updateProject(
     status: string;
     deadline?: string;
     notes?: string;
+    coverUrl?: string;
   },
 ): Promise<ProjectActionResult> {
   if (!isPositiveId(projectId)) {

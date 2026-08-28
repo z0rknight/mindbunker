@@ -33,7 +33,7 @@ export default async function ClientLoginPage() {
       <section className="relative w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-2xl shadow-black/60 backdrop-blur-xl sm:p-8">
         <div className="mb-7 flex items-center justify-between">
           <Image
-            src="/mindbunker/mindbunker-access-logo.svg"
+            src="/mindbunker/rmedia-client-logo.svg"
             alt="RMEDIA"
             width={560}
             height={144}
@@ -47,10 +47,10 @@ export default async function ClientLoginPage() {
 
         <div className="border-t border-zinc-800 pt-7">
           <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
-            Your client portal.
+            Client Portal
           </h1>
           <p className="mt-2 max-w-sm text-sm leading-6 text-zinc-500">
-            See what RMEDIA is producing for you, review what&apos;s ready, and revisit past deliveries.
+            Your content. Your projects. Your reviews.
           </p>
         </div>
 

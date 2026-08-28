@@ -6,7 +6,7 @@ import { getAuthenticatedDb } from "@/db";
 import { caffeineEvents } from "@/db/schema";
 import { gte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { nowBrazil, daysAgoISO } from "@/utils/date";
+import { daysAgoISO } from "@/utils/date";
 import {
   caffeineDayKey,
   computeCaffeineSummary,
@@ -52,9 +52,24 @@ async function fetchCaffeineDayCounts(
 
 // 8 days back always covers "this week" (Monday-start) even when today is
 // a Sunday.
+//
+// NIGHT SHIFT REALITY PATCH — P0 bug fix: this used to compute todayKey via
+// caffeineDayKey(nowBrazil().toISOString()). nowBrazil() already fakes a
+// -3h shift (it returns a Date whose UTC-labeled ISO string reads as
+// Brazil's wall clock -- see the comment on nowBrazil() in utils/date.ts),
+// but caffeineDayKey() does its OWN correct America/Sao_Paulo conversion
+// via Intl on top of whatever real UTC instant it's given. Feeding
+// nowBrazil()'s already-shifted value into it double-shifted the day
+// boundary by another 3 hours -- so a coffee logged shortly after real
+// Brazil midnight (e.g. 00:15) resolved todayKey to the PREVIOUS calendar
+// day, and "today's" count silently looked up yesterday's bucket instead.
+// The individual events were always bucketed correctly (fetchCaffeineDayCounts
+// calls caffeineDayKey on the event's own real timestamp) -- only this
+// "what day is today" resolution was wrong. Fix: feed caffeineDayKey the
+// real current UTC instant directly; it does the correct conversion itself.
 export async function getCaffeineSummary() {
   const counts = await fetchCaffeineDayCounts(8);
-  const todayKey = caffeineDayKey(nowBrazil().toISOString());
+  const todayKey = caffeineDayKey(new Date().toISOString());
   return computeCaffeineSummary(counts, todayKey);
 }
 

@@ -7,11 +7,13 @@
  */
 
 import { getAuthenticatedDb } from "@/db";
-import { transactions, videoLogs, clients, healthLogs, caffeineEvents } from "@/db/schema";
+import { isInternalClientName } from "@/lib/client-identity";
+import { transactions, videoLogs, clients, healthLogs, caffeineEvents, projects } from "@/db/schema";
+import { DEFAULT_CURRENCY } from "@/modules/finance/config";
 import { gte } from "drizzle-orm";
 import { startOfMonthISO, daysAgoISO } from "@/utils/date";
 import { completedVideoLogs } from "@/modules/productivity/core";
-import { caffeineDayKey, reconcileDailyCaffeineMg } from "@/modules/caffeine/core";
+import { caffeineDayKey, reconcileDailyCaffeineMg, computeCoffeesPerVideo } from "@/modules/caffeine/core";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -26,8 +28,15 @@ export interface IncomeIntelligence {
   onTrack: boolean;
   /** Revenue per video this month (flat-rate leverage metric) */
   effectiveFlatRateYield: number | null;
-  /** Top 5 clients by revenue */
-  topClientsByRevenue: Array<{ name: string; revenue: number; projects: number; effectiveYield: number | null }>;
+  /** Top 5 (client, currency) entries by revenue -- never summed across
+   * currencies for one client; see getWarRoomAnalytics for the note. */
+  topClientsByRevenue: Array<{
+    name: string;
+    currency: string;
+    revenue: number;
+    projects: number;
+    effectiveYield: number | null;
+  }>;
   /** Revenue per video (all time) */
   revenuePerVideoAllTime: number | null;
 }
@@ -45,8 +54,15 @@ export interface EfficiencyMetrics {
   videosPerActiveClient: number | null;
   /** Active client count */
   activeClientCount: number;
-  /** Client drain ranking: top 5 clients sorted by lowest effective yield */
-  clientDrainRanking: Array<{ name: string; revenue: number; projects: number; effectiveYield: number | null }>;
+  /** Client drain ranking: top 5 (client, currency) entries sorted by
+   * lowest effective yield -- see topClientsByRevenue's note above. */
+  clientDrainRanking: Array<{
+    name: string;
+    currency: string;
+    revenue: number;
+    projects: number;
+    effectiveYield: number | null;
+  }>;
 }
 
 export interface BiologicalCorrelation {
@@ -58,8 +74,13 @@ export interface BiologicalCorrelation {
   avgVideosVampireNights: number | null;
   /** Total caffeine this month (mg) */
   totalCaffeineMonth: number;
-  /** Caffeine per revenue ratio (mg / R$) */
-  caffeinePerRevenue: number | null;
+  /** Total quick-logged coffees (servings) this month -- no mg inference,
+   *  same honest source as "Coffees Today/This Week". */
+  totalCoffeesMonth: number;
+  /** Coffees per completed video this month. Lunch Reality Patch P1 §6:
+   *  replaces the old mg/R$ "Caffeine Ratio". Null when no videos
+   *  completed this month yet, never a fake 0. */
+  coffeesPerVideo: number | null;
   /** Crash detector: true if 2+ nights <5h sleep AND output declining */
   crashDetected: boolean;
   /** Crash detector details */
@@ -201,6 +222,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
     allTransactions,
     allVideoLogs,
     allClients,
+    allProjectRows,
     last30HealthLogs,
     last7HealthLogs,
     thisMonthCaffeineEvents,
@@ -208,6 +230,10 @@ export async function getWarRoomData(): Promise<WarRoomData> {
     db.select().from(transactions),
     db.select().from(videoLogs),
     db.select().from(clients),
+    // Sprint 3 P2 (fixes the confirmed stale clients.totalProjects /
+    // totalRevenue usage below -- same root cause as the CRM Client
+    // Intelligence P0 fix).
+    db.select({ id: projects.id, clientId: projects.clientId }).from(projects),
     db.select().from(healthLogs).where(gte(healthLogs.date, thirtyDaysAgo)),
     db.select().from(healthLogs).where(gte(healthLogs.date, sevenDaysAgo)),
     db
@@ -230,9 +256,57 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   // status === "active"; now also excludes Geladeira clients so an
   // archived-but-still-status-active client stops appearing in top-client
   // revenue rankings and client-drain ranking once archived.
+  // Quick Morning Reality Patch §6: RMEDIA's own internal `clients` row
+  // (used to log internal Operations/Marketing/Administration/Product
+  // work) is not a real client relationship -- excluded the same way
+  // Geladeira clients are, so it never appears in "Top Clients by
+  // Revenue" or the client-drain ranking below. Name-based, presentation
+  // scoped to this War Room read model only; no schema change.
   const activeClients = allClients.filter(
-    (c) => c.status === "active" && c.archivalState !== "GELADEIRA",
+    (c) => c.status === "active" && c.archivalState !== "GELADEIRA" && !isInternalClientName(c.name),
   );
+
+  // Sprint 3 P2: live project counts and per-currency income, replacing
+  // the stale clients.totalProjects / clients.totalRevenue columns (see
+  // getClientIntelligence in modules/crm/actions.ts for the full
+  // root-cause note -- same bug, different surface). Both maps are
+  // built once here from data already fetched above, no extra queries.
+  const projectCountByClientId = new Map<number, number>();
+  for (const row of allProjectRows) {
+    projectCountByClientId.set(
+      row.clientId,
+      (projectCountByClientId.get(row.clientId) ?? 0) + 1,
+    );
+  }
+  const incomeByClientCurrency = new Map<number, Map<string, number>>();
+  for (const t of allTransactions) {
+    if (t.type !== "income" || t.clientId === null) continue;
+    const byCurrency = incomeByClientCurrency.get(t.clientId) ?? new Map<string, number>();
+    byCurrency.set(t.currency, (byCurrency.get(t.currency) ?? 0) + t.amount);
+    incomeByClientCurrency.set(t.clientId, byCurrency);
+  }
+  // One entry per (active client, currency they actually have income in) --
+  // never merged across currencies. A client with zero recorded income
+  // still gets exactly one entry at revenue 0 (DEFAULT_CURRENCY is just a
+  // label here since zero is zero in any currency), so clients aren't
+  // silently dropped from ranking coverage.
+  function clientRevenueEntries() {
+    return activeClients.flatMap((c) => {
+      const projectsCount = projectCountByClientId.get(c.id) ?? 0;
+      const byCurrency = incomeByClientCurrency.get(c.id);
+      const currencyRows =
+        byCurrency && byCurrency.size > 0
+          ? Array.from(byCurrency, ([currency, revenue]) => ({ currency, revenue }))
+          : [{ currency: DEFAULT_CURRENCY, revenue: 0 }];
+      return currencyRows.map(({ currency, revenue }) => ({
+        name: c.name,
+        currency,
+        revenue,
+        projects: projectsCount,
+        effectiveYield: projectsCount > 0 ? Math.round(revenue / projectsCount) : null,
+      }));
+    });
+  }
 
   // ── INCOME INTELLIGENCE ───────────────────────────────────────────────────
 
@@ -267,17 +341,15 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       ? Math.round(allTimeRevenue / allCompletedVideos.length)
       : null;
 
-  // Top clients by revenue (from CRM totalRevenue field)
-  const topClientsByRevenue = [...activeClients]
-    .sort((a, b) => b.totalRevenue - a.totalRevenue)
-    .slice(0, 5)
-    .map((c) => ({
-      name: c.name,
-      revenue: c.totalRevenue,
-      projects: c.totalProjects,
-      effectiveYield:
-        c.totalProjects > 0 ? Math.round(c.totalRevenue / c.totalProjects) : null,
-    }));
+  // Top (client, currency) entries by revenue -- see clientRevenueEntries
+  // above. Sorting mixed currencies together by raw amount is a known,
+  // narrow simplification (a $500 entry outranks a R$2000 entry) rather
+  // than an invented FX conversion -- Sprint C's FX ledger is the correct
+  // place to make these comparable; not fabricated here.
+  const topClientsByRevenue = clientRevenueEntries()
+    .filter((entry) => entry.revenue > 0)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 5);
 
   // ── EFFICIENCY METRICS ────────────────────────────────────────────────────
 
@@ -306,15 +378,10 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       ? Math.round((thisMonthVideoCount / activeClients.length) * 10) / 10
       : null;
 
-  // Client drain ranking: sorted by lowest effective yield (most draining first)
-  const clientDrainRanking = [...activeClients]
-    .map((c) => ({
-      name: c.name,
-      revenue: c.totalRevenue,
-      projects: c.totalProjects,
-      effectiveYield:
-        c.totalProjects > 0 ? Math.round(c.totalRevenue / c.totalProjects) : null,
-    }))
+  // Client drain ranking: sorted by lowest effective yield (most draining
+  // first) -- see clientRevenueEntries above and the currency-mixing note
+  // on topClientsByRevenue, which applies here too.
+  const clientDrainRanking = clientRevenueEntries()
     .sort((a, b) => {
       if (a.effectiveYield === null) return -1;
       if (b.effectiveYield === null) return 1;
@@ -386,10 +453,11 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       ),
     0,
   );
-  const caffeinePerRevenue =
-    monthlyRevenue > 0
-      ? Math.round((totalCaffeineMonth / monthlyRevenue) * 100) / 100
-      : null;
+  const totalCoffeesMonth = Array.from(quickLogServingsByDay.values()).reduce(
+    (sum, servings) => sum + servings,
+    0,
+  );
+  const coffeesPerVideo = computeCoffeesPerVideo(totalCoffeesMonth, thisMonthVideos.length);
 
   // Crash detector: 2+ nights <5h sleep in last 7 days AND output declining
   const recentSleepLogs = last7HealthLogs.filter(
@@ -561,7 +629,8 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       avgVideosCrashSleep,
       avgVideosVampireNights,
       totalCaffeineMonth,
-      caffeinePerRevenue,
+      totalCoffeesMonth,
+      coffeesPerVideo,
       crashDetected,
       crashReason,
       physicalActivityScore,

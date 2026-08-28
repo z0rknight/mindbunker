@@ -4,10 +4,13 @@ import test from "node:test";
 import {
   buildBillingEvidenceIdempotencyKey,
   computeReconciliation,
+  computeFinanceSummaryByCurrency,
   computeRmediaCashSummary,
+  convertUsdToBrl,
   formatMinutesAsHours,
   validateBillingEvidenceInput,
   validateContractInput,
+  computeRateEquivalent,
 } from "./core.ts";
 
 // Real Taryn Dubreuil / Upwork fixture from the Monday Money Lab P0 brief:
@@ -133,6 +136,32 @@ test("computeRmediaCashSummary: Owner Pay reduces Business Cash without touching
   // Tax Reserve is still derived from income only, not from what's left.
   assert.equal(summary.taxReserve, 100);
   assert.equal(summary.availableBusinessCash, 550);
+});
+
+test("finance summary never lets a BRL expense alter the USD ledger", () => {
+  const result = computeFinanceSummaryByCurrency([
+    { type: "income", amount: 343.75, currency: "USD", date: "2026-08-24" },
+    { type: "owner_pay", amount: 140, currency: "USD", date: "2026-08-24" },
+    { type: "expense", amount: 100, currency: "BRL", date: "2026-08-24" },
+  ], "2026-08-01");
+
+  assert.deepEqual(result, [
+    { currency: "BRL", monthlyRevenue: 0, monthlyExpenses: 100, monthlyNet: -100, currentBalance: -100 },
+    { currency: "USD", monthlyRevenue: 343.75, monthlyExpenses: 0, monthlyNet: 343.75, currentBalance: 203.75 },
+  ]);
+});
+
+test("equal numeric amounts in different currencies remain separate", () => {
+  const result = computeFinanceSummaryByCurrency([
+    { type: "income", amount: 100, currency: "USD", date: "2026-08-24" },
+    { type: "expense", amount: 100, currency: "BRL", date: "2026-08-24" },
+  ], "2026-08-01");
+  assert.equal(result.find((row) => row.currency === "USD")?.currentBalance, 100);
+  assert.equal(result.find((row) => row.currency === "BRL")?.currentBalance, -100);
+});
+
+test("effective FX converts USD to BRL only in an explicit derived view", () => {
+  assert.equal(convertUsdToBrl(203.75), 1039.13);
 });
 
 test("validateContractInput enforces the real Taryn fixture shape", () => {
@@ -361,4 +390,78 @@ test("validateSubscriptionInput enforces required fields and a real cadence", ()
   assert.equal(validateSubscriptionInput(good), null);
   assert.match(validateSubscriptionInput({ ...good, cadence: "WEEKLY" }) ?? "", /MONTHLY or ANNUAL/i);
   assert.match(validateSubscriptionInput({ ...good, amount: 0 }) ?? "", /positive/i);
+});
+
+// ─── NIGHT SHIFT REALITY PATCH §6: rate-equivalent ─────────────────────────
+
+test("computeRateEquivalent: matches the brief's worked example (3h attributable at $25/h = $75)", () => {
+  const result = computeRateEquivalent(3 * 3600, 25, "USD");
+  assert.equal(result.rateEquivalent, 75);
+  assert.equal(result.currency, "USD");
+  assert.equal(result.hourlyRate, 25);
+});
+
+test("computeRateEquivalent: fractional hours round to cents, never to a whole dollar", () => {
+  // 3h02m = 3.0333...h at $25/h = $75.8333... -> $75.83
+  const result = computeRateEquivalent(3 * 3600 + 2 * 60, 25, "USD");
+  assert.equal(result.rateEquivalent, 75.83);
+});
+
+test("computeRateEquivalent: zero attributable seconds is zero, not omitted or null", () => {
+  assert.equal(computeRateEquivalent(0, 25, "USD").rateEquivalent, 0);
+});
+
+test("computeRateEquivalent: currency is preserved, never converted", () => {
+  const result = computeRateEquivalent(3600, 100, "BRL");
+  assert.equal(result.currency, "BRL");
+  assert.equal(result.rateEquivalent, 100);
+});
+
+test("business FX moves cash between currencies without touching revenue or expenses", () => {
+  const summary = computeFinanceSummaryByCurrency(
+    [
+      { type: "income", amount: 203.75, currency: "USD", date: "2026-08-24" },
+    ],
+    "2026-08-01",
+    [
+      { currency: "USD", amount: -100 },
+      { currency: "BRL", amount: 510 },
+    ],
+  );
+
+  assert.deepEqual(summary, [
+    {
+      currency: "BRL",
+      monthlyRevenue: 0,
+      monthlyExpenses: 0,
+      monthlyNet: 0,
+      currentBalance: 510,
+    },
+    {
+      currency: "USD",
+      monthlyRevenue: 203.75,
+      monthlyExpenses: 0,
+      monthlyNet: 203.75,
+      currentBalance: 103.75,
+    },
+  ]);
+});
+
+test("a BRL subscription charge reduces converted BRL cash and creates a BRL expense only", () => {
+  const summary = computeFinanceSummaryByCurrency(
+    [
+      { type: "income", amount: 203.75, currency: "USD", date: "2026-08-24" },
+      { type: "expense", amount: 250, currency: "BRL", date: "2026-08-25" },
+    ],
+    "2026-08-01",
+    [
+      { currency: "USD", amount: -100 },
+      { currency: "BRL", amount: 510 },
+    ],
+  );
+
+  assert.equal(summary.find((row) => row.currency === "BRL")?.currentBalance, 260);
+  assert.equal(summary.find((row) => row.currency === "BRL")?.monthlyExpenses, 250);
+  assert.equal(summary.find((row) => row.currency === "USD")?.currentBalance, 103.75);
+  assert.equal(summary.find((row) => row.currency === "USD")?.monthlyExpenses, 0);
 });

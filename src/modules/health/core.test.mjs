@@ -4,7 +4,73 @@ import test from "node:test";
 import {
   buildActivityTimelineDays,
   groupTimelineDaysIntoWeekColumns,
+  isValidHealthDate,
+  validateHealthLogMutableValues,
 } from "./core.ts";
+
+test("historical health dates stay exact calendar strings without timezone shifting", () => {
+  assert.equal(isValidHealthDate("2026-08-23"), true);
+  const parsed = validateHealthLogMutableValues({
+    date: "2026-08-23",
+    sleepHours: 7.5,
+    caffeineMg: 100,
+    substancesNotes: null,
+    screenTimeHours: 5,
+    cyclingKm: null,
+    cyclingMinutes: null,
+    walkingMinutes: 42,
+  });
+  assert.equal(parsed.success, true);
+  assert.equal(parsed.data.date, "2026-08-23");
+});
+
+test("health date validation rejects impossible or shifted-looking dates", () => {
+  assert.equal(isValidHealthDate("2026-02-29"), false);
+  assert.equal(isValidHealthDate("2026-8-23"), false);
+  assert.equal(isValidHealthDate("2026-08-23T00:00:00Z"), false);
+});
+
+test("health corrections contain only editable facts and preserve system identity fields", () => {
+  const parsed = validateHealthLogMutableValues({
+    id: 99,
+    date: "2026-08-24",
+    sleepHours: null,
+    caffeineMg: null,
+    substancesNotes: " corrected ",
+    screenTimeHours: null,
+    cyclingKm: 12.5,
+    cyclingMinutes: 35,
+    walkingMinutes: null,
+    createdAt: new Date("2026-08-27T12:00:00Z"),
+  });
+  assert.equal(parsed.success, true);
+  assert.deepEqual(Object.keys(parsed.data), [
+    "date",
+    "sleepHours",
+    "caffeineMg",
+    "substancesNotes",
+    "screenTimeHours",
+    "cyclingKm",
+    "cyclingMinutes",
+    "walkingMinutes",
+  ]);
+  assert.equal(parsed.data.substancesNotes, "corrected");
+});
+
+test("health corrections reject invalid values before persistence", () => {
+  const parsed = validateHealthLogMutableValues({
+    date: "2026-08-24",
+    sleepHours: 25,
+    caffeineMg: null,
+    substancesNotes: null,
+    screenTimeHours: null,
+    cyclingKm: null,
+    cyclingMinutes: null,
+    walkingMinutes: null,
+  });
+  assert.equal(parsed.success, false);
+  assert.match(parsed.error, /Sleep/);
+});
 
 test("buildActivityTimelineDays pads back to the nearest Monday", () => {
   // 2026-08-27 is a Thursday; 7 days back is 2026-08-21 (Friday).

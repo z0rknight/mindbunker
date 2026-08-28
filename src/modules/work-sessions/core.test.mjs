@@ -18,6 +18,12 @@ import {
   isWorkSessionSource,
   isWorkSessionVideoId,
   toUnixSeconds,
+  computeProjectStreaks,
+  sortProjectStreaks,
+  computeTodayWorkSessionStats,
+  dayKeyFor,
+  formatLastActive,
+  mondayOfWeek,
   validateSessionCorrection,
 } from "./core.ts";
 
@@ -31,6 +37,7 @@ test("the approved activity vocabulary validates explicitly", () => {
     "REVIEW",
     "EXPORT",
     "ADMIN",
+    "CLIENT_SERVICE",
     "OTHER",
   ]);
   for (const activity of WORK_SESSION_ACTIVITY_TYPES) {
@@ -359,4 +366,167 @@ test("Session Narrative returns notes oldest-first within a session", () => {
   const correlated = correlateSessionMemoryNotes(session, [later, earlier], "2026-08-24T00:00:00.000Z");
 
   assert.deepEqual(correlated.map((note) => note.id), [8, 7]);
+});
+
+// ─── NIGHT SHIFT REALITY PATCH §5: project day streaks ────────────────────
+
+test("computeProjectStreaks: consecutive days ending today produce the right streak length", () => {
+  const rows = [
+    { projectId: 1, projectName: "MINI SERIES", startedAt: "2026-08-23T14:00:00.000Z" }, // Aug 23 local
+    { projectId: 1, projectName: "MINI SERIES", startedAt: "2026-08-24T14:00:00.000Z" }, // Aug 24 local
+    { projectId: 1, projectName: "MINI SERIES", startedAt: "2026-08-25T14:00:00.000Z" }, // Aug 25 local
+  ];
+  const streaks = computeProjectStreaks(rows, "2026-08-25");
+  assert.equal(streaks.length, 1);
+  assert.equal(streaks[0].currentStreak, 3);
+  assert.equal(streaks[0].isActiveToday, true);
+});
+
+test("computeProjectStreaks: a gap breaks the streak", () => {
+  const rows = [
+    { projectId: 1, projectName: "MINI SERIES", startedAt: "2026-08-23T14:00:00.000Z" }, // Aug 23
+    // no Aug 24
+    { projectId: 1, projectName: "MINI SERIES", startedAt: "2026-08-25T14:00:00.000Z" }, // Aug 25 (today)
+  ];
+  const streaks = computeProjectStreaks(rows, "2026-08-25");
+  assert.equal(streaks[0].currentStreak, 1);
+});
+
+test("computeProjectStreaks: multiple sessions the same day still count as one active day", () => {
+  const rows = [
+    { projectId: 1, projectName: "MINI SERIES", startedAt: "2026-08-25T13:00:00.000Z" },
+    { projectId: 1, projectName: "MINI SERIES", startedAt: "2026-08-25T17:00:00.000Z" },
+    { projectId: 1, projectName: "MINI SERIES", startedAt: "2026-08-25T21:00:00.000Z" },
+  ];
+  const streaks = computeProjectStreaks(rows, "2026-08-25");
+  assert.equal(streaks[0].currentStreak, 1);
+});
+
+test("computeProjectStreaks: a project worked yesterday but not yet today still shows a streak of 1, not zero", () => {
+  const rows = [{ projectId: 1, projectName: "MINI SERIES", startedAt: "2026-08-24T14:00:00.000Z" }];
+  const streaks = computeProjectStreaks(rows, "2026-08-25");
+  assert.equal(streaks.length, 1);
+  assert.equal(streaks[0].currentStreak, 1);
+  assert.equal(streaks[0].isActiveToday, false);
+});
+
+test("computeProjectStreaks: a project not worked in 2+ days produces no streak at all", () => {
+  const rows = [{ projectId: 1, projectName: "MINI SERIES", startedAt: "2026-08-20T14:00:00.000Z" }];
+  const streaks = computeProjectStreaks(rows, "2026-08-25");
+  assert.equal(streaks.length, 0);
+});
+
+test("computeProjectStreaks: rows with no project attribution never create a streak", () => {
+  const rows = [{ projectId: null, projectName: null, startedAt: "2026-08-25T14:00:00.000Z" }];
+  const streaks = computeProjectStreaks(rows, "2026-08-25");
+  assert.equal(streaks.length, 0);
+});
+
+test("sortProjectStreaks: active-today first, then longest streak, then most recent", () => {
+  const streaks = [
+    { projectId: 1, projectName: "A", currentStreak: 1, lastActiveDayKey: "2026-08-24", isActiveToday: false },
+    { projectId: 2, projectName: "B", currentStreak: 3, lastActiveDayKey: "2026-08-25", isActiveToday: true },
+    { projectId: 3, projectName: "C", currentStreak: 5, lastActiveDayKey: "2026-08-24", isActiveToday: false },
+  ];
+  const sorted = sortProjectStreaks(streaks);
+  assert.deepEqual(sorted.map((s) => s.projectId), [2, 3, 1]); // active-today wins over a longer stale streak
+});
+
+// ─── NIGHT SHIFT REALITY PATCH §6/§9: today's work session stats ─────────
+
+test("computeTodayWorkSessionStats: only counts sessions whose local day matches todayKey", () => {
+  const rows = [
+    { projectId: 1, projectName: "P", clientId: 1, clientName: "Taryn", startedAt: "2026-08-24T14:00:00.000Z", durationSeconds: 3600 },
+    { projectId: 1, projectName: "P", clientId: 1, clientName: "Taryn", startedAt: "2026-08-25T14:00:00.000Z", durationSeconds: 1800 },
+  ];
+  const stats = computeTodayWorkSessionStats(rows, "2026-08-25");
+  assert.equal(stats.totalSeconds, 1800);
+  assert.equal(stats.sessionCount, 1);
+});
+
+test("computeTodayWorkSessionStats: groups seconds by client, excludes null-client sessions from byClient", () => {
+  const rows = [
+    { projectId: 1, projectName: "P", clientId: 1, clientName: "Taryn", startedAt: "2026-08-25T14:00:00.000Z", durationSeconds: 3600 },
+    { projectId: 1, projectName: "P", clientId: 1, clientName: "Taryn", startedAt: "2026-08-25T18:00:00.000Z", durationSeconds: 1800 },
+    { projectId: null, projectName: null, clientId: null, clientName: null, startedAt: "2026-08-25T20:00:00.000Z", durationSeconds: 600 },
+  ];
+  const stats = computeTodayWorkSessionStats(rows, "2026-08-25");
+  assert.equal(stats.totalSeconds, 6000);
+  assert.equal(stats.sessionCount, 3);
+  assert.deepEqual(stats.byClient, [{ clientId: 1, clientName: "Taryn", seconds: 5400 }]);
+});
+
+test("computeTodayWorkSessionStats: a boundary event just after local midnight belongs to the new day", () => {
+  // 2026-08-25T03:01:00Z = Brazil 2026-08-25T00:01 local -- new day.
+  const rows = [
+    { projectId: 1, projectName: "P", clientId: null, clientName: null, startedAt: "2026-08-25T03:01:00.000Z", durationSeconds: 300 },
+  ];
+  assert.equal(computeTodayWorkSessionStats(rows, "2026-08-24").totalSeconds, 0);
+  assert.equal(computeTodayWorkSessionStats(rows, "2026-08-25").totalSeconds, 300);
+});
+
+test("dayKeyFor buckets by America/Sao_Paulo day, matching caffeine's convention", () => {
+  assert.equal(dayKeyFor("2026-08-25T02:59:00.000Z"), "2026-08-24");
+  assert.equal(dayKeyFor("2026-08-25T03:01:00.000Z"), "2026-08-25");
+});
+
+
+// NIGHT SHIFT REALITY PATCH §10: "This Week" must consistently mean the
+// Monday-anchored local calendar week everywhere it's used (Work Session
+// ledger, caffeine weekCount, client-portal completedThisWeek, and now
+// productivity/actions.ts's getVideoStats -- previously a rolling
+// trailing-7-days window there, a confirmed label/query mismatch fixed
+// this round).
+test("mondayOfWeek anchors a mid-week day back to that week's Monday", () => {
+  // 2026-08-26 is a Wednesday.
+  assert.equal(mondayOfWeek("2026-08-26"), "2026-08-24");
+});
+
+test("mondayOfWeek is idempotent on a Monday itself", () => {
+  assert.equal(mondayOfWeek("2026-08-24"), "2026-08-24");
+});
+
+test("mondayOfWeek rolls a Sunday back to the Monday that started its week, not the next one", () => {
+  assert.equal(mondayOfWeek("2026-08-30"), "2026-08-24");
+});
+
+
+// MICRO PATCH §2: "Last active" relative label.
+test("formatLastActive: under an hour ago is Just now", () => {
+  assert.equal(
+    formatLastActive("2026-08-25T14:50:00.000Z", "2026-08-25T15:00:00.000Z"),
+    "Just now",
+  );
+});
+
+test("formatLastActive: same local day, hours ago", () => {
+  // Both instants fall on Brazil-local 2026-08-25.
+  assert.equal(
+    formatLastActive("2026-08-25T13:00:00.000Z", "2026-08-25T15:00:00.000Z"),
+    "2h ago",
+  );
+});
+
+test("formatLastActive: yesterday local day", () => {
+  // 2026-08-24T23:00Z = Brazil 2026-08-24T20:00 (yesterday); now is Brazil 2026-08-25 midday.
+  assert.equal(
+    formatLastActive("2026-08-24T23:00:00.000Z", "2026-08-25T15:00:00.000Z"),
+    "Yesterday",
+  );
+});
+
+test("formatLastActive: older than yesterday falls back to an absolute date", () => {
+  assert.equal(
+    formatLastActive("2026-08-18T15:00:00.000Z", "2026-08-25T15:00:00.000Z"),
+    "Aug 18",
+  );
+});
+
+test("formatLastActive: a late-night local session just after midnight still reads as Just now / today, not yesterday", () => {
+  // Real UTC 2026-08-25T03:05Z = Brazil 2026-08-25T00:05 -- a new local day.
+  // "Now" is 10 minutes later, same real UTC/local day.
+  assert.equal(
+    formatLastActive("2026-08-25T03:05:00.000Z", "2026-08-25T03:15:00.000Z"),
+    "Just now",
+  );
 });

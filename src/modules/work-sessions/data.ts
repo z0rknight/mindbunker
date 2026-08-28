@@ -5,19 +5,28 @@ import { getVideoOperationalMemoryForVideos } from "@/modules/video-memory/actio
 import {
   OPEN_WORK_SESSION_SQL,
   VIDEO_WORK_SESSION_SUMMARY_SQL,
+  WORK_SESSION_ATTRIBUTION_SQL,
   WORK_SESSION_BY_ID_SQL,
   WORK_SESSION_HISTORY_SQL,
   WORK_SESSION_OVERVIEW_SQL,
+  computeProjectStreaks,
+  computeTodayWorkSessionStats,
   correlateSessionMemoryNotes,
+  dayKeyFor,
   isSessionStale,
   isWorkSessionActivityType,
   isWorkSessionSource,
   isWorkSessionVideoId,
+  sortProjectStreaks,
+  toUnixSeconds,
   type CorrelatedMemoryNote,
   type OpenWorkSession,
+  type ProjectStreak,
   type SessionCorrectionBefore,
+  type TodayWorkSessionStats,
   type VideoWorkSessionState,
   type VideoWorkSessionSummary,
+  type WorkSessionAttributionRow,
   type WorkSessionHistoryEntry,
 } from "./core";
 
@@ -31,8 +40,11 @@ type RawOpenSessionRow = {
   id: number;
   video_id: number;
   video_title: string;
+  client_name: string | null;
+  project_name: string | null;
   activity_type: string;
   started_at: number;
+  device_name: string | null;
 };
 
 type RawHistoryRow = {
@@ -77,8 +89,11 @@ function mapOpenSession(row: RawOpenSessionRow | null): OpenWorkSession | null {
     id: Number(row.id),
     videoId: Number(row.video_id),
     videoTitle: row.video_title,
+    clientName: row.client_name,
+    projectName: row.project_name,
     activityType: row.activity_type,
     startedAt: new Date(Number(row.started_at) * 1_000).toISOString(),
+    deviceName: row.device_name,
   };
 }
 
@@ -296,4 +311,116 @@ export async function getSessionNarratives(
     }
   }
   return result;
+}
+
+// ─── NIGHT SHIFT REALITY PATCH §5/§6/§9 ────────────────────────────────────
+
+type RawAttributionRow = {
+  started_at: number;
+  ended_at: number;
+  project_id: number | null;
+  project_name: string | null;
+  client_id: number | null;
+  client_name: string | null;
+};
+
+const ATTRIBUTION_LOOKBACK_DAYS = 35;
+
+async function fetchAttributionRows(): Promise<WorkSessionAttributionRow[]> {
+  const db = await getAuthenticatedDb();
+  const cutoff = toUnixSeconds(
+    new Date(Date.now() - ATTRIBUTION_LOOKBACK_DAYS * 24 * 60 * 60 * 1_000),
+  );
+  const result = await db.$client
+    .prepare(WORK_SESSION_ATTRIBUTION_SQL)
+    .bind(cutoff)
+    .all<RawAttributionRow>();
+  return result.results.map((row) => ({
+    projectId: row.project_id === null ? null : Number(row.project_id),
+    projectName: row.project_name,
+    clientId: row.client_id === null ? null : Number(row.client_id),
+    clientName: row.client_name,
+    startedAt: new Date(Number(row.started_at) * 1_000).toISOString(),
+    durationSeconds: Math.max(0, Number(row.ended_at) - Number(row.started_at)),
+  }));
+}
+
+// §5: top-N project streaks for Home "Momentum". Derived entirely from
+// canonical Work Session history within a 35-day lookback -- no persisted
+// streak counter, so it can never drift from the real ledger.
+export async function getProjectStreaks(limit = 3): Promise<ProjectStreak[]> {
+  const rows = await fetchAttributionRows();
+  const todayKey = dayKeyFor(new Date().toISOString());
+  return sortProjectStreaks(computeProjectStreaks(rows, todayKey)).slice(0, limit);
+}
+
+// §6/§9: today's attributable work -- total duration, session count, and
+// per-client seconds (the latter feeds Finance's rate-equivalent). "Today"
+// is resolved the same way everywhere in this patch: dayKeyFor on each
+// session's own started_at, in America/Sao_Paulo, never SQLite's UTC date().
+// An open session's live elapsed time is folded in only when that session
+// itself started today -- so the Home "Today" total reflects what's
+// actually happening right now, not just closed history.
+export async function getTodayWorkSessionStats(): Promise<TodayWorkSessionStats> {
+  const [rows, overview] = await Promise.all([
+    fetchAttributionRows(),
+    getWorkSessionOverview(),
+  ]);
+  const todayKey = dayKeyFor(new Date().toISOString());
+  const stats = computeTodayWorkSessionStats(rows, todayKey);
+
+  if (overview.openSession && dayKeyFor(overview.openSession.startedAt) === todayKey) {
+    stats.totalSeconds += overview.openSessionElapsedSeconds;
+    stats.sessionCount += 1;
+  }
+  return stats;
+}
+
+
+// ─── MICRO PATCH §2: Last Active (Projects / CRM) ──────────────────────────
+// Deliberately NOT reusing fetchAttributionRows()/ATTRIBUTION_LOOKBACK_DAYS
+// above -- that 35-day window is correct for streaks (a stale streak
+// *should* disappear) but wrong here: a project genuinely last touched 40
+// days ago must still report its real last-active date, not look
+// indistinguishable from "never worked." These are separate, unbounded,
+// one-shot MAX(started_at) GROUP BY queries -- no N+1, one call each,
+// batched into the existing overview fetches via Promise.all.
+
+const LAST_ACTIVE_BY_PROJECT_SQL = `
+  SELECT v.project_id AS group_id, MAX(ws.started_at) AS last_active_at
+  FROM work_sessions ws
+  INNER JOIN video_logs v ON v.id = ws.video_id
+  WHERE ws.ended_at IS NOT NULL AND v.project_id IS NOT NULL
+  GROUP BY v.project_id
+`;
+
+const LAST_ACTIVE_BY_CLIENT_SQL = `
+  SELECT v.client_id AS group_id, MAX(ws.started_at) AS last_active_at
+  FROM work_sessions ws
+  INNER JOIN video_logs v ON v.id = ws.video_id
+  WHERE ws.ended_at IS NOT NULL AND v.client_id IS NOT NULL
+  GROUP BY v.client_id
+`;
+
+type RawLastActiveRow = { group_id: number; last_active_at: number };
+
+async function fetchLastActiveMap(sql: string): Promise<Map<number, string>> {
+  const db = await getAuthenticatedDb();
+  const result = await db.$client.prepare(sql).all<RawLastActiveRow>();
+  const map = new Map<number, string>();
+  for (const row of result.results) {
+    map.set(Number(row.group_id), new Date(Number(row.last_active_at) * 1_000).toISOString());
+  }
+  return map;
+}
+
+// Keyed by project_id -- one row per project that has at least one closed,
+// attributed Work Session, ever (not lookback-bounded).
+export async function getLastActiveByProject(): Promise<Map<number, string>> {
+  return fetchLastActiveMap(LAST_ACTIVE_BY_PROJECT_SQL);
+}
+
+// Keyed by client_id, same semantics.
+export async function getLastActiveByClient(): Promise<Map<number, string>> {
+  return fetchLastActiveMap(LAST_ACTIVE_BY_CLIENT_SQL);
 }

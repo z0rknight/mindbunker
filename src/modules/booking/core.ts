@@ -6,6 +6,14 @@ import {
   type BookingStatus,
 } from "./config.ts";
 import type { OpportunityStage } from "../gateway/config.ts";
+import { isServiceInterest } from "../gateway/core.ts";
+import type { ServiceInterest } from "../gateway/config.ts";
+
+// MICRO PATCH §4 (/book highlight): the crmEvents `type` written on every
+// public-intake submission (new lead or repeat), see submitPublicBookingRequest
+// in actions.ts. Exported so the "recent /book requests" query in
+// crm/actions.ts never drifts from the literal actions.ts actually writes.
+export const BOOK_REQUEST_EVENT_TYPE = "book_request_submitted";
 
 const MINUTE_IN_MILLISECONDS = 60_000;
 const HOUR_IN_MILLISECONDS = 60 * MINUTE_IN_MILLISECONDS;
@@ -53,6 +61,61 @@ export function cleanEmail(value: unknown) {
   if (typeof value !== "string") return null;
   const email = value.trim().toLowerCase().slice(0, 320);
   return EMAIL_PATTERN.test(email) ? email : null;
+}
+
+// Sprint 3 — /book public intake ("requesting contact," never an
+// automatic booked meeting -- see docs/architecture/SPRINT_3 brief. This
+// deliberately does NOT touch bookings/availabilityWindows: there is no
+// calendar slot picker here, just a lead-capture form). Reuses cleanEmail
+// and the existing ServiceInterest vocabulary rather than inventing a
+// parallel one.
+export type PublicBookingRequestInput = {
+  name: string;
+  email: string;
+  phone: string | null;
+  serviceInterest: ServiceInterest | null;
+  message: string | null;
+};
+
+export type PublicBookingRequestValidation =
+  | { success: true; data: PublicBookingRequestInput }
+  | { success: false; errors: Record<string, string> };
+
+export function validatePublicBookingRequestInput(
+  values: Record<string, unknown>,
+): PublicBookingRequestValidation {
+  const errors: Record<string, string> = {};
+
+  const name =
+    typeof values.name === "string" ? values.name.trim().slice(0, 160) : "";
+  const email = cleanEmail(values.email);
+  const phone =
+    typeof values.phone === "string"
+      ? values.phone.trim().slice(0, 80) || null
+      : null;
+  const message =
+    typeof values.message === "string"
+      ? values.message.trim().slice(0, 2_000) || null
+      : null;
+  const serviceInterest = isServiceInterest(values.serviceInterest)
+    ? values.serviceInterest
+    : null;
+
+  if (name.length < 2) {
+    errors.name = "Enter your name.";
+  }
+  if (!email) {
+    errors.email = "Enter a valid email address.";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { success: false, errors };
+  }
+
+  return {
+    success: true,
+    data: { name, email: email as string, phone, serviceInterest, message },
+  };
 }
 
 export function parseTimeToMinute(value: unknown) {

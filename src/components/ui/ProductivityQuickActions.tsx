@@ -67,16 +67,24 @@ function ActionSheet({
 export function PlanVideoButton({
   initialProjectId = null,
   initiallyOpen = false,
+  projectContext = null,
 }: {
   initialProjectId?: number | null;
   initiallyOpen?: boolean;
+  projectContext?: {
+    id: number;
+    name: string;
+    clientName: string;
+  } | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [options, setOptions] = useState<QuickOptions | null>(null);
   const [title, setTitle] = useState("");
-  const [projectId, setProjectId] = useState(initialProjectId?.toString() ?? "");
+  const [projectId, setProjectId] = useState(
+    projectContext?.id.toString() ?? initialProjectId?.toString() ?? "",
+  );
   const [createUnderClientId, setCreateUnderClientId] = useState("");
   const [notes, setNotes] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -101,6 +109,10 @@ export function PlanVideoButton({
   function handleOpen() {
     setOpen(true);
     setFeedback("");
+    if (projectContext) {
+      setProjectId(projectContext.id.toString());
+      return;
+    }
     startTransition(fetchOptions);
   }
 
@@ -113,7 +125,11 @@ export function PlanVideoButton({
     if (!initiallyOpen) return;
     setOpen(true);
     setFeedback("");
-    startTransition(fetchOptions);
+    if (projectContext) {
+      setProjectId(projectContext.id.toString());
+    } else {
+      startTransition(fetchOptions);
+    }
     // The query-driven opening is intentionally one-shot for this mounted button.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initiallyOpen, initialProjectId]);
@@ -122,9 +138,10 @@ export function PlanVideoButton({
     event.preventDefault();
     setFeedback("");
     startTransition(async () => {
+      const selectedProjectId = projectContext?.id ?? (projectId ? Number(projectId) : null);
       const result = await createVideoLog({
         title,
-        projectId: projectId ? Number(projectId) : null,
+        projectId: selectedProjectId,
         clientId: null,
         notes,
         status: "PLANNED",
@@ -177,46 +194,60 @@ export function PlanVideoButton({
                 className={fieldClassName}
               />
             </div>
-            <div>
-              <label htmlFor="plannedVideoProject" className="mb-1.5 block text-xs font-bold text-zinc-400">
-                Project
-              </label>
-              <select
-                id="plannedVideoProject"
-                value={projectId}
-                onChange={(event) => setProjectId(event.target.value)}
-                disabled={!options || isPending}
-                required
-                className={fieldClassName}
-              >
-                <option value="">Select a project</option>
-                {options?.projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name} — {project.clientName}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950/45 p-3">
-              <p className="text-xs leading-5 text-zinc-500">
-                Videos belong to Projects. If this commitment does not exist yet, create it under its Client and return here.
-              </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
-                <select
-                  aria-label="Client for new project"
-                  value={createUnderClientId}
-                  onChange={(event) => setCreateUnderClientId(event.target.value)}
-                  disabled={!options || options.clients.length === 0}
-                  className={fieldClassName}
-                >
-                  {options?.clients.length === 0 && <option value="">No clients yet</option>}
-                  {options?.clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
-                </select>
-                <Link href={createProjectHref} className="flex min-h-12 items-center justify-center rounded-xl border border-cyan-500/30 px-4 text-sm font-black text-cyan-300">
-                  Create Project
-                </Link>
+            {projectContext ? (
+              <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-3.5">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-400">
+                  Creating inside this project
+                </p>
+                <p className="mt-1 font-black text-white">{projectContext.name}</p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  Client: {projectContext.clientName}
+                </p>
               </div>
-            </div>
+            ) : (
+              <>
+                <div>
+                  <label htmlFor="plannedVideoProject" className="mb-1.5 block text-xs font-bold text-zinc-400">
+                    Project
+                  </label>
+                  <select
+                    id="plannedVideoProject"
+                    value={projectId}
+                    onChange={(event) => setProjectId(event.target.value)}
+                    disabled={!options || isPending}
+                    required
+                    className={fieldClassName}
+                  >
+                    <option value="">Select a project</option>
+                    {options?.projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name} — {project.clientName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/45 p-3">
+                  <p className="text-xs leading-5 text-zinc-500">
+                    Videos belong to Projects. If this commitment does not exist yet, create it under its Client and return here.
+                  </p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                    <select
+                      aria-label="Client for new project"
+                      value={createUnderClientId}
+                      onChange={(event) => setCreateUnderClientId(event.target.value)}
+                      disabled={!options || options.clients.length === 0}
+                      className={fieldClassName}
+                    >
+                      {options?.clients.length === 0 && <option value="">No clients yet</option>}
+                      {options?.clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+                    </select>
+                    <Link href={createProjectHref} className="flex min-h-12 items-center justify-center rounded-xl border border-cyan-500/30 px-4 text-sm font-black text-cyan-300">
+                      Create Project
+                    </Link>
+                  </div>
+                </div>
+              </>
+            )}
             <div>
               <label htmlFor="plannedVideoNotes" className="mb-1.5 block text-xs font-bold text-zinc-400">
                 Notes <span className="font-normal text-zinc-600">optional</span>

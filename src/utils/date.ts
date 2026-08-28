@@ -59,3 +59,40 @@ export function formatCurrency(amount: number, currency: string = "USD"): string
 export function currentMonthName(): string {
   return nowBrazil().toLocaleString("en-US", { month: "long" });
 }
+
+/**
+ * Sprint C1 §68: minimal month-navigation vocabulary shared by any surface
+ * that needs a "previous/next month" switcher (FX ledger, Personal
+ * Finance). A month key is always "YYYY-MM". These are pure string/number
+ * helpers -- no Date-object DST or month-length edge cases to worry about.
+ */
+
+/**
+ * Returns the current month as "YYYY-MM" (Brazil timezone).
+ */
+export function currentMonthKey(): string {
+  return startOfMonthISO().slice(0, 7);
+}
+
+/**
+ * Shifts a "YYYY-MM" month key by N months (positive = later, negative = earlier).
+ */
+export function shiftMonthKey(monthKey: string, delta: number): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  const total = year * 12 + (month - 1) + delta;
+  const newYear = Math.floor(total / 12);
+  const newMonth = (total % 12) + 1;
+  return `${newYear}-${String(newMonth).padStart(2, "0")}`;
+}
+
+/**
+ * Formats a "YYYY-MM" month key for display, e.g. "August 2026".
+ */
+export function formatMonthKey(monthKey: string): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  return `${months[month - 1]} ${year}`;
+}

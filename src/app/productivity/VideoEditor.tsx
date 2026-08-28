@@ -6,6 +6,7 @@ import {
   updateVideoMetadata,
 } from "@/modules/productivity/actions";
 import { validateCoverUrl, validateDeliveryUrl } from "@/modules/productivity/core";
+import { CopyLinkButton } from "@/components/ui/CopyLinkButton";
 import {
   VIDEO_CONTENT_TYPE_LABELS,
   VIDEO_CONTENT_TYPES,
@@ -25,7 +26,9 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { WorkSessionPanel } from "./WorkSessionPanel";
 import { VideoMemoryPanel } from "./VideoMemoryPanel";
+import { CommercialTermsPanel } from "./CommercialTermsPanel";
 import { ProjectReferencesPanel } from "./ProjectReferencesPanel";
+import { CoverUploadField } from "@/components/media/CoverUploadField";
 
 type VideoEditorProps = {
   video: {
@@ -266,14 +269,21 @@ export function VideoEditor({
                     </div>
                   )}
                   {safeDeliveryUrl && (
-                    <a
-                      href={safeDeliveryUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="absolute bottom-3 right-3 inline-flex min-h-11 items-center rounded-xl bg-violet-600 px-4 text-sm font-black text-white shadow-lg shadow-black/50 hover:bg-violet-500"
-                    >
-                      Preview / Watch ↗
-                    </a>
+                    <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+                      <a
+                        href={safeDeliveryUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-11 items-center rounded-xl bg-violet-600 px-4 text-sm font-black text-white shadow-lg shadow-black/50 hover:bg-violet-500"
+                      >
+                        Preview / Watch ↗
+                      </a>
+                      <CopyLinkButton
+                        url={safeDeliveryUrl}
+                        label="Copy"
+                        className="inline-flex min-h-11 items-center rounded-xl bg-zinc-900/90 px-3 text-xs font-bold text-zinc-300 shadow-lg shadow-black/50 hover:bg-zinc-800"
+                      />
+                    </div>
                   )}
                 </section>
 
@@ -326,6 +336,7 @@ export function VideoEditor({
               </aside>
 
               <div className="space-y-4">
+                <CommercialTermsPanel videoId={video.id} />
                 <VideoMemoryPanel videoId={video.id} />
                 <form onSubmit={saveMetadata} className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/25 p-4 sm:p-5">
                 <div className="mb-1">
@@ -456,23 +467,29 @@ export function VideoEditor({
 
               <div>
                 <label htmlFor={`video-cover-url-${video.id}`} className="mb-1.5 block text-xs font-bold text-zinc-400">
-                  Cover image URL <span className="font-normal text-zinc-600">optional</span>
+                  Cover <span className="font-normal text-zinc-600">optional</span>
                 </label>
                 <input
                   id={`video-cover-url-${video.id}`}
-                  type="url"
+                  type="text"
                   inputMode="url"
                   autoCapitalize="none"
                   autoCorrect="off"
                   value={coverUrl}
                   onChange={(event) => setCoverUrl(event.target.value)}
                   maxLength={2_048}
-                  placeholder="https://…"
+                  placeholder="Use an HTTPS image URL…"
                   className={fieldClassName}
                 />
                 <p className="mt-1.5 text-[11px] leading-4 text-zinc-600">
-                  HTTPS only. Shown as the video&apos;s thumbnail on the client portal.
+                  Upload an image below, or keep using an external HTTPS URL. Shown on the client portal.
                 </p>
+                <CoverUploadField
+                  targetType="video"
+                  targetId={video.id}
+                  coverUrl={coverUrl}
+                  onCoverUrlChange={setCoverUrl}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">

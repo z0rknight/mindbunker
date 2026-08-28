@@ -31,6 +31,11 @@ export const DEFAULT_CURRENCY = "USD";
 // it per docs/architecture/MONDAY_MONEY_LAB_P0.md §9.
 export const DEFAULT_TAX_RESERVE_PERCENT = 10;
 
+// Temporary manual operating rate. This is display/configuration context
+// only: transaction ledgers and every per-currency subtotal remain in their
+// original currency.
+export const EFFECTIVE_USD_TO_BRL_RATE = 5.1;
+
 export function isContractBillingType(
   value: unknown,
 ): value is ContractBillingType {

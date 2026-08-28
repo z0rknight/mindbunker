@@ -23,10 +23,10 @@ import {
   type HistArtifactBundle,
 } from "./core.ts";
 
-// Bound to comfortably clear D1/SQLite's default bound-parameter ceiling
-// (999) per statement even for the widest table (hist_facts, ~15 columns):
-// 15 * 40 = 600 params/statement, leaving headroom.
-const INSERT_CHUNK_SIZE = 40;
+// D1's runtime rejects the former 40-row hist_facts insert as "too many SQL
+// variables". Five rows keep the widest statement below 100 bound values,
+// while the complete import still fits in one atomic db.batch transaction.
+const INSERT_CHUNK_SIZE = 5;
 
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];

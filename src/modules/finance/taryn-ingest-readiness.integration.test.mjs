@@ -103,6 +103,31 @@ test("scenario 3: double submission (same idempotency key) does not duplicate", 
   assert.equal(rows.length, 1, "a double-submit with the same key must never create a second transaction");
 });
 
+test("subscription detail history returns only transactions linked to that subscription", () => {
+  const db = buildMigratedDb();
+  seedClientAndSubscription(db);
+  db.exec(`
+    INSERT INTO subscriptions (id, name, vendor, amount, currency, cadence, status)
+    VALUES (2, 'Frame.io', 'Adobe', 20, 'USD', 'MONTHLY', 'ACTIVE');
+    INSERT INTO transactions (type, amount, category, date, currency, subscription_id)
+    VALUES
+      ('expense', 250, 'Subscription — Creative Cloud', '2026-08-24', 'BRL', 1),
+      ('expense', 245, 'Subscription — Creative Cloud', '2026-07-24', 'BRL', 1),
+      ('expense', 20, 'Subscription — Frame.io', '2026-08-20', 'USD', 2),
+      ('expense', 99, 'Unlinked software', '2026-08-18', 'USD', NULL);
+  `);
+
+  const rows = db
+    .prepare("SELECT * FROM transactions WHERE subscription_id = ? ORDER BY date DESC, id DESC")
+    .all(1);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((row) => row.category), [
+    "Subscription — Creative Cloud",
+    "Subscription — Creative Cloud",
+  ]);
+  assert.ok(rows.every((row) => row.subscription_id === 1));
+});
+
 test("scenario 4: a debt payment accepts a user-chosen historical date", () => {
   const db = buildMigratedDb();
   db.exec(`

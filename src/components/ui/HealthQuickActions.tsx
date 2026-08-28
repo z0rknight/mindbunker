@@ -20,14 +20,21 @@ const SLEEP_PRESETS = [5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 10];
 export function LastNightSleepButton({ todayISODate }: { todayISODate: string }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [date, setDate] = useState(todayISODate);
   const [customHours, setCustomHours] = useState("");
   const [flash, setFlash] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   function logHours(value: number) {
     if (!Number.isFinite(value) || value < 0 || value > 24) return;
+    setError(null);
     startTransition(async () => {
-      await upsertHealthLog({ sleepHours: value });
+      const result = await upsertHealthLog({ date, sleepHours: value });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
       setFlash(true);
       setTimeout(() => setFlash(false), 1400);
       setOpen(false);
@@ -44,7 +51,11 @@ export function LastNightSleepButton({ todayISODate }: { todayISODate: string })
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setDate(todayISODate);
+          setError(null);
+          setOpen(true);
+        }}
         disabled={isPending}
         className={`flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm transition-all w-full
           ${flash ? "bg-indigo-500 text-white scale-95" : "bg-indigo-800 hover:bg-indigo-700 text-white active:scale-95"}
@@ -73,9 +84,24 @@ export function LastNightSleepButton({ todayISODate }: { todayISODate: string })
               </button>
             </div>
             <p className="text-zinc-500 text-xs mb-4">
-              This logs the night leading into today ({formatDate(todayISODate)}) —
-              not tonight&rsquo;s sleep.
+              This logs the night leading into the selected day — not that
+              evening&rsquo;s sleep.
             </p>
+            <div className="mb-4">
+              <label className="mb-1 block text-xs uppercase tracking-wider text-zinc-400">
+                Night leading into
+              </label>
+              <input
+                type="date"
+                value={date}
+                max={todayISODate}
+                onChange={(event) => setDate(event.target.value)}
+                onInput={(event) => setDate(event.currentTarget.value)}
+                required
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
+              />
+              {date && <p className="mt-1 text-[11px] text-zinc-600">{formatDate(date)}</p>}
+            </div>
             <div className="grid grid-cols-3 gap-2 mb-4">
               {SLEEP_PRESETS.map((h) => (
                 <button
@@ -109,6 +135,7 @@ export function LastNightSleepButton({ todayISODate }: { todayISODate: string })
                 Save
               </button>
             </form>
+            {error && <p role="alert" className="mt-3 text-xs text-red-300">{error}</p>}
           </div>
         </div>
       )}

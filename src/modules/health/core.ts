@@ -10,6 +10,121 @@ export type HealthLogForTimeline = {
   cyclingKm: number | null;
 };
 
+export type HealthLogMutableValues = {
+  date: string;
+  sleepHours: number | null;
+  caffeineMg: number | null;
+  substancesNotes: string | null;
+  screenTimeHours: number | null;
+  cyclingKm: number | null;
+  cyclingMinutes: number | null;
+  walkingMinutes: number | null;
+};
+
+type HealthLogValidation =
+  | { success: true; data: HealthLogMutableValues }
+  | { success: false; error: string };
+
+/**
+ * Validates a calendar date without converting it through local time or UTC.
+ * The returned value is the exact YYYY-MM-DD string the operator chose.
+ */
+export function isValidHealthDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
+    return false;
+  }
+  const [year, month, day] = value.split("-").map(Number);
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  return (
+    candidate.getUTCFullYear() === year &&
+    candidate.getUTCMonth() === month - 1 &&
+    candidate.getUTCDate() === day
+  );
+}
+
+function validateNullableNumber(
+  value: unknown,
+  label: string,
+  options: { max?: number; integer?: boolean } = {},
+): { success: true; value: number | null } | { success: false; error: string } {
+  if (value === null || value === "") return { success: true, value: null };
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return { success: false, error: `${label} must be zero or a positive number.` };
+  }
+  if (options.max !== undefined && value > options.max) {
+    return { success: false, error: `${label} must be ${options.max} or less.` };
+  }
+  if (options.integer && !Number.isSafeInteger(value)) {
+    return { success: false, error: `${label} must be a whole number.` };
+  }
+  return { success: true, value };
+}
+
+/**
+ * Full-row validation for the small operator-side correction form. It
+ * deliberately returns only editable domain fields: id/createdAt/updatedAt
+ * are not accepted here, so correcting the happened-on date can never
+ * rewrite record identity or system creation time.
+ */
+export function validateHealthLogMutableValues(
+  values: Record<string, unknown>,
+): HealthLogValidation {
+  if (!isValidHealthDate(values.date)) {
+    return { success: false, error: "Choose a valid calendar date." };
+  }
+
+  const sleep = validateNullableNumber(values.sleepHours, "Sleep", { max: 24 });
+  if (!sleep.success) return sleep;
+  const caffeine = validateNullableNumber(values.caffeineMg, "Caffeine", {
+    integer: true,
+  });
+  if (!caffeine.success) return caffeine;
+  const screenTime = validateNullableNumber(values.screenTimeHours, "Screen time", {
+    max: 24,
+  });
+  if (!screenTime.success) return screenTime;
+  const cyclingKm = validateNullableNumber(values.cyclingKm, "Cycling distance");
+  if (!cyclingKm.success) return cyclingKm;
+  const cyclingMinutes = validateNullableNumber(
+    values.cyclingMinutes,
+    "Cycling duration",
+    { integer: true },
+  );
+  if (!cyclingMinutes.success) return cyclingMinutes;
+  const walkingMinutes = validateNullableNumber(
+    values.walkingMinutes,
+    "Walking duration",
+    { integer: true },
+  );
+  if (!walkingMinutes.success) return walkingMinutes;
+
+  if (
+    values.substancesNotes !== null &&
+    values.substancesNotes !== "" &&
+    typeof values.substancesNotes !== "string"
+  ) {
+    return { success: false, error: "Notes must be text." };
+  }
+  const substancesNotes =
+    values.substancesNotes === null || values.substancesNotes === ""
+      ? null
+      : values.substancesNotes.trim().slice(0, 2_000) || null;
+
+  return {
+    success: true,
+    data: {
+      date: values.date,
+      sleepHours: sleep.value,
+      caffeineMg: caffeine.value,
+      substancesNotes,
+      screenTimeHours: screenTime.value,
+      cyclingKm: cyclingKm.value,
+      cyclingMinutes: cyclingMinutes.value,
+      walkingMinutes: walkingMinutes.value,
+    },
+  };
+}
+
 export type ActivityTimelineDay = {
   date: string;
   weekday: number; // 0 = Monday ... 6 = Sunday

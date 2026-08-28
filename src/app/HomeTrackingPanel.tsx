@@ -1,25 +1,40 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useTransition } from "react";
 import {
   FinishedVideoButton,
   NewWorkButton,
   StartWorkButton,
 } from "@/components/ui/ProductivityQuickActions";
 import {
+  OPERATOR_NAME,
   WORK_SESSION_ACTIVITY_LABELS,
   formatClosedDuration,
   type OpenWorkSession,
 } from "@/modules/work-sessions/core";
+import { addVideoOperationalNote } from "@/modules/video-memory/actions";
+import { VIDEO_OPERATIONAL_NOTE_MAX_LENGTH } from "@/modules/video-memory/core";
 
-// Dashboard entry point for the Client → Project → Video → Activity → Start
-// flow (Sprint 1.2.x local dogfooding round). When nothing is running, the
-// Dashboard's default state is the two primary actions -- [Start Work] to
-// the left of [Finished Video] -- rather than a permanently exposed
-// four-field form; the full selection flow now lives behind Start Work's
-// own compact modal (see StartWorkButton in ProductivityQuickActions.tsx).
-// When a session is already active, this surfaces that state instead of
-// presenting a normal Start flow, exactly as before.
+// Dashboard entry point for the Client -> Project -> Video -> Activity ->
+// Start flow (Sprint 1.2.x local dogfooding round). When nothing is
+// running, the Dashboard's default state is the two primary actions --
+// [Start Work] to the left of [Finished Video] -- rather than a
+// permanently exposed four-field form; the full selection flow now lives
+// behind Start Work's own compact modal (see StartWorkButton in
+// ProductivityQuickActions.tsx). When a session is already active, this
+// surfaces that state instead of presenting a normal Start flow, exactly
+// as before.
+//
+// NIGHT SHIFT REALITY PATCH SS3: the active-session block also renders the
+// real Operator -> Sensor device -> Client -> Project hierarchy, showing
+// only the dimensions that actually exist for this session -- never
+// fabricating a client/project/device that isn't there (e.g. an ADMIN
+// task has no client/project; a WEB_TIMER session has no device). SS4: a
+// compact, collapsed-by-default "Quick note" affordance writes straight
+// to the same canonical video-memory stream productivity/VideoMemoryPanel
+// already reads, so Emmanuel never has to leave Home (or open
+// ChatGPT/Notion) just to jot down what happened mid-session.
 export function HomeTrackingPanel({
   openSession,
   openSessionElapsedSeconds,
@@ -28,6 +43,13 @@ export function HomeTrackingPanel({
   openSessionElapsedSeconds: number;
 }) {
   if (openSession) {
+    const contextParts = [
+      OPERATOR_NAME,
+      openSession.deviceName,
+      openSession.clientName,
+      openSession.projectName,
+    ].filter((part): part is string => Boolean(part));
+
     return (
       <section className="mb-8 rounded-2xl border border-emerald-500/35 bg-emerald-500/[0.07] p-4 sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -36,6 +58,11 @@ export function HomeTrackingPanel({
               <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
               Tracking now
             </p>
+            {contextParts.length > 0 && (
+              <p className="mt-1.5 truncate text-[11px] font-bold uppercase tracking-wide text-emerald-200/70">
+                {contextParts.join(" / ")}
+              </p>
+            )}
             <h2 className="mt-2 truncate text-lg font-black text-white">{openSession.videoTitle}</h2>
             <p className="mt-1 text-xs text-zinc-400">
               {WORK_SESSION_ACTIVITY_LABELS[openSession.activityType]} · {formatClosedDuration(openSessionElapsedSeconds)} elapsed
@@ -48,6 +75,8 @@ export function HomeTrackingPanel({
             Open active workspace
           </Link>
         </div>
+
+        <QuickNote videoId={openSession.videoId} />
       </section>
     );
   }
@@ -61,5 +90,72 @@ export function HomeTrackingPanel({
         <FinishedVideoButton />
       </div>
     </section>
+  );
+}
+
+// SS4: collapsed by default -- Home stays a compact daily surface (SS9)
+// even though this affordance exists. Reuses the exact canonical note
+// stream (crmEvents, type "video.note_added") that
+// productivity/VideoMemoryPanel already reads, so a note added here shows
+// up there too with no new storage.
+function QuickNote({ videoId }: { videoId: number }) {
+  const [open, setOpen] = useState(false);
+  const [body, setBody] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-4 min-h-9 rounded-lg border border-emerald-500/25 px-3 text-xs font-bold text-emerald-300/80 hover:border-emerald-500/50 hover:text-emerald-200"
+      >
+        + Quick note
+      </button>
+    );
+  }
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setFeedback("");
+    startTransition(async () => {
+      const result = await addVideoOperationalNote(videoId, body);
+      if (!result.success) {
+        setFeedback(result.error);
+        return;
+      }
+      setBody("");
+      setFeedback("Saved.");
+      setOpen(false);
+    });
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-4 border-t border-emerald-500/15 pt-4">
+      <label htmlFor={`home-quick-note-${videoId}`} className="sr-only">
+        Quick note for this session
+      </label>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input
+          id={`home-quick-note-${videoId}`}
+          type="text"
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          maxLength={VIDEO_OPERATIONAL_NOTE_MAX_LENGTH}
+          placeholder="What just happened?"
+          autoFocus
+          className="min-h-11 flex-1 rounded-xl border border-zinc-700 bg-zinc-950/75 px-3.5 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+        />
+        <button
+          type="submit"
+          disabled={isPending || !body.trim()}
+          className="min-h-11 rounded-xl bg-emerald-600 px-4 text-sm font-black text-white transition hover:bg-emerald-500 disabled:opacity-40"
+        >
+          {isPending ? "Saving…" : "Save"}
+        </button>
+      </div>
+      {feedback && <p aria-live="polite" className="mt-2 text-xs text-emerald-200">{feedback}</p>}
+    </form>
   );
 }

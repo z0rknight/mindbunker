@@ -6,6 +6,12 @@ export const WORK_SESSION_ACTIVITY_TYPES = [
   "REVIEW",
   "EXPORT",
   "ADMIN",
+  // Client Service Reality Patch (25 Aug 2026): pricing, replying to a
+  // client, brief interpretation, quote preparation, delivery
+  // coordination -- everything that used to have no honest home except
+  // "Other". One clear activity, not ten communication subtypes (per the
+  // brief's own instruction).
+  "CLIENT_SERVICE",
   "OTHER",
 ] as const;
 
@@ -25,6 +31,7 @@ export const WORK_SESSION_ACTIVITY_LABELS: Record<
   REVIEW: "Review",
   EXPORT: "Export",
   ADMIN: "Admin",
+  CLIENT_SERVICE: "Client service",
   OTHER: "Other",
 };
 
@@ -50,12 +57,31 @@ export function isWorkSessionSource(
   );
 }
 
+// NIGHT SHIFT REALITY PATCH §3: MindBunker serves one operator. Rather than
+// inventing a users table for a single-person tool, operator identity is
+// this tiny configuration constant -- the smallest thing that can possibly
+// work, per the brief's own preference (config over a new canonical
+// concept). If MindBunker ever serves more than one operator, this is the
+// first thing that has to change; until then, a table would be pure
+// speculative abstraction.
+export const OPERATOR_NAME = "Emmanuel";
+
 export type OpenWorkSession = {
   id: number;
   videoId: number;
   videoTitle: string;
+  // Null when the video has no client/project attribution -- never
+  // fabricated. A session on an unattributed video (e.g. an ADMIN task) is
+  // shown honestly as just the video/activity, not guessed into a client.
+  clientName: string | null;
+  projectName: string | null;
   activityType: WorkSessionActivityType;
   startedAt: string;
+  // Null for a WEB_TIMER session (no physical device involved) or when the
+  // linked sensor_devices row has since been revoked/renamed away; present
+  // only when this really is MAC_SENSOR-captured evidence from a named
+  // device -- see work_sessions.sensor_device_id in db/schema.ts.
+  deviceName: string | null;
 };
 
 export type VideoWorkSessionSummary = {
@@ -174,15 +200,29 @@ export const VIDEO_WORK_SESSION_SUMMARY_SQL = `
   WHERE video_id = ?1
 `;
 
+// NIGHT SHIFT REALITY PATCH §3: extended with LEFT JOINs to clients/
+// projects/sensor_devices so the Home "Now" panel can show the real
+// attribution hierarchy (Operator -> Device -> Client -> Project -> Video)
+// when it exists, and honestly fall back to less when it doesn't --
+// video_logs.client_id/project_id and work_sessions.sensor_device_id are
+// all nullable, so every LEFT JOIN can legitimately produce NULL. Never
+// widened to INNER JOIN: doing so would silently hide an open session on
+// an unattributed video instead of showing it plainly.
 export const OPEN_WORK_SESSION_SQL = `
   SELECT
     ws.id,
     ws.video_id,
     COALESCE(v.title, 'Video ' || v.date) AS video_title,
+    c.name AS client_name,
+    p.name AS project_name,
     ws.activity_type,
-    ws.started_at
+    ws.started_at,
+    sd.name AS device_name
   FROM work_sessions ws
   INNER JOIN video_logs v ON v.id = ws.video_id
+  LEFT JOIN projects p ON p.id = v.project_id
+  LEFT JOIN clients c ON c.id = v.client_id
+  LEFT JOIN sensor_devices sd ON sd.id = ws.sensor_device_id
   WHERE ws.ended_at IS NULL
   ORDER BY ws.id DESC
   LIMIT 1
@@ -440,7 +480,7 @@ const HISTORY_DAY_LABEL_FORMATTER = new Intl.DateTimeFormat("en-US", {
 
 // en-CA locale formats as YYYY-MM-DD, which sorts correctly as a string —
 // used as the grouping key.
-function dayKeyFor(iso: string): string {
+export function dayKeyFor(iso: string): string {
   return HISTORY_DAY_FORMATTER.format(new Date(iso));
 }
 
@@ -583,4 +623,179 @@ export function correlateSessionMemoryNotes(
     })
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .map((note) => ({ id: note.id, body: note.body, createdAt: note.createdAt }));
+}
+
+// ─── NIGHT SHIFT REALITY PATCH §3/§5/§6/§9: attribution window ───────────
+//
+// One raw fetch (closed sessions only, joined to client/project) serving
+// two different derived views: project day-streaks (§5) and today's
+// duration/session-count/per-client-seconds (§6, §9). ?1 is a bound epoch
+// seconds cutoff computed by the caller (data.ts) -- a lookback window
+// generous enough to cover any realistic streak, never the whole ledger.
+export const WORK_SESSION_ATTRIBUTION_SQL = `
+  SELECT
+    ws.started_at,
+    ws.ended_at,
+    v.project_id AS project_id,
+    p.name AS project_name,
+    v.client_id AS client_id,
+    c.name AS client_name
+  FROM work_sessions ws
+  INNER JOIN video_logs v ON v.id = ws.video_id
+  LEFT JOIN projects p ON p.id = v.project_id
+  LEFT JOIN clients c ON c.id = v.client_id
+  WHERE ws.ended_at IS NOT NULL
+    AND ws.started_at >= ?1
+  ORDER BY ws.started_at ASC
+`;
+
+export type WorkSessionAttributionRow = {
+  projectId: number | null;
+  projectName: string | null;
+  clientId: number | null;
+  clientName: string | null;
+  startedAt: string;
+  durationSeconds: number;
+};
+
+// Simple calendar-day arithmetic on a "YYYY-MM-DD" key. UTC-anchored on
+// purpose -- this only ever adds/subtracts whole days from a key that was
+// itself already correctly resolved to America/Sao_Paulo via dayKeyFor()
+// above, so no further timezone conversion belongs here.
+function shiftDayKey(dayKey: string, deltaDays: number): string {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + deltaDays);
+  return date.toISOString().slice(0, 10);
+}
+
+export type ProjectStreak = {
+  projectId: number;
+  projectName: string;
+  currentStreak: number;
+  lastActiveDayKey: string;
+  isActiveToday: boolean;
+};
+
+// §5: "a project active day exists when canonical evidence associates
+// meaningful work with that project on that local calendar date" --
+// Work Sessions explicitly linked to a project via video_logs.project_id,
+// never inferred from passive Sensor observation. Multiple sessions the
+// same day count once (a Set of day keys, not a count). A streak must end
+// today or yesterday to be "current" -- a project last worked 2+ days ago
+// shows no streak rather than a stale one (so it stops meaning something
+// at 00:01, per the brief's own worked example).
+export function computeProjectStreaks(
+  rows: readonly Pick<WorkSessionAttributionRow, "projectId" | "projectName" | "startedAt">[],
+  todayKey: string,
+): ProjectStreak[] {
+  const byProject = new Map<number, { name: string; days: Set<string> }>();
+  for (const row of rows) {
+    if (row.projectId === null) continue; // passive/unattributed work never creates a streak
+    const dayKey = dayKeyFor(row.startedAt);
+    const entry = byProject.get(row.projectId) ?? { name: row.projectName ?? "", days: new Set<string>() };
+    entry.days.add(dayKey);
+    byProject.set(row.projectId, entry);
+  }
+
+  const yesterdayKey = shiftDayKey(todayKey, -1);
+  const streaks: ProjectStreak[] = [];
+  for (const [projectId, { name, days }] of byProject) {
+    const lastActiveDayKey = [...days].sort().at(-1)!;
+    if (lastActiveDayKey !== todayKey && lastActiveDayKey !== yesterdayKey) continue;
+
+    let currentStreak = 0;
+    let cursor = lastActiveDayKey;
+    while (days.has(cursor)) {
+      currentStreak += 1;
+      cursor = shiftDayKey(cursor, -1);
+    }
+    streaks.push({
+      projectId,
+      projectName: name,
+      currentStreak,
+      lastActiveDayKey,
+      isActiveToday: lastActiveDayKey === todayKey,
+    });
+  }
+  return streaks;
+}
+
+// Sort per §5: currently active first, then longest streak, then most
+// recently active. Callers slice to the top ~3 for Home.
+export function sortProjectStreaks(streaks: readonly ProjectStreak[]): ProjectStreak[] {
+  return [...streaks].sort((a, b) => {
+    if (a.isActiveToday !== b.isActiveToday) return a.isActiveToday ? -1 : 1;
+    if (a.currentStreak !== b.currentStreak) return b.currentStreak - a.currentStreak;
+    return b.lastActiveDayKey.localeCompare(a.lastActiveDayKey);
+  });
+}
+
+export type TodayWorkSessionStats = {
+  totalSeconds: number;
+  sessionCount: number;
+  byClient: Array<{ clientId: number; clientName: string; seconds: number }>;
+};
+
+// §6/§9: TODAY = the operator's current local calendar day, resolved by
+// dayKeyFor on each session's own started_at -- never SQLite's UTC-based
+// date(), which would misattribute a late-evening Brazil session to the
+// wrong day (see the Sprint C1 report's note on this same class of bug in
+// finance/core.ts's CLIENT_OPERATIONAL_MINUTES_SQL, deliberately not
+// reused here for exactly that reason).
+export function computeTodayWorkSessionStats(
+  closedRows: readonly WorkSessionAttributionRow[],
+  todayKey: string,
+): TodayWorkSessionStats {
+  const todays = closedRows.filter((row) => dayKeyFor(row.startedAt) === todayKey);
+  const byClientMap = new Map<number, { name: string; seconds: number }>();
+  let totalSeconds = 0;
+  for (const row of todays) {
+    totalSeconds += row.durationSeconds;
+    if (row.clientId !== null) {
+      const entry = byClientMap.get(row.clientId) ?? { name: row.clientName ?? "", seconds: 0 };
+      entry.seconds += row.durationSeconds;
+      byClientMap.set(row.clientId, entry);
+    }
+  }
+  return {
+    totalSeconds,
+    sessionCount: todays.length,
+    byClient: Array.from(byClientMap, ([clientId, v]) => ({
+      clientId,
+      clientName: v.name,
+      seconds: v.seconds,
+    })),
+  };
+}
+
+
+// ─── MICRO PATCH (Open/Copy, Last Active, Provenance, /book) ──────────────
+// §2: "Last active" -- a short, honest relative label for when a
+// project/client was last actively worked on (explicit attributable Work
+// Sessions only, never inferred from passive Sensor observation -- see
+// getLastActiveByProject/getLastActiveByClient in data.ts, which this
+// formats). Reuses dayKeyFor's existing America/Sao_Paulo day-boundary
+// semantics for the Today/Yesterday bucketing so this never disagrees with
+// any other Today/Yesterday label already in the app.
+export function formatLastActive(iso: string, nowIso: string): string {
+  const then = new Date(iso);
+  const now = new Date(nowIso);
+  const todayKey = dayKeyFor(nowIso);
+  const thenKey = dayKeyFor(iso);
+
+  if (thenKey === todayKey) {
+    const diffHours = Math.floor((now.getTime() - then.getTime()) / (60 * 60 * 1000));
+    return diffHours < 1 ? "Just now" : `${diffHours}h ago`;
+  }
+  if (thenKey === shiftDayKey(todayKey, -1)) {
+    return "Yesterday";
+  }
+
+  const [, month, day] = thenKey.split("-").map(Number);
+  const MONTH_LABELS = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  return `${MONTH_LABELS[month - 1]} ${day}`;
 }

@@ -11,7 +11,7 @@ import {
   getDebts,
   getSubscriptionSummary,
 } from "@/modules/finance/actions";
-import { formatCurrency, formatDate, currentMonthName } from "@/utils/date";
+import { formatCurrency, formatDate, currentMonthKey, currentMonthName } from "@/utils/date";
 import { formatMinutesAsHours } from "@/modules/finance/core";
 import { DeleteTransactionButton } from "./DeleteTransactionButton";
 import { RecordOwnerPayButton } from "./RecordOwnerPayButton";
@@ -19,6 +19,9 @@ import { TaxReserveControl } from "./TaxReserveControl";
 import { getAllClients } from "@/modules/crm/actions";
 import { getOperatingReserveSummary } from "@/modules/finance/actions";
 import { OperatingReserveControl } from "./OperatingReserveControl";
+import { getOwnerPayReceiptIdsByTransaction } from "@/modules/personal-finance/actions";
+import { getFxRateForMonth } from "@/modules/fx/actions";
+import { ReconcileWithWisePanel } from "@/components/finance/ReconcileWithWisePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +37,8 @@ export default async function FinancePage() {
     operatingReserve,
     debts,
     subscriptionSummary,
+    ownerPayReceiptIdsByTransaction,
+    businessFx,
   ] = await Promise.all([
     getFinanceSummary(),
     getAllTransactions(),
@@ -45,6 +50,8 @@ export default async function FinancePage() {
     getOperatingReserveSummary(),
     getDebts(),
     getSubscriptionSummary(),
+    getOwnerPayReceiptIdsByTransaction(),
+    getFxRateForMonth(currentMonthKey(), "BUSINESS"),
   ]);
   const activeDebts = debts.filter((d) => d.status === "ACTIVE");
   const remainingByCurrency = new Map<string, number>();
@@ -54,6 +61,49 @@ export default async function FinancePage() {
   const clientOptions = allClients.map((c) => ({ id: c.id, name: c.name }));
 
   const recentTransactions = [...transactions].reverse().slice(0, 100);
+
+  // Client Portal Reality round §I: real FK links already present on every
+  // transaction row (never inferred from category/name strings) -- just
+  // rendered as dead text/not shown at all until now.
+  function relatedLink(t: (typeof recentTransactions)[number]) {
+    if (t.type === "owner_pay") {
+      const receiptId = ownerPayReceiptIdsByTransaction.get(t.id);
+      return receiptId ? (
+        <Link href={`/finance/personal#personal-tx-${receiptId}`} className="text-indigo-400 hover:text-indigo-300">
+          View personal receipt →
+        </Link>
+      ) : null;
+    }
+    if (t.debtId) {
+      return (
+        <Link href={`/finance/debts/${t.debtId}`} className="text-cyan-400 hover:text-cyan-300">
+          View debt →
+        </Link>
+      );
+    }
+    if (t.subscriptionId) {
+      return (
+        <Link href={`/finance/subscriptions/${t.subscriptionId}`} className="text-cyan-400 hover:text-cyan-300">
+          View subscription →
+        </Link>
+      );
+    }
+    if (t.contractId) {
+      return (
+        <Link href={`/finance/contracts/${t.contractId}`} className="text-cyan-400 hover:text-cyan-300">
+          View contract →
+        </Link>
+      );
+    }
+    if (t.clientId) {
+      return (
+        <Link href={`/crm/${t.clientId}`} className="text-cyan-400 hover:text-cyan-300">
+          View client →
+        </Link>
+      );
+    }
+    return null;
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
@@ -80,6 +130,18 @@ export default async function FinancePage() {
             className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
           >
             🔁 Subscriptions
+          </Link>
+          <Link
+            href="/finance/fx"
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            💱 FX Ledger
+          </Link>
+          <Link
+            href="/finance/personal"
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            👤 Personal
           </Link>
         </div>
       </div>
@@ -202,6 +264,11 @@ export default async function FinancePage() {
         )}
       </div>
 
+      {/* ── LEDGER vs OBSERVED (Reality Closure, 26 Aug 2026) ─────────────── */}
+      <div className="mb-8">
+        <ReconcileWithWisePanel scope="BUSINESS" />
+      </div>
+
       {/* ── RECONCILIATION REQUIRING ATTENTION ────────────────────────────── */}
       {reconciliationAttention.length > 0 && (
         <div className="mb-8">
@@ -238,34 +305,54 @@ export default async function FinancePage() {
         </div>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-        <StatCard
-          label="Current Balance"
-          value={formatCurrency(summary.currentBalance)}
-          accent={summary.currentBalance >= 0 ? "green" : "red"}
-          icon="💳"
-        />
-        <StatCard
-          label="Monthly Revenue"
-          value={formatCurrency(summary.monthlyRevenue)}
-          sub={currentMonthName()}
-          accent="green"
-          icon="📈"
-        />
-        <StatCard
-          label="Monthly Expenses"
-          value={formatCurrency(summary.monthlyExpenses)}
-          sub={currentMonthName()}
-          accent="red"
-          icon="📉"
-        />
-        <StatCard
-          label="Net This Month"
-          value={formatCurrency(summary.monthlyNet)}
-          accent={summary.monthlyNet >= 0 ? "green" : "red"}
-          icon="⚖️"
-        />
+      {/* Currency ledgers stay separate. FX is context only, never a ledger mutation. */}
+      <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Business Effective FX</p>
+          <p className="mt-0.5 text-sm font-bold text-white">1 USD ≈ R${businessFx.rate.toFixed(4)}</p>
+        </div>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+          {businessFx.source === "OBSERVED"
+            ? `observed · ${businessFx.observedConversionCount}`
+            : businessFx.source === "MANUAL"
+              ? "manual"
+              : "fallback"}
+        </span>
+      </div>
+      <div className="mb-8 space-y-4">
+        {summary.map((row) => (
+          <div key={row.currency}>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">{row.currency}</p>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <StatCard
+                label="Current Balance"
+                value={formatCurrency(row.currentBalance, row.currency)}
+                accent={row.currentBalance >= 0 ? "green" : "red"}
+                icon="💳"
+              />
+              <StatCard
+                label="Monthly Revenue"
+                value={formatCurrency(row.monthlyRevenue, row.currency)}
+                sub={currentMonthName()}
+                accent="green"
+                icon="📈"
+              />
+              <StatCard
+                label="Monthly Expenses"
+                value={formatCurrency(row.monthlyExpenses, row.currency)}
+                sub={currentMonthName()}
+                accent="red"
+                icon="📉"
+              />
+              <StatCard
+                label="Net This Month"
+                value={formatCurrency(row.monthlyNet, row.currency)}
+                accent={row.monthlyNet >= 0 ? "green" : "red"}
+                icon="⚖️"
+              />
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Quick Actions */}
@@ -336,12 +423,13 @@ export default async function FinancePage() {
                   <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Category</th>
                   <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Amount</th>
                   <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Notes</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Related</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody>
                 {recentTransactions.map((t, i) => (
-                  <tr key={t.id} className={`border-b border-zinc-800/50 ${i % 2 === 0 ? "" : "bg-zinc-800/20"}`}>
+                  <tr id={`tx-${t.id}`} key={t.id} className={`border-b border-zinc-800/50 ${i % 2 === 0 ? "" : "bg-zinc-800/20"}`}>
                     <td className="px-4 py-3 text-white">{formatDate(t.date)}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -361,6 +449,7 @@ export default async function FinancePage() {
                       {t.type === "income" ? "+" : "-"}{formatCurrency(t.amount, t.currency)}
                     </td>
                     <td className="px-4 py-3 text-zinc-500 text-xs">{t.notes ?? "—"}</td>
+                    <td className="px-4 py-3 text-xs">{relatedLink(t) ?? <span className="text-zinc-700">—</span>}</td>
                     <td className="px-4 py-3">
                       <DeleteTransactionButton id={t.id} />
                     </td>

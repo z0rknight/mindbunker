@@ -19,6 +19,7 @@ export function ProjectWorkspaceControls({
     status: ProjectStatus;
     deadline: string | null;
     notes: string | null;
+    coverUrl: string | null;
   };
 }) {
   const router = useRouter();
@@ -61,11 +62,13 @@ export function ProjectWorkspaceControls({
             status: project.status,
             deadline: project.deadline ?? "",
             notes: project.notes ?? "",
+            coverUrl: project.coverUrl ?? "",
           }}
           submitLabel="Save project"
           onSubmit={save}
           onCancel={() => setEditing(false)}
           isPending={isPending}
+          coverUploadTarget={{ type: "project", id: project.id }}
         />
         {feedback && <p className="mt-3 text-sm text-red-300">{feedback}</p>}
       </section>

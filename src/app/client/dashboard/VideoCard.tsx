@@ -1,12 +1,15 @@
-import Image from "next/image";
+import Link from "next/link";
 import type { VideoStatus } from "@/modules/productivity/config";
+import { CoverImage } from "./CoverImage";
 import { ReviewActions } from "./ReviewActions";
+import { PriorityToggle } from "./PriorityToggle";
 
 type CardData = {
   id: number;
   title: string;
   status: VideoStatus;
   statusLabel: string;
+  projectId: number | null;
   projectName: string | null;
   contentTypeLabel: string | null;
   orientation: "LANDSCAPE" | "VERTICAL" | "SQUARE" | null;
@@ -15,6 +18,8 @@ type CardData = {
   reviewUrl: string | null;
   publishedUrl: string | null;
   lastUpdated: string | null;
+  isPriority: boolean;
+  projectVideoCount: number | null;
 };
 
 // Monday Real-Operation Pre-Freeze §6: READY FOR REVIEW -> reviewUrl,
@@ -74,16 +79,12 @@ export function VideoCard({
 
   return (
     <article className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/40">
-      <div className={`relative w-full overflow-hidden bg-zinc-900 ${ASPECT_CLASSES[aspectKey]}`}>
+      <Link
+        href={`/client/dashboard/videos/${video.id}`}
+        className={`relative block w-full overflow-hidden bg-zinc-900 ${ASPECT_CLASSES[aspectKey]}`}
+      >
         {video.coverUrl ? (
-          <Image
-            src={video.coverUrl}
-            alt=""
-            fill
-            unoptimized
-            sizes="(max-width: 640px) 100vw, 33vw"
-            className="object-cover"
-          />
+          <CoverImage src={video.coverUrl} />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-zinc-900 to-zinc-950 text-zinc-700">
             <span className="text-2xl" aria-hidden="true">🎬</span>
@@ -95,11 +96,18 @@ export function VideoCard({
         >
           {video.statusLabel}
         </span>
-      </div>
+        {video.isPriority && (
+          <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full border border-amber-400/50 bg-amber-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-200 backdrop-blur">
+            ⭐ Priority
+          </span>
+        )}
+      </Link>
 
       <div className="space-y-2 p-3.5">
         <h3 className="truncate text-sm font-bold text-white" title={video.title}>
-          {video.title}
+          <Link href={`/client/dashboard/videos/${video.id}`} className="hover:text-violet-300">
+            {video.title}
+          </Link>
         </h3>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-500">
           {video.projectName && <span className="font-semibold text-zinc-400">{video.projectName}</span>}
@@ -129,6 +137,13 @@ export function VideoCard({
         )}
 
         {showReviewActions && <ReviewActions videoId={video.id} />}
+        {video.projectId !== null && (
+          <PriorityToggle
+            videoId={video.id}
+            isPriority={video.isPriority}
+            projectVideoCount={video.projectVideoCount}
+          />
+        )}
       </div>
     </article>
   );

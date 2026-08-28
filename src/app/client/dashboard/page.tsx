@@ -42,7 +42,7 @@ export default async function ClientDashboardPage() {
       <header className="border-b border-zinc-800/80 bg-zinc-900/60 px-4 py-5 backdrop-blur sm:px-6">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">RMEDIA Portal</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">RMEDIA · Client Portal</p>
             <h1 className="mt-0.5 text-xl font-black tracking-tight sm:text-2xl">
               Welcome back, {view.clientName}
             </h1>
@@ -68,6 +68,11 @@ export default async function ClientDashboardPage() {
               <StatTile label="In production" value={view.totals.inProduction} />
               <StatTile label="Ready for review" value={view.totals.readyForReview} />
               <StatTile label="Completed" value={view.totals.completed} />
+            </section>
+
+            <section className="grid grid-cols-2 gap-3">
+              <StatTile label="Videos this week" value={view.videosThisWeek} />
+              <StatTile label="Videos this month" value={view.videosThisMonth} />
             </section>
 
             {view.completedThisWeek > 0 && (

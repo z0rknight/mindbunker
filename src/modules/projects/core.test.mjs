@@ -8,6 +8,7 @@ import {
   isPositiveId,
   isProjectOverdue,
   naturalCompare,
+  resolveCurrentWorkVideo,
   sortProjectWorkspaceVideos,
   validateProjectInput,
 } from "./core.ts";
@@ -27,7 +28,37 @@ test("project input keeps only useful bounded fields", () => {
       status: "active",
       deadline: "2026-09-10",
       notes: "First delivery",
+      coverUrl: null,
     });
+  }
+});
+
+// Sprint 3 P1 (Project + Video visual covers): reuses productivity's
+// validateCoverUrl (HTTPS-only) -- one cover-URL safety rule, not two.
+test("project input accepts a valid HTTPS cover URL and rejects an unsafe one", () => {
+  const valid = validateProjectInput({
+    name: "Product launch",
+    status: "active",
+    coverUrl: "https://cdn.example.com/cover.jpg",
+  });
+  assert.equal(valid.success, true);
+  if (valid.success) {
+    assert.equal(valid.data.coverUrl, "https://cdn.example.com/cover.jpg");
+  }
+
+  const unsafe = validateProjectInput({
+    name: "Product launch",
+    status: "active",
+    coverUrl: "javascript:alert(1)",
+  });
+  assert.equal(unsafe.success, false);
+});
+
+test("project input treats an omitted cover URL as optional, not an error", () => {
+  const result = validateProjectInput({ name: "Product launch", status: "active" });
+  assert.equal(result.success, true);
+  if (result.success) {
+    assert.equal(result.data.coverUrl, null);
   }
 });
 
@@ -151,4 +182,38 @@ test("sortProjectWorkspaceVideos falls back to id for total determinism", () => 
   ];
   const sorted = sortProjectWorkspaceVideos(videos);
   assert.deepEqual(sorted.map((v) => v.id), [2, 9]);
+});
+
+
+// NIGHT SHIFT REALITY PATCH §7 -- "current work" derivation, no new field.
+test("resolveCurrentWorkVideo prefers the most recently updated in-flight video", () => {
+  const videos = [
+    { id: 1, status: "DONE", reviewUrl: null, updatedAt: new Date("2026-08-20T00:00:00Z"), createdAt: null },
+    { id: 2, status: "IN_PROGRESS", reviewUrl: "https://review.example/2", updatedAt: new Date("2026-08-23T00:00:00Z"), createdAt: null },
+    { id: 3, status: "CHANGES_REQUESTED", reviewUrl: "https://review.example/3", updatedAt: new Date("2026-08-24T00:00:00Z"), createdAt: null },
+  ];
+  const result = resolveCurrentWorkVideo(videos);
+  assert.equal(result?.id, 3);
+});
+
+test("resolveCurrentWorkVideo falls back to the most recently updated reviewable video when nothing is in flight", () => {
+  const videos = [
+    { id: 1, status: "PLANNED", reviewUrl: null, updatedAt: new Date("2026-08-24T00:00:00Z"), createdAt: null },
+    { id: 2, status: "READY_FOR_REVIEW", reviewUrl: "https://review.example/2", updatedAt: new Date("2026-08-22T00:00:00Z"), createdAt: null },
+    { id: 3, status: "DONE", reviewUrl: "https://review.example/3", updatedAt: new Date("2026-08-23T00:00:00Z"), createdAt: null },
+  ];
+  const result = resolveCurrentWorkVideo(videos);
+  assert.equal(result?.id, 3);
+});
+
+test("resolveCurrentWorkVideo returns null rather than fabricating current work", () => {
+  const videos = [
+    { id: 1, status: "PLANNED", reviewUrl: null, updatedAt: null, createdAt: null },
+    { id: 2, status: "DONE", reviewUrl: null, updatedAt: null, createdAt: null },
+  ];
+  assert.equal(resolveCurrentWorkVideo(videos), null);
+});
+
+test("resolveCurrentWorkVideo returns null for an empty project", () => {
+  assert.equal(resolveCurrentWorkVideo([]), null);
 });

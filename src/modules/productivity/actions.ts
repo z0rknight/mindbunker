@@ -4,10 +4,11 @@ import "server-only";
 
 import { getAuthenticatedDb, getDb } from "@/db";
 import { isClientAuthenticated } from "@/lib/client-portal-session";
-import { clients, crmEvents, projects, videoLogs, workSessions } from "@/db/schema";
+import { clients, crmEvents, projects, revisions, videoLogs, workSessions } from "@/db/schema";
 import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { startOfMonthISO, todayISO } from "@/utils/date";
+import { mondayOfWeek } from "../work-sessions/core";
 import {
   completedVideoLogs,
   getVideoMetadataChanges,
@@ -17,6 +18,7 @@ import {
   validateVideoAssignment,
   validateVideoCreateInput,
   validateVideoInput,
+  validateVideoPriorityInput,
   type VideoCreateInputValues,
   type VideoInputValues,
   type ValidatedVideoMetadata,
@@ -143,6 +145,9 @@ export async function createVideoLog(
   });
 
   revalidateProductivityViews(assignment.clientId);
+  if (parsed.data.projectId) {
+    revalidatePath(`/projects/${parsed.data.projectId}`);
+  }
   return {
     success: true,
     videoId,
@@ -363,9 +368,19 @@ export async function updateVideoLogsBulk(
       set.contentType = patch.contentType.value;
     }
   }
+  // Sprint 3 P2 (bulk-edit safety fix): a blank text box on an enabled
+  // field must mean "leave unchanged, not erase" -- exactly the contract
+  // already documented on UpdateVideoLogsBulkPatch above. Before this
+  // fix, validateDeliveryUrl("") returns { success:true, value:null }
+  // (correct for the single-video edit form, where an empty box IS an
+  // intentional clear), so this bulk path was silently nulling
+  // deliveryUrl/reviewUrl for every selected video whenever the operator
+  // enabled the field but left it blank without checking "Clear".
   if (patch.deliveryUrl) {
     if ("clear" in patch.deliveryUrl) {
       set.deliveryUrl = null;
+    } else if (!patch.deliveryUrl.value.trim()) {
+      return { success: false, error: "Enter a delivery URL, or choose Clear to remove it." };
     } else {
       const parsed = validateDeliveryUrl(patch.deliveryUrl.value);
       if (!parsed.success) return parsed;
@@ -375,6 +390,8 @@ export async function updateVideoLogsBulk(
   if (patch.reviewUrl) {
     if ("clear" in patch.reviewUrl) {
       set.reviewUrl = null;
+    } else if (!patch.reviewUrl.value.trim()) {
+      return { success: false, error: "Enter a review URL, or choose Clear to remove it." };
     } else {
       const parsed = validateDeliveryUrl(patch.reviewUrl.value);
       if (!parsed.success) return parsed;
@@ -384,8 +401,10 @@ export async function updateVideoLogsBulk(
   if (patch.batchLabel) {
     if ("clear" in patch.batchLabel) {
       set.batchLabel = null;
+    } else if (!patch.batchLabel.value.trim()) {
+      return { success: false, error: "Enter a batch label, or choose Clear to remove it." };
     } else {
-      set.batchLabel = patch.batchLabel.value.trim().slice(0, 160) || null;
+      set.batchLabel = patch.batchLabel.value.trim().slice(0, 160);
     }
   }
 
@@ -395,11 +414,45 @@ export async function updateVideoLogsBulk(
 
   const db = await getAuthenticatedDb();
   const existing = await db
-    .select({ id: videoLogs.id, clientId: videoLogs.clientId, projectId: videoLogs.projectId })
+    .select({
+      id: videoLogs.id,
+      clientId: videoLogs.clientId,
+      projectId: videoLogs.projectId,
+      reviewUrl: videoLogs.reviewUrl,
+    })
     .from(videoLogs)
     .where(inArray(videoLogs.id, videoIds));
   if (existing.length === 0) {
     return { success: false, error: "No matching videos found." };
+  }
+
+  // Sprint 3 P2 (invariant-drift fix): "a Video cannot enter
+  // READY_FOR_REVIEW without a reviewUrl" is enforced at creation
+  // (validateVideoCreateInput) and at single-video transition
+  // (planVideoTransition), but this bulk path wrote `status` straight to
+  // the DB with no such check -- the exact same class of gap the Add
+  // Video round already closed for creation. `set.reviewUrl` (this
+  // patch's own change, if any) is now guaranteed non-null by the block
+  // above whenever it's present; a row with no reviewUrl in the patch
+  // falls back to its own existing value.
+  if (set.status === "READY_FOR_REVIEW") {
+    const patchReviewUrl =
+      patch.reviewUrl && !("clear" in patch.reviewUrl) ? (set.reviewUrl as string) : null;
+    const missingReviewUrl = patchReviewUrl
+      ? []
+      : existing.filter((row) => !row.reviewUrl);
+    if (patch.reviewUrl && "clear" in patch.reviewUrl) {
+      return {
+        success: false,
+        error: "Cannot set status to Ready for review while also clearing the review URL.",
+      };
+    }
+    if (missingReviewUrl.length > 0) {
+      return {
+        success: false,
+        error: `${missingReviewUrl.length} of the selected videos have no review URL yet. Add one (to the patch, or on each video) before setting Ready for review.`,
+      };
+    }
   }
 
   const now = new Date();
@@ -441,9 +494,21 @@ export async function getVideoStats() {
     db.select().from(videoLogs).orderBy(videoLogs.createdAt),
   ]);
 
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const weekStart = sevenDaysAgo.toISOString().split("T")[0];
+  // NIGHT SHIFT REALITY PATCH §10: "This Week" must mean the same thing
+  // everywhere in this app -- the Monday-anchored local calendar week
+  // already used by the Work Session ledger, caffeine's weekCount, and
+  // client-portal's completedThisWeek (see mondayOfWeek in
+  // work-sessions/core.ts). This used to be a rolling trailing-7-days
+  // window instead, which silently bled into the prior calendar week on
+  // any day before Sunday -- a label/query mismatch, not a rolling-window
+  // feature anyone asked for.
+  // mondayOfWeek takes an already-resolved local "YYYY-MM-DD" day key and
+  // does pure calendar arithmetic on it (no further timezone conversion) --
+  // todayISO() is exactly that: the Brazil-local today, precomputed above.
+  // Do NOT route this through dayKeyFor(), which expects a real ISO
+  // datetime and would misinterpret a bare date-only string as UTC
+  // midnight, shifting the boundary by 3 hours.
+  const weekStart = mondayOfWeek(today);
   const completedLogs = completedVideoLogs(allLogs);
   const weekLogs = completedLogs.filter((log) => log.date >= weekStart);
 
@@ -824,6 +889,99 @@ export async function transitionVideoStatusAsClient(
   );
 }
 
+// Lunch Reality Patch P1 §7: client-settable "priority now" video, one per
+// project. Same isolation pattern as transitionVideoStatusAsClient above --
+// identical "not found" error whether the videoId doesn't exist or belongs
+// to a different client, so a client can never learn anything about
+// another client's data from this action's response. D1 serializes a
+// db.batch() as one atomic transaction, so concurrent requests cannot
+// interleave the clear-and-set pair and leave two priority rows behind.
+export async function setVideoPriorityAsClient(
+  videoId: number,
+  makePriority: boolean,
+): Promise<ProductivityActionResult> {
+  const clientId = await isClientAuthenticated();
+  if (clientId === false) {
+    return { success: false, error: "Please log in to set video priority." };
+  }
+  if (!isPositiveId(videoId) || typeof makePriority !== "boolean") {
+    return { success: false, error: "Invalid request." };
+  }
+
+  const db = await getAuthenticatedDb();
+  const current = await db
+    .select({
+      id: videoLogs.id,
+      clientId: videoLogs.clientId,
+      projectId: videoLogs.projectId,
+    })
+    .from(videoLogs)
+    .where(eq(videoLogs.id, videoId))
+    .limit(1);
+  // Deliberately identical "not found" error whether the video doesn't
+  // exist or belongs to a different client -- see
+  // transitionVideoStatusAsClient above for the same convention.
+  if (!current[0] || current[0].clientId !== clientId) {
+    return { success: false, error: "Video not found." };
+  }
+
+  const validationError = validateVideoPriorityInput(makePriority, current[0].projectId);
+  if (validationError) {
+    return { success: false, error: validationError };
+  }
+
+  const updatedAt = new Date();
+  if (makePriority && current[0].projectId !== null) {
+    await db.batch([
+      db
+        .update(videoLogs)
+        .set({ isPriority: false, updatedAt })
+        .where(
+          and(
+            eq(videoLogs.projectId, current[0].projectId),
+            ne(videoLogs.id, videoId),
+            eq(videoLogs.isPriority, true),
+          ),
+        ),
+      db
+        .update(videoLogs)
+        .set({ isPriority: true, updatedAt })
+        .where(eq(videoLogs.id, videoId)),
+    ]);
+  } else {
+    await db
+      .update(videoLogs)
+      .set({ isPriority: false, updatedAt })
+      .where(eq(videoLogs.id, videoId));
+  }
+
+  revalidateProductivityViews(current[0].clientId);
+  return {
+    success: true,
+    message: makePriority ? "Marked as priority." : "Priority cleared.",
+  };
+}
+
+// Pre-Operation Reality Hardening §7: revisions are now historical facts,
+// not just an integer. changeRevisionCount used to ONLY mutate
+// videoLogs.revisionsCount, which meant correcting the tally (the "-"
+// button) silently rewrote history with no trace a revision was ever
+// logged -- exactly the provenance loss future unit-economics analytics
+// (revision drag, revision frequency/timestamps) can't tolerate.
+//
+// +1 ("Add one revision") inserts a real, timestamped `revisions` row --
+// a new historical fact -- and increments the cache in the SAME db.batch
+// (one D1 transaction: either both happen or neither does).
+//
+// -1 ("Remove one revision") is a CORRECTION, not a new fact, so it does
+// NOT delete an arbitrary row: it removes only the most recently recorded
+// revision for THIS video (if one exists) and decrements the cache
+// together, atomically. A legacy video whose revisionsCount > 0 predates
+// this table (no revisions rows yet) has nothing to delete -- the cache
+// still decrements on its own, exactly as before this round, so existing
+// legacy counts stay correctable without ever manufacturing a fake row to
+// delete. This is the one place "deletion" of a revisions row happens;
+// no other code path may delete from that table.
 export async function changeRevisionCount(
   videoId: number,
   delta: -1 | 1,
@@ -847,7 +1005,7 @@ export async function changeRevisionCount(
     return { success: false, error: "This video has no revision to remove." };
   }
 
-  const updated = await db
+  const cacheUpdate = db
     .update(videoLogs)
     .set({
       revisionsCount: sql`max(${videoLogs.revisionsCount} + ${delta}, 0)`,
@@ -855,6 +1013,24 @@ export async function changeRevisionCount(
     })
     .where(and(eq(videoLogs.id, videoId), gte(videoLogs.revisionsCount, 0)))
     .returning({ revisionsCount: videoLogs.revisionsCount });
+
+  let updated;
+  if (delta === 1) {
+    const eventInsert = db.insert(revisions).values({
+      videoId,
+      actor: "admin",
+    });
+    [, updated] = await db.batch([eventInsert, cacheUpdate]);
+  } else {
+    // Delete only the most recently created revisions row for THIS
+    // video -- never another video's history, never an arbitrary row.
+    // No-op (0 rows affected) when this video has no revisions rows yet
+    // (legacy data), which is fine: the cache decrement below still runs.
+    const undoLast = db.delete(revisions).where(
+      sql`${revisions.id} = (select id from revisions where video_id = ${videoId} order by created_at desc, id desc limit 1)`,
+    );
+    [, updated] = await db.batch([undoLast, cacheUpdate]);
+  }
 
   revalidateProductivityViews(current[0].clientId);
   return {

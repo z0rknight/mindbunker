@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import { OPPORTUNITY_STAGES } from "../modules/gateway/config";
+import { QUOTE_STATUSES, DEFAULT_QUOTE_CURRENCY } from "../modules/quotes/config";
 import {
   BOOKING_STATUSES,
   CALENDAR_PROVIDERS,
@@ -269,10 +270,76 @@ export const crmEvents = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
       () => new Date(),
     ),
+    // Sprint 3 (/book public intake): a client-minted idempotency key so a
+    // double-click/double-submit of the public booking-request form cannot
+    // log the same submission twice. Same nullable-unique-index pattern as
+    // transactions.idempotencyKey -- SQLite permits unlimited NULLs in a
+    // unique index, so this only constrains the /book flow that opts in;
+    // every other crm_events writer is unaffected.
+    idempotencyKey: text("idempotency_key"),
   },
   (table) => [
     index("crm_events_client_created_idx").on(table.clientId, table.createdAt),
     index("crm_events_video_created_idx").on(table.videoId, table.createdAt),
+    uniqueIndex("crm_events_idempotency_key_idx").on(table.idempotencyKey),
+  ],
+);
+
+// Client Service Reality Patch (25 Aug 2026): Emmanuel's commercial offer
+// to a client, hand-logged from a Pricing Lab calculation (see
+// modules/quotes/config.ts's header for the full rationale). Additive,
+// standalone -- references clients/projects/videoLogs but nothing
+// references it back, so it cannot break any existing query.
+export const quotes = sqliteTable(
+  "quotes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    status: text("status", { enum: QUOTE_STATUSES }).notNull().default("DRAFT"),
+    currency: text("currency").notNull().default(DEFAULT_QUOTE_CURRENCY),
+    amountCents: integer("amount_cents").notNull(),
+    contentTypeLabel: text("content_type_label").notNull(),
+    turnaroundLabel: text("turnaround_label").notNull(),
+    revisionsIncluded: integer("revisions_included").notNull(),
+    summary: text("summary"),
+    scopeText: text("scope_text").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    sentAt: integer("sent_at", { mode: "timestamp" }),
+    approvedAt: integer("approved_at", { mode: "timestamp" }),
+    declinedAt: integer("declined_at", { mode: "timestamp" }),
+    // Set once "Create production work" runs after approval -- never set
+    // before APPROVED (enforced at the action layer, not by a DB
+    // constraint, same discipline as personal_transactions' protected
+    // types). A quote can exist with neither set (not yet actioned), or
+    // both (the canonical production this quote authorized).
+    projectId: integer("project_id").references(() => projects.id, {
+      onDelete: "set null",
+    }),
+    videoId: integer("video_id").references(() => videoLogs.id, {
+      onDelete: "set null",
+    }),
+    // Reality Closure (26 Aug 2026) P0: the Video Commercial Terms panel
+    // must be able to say "Approved Quote" vs "Manual Commercial Terms"
+    // (brief's exact wording) -- a quote created by the full public
+    // /quoteavideo -> DRAFT -> SENT -> APPROVED flow vs one Emmanuel
+    // records directly from an existing Video workspace for a deal that
+    // predates/bypassed that flow (e.g. Dave's fixed $100, agreed before
+    // this system existed). Both are equally real APPROVED commercial
+    // records in the same table -- this is a label on provenance, not a
+    // second price model.
+    origin: text("origin", { enum: ["INTAKE", "MANUAL"] })
+      .notNull()
+      .default("INTAKE"),
+  },
+  (table) => [
+    index("quotes_client_id_idx").on(table.clientId),
+    index("quotes_status_idx").on(table.status),
+    index("quotes_video_id_idx").on(table.videoId),
+    check("quotes_origin_check", sql`${table.origin} in ('INTAKE', 'MANUAL')`),
   ],
 );
 
@@ -377,6 +444,13 @@ export const projects = sqliteTable(
       .default("planned"),
     deadline: text("deadline"),
     notes: text("notes"),
+    // Sprint 3 P1 (Project + Video visual covers): nullable, never
+    // backfilled by inference -- same convention as videoLogs.coverUrl
+    // above. A Project with no coverUrl falls back through
+    // Project -> its most recent Video's cover -> the client's avatar ->
+    // a neutral placeholder (resolved in modules/media/core.ts, not
+    // stored here).
+    coverUrl: text("cover_url"),
     createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
       () => new Date(),
     ),
@@ -450,6 +524,18 @@ export const videoLogs = sqliteTable(
     // table -- no batch analytics/throughput/dashboards are built on top
     // of this in this round; see docs/architecture/FINAL_LOCAL_LIVE_READINESS.md.
     batchLabel: text("batch_label"),
+    // Lunch Reality Patch P1 §7: a single client-settable "priority now"
+    // video per project. Plain boolean, not a rank/order integer -- only
+    // ever one thing to express ("this is the one I need right now"), not
+    // a general ordering. The "only one true per project" invariant is
+    // enforced at the action layer (setVideoPriorityAsClient in
+    // modules/productivity/actions.ts: clear the project's other rows,
+    // then set this one), not a DB constraint -- SQLite has no native
+    // "unique true per group" constraint short of a partial unique index,
+    // and the write path already fully owns this invariant.
+    isPriority: integer("is_priority", { mode: "boolean" })
+      .notNull()
+      .default(false),
     createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
       () => new Date(),
     ),
@@ -463,6 +549,10 @@ export const videoLogs = sqliteTable(
       table.createdAt,
     ),
     index("video_logs_client_created_idx").on(table.clientId, table.createdAt),
+    index("video_logs_project_priority_idx").on(
+      table.projectId,
+      table.isPriority,
+    ),
     check(
       "video_logs_orientation_check",
       sql`${table.orientation} is null or ${table.orientation} in ('LANDSCAPE', 'VERTICAL', 'SQUARE')`,
@@ -472,6 +562,41 @@ export const videoLogs = sqliteTable(
       sql`${table.contentType} is null or ${table.contentType} in ('short-form', 'long-form', 'mini-doc', 'testimonial', 'other')`,
     ),
   ],
+);
+
+// Pre-Operation Reality Hardening §7: revisions AS HISTORICAL FACTS.
+// videoLogs.revisionsCount above is a mutable integer -- correcting it
+// (RevisionControls' "-" button) rewrites history in place, which is fine
+// for a running tally but destroys the provenance future unit-economics
+// analytics need (revision drag, revision frequency, revision timestamps).
+// This table is the new source of truth for THAT: one row per revision
+// event, append-mostly, independently auditable per video.
+//
+// videoLogs.revisionsCount is NOT removed -- it remains a derived
+// cache/compatibility field (existing UI reads it directly in several
+// places; recomputing it from a join everywhere would be a much bigger
+// change than this hardening round calls for). The canonical action
+// (recordRevisionAdded/undoLastRevision in modules/productivity/actions.ts)
+// keeps the two in sync atomically on every write. Existing legacy videos
+// with revisionsCount > 0 and zero rows here are a known, accepted gap --
+// see that action's comment for why no historical rows are manufactured
+// to "fill in" a legacy count.
+export const revisions = sqliteTable(
+  "revisions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id")
+      .notNull()
+      .references(() => videoLogs.id, { onDelete: "cascade" }),
+    note: text("note"),
+    actor: text("actor", { enum: ["admin", "gateway", "system", "client"] })
+      .notNull()
+      .default("admin"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [index("revisions_video_created_idx").on(table.videoId, table.createdAt)],
 );
 
 // MindBunker Sensor P1: one revocable, narrowly-scoped credential per
@@ -512,6 +637,7 @@ export const workSessions = sqliteTable(
         "REVIEW",
         "EXPORT",
         "ADMIN",
+        "CLIENT_SERVICE",
         "OTHER",
       ],
     })
@@ -560,7 +686,7 @@ export const workSessions = sqliteTable(
     ),
     check(
       "work_sessions_activity_type_check",
-      sql`${table.activityType} in ('EDITING', 'MOTION_GRAPHICS', 'COLOR', 'AUDIO', 'REVIEW', 'EXPORT', 'ADMIN', 'OTHER')`,
+      sql`${table.activityType} in ('EDITING', 'MOTION_GRAPHICS', 'COLOR', 'AUDIO', 'REVIEW', 'EXPORT', 'ADMIN', 'CLIENT_SERVICE', 'OTHER')`,
     ),
   ],
 );
@@ -590,6 +716,7 @@ export const sensorSessions = sqliteTable(
         "REVIEW",
         "EXPORT",
         "ADMIN",
+        "CLIENT_SERVICE",
         "OTHER",
       ],
     }).notNull(),
@@ -634,7 +761,7 @@ export const sensorSessions = sqliteTable(
     ),
     check(
       "sensor_sessions_activity_type_check",
-      sql`${table.activityType} in ('EDITING', 'MOTION_GRAPHICS', 'COLOR', 'AUDIO', 'REVIEW', 'EXPORT', 'ADMIN', 'OTHER')`,
+      sql`${table.activityType} in ('EDITING', 'MOTION_GRAPHICS', 'COLOR', 'AUDIO', 'REVIEW', 'EXPORT', 'ADMIN', 'CLIENT_SERVICE', 'OTHER')`,
     ),
     check(
       "sensor_sessions_approval_state_check",
@@ -690,6 +817,106 @@ export const deviceActivityObservations = sqliteTable(
     check(
       "device_activity_observations_mouse_movement_count_check",
       sql`${table.mouseMovementCount} is null or ${table.mouseMovementCount} >= 0`,
+    ),
+  ],
+);
+
+// ─── ACTIVITYWATCH IMPORT (Pre-Operation Reality Hardening — ActivityWatch
+// Import round) ──────────────────────────────────────────────────────────
+//
+// Raw, observed ActivityWatch history -- deliberately NOT the same tier as
+// deviceActivityObservations above (that table is native MindBunker
+// observation, fed by the live authenticated Sensor agent and consumed by
+// Sensor's own session/billing logic) and NOT the same tier as the
+// Historical Reference Layer below (that layer stores RECONSTRUCTED,
+// aggregated facts derived by an offline script, e.g. "activitywatch_afk"
+// monthly totals in historical_facts_v0.json). This is tier-1 raw evidence,
+// one row per real ActivityWatch event, imported as-is from an operator-
+// supplied export file. It must never be converted into a sensor_sessions
+// row, a work_sessions row, or any billable/canonical record -- it exists
+// purely so future analytics have real per-event provenance to query,
+// completely separate from anything MindBunker itself measured or billed.
+//
+// One row per uploaded file, append-only, keyed by a whole-file content
+// fingerprint so re-uploading the exact same export is a fast no-op.
+export const activitywatchImports = sqliteTable(
+  "activitywatch_imports",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    bucketId: text("bucket_id").notNull(),
+    bucketType: text("bucket_type", { enum: ["WINDOW", "AFK"] }).notNull(),
+    hostname: text("hostname"),
+    fileFingerprint: text("file_fingerprint").notNull(),
+    r2ObjectKey: text("r2_object_key").notNull(),
+    fileSizeBytes: integer("file_size_bytes").notNull(),
+    totalEventsInFile: integer("total_events_in_file").notNull().default(0),
+    newEventCount: integer("new_event_count").notNull().default(0),
+    duplicateEventCount: integer("duplicate_event_count").notNull().default(0),
+    rejectedEventCount: integer("rejected_event_count").notNull().default(0),
+    rangeStart: integer("range_start", { mode: "timestamp" }),
+    rangeEnd: integer("range_end", { mode: "timestamp" }),
+    importedAt: integer("imported_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("activitywatch_imports_file_fingerprint_unique").on(
+      table.fileFingerprint,
+    ),
+    index("activitywatch_imports_bucket_idx").on(table.bucketId),
+  ],
+);
+
+// One row per raw event (window-focus interval or AFK-state interval).
+// `fingerprint` is derived deterministically from (bucketId, bucketType,
+// startedAt, durationSeconds, and the type-specific payload) -- see
+// deriveEventFingerprint in modules/activitywatch/core.ts -- so the SAME
+// real-world event imported from two different export files (e.g. an
+// overlapping re-export) collides on the unique index and is silently
+// skipped (onConflictDoNothing), never duplicated.
+export const activitywatchEvents = sqliteTable(
+  "activitywatch_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    importId: integer("import_id")
+      .notNull()
+      .references(() => activitywatchImports.id, { onDelete: "restrict" }),
+    bucketId: text("bucket_id").notNull(),
+    bucketType: text("bucket_type", { enum: ["WINDOW", "AFK"] }).notNull(),
+    hostname: text("hostname"),
+    startedAt: integer("started_at", { mode: "timestamp" }).notNull(),
+    durationSeconds: real("duration_seconds").notNull(),
+    // WINDOW-only (null for AFK rows).
+    appName: text("app_name"),
+    windowTitle: text("window_title"),
+    // AFK-only (null for WINDOW rows). Whatever string ActivityWatch's own
+    // afkstatus watcher reported ("afk" / "not-afk") -- not reinterpreted.
+    afkStatus: text("afk_status"),
+    // Always "ACTIVITYWATCH" today. A real column (not just a fixed value
+    // in application code) so a future second raw-import source can share
+    // this table honestly, and so provenance survives any export/backup.
+    provenance: text("provenance").notNull().default("ACTIVITYWATCH"),
+    fingerprint: text("fingerprint").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("activitywatch_events_fingerprint_unique").on(
+      table.fingerprint,
+    ),
+    index("activitywatch_events_bucket_started_idx").on(
+      table.bucketId,
+      table.startedAt,
+    ),
+    index("activitywatch_events_import_idx").on(table.importId),
+    check(
+      "activitywatch_events_bucket_type_check",
+      sql`${table.bucketType} in ('WINDOW', 'AFK')`,
+    ),
+    check(
+      "activitywatch_events_duration_check",
+      sql`${table.durationSeconds} >= 0`,
     ),
   ],
 );
@@ -1401,5 +1628,198 @@ export const operatingReserveSettings = sqliteTable(
   },
   (table) => [
     check("operating_reserve_settings_singleton_check", sql`${table.id} = 1`),
+  ],
+);
+
+// ─── SPRINT C1: FX OBSERVED-RATE LEDGER ────────────────────────────────────
+// Records a REAL BRL<->USD conversion Emmanuel actually performed (e.g. an
+// Upwork/Wise withdrawal converting X BRL into Y USD or vice versa). This is
+// its own append-only source fact, never a revenue/expense transaction --
+// see EFFECTIVE_USD_TO_BRL_RATE in finance/config.ts for the temporary
+// manual fallback this ledger is meant to eventually replace with real
+// observed data. No automatic FX API: every row here is something Emmanuel
+// typed in after the fact.
+//
+// FX + Business Operating Cash Patch: a BUSINESS-scope row IS now read
+// alongside `transactions` when deriving Business Cash by currency (see
+// getRmediaCashSummary/computeFinanceSummaryByCurrency in finance/) -- the
+// conversion moves value between currency positions, it still never
+// creates revenue or expense. A PERSONAL-scope row never touches Business
+// Finance at all.
+export const fxConversions = sqliteTable(
+  "fx_conversions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    date: text("date").notNull(), // ISO date string YYYY-MM-DD
+    brlAmount: real("brl_amount").notNull(),
+    usdAmount: real("usd_amount").notNull(),
+    notes: text("notes"),
+    // FX + Business Operating Cash Patch §2: every conversion belongs to
+    // BUSINESS or PERSONAL money -- the two must never be mixed by
+    // default. Historical rows recorded before this column existed get
+    // UNCLASSIFIED via the column default below, never silently backfilled
+    // to BUSINESS; new conversions always pass an explicit scope at the
+    // app level (validateFxConversionInput in modules/fx/core.ts).
+    // UNCLASSIFIED is reachable only as this migration's honest default
+    // for pre-existing rows, or by an explicit manual reclassification.
+    scope: text("scope", { enum: ["BUSINESS", "PERSONAL", "UNCLASSIFIED"] })
+      .notNull()
+      .default("UNCLASSIFIED"),
+    // FX + Business Operating Cash Patch §5/§6: which currency was actually
+    // SPENT to obtain the other -- required to move Business Cash in the
+    // right direction (USD->BRL decreases USD and increases BRL; BRL->USD
+    // is the reverse). The brlAmount/usdAmount pair above is deliberately
+    // direction-agnostic for weighted-RATE math (see computeVolumeWeightedRate),
+    // but cash movement is not direction-agnostic, so this is a separate
+    // field, not inferred from brlAmount/usdAmount. Nullable: rows recorded
+    // before this column existed (or with scope != BUSINESS) have no
+    // recorded direction and are simply excluded from cash derivation --
+    // never guessed, matching the "never rewrite history" rule.
+    fromCurrency: text("from_currency", { enum: ["BRL", "USD"] }),
+    // FX + Business Operating Cash Patch §3: describes INTENT for a
+    // BUSINESS conversion ("this BRL was prepared to pay Adobe"), never an
+    // expense itself -- the actual subscription charge is what creates the
+    // expense later, this only labels why the money was moved. Nullable;
+    // only meaningful when scope = BUSINESS, never required for PERSONAL.
+    purpose: text("purpose", {
+      enum: ["OPERATING_COST", "TAX_RESERVE", "OWNER_TRANSFER", "OTHER"],
+    }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("fx_conversions_date_idx").on(table.date),
+    index("fx_conversions_scope_idx").on(table.scope),
+    check("fx_conversions_brl_amount_check", sql`${table.brlAmount} > 0`),
+    check("fx_conversions_usd_amount_check", sql`${table.usdAmount} > 0`),
+    check(
+      "fx_conversions_scope_check",
+      sql`${table.scope} in ('BUSINESS', 'PERSONAL', 'UNCLASSIFIED')`,
+    ),
+    check(
+      "fx_conversions_purpose_check",
+      sql`${table.purpose} is null or ${table.purpose} in ('OPERATING_COST', 'TAX_RESERVE', 'OWNER_TRANSFER', 'OTHER')`,
+    ),
+    check(
+      "fx_conversions_from_currency_check",
+      sql`${table.fromCurrency} is null or ${table.fromCurrency} in ('BRL', 'USD')`,
+    ),
+  ],
+);
+
+// A manually-declared rate for one calendar month ("YYYY-MM"), used only
+// when that month has zero observed fx_conversions rows. Second tier of
+// the provenance hierarchy: OBSERVED (real conversions that month) ->
+// MANUAL (this table) -> FALLBACK (EFFECTIVE_USD_TO_BRL_RATE). Never
+// overwrites observed data -- see resolveFxRateForMonth in
+// modules/fx/core.ts.
+export const fxManualRates = sqliteTable(
+  "fx_manual_rates",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    month: text("month").notNull(), // "YYYY-MM"
+    rate: real("rate").notNull(),
+    notes: text("notes"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("fx_manual_rates_month_idx").on(table.month),
+    check("fx_manual_rates_rate_check", sql`${table.rate} > 0`),
+  ],
+);
+
+// ─── SPRINT C1: PERSONAL FINANCE FOUNDATION ────────────────────────────────
+// A strictly separate ledger from `transactions` (Business Finance) -- not
+// a category tag on the same table. `owner_pay_receipt` is the personal
+// side of the RMEDIA CASH -> OWNER PAY -> PERSONAL MONEY bridge (see
+// recordOwnerPay in finance/actions.ts, which inserts the paired row here
+// automatically, 1:1, via ownerPayTransactionId); it is never business
+// expense/revenue and never counted as personal `income` (reserved for
+// genuine external personal income, e.g. a gift or a second job).
+// `opening_balance` is an explicit starting-point fact, distinct from
+// income, so a first-ever balance can be recorded honestly without
+// inventing a fake income event.
+export const personalTransactions = sqliteTable(
+  "personal_transactions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    type: text("type", {
+      enum: ["opening_balance", "owner_pay_receipt", "income", "expense"],
+    }).notNull(),
+    amount: real("amount").notNull(),
+    category: text("category").notNull(),
+    currency: text("currency").notNull(),
+    date: text("date").notNull(), // ISO date string YYYY-MM-DD
+    notes: text("notes"),
+    ownerPayTransactionId: integer("owner_pay_transaction_id").references(
+      () => transactions.id,
+      { onDelete: "restrict" },
+    ),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("personal_transactions_date_idx").on(table.date),
+    uniqueIndex("personal_transactions_owner_pay_txn_idx").on(
+      table.ownerPayTransactionId,
+    ),
+    check(
+      "personal_transactions_type_check",
+      sql`${table.type} in ('opening_balance', 'owner_pay_receipt', 'income', 'expense')`,
+    ),
+    check("personal_transactions_amount_check", sql`${table.amount} >= 0`),
+    // Every owner_pay_receipt row is linked to exactly the business
+    // transaction that produced it, and nothing else is ever linked.
+    check(
+      "personal_transactions_owner_pay_link_check",
+      sql`(${table.type} = 'owner_pay_receipt') = (${table.ownerPayTransactionId} is not null)`,
+    ),
+  ],
+);
+
+// ─── Reality Closure (26 Aug 2026): LEDGER vs OBSERVED account balance ────
+// "MindBunker needs to distinguish LEDGER BALANCE from OBSERVED ACCOUNT
+// BALANCE because Emmanuel may not yet have logged every historical
+// movement." A snapshot is evidence for reconciliation, nothing else --
+// it is NEVER income, expense, an FX conversion, or owner pay, and it
+// must never be folded into any of those derivations. finance/core.ts and
+// personal-finance/core.ts's balance computations do not read this table
+// at all; only the reconciliation panel reads it, alongside the existing
+// ledger derivation, to show the difference.
+export const cashBalanceSnapshots = sqliteTable(
+  "cash_balance_snapshots",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    scope: text("scope", { enum: ["BUSINESS", "PERSONAL"] }).notNull(),
+    currency: text("currency", { enum: ["USD", "BRL"] }).notNull(),
+    balanceAmount: real("balance_amount").notNull(),
+    observedAt: text("observed_at").notNull(), // ISO date YYYY-MM-DD
+    // Free text, not a closed enum -- only WISE_MANUAL exists today ("no
+    // bank API"), but a future source (a different account, a different
+    // manual check) shouldn't need a migration to be recorded.
+    source: text("source").notNull().default("WISE_MANUAL"),
+    notes: text("notes"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("cash_balance_snapshots_scope_currency_idx").on(
+      table.scope,
+      table.currency,
+      table.observedAt,
+    ),
+    check(
+      "cash_balance_snapshots_scope_check",
+      sql`${table.scope} in ('BUSINESS', 'PERSONAL')`,
+    ),
+    check(
+      "cash_balance_snapshots_currency_check",
+      sql`${table.currency} in ('USD', 'BRL')`,
+    ),
   ],
 );

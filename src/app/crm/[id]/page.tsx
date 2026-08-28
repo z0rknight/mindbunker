@@ -12,6 +12,10 @@ import { RenameClientButton } from "./RenameClientButton";
 import { GeladeiraControl } from "./GeladeiraControl";
 import { OpportunityPanel } from "./OpportunityPanel";
 import { PortalAccessPanel } from "./PortalAccessPanel";
+import { QuotePanel } from "./QuotePanel";
+import { getQuotesForClient } from "@/modules/quotes/data";
+import { computeClientCommercialValue } from "@/modules/quotes/core";
+import { ClientCommercialValuePanel } from "./ClientCommercialValuePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -43,14 +47,33 @@ export default async function ClientDetailPage({
   if (!client) {
     notFound();
   }
-  const [workspace, bookingConfiguration, projects, instagramStatus, clientIntelligence] =
+  const [workspace, bookingConfiguration, projects, instagramStatus, clientIntelligence, quotes] =
     await Promise.all([
       getAdminGatewayWorkspace(clientId),
       getAdminBookingConfiguration(),
       getProjectsForClient(clientId),
       getInstagramImportStatus(),
       getClientIntelligence(clientId),
+      getQuotesForClient(clientId),
     ]);
+  // Client Service Reality Patch §6/§8 -- Quote rows carry Date | null
+  // fields (createdAt) from the DB layer; serialize to string | null
+  // before crossing into the "use client" QuotePanel, same pattern as
+  // every other date field already serialized on this page.
+  const serializedQuotes = quotes.map((quote) => ({
+    id: quote.id,
+    status: quote.status,
+    currency: quote.currency,
+    amountCents: quote.amountCents,
+    contentTypeLabel: quote.contentTypeLabel,
+    turnaroundLabel: quote.turnaroundLabel,
+    revisionsIncluded: quote.revisionsIncluded,
+    scopeText: quote.scopeText,
+    projectId: quote.projectId,
+    videoId: quote.videoId,
+    createdAt: quote.createdAt ? quote.createdAt.toISOString() : null,
+  }));
+  const commercialValue = computeClientCommercialValue(quotes);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
@@ -150,6 +173,7 @@ export default async function ClientDetailPage({
             ? { id: workspace.invitation.id, status: workspace.invitation.status }
             : null
         }
+        hasPortalPassword={Boolean(client.portalPasswordHash)}
       />
 
       <OpportunityPanel
@@ -184,6 +208,11 @@ export default async function ClientDetailPage({
         }
       />
 
+      <ClientCommercialValuePanel
+        realizedRevenueByCurrency={clientIntelligence.totalRevenueByCurrency}
+        commercialValue={commercialValue}
+      />
+
       {/* Internal Client Intelligence (Sunday Systems Round, Phase H) --
           never rendered on the client-facing Vault or Gateway. */}
       <ClientIntelligencePanel summary={clientIntelligence} />
@@ -200,9 +229,19 @@ export default async function ClientDetailPage({
         />
       </div>
 
+      {/* Quote Approval (Client Service Reality Patch §6) -- log a quote
+          from a Pricing Lab calculation, move it DRAFT -> SENT ->
+          APPROVED/DECLINED, then create the linked Project/Video once
+          approved via the canonical creation path. */}
+      <div className="mb-6">
+        <QuotePanel clientId={client.id} quotes={serializedQuotes} />
+      </div>
+
       {/* Client Tabs */}
       <ClientTabs
         client={client}
+        totalProjectsCount={clientIntelligence.totalProjectsCount}
+        totalRevenueByCurrency={clientIntelligence.totalRevenueByCurrency}
         briefing={workspace.briefing}
         events={workspace.events}
         projects={projects}

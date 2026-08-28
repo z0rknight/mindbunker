@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **🩹 Live correction sprint — local release gate (2026-08-27)**
+  - [x] Fixed Owner Pay's Drizzle `INSERT … SELECT` projection/order crash while preserving one atomic, idempotent Business → Personal bridge
+  - [x] Added truthful historical Health dates and stable-ID correction; `created_at` is preserved and `updated_at` records the edit
+  - [x] Made Project-native Plan Video lock to the current Project and derive Client ownership server-side
+  - [x] Split CRM commercial truth into realized Finance revenue, open pipeline, and approved/closed value without mixing currencies
+  - [x] No migration; 601/601 tests, TypeScript, source ESLint, Next build, OpenNext build, responsive QA, and local FK check passed
+  - [x] Full repository lint remains red only because it traverses pre-existing generated `.round-logs/` and `_to_delete/.next*` artifacts; sprint/source scope has zero lint errors
+  - [x] Production unchanged; awaiting explicit live-patch approval
+
 - [x] **🛰️ Sensor P1.1 Inbox + observation sync audit — local only (2026-08-24)**
   - [x] Split native intentional evidence into `sensor_sessions` review state while preserving passive observations as an independent stream
   - [x] Added explicit Approve → exactly one `MAC_SENSOR_APPROVED` canonical Work Session; Archive and confirmed manual soft Delete preserve evidence
@@ -226,6 +235,7 @@ The original February 2026 visual design is the canonical interface. The separat
 | `src/modules/work-sessions/` | Video-attributed Start/Stop, global active-session recovery, and closed-time aggregation | ✅ P0 live |
 | `src/modules/sensor/` | Scoped native-device auth, Sensor Inbox review, idempotent observation ingestion, explicit Work Session approval, and overlap projections | ✅ P1.1 local candidate |
 | `src/app/productivity/sensor/` | Sensor Inbox, session detail, passive evidence, diagnostics, and device credential management | ✅ P1.1 local candidate |
+| `src/app/all-history/` | Authenticated reconstructed-history dashboard plus fingerprinted, idempotent operator import control | ✅ Production batch 1 active |
 | `src/modules/booking/` | Availability/slot core, provider boundary, D1 DAL, actions, and tests | ✅ Milestone 2 local |
 | `src/db/schema.ts` | All table definitions including Gateway and booking | ✅ Ready |
 | `src/db/index.ts` | Request-scoped Drizzle client over Cloudflare D1 | ✅ Ready |
@@ -315,3 +325,4 @@ The original February 2026 visual design is the canonical interface. The separat
 | 2026-08-22 | Completed Productivity / Project Navigation P1.1 locally without schema changes: Client remains mandatory for Project, `/projects/[id]` owns Project operations, Client/Project/Video links follow the canonical hierarchy, Plan Video requires an existing Project with a safe create-and-return path, and Finished Video transitions an existing identity to DONE instead of inserting a duplicate; tests/builds/responsive QA green, production untouched |
 | 2026-08-22 | Completed Video Operational Memory P1.2 locally without schema changes: the Video Workspace can append durable chronological notes through `crm_events.video_id`, deterministic newest-first history preserves lifecycle/work-session boundaries, operational memory blocks app-level video deletion, temporary QA notes were removed, and production remained untouched |
 | 2026-08-24 | Implemented MindBunker Sensor P1 locally: revocable scoped device credentials, cached canonical Client → Project → Video hydration, Keychain storage, durable offline outbox, idempotent MAC_SENSOR Work Sessions, separate passive observation batches, derived correlation, optional privacy-safe aggregate key/mouse counters, and Sensor Activity diagnostics; production remains exactly 0000–0015 |
+| 2026-08-25 | Activated reconciled Worker `82aefdcc-eb7c-4dc5-9ccc-19540dbd3e8c`, imported canonical All History fingerprint `932047bd8bdbf0f3b14672ce7fa9bf88a18e83e4de76e25fa30df3f74d987390` as active batch 1, proved rerun idempotency, preserved operational counts/FKs and known videos, and verified live operator/client-auth surfaces; production schema remains 0000–0028 |

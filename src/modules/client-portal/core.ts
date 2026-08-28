@@ -4,8 +4,10 @@ import type {
   VideoStatus,
 } from "../productivity/config.ts";
 import { VIDEO_CONTENT_TYPE_LABELS } from "../productivity/config.ts";
-import { validateDeliveryUrl } from "../productivity/core.ts";
+import { validateDeliveryUrl, validateCoverUrl } from "../productivity/core.ts";
 import type { ProjectStatus } from "../projects/config.ts";
+import { resolveCoverUrl } from "../media/core.ts";
+import type { ClientQuoteSummary } from "../quotes/core.ts";
 
 export const CLIENT_VIDEO_STATUS_LABELS: Record<VideoStatus, string> = {
   PLANNED: "Planned",
@@ -14,6 +16,23 @@ export const CLIENT_VIDEO_STATUS_LABELS: Record<VideoStatus, string> = {
   CHANGES_REQUESTED: "Updates in progress",
   DONE: "Delivered",
 };
+
+// Client Portal Reality round §K (historical friction sweep, item 2): the
+// static DONE -> "Delivered" label above reads as false confidence when a
+// video is marked DONE (production finished) but never actually got a
+// delivery link -- e.g. a batch status clean-up, or a video finished but
+// not yet handed off. "Delivered" now requires a real deliveryUrl;
+// otherwise a DONE video reads as "Completed" (production finished, not
+// yet delivered). Every other status keeps the static label unchanged.
+export function clientVideoStatusLabel(
+  status: VideoStatus,
+  hasDeliveryUrl: boolean,
+): string {
+  if (status === "DONE") {
+    return hasDeliveryUrl ? "Delivered" : "Completed";
+  }
+  return CLIENT_VIDEO_STATUS_LABELS[status];
+}
 
 export const CLIENT_PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   planned: "Upcoming",
@@ -40,6 +59,7 @@ export type ClientPortalProjectRow = {
 };
 
 export type ClientPortalVideoRow = {
+  id: number;
   projectId: number | null;
   clientId: number | null;
   projectClientId: number;
@@ -49,6 +69,12 @@ export type ClientPortalVideoRow = {
   deliveryUrl: string | null;
   reviewUrl: string | null;
   publishedUrl: string | null;
+  // Client Portal Reality round: this token-based Vault surface never
+  // carried covers at all, unlike the authenticated dashboard below --
+  // same fallback chain (Video -> Project), tier 2 only, same as
+  // toCard's coverUrl resolution.
+  coverUrl: string | null;
+  projectCoverUrl: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 };
@@ -58,12 +84,14 @@ export type ClientPortalProject = {
   status: string;
   deadline: string | null;
   videos: Array<{
+    id: number;
     title: string;
     status: string;
     lastUpdated: string | null;
     deliveryUrl: string | null;
     reviewUrl: string | null;
     publishedUrl: string | null;
+    coverUrl: string | null;
   }>;
 };
 
@@ -113,13 +141,32 @@ export function buildClientPortalProjects(
         const deliveryUrl = validateDeliveryUrl(video.deliveryUrl);
         const reviewUrl = validateDeliveryUrl(video.reviewUrl);
         const publishedUrl = validateDeliveryUrl(video.publishedUrl);
+        // Client Vault Cover Bug fix (25 Aug 2026): this was
+        // validateDeliveryUrl, which requires an absolute https:// URL --
+        // it silently rejected the app's own internal cover route
+        // (/mindbunker/media/covers/<uuid>.<ext>, a relative path) and
+        // fell back to null, so an uploaded R2 cover that rendered fine
+        // operator-side showed as "No preview yet" client-side.
+        // validateCoverUrl is the correct validator here: it recognizes
+        // that internal route via isInternalCoverRoute before falling
+        // back to the same strict-HTTPS check for any external URL.
+        const coverUrl = validateCoverUrl(
+          resolveCoverUrl(video.coverUrl, video.projectCoverUrl),
+        );
+        // deliveryUrl.success is true both when a real URL validated AND
+        // when there simply was none (validateDeliveryUrl treats null/""
+        // as a valid "absence") -- Delivered must require an actual link,
+        // so check the resolved value, not just .success.
+        const resolvedDeliveryUrl = deliveryUrl.success ? deliveryUrl.value : null;
         return {
+          id: video.id,
           title: video.title?.trim() || `Video ${video.date}`,
-          status: CLIENT_VIDEO_STATUS_LABELS[video.status],
+          status: clientVideoStatusLabel(video.status, resolvedDeliveryUrl !== null),
           lastUpdated: lastMeaningfulUpdate(video),
-          deliveryUrl: deliveryUrl.success ? deliveryUrl.value : null,
+          deliveryUrl: resolvedDeliveryUrl,
           reviewUrl: reviewUrl.success ? reviewUrl.value : null,
           publishedUrl: publishedUrl.success ? publishedUrl.value : null,
+          coverUrl: coverUrl.success ? coverUrl.value : null,
         };
       }),
   }));
@@ -153,8 +200,12 @@ export type ClientDashboardVideoRow = {
   reviewUrl: string | null;
   publishedUrl: string | null;
   coverUrl: string | null;
+  // Sprint 3 P1: cover fallback tier 2 -- see resolveCoverUrl below.
+  projectCoverUrl: string | null;
   orientation: VideoOrientation | null;
   contentType: VideoContentType | null;
+  // Lunch Reality Patch P1 §7: client-settable "priority now" video.
+  isPriority: boolean;
   createdAt: Date | null;
   updatedAt: Date | null;
 };
@@ -181,6 +232,7 @@ export type ClientDashboardVideoCard = {
   title: string;
   status: VideoStatus;
   statusLabel: string;
+  projectId: number | null;
   projectName: string | null;
   contentType: VideoContentType | null;
   contentTypeLabel: string | null;
@@ -190,6 +242,16 @@ export type ClientDashboardVideoCard = {
   reviewUrl: string | null;
   publishedUrl: string | null;
   lastUpdated: string | null;
+  // Lunch Reality Patch P1 §7: client-settable "priority now" video.
+  isPriority: boolean;
+  // Quick Morning Reality Patch (26 Aug 2026) §4: how many videos this
+  // video's project currently has, from the client's own owned-video set.
+  // null when the video has no project. Lets the UI distinguish "the only
+  // candidate in this project" (an honest static state -- there is
+  // nothing else to prioritize against) from "one of several" (a real
+  // choice, worth an actionable toggle). Never used for ranking/ordering,
+  // only for this single UI decision.
+  projectVideoCount: number | null;
 };
 
 export type ClientDashboard = {
@@ -201,6 +263,12 @@ export type ClientDashboard = {
     readyForReview: number;
   };
   completedThisWeek: number;
+  // Sprint 3 P1 (Client Gateway Intelligence): total video activity in
+  // the period, by production date -- distinct from completedThisWeek
+  // above, which counts only videos actually finished this week. A video
+  // shot this week that is still in production counts here but not there.
+  videosThisWeek: number;
+  videosThisMonth: number;
   currentWork: ClientDashboardVideoCard[];
   readyForReview: ClientDashboardVideoCard[];
   recentDeliveries: Array<ClientDashboardVideoCard & { deliveredAt: string | null }>;
@@ -213,20 +281,35 @@ export type ClientDashboard = {
   unclassifiedCompletedCount: number;
 };
 
-function toCard(
+export function toCard(
   video: ClientDashboardVideoRow,
   projectNameById: Map<number, string>,
+  projectVideoCounts: Map<number, number> = new Map(),
 ): ClientDashboardVideoCard {
   const deliveryUrl = validateDeliveryUrl(video.deliveryUrl);
   const reviewUrl = validateDeliveryUrl(video.reviewUrl);
   const publishedUrl = validateDeliveryUrl(video.publishedUrl);
-  const coverUrl = validateDeliveryUrl(video.coverUrl);
+  // Sprint 3 P1 cover fallback chain, tier 2 only (Video -> Project): the
+  // Client's own avatar is deliberately not tier 3 here -- a client
+  // viewing their own portal doesn't need their own avatar as a video
+  // placeholder; VideoCard's existing "No preview yet" state already
+  // covers the empty case cleanly.
+  // Client Vault Cover Bug fix (25 Aug 2026): see the identical fix and
+  // full explanation in buildClientPortalProjects above -- same wrong
+  // validator, same silent-null failure mode, same fix.
+  const coverUrl = validateCoverUrl(
+    resolveCoverUrl(video.coverUrl, video.projectCoverUrl),
+  );
   const updated = video.updatedAt ?? video.createdAt;
+  // Same fix as buildClientPortalProjects above: check the resolved value,
+  // not just .success (which is also true when there's simply no URL).
+  const resolvedDeliveryUrl = deliveryUrl.success ? deliveryUrl.value : null;
   return {
     id: video.id,
     title: video.title?.trim() || `Video ${video.date}`,
     status: video.status,
-    statusLabel: CLIENT_VIDEO_STATUS_LABELS[video.status],
+    statusLabel: clientVideoStatusLabel(video.status, resolvedDeliveryUrl !== null),
+    projectId: video.projectId,
     projectName: video.projectId ? (projectNameById.get(video.projectId) ?? null) : null,
     contentType: video.contentType,
     contentTypeLabel: video.contentType
@@ -234,13 +317,16 @@ function toCard(
       : null,
     orientation: video.orientation,
     coverUrl: coverUrl.success ? coverUrl.value : null,
-    deliveryUrl: deliveryUrl.success ? deliveryUrl.value : null,
+    deliveryUrl: resolvedDeliveryUrl,
     reviewUrl: reviewUrl.success ? reviewUrl.value : null,
     publishedUrl: publishedUrl.success ? publishedUrl.value : null,
     lastUpdated:
       updated instanceof Date && !Number.isNaN(updated.getTime())
         ? updated.toISOString()
         : null,
+    isPriority: video.isPriority,
+    projectVideoCount:
+      video.projectId !== null ? (projectVideoCounts.get(video.projectId) ?? null) : null,
   };
 }
 
@@ -256,6 +342,10 @@ function startOfWeekUTC(now: Date) {
   );
   monday.setUTCDate(monday.getUTCDate() - diffToMonday);
   return monday;
+}
+
+function startOfMonthUTC(now: Date) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
 export function buildClientDashboard(
@@ -280,6 +370,17 @@ export function buildClientDashboard(
       (video.projectId === null || ownedProjectIds.has(video.projectId)),
   );
   const ownedVideoIds = new Set(ownedVideos.map((video) => video.id));
+
+  // Quick Morning Reality Patch §4: per-project sibling count within this
+  // client's own owned videos, so toCard can tell "only video in this
+  // project" from "one of several" -- see projectVideoCount's comment on
+  // ClientDashboardVideoCard.
+  const projectVideoCounts = new Map<number, number>();
+  for (const video of ownedVideos) {
+    if (video.projectId !== null) {
+      projectVideoCounts.set(video.projectId, (projectVideoCounts.get(video.projectId) ?? 0) + 1);
+    }
+  }
 
   const inProduction = ownedVideos.filter(
     (video) => video.status === "IN_PROGRESS" || video.status === "CHANGES_REQUESTED",
@@ -311,7 +412,7 @@ export function buildClientDashboard(
       const video = event.videoId !== null ? videoById.get(event.videoId) : undefined;
       if (!video) return null;
       return {
-        ...toCard(video, projectNameById),
+        ...toCard(video, projectNameById, projectVideoCounts),
         deliveredAt:
           event.createdAt instanceof Date && !Number.isNaN(event.createdAt.getTime())
             ? event.createdAt.toISOString()
@@ -333,6 +434,9 @@ export function buildClientDashboard(
     }
   }
 
+  const weekStartDateKey = weekStart.toISOString().slice(0, 10);
+  const monthStartDateKey = startOfMonthUTC(now).toISOString().slice(0, 10);
+
   return {
     activeProjectsCount: ownedProjects.filter((project) => project.status === "active")
       .length,
@@ -343,16 +447,18 @@ export function buildClientDashboard(
       readyForReview: readyForReview.length,
     },
     completedThisWeek: completedThisWeekVideoIds.size,
+    videosThisWeek: ownedVideos.filter((video) => video.date >= weekStartDateKey).length,
+    videosThisMonth: ownedVideos.filter((video) => video.date >= monthStartDateKey).length,
     currentWork: inProduction
       .toSorted((a, b) => (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0))
-      .map((video) => toCard(video, projectNameById)),
+      .map((video) => toCard(video, projectNameById, projectVideoCounts)),
     readyForReview: readyForReview
       .toSorted((a, b) => (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0))
-      .map((video) => toCard(video, projectNameById)),
+      .map((video) => toCard(video, projectNameById, projectVideoCounts)),
     recentDeliveries,
     allVideos: ownedVideos
       .toSorted((a, b) => (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0))
-      .map((video) => toCard(video, projectNameById)),
+      .map((video) => toCard(video, projectNameById, projectVideoCounts)),
     contentBreakdown: Array.from(contentBreakdownCounts.entries()).map(
       ([contentType, completedCount]) => ({
         contentType,
@@ -371,4 +477,29 @@ export function filterClientDashboardVideos(
   return contentType === "all"
     ? [...videos]
     : videos.filter((video) => video.contentType === contentType);
+}
+
+// Client Vault "video must act like a video" fix (25 Aug 2026, brief §9):
+// a client-safe single-video detail, built from the same validated card
+// (toCard) plus an optional approved-quote summary. No internal notes, no
+// rate-equivalent, no private Finance, no Sensor data -- exactly the same
+// fields the list card already exposes, plus the quote.
+export type ClientVideoDetail = ClientDashboardVideoCard & {
+  quote: ClientQuoteSummary | null;
+};
+
+export function buildClientVideoDetail(
+  video: ClientDashboardVideoRow,
+  projectNameById: Map<number, string>,
+  quote: ClientQuoteSummary | null,
+  projectVideoCount: number | null,
+): ClientVideoDetail {
+  const projectVideoCounts =
+    video.projectId !== null && projectVideoCount !== null
+      ? new Map([[video.projectId, projectVideoCount]])
+      : new Map<number, number>();
+  return {
+    ...toCard(video, projectNameById, projectVideoCounts),
+    quote,
+  };
 }

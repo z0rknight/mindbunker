@@ -23,6 +23,13 @@ export function isPositiveId(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 
+// The CRM stores one ordinary contact email, which is also the identity
+// used by the existing client-portal login. Keep validation conservative
+// and shared by the UI and server action.
+export function isValidClientEmail(value: string): boolean {
+  return value.length <= 320 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
+}
+
 export interface ArchivalTransitionPlan {
   changed: boolean;
   nextState: ArchivalState;
@@ -121,4 +128,42 @@ export function describeProtectedHistory(
     );
   }
   return parts.join(", ");
+}
+// Sprint 3 (CRM Lead Workspace — fast activity quick-log): a small fixed
+// vocabulary, not a generalized workflow/event framework. Reuses the
+// existing free-text crm_events.type column (no migration) the same way
+// booking_created/stage_changed/briefing_submitted already do -- this
+// just gives the operator a fast way to add to that same column instead
+// of only ever reading it.
+export const CRM_ACTIVITY_TYPES = [
+  { value: "call", label: "Call" },
+  { value: "email", label: "Email" },
+  { value: "meeting", label: "Meeting" },
+  { value: "message", label: "Message" },
+  { value: "note", label: "Note" },
+] as const;
+
+export type CrmActivityType = (typeof CRM_ACTIVITY_TYPES)[number]["value"];
+
+export function isCrmActivityType(value: unknown): value is CrmActivityType {
+  return CRM_ACTIVITY_TYPES.some((option) => option.value === value);
+}
+
+export type LogCrmActivityValidation =
+  | { success: true; data: { type: CrmActivityType; description: string } }
+  | { success: false; error: string };
+
+export function validateLogCrmActivityInput(values: {
+  type?: unknown;
+  description?: unknown;
+}): LogCrmActivityValidation {
+  const description =
+    typeof values.description === "string"
+      ? values.description.trim().slice(0, 2_000)
+      : "";
+  if (!description) {
+    return { success: false, error: "Enter a note before logging this activity." };
+  }
+  const type = isCrmActivityType(values.type) ? values.type : "note";
+  return { success: true, data: { type, description } };
 }

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createAsset, updateAsset, deleteAsset } from "@/modules/assets/actions";
 import { ASSET_TYPES, ASSET_TYPE_LABELS, ASSET_STATUSES, ASSET_STATUS_LABELS, type AssetType, type AssetStatus } from "@/modules/assets/config";
+import { CopyLinkButton } from "@/components/ui/CopyLinkButton";
 
 type AssetRow = {
   id: number;
@@ -162,14 +163,17 @@ export function AssetsPanel({
                   {a.videoId ? " · linked to a video" : " · project-level"}
                 </p>
                 {a.deliveryUrl && (
-                  <a
-                    href={a.deliveryUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-1 inline-block truncate max-w-full text-xs text-amber-400 hover:text-amber-300 underline"
-                  >
-                    {a.deliveryUrl}
-                  </a>
+                  <span className="mt-1 flex items-center gap-2">
+                    <a
+                      href={a.deliveryUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block truncate max-w-full text-xs text-amber-400 hover:text-amber-300 underline"
+                    >
+                      {a.deliveryUrl}
+                    </a>
+                    <CopyLinkButton url={a.deliveryUrl} className="shrink-0 text-xs text-zinc-600 hover:text-amber-300 transition" />
+                  </span>
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-3">

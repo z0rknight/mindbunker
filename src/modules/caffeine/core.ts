@@ -113,3 +113,22 @@ export function resolveCaffeineTodayDisplay(
   if (manualMg === null && quickLogServings <= 0) return null;
   return reconcileDailyCaffeineMg(manualMg, quickLogServings);
 }
+
+// Lunch Reality Patch P1 §6: the War Room/Home "Caffeine Ratio" card used
+// to show `mg/R$` (total reconciled caffeine this month divided by monthly
+// revenue) -- a unit nobody actually reads as a real-world quantity.
+// Replaced with a coffees-per-completed-video ratio: a plain count of
+// quick-logged coffee servings this month (the same honest,
+// no-mg-inference source as "Coffees Today/This Week" -- see
+// CAFFEINE_MG_PER_SERVING_ESTIMATE's comment above for why this module
+// keeps servings and mg as two independent tracking paths) divided by
+// completed videos this month. Honest `null` (displayed as "--") when no
+// videos completed this month, rather than a divide-by-zero or a
+// misleadingly confident 0.
+export function computeCoffeesPerVideo(
+  totalCoffeesThisMonth: number,
+  completedVideosThisMonth: number,
+): number | null {
+  if (completedVideosThisMonth <= 0) return null;
+  return Math.round((totalCoffeesThisMonth / completedVideosThisMonth) * 100) / 100;
+}

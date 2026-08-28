@@ -290,7 +290,17 @@ function SessionRow({
             width. Nothing invented: source is only ever what the row
             actually recorded (WEB_TIMER or MAC_SENSOR_APPROVED). */}
         <p className="mt-1 text-[10px] text-zinc-600">
-          {session.source}
+          {/* MICRO PATCH §3: a small provenance cue, not a new framework --
+              only the sensor-captured sources get a distinct badge (they're
+              the ones that can be confused with a manually-run timer);
+              WEB_TIMER stays plain text, the unremarkable default. */}
+          {session.source === "MAC_SENSOR" || session.source === "MAC_SENSOR_APPROVED" ? (
+            <span className="mr-1 rounded border border-cyan-800/60 px-1 py-0.5 font-black uppercase tracking-wide text-cyan-500">
+              Sensor
+            </span>
+          ) : (
+            session.source
+          )}
           {session.updatedAt && <> · corrected {formatDateTime(session.updatedAt)}</>}
           {/* Brief C §13: reuse the existing Sensor Session detail route --
               no duplicate UI, just a link where the correlation exists. */}

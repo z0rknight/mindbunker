@@ -1,5 +1,7 @@
 import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
+import { displayClientName, getClientAccent } from "@/lib/client-identity";
 import { getProjectsOverview } from "@/modules/projects/actions";
+import { resolveCoverUrl } from "@/modules/media/core";
 import { getProductivityQuickOptions } from "@/modules/productivity/actions";
 import {
   PROJECT_GROUP_LABELS,
@@ -13,6 +15,7 @@ import {
   type ProjectOverviewItem,
 } from "@/modules/projects/core";
 import { formatDate, todayISO } from "@/utils/date";
+import { formatLastActive } from "@/modules/work-sessions/core";
 import Link from "next/link";
 import { ClientFilter } from "./ClientFilter";
 import { NewProjectButton } from "./NewProjectButton";
@@ -28,30 +31,56 @@ const GROUP_DESCRIPTIONS: Record<ProjectGroup, string> = {
 function ProjectCard({
   project,
   today,
+  nowIso,
 }: {
   project: ProjectOverviewItem;
   today: string;
+  nowIso: string;
 }) {
   const progress = getProjectProgress(project);
   const overdue = isProjectOverdue(project, today);
+  // Quick Morning Reality Patch §5/§6: a deterministic per-client accent
+  // (color for a real client, neutral for RMEDIA's own internal record)
+  // so clients read as visually distinct without a theme system, and a
+  // left accent bar on the card itself so it's visible even before the
+  // client name is read.
+  const accent = getClientAccent(project.clientId, project.clientName);
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/80 shadow-sm">
+    <article
+      className={`flex h-full flex-col overflow-hidden rounded-2xl border-l-4 border-y border-r border-zinc-800 bg-zinc-900/80 shadow-sm ${accent.border}`}
+    >
       <div className="flex-1 p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-600">
-              Project #{project.id}
-            </p>
-            <h3 className="mt-1 truncate text-lg font-black text-white">
-              {project.name}
-            </h3>
-            <Link
-              href={`/crm/${project.clientId}`}
-              className="mt-1 inline-flex min-h-8 items-center text-sm font-bold text-cyan-400 transition hover:text-cyan-300"
-            >
-              {project.clientName}
-            </Link>
+          <div className="flex min-w-0 items-start gap-3">
+            {/* Sprint 3 P1 (Project + Video visual covers): Project cover
+                -> Client avatar -> initials. */}
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800 text-xs font-black text-zinc-400">
+              {(() => {
+                const coverUrl = resolveCoverUrl(project.coverUrl, project.clientAvatarUrl);
+                return coverUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  project.clientName.slice(0, 2).toUpperCase()
+                );
+              })()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-600">
+                Project #{project.id}
+              </p>
+              <h3 className="mt-1 truncate text-lg font-black text-white">
+                {project.name}
+              </h3>
+              <Link
+                href={`/crm/${project.clientId}`}
+                className={`mt-1 inline-flex min-h-8 items-center gap-1.5 text-sm font-bold transition hover:opacity-80 ${accent.text}`}
+              >
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${accent.dot}`} aria-hidden="true" />
+                {displayClientName(project.clientName)}
+              </Link>
+            </div>
           </div>
           <ProjectStatusBadge status={project.status} />
         </div>
@@ -71,6 +100,11 @@ function ProjectCard({
           <span className="rounded-full border border-zinc-700 bg-zinc-950/60 px-2.5 py-1 font-bold text-zinc-400">
             {project.totalVideos} video{project.totalVideos === 1 ? "" : "s"}
           </span>
+          {project.lastActiveAt && (
+            <span className="rounded-full border border-zinc-700 bg-zinc-950/60 px-2.5 py-1 font-bold text-zinc-500">
+              Last active: {formatLastActive(project.lastActiveAt, nowIso)}
+            </span>
+          )}
         </div>
 
         <div className="mt-5">
@@ -151,6 +185,7 @@ export default async function ProjectsPage({
       : allProjects;
   const groups = groupProjectsForOverview(projects);
   const today = todayISO();
+  const nowIso = new Date().toISOString();
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
@@ -215,9 +250,15 @@ export default async function ProjectsPage({
                 </div>
               ) : (
                 <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                  {groups[group].map((project) => (
-                    <ProjectCard key={project.id} project={project} today={today} />
-                  ))}
+                  {/* Quick Morning Reality Patch §5: cluster same-client
+                      projects next to each other within each lifecycle
+                      group (cheap client grouping, no restructuring of
+                      the existing active/planned/completed sections). */}
+                  {groups[group]
+                    .toSorted((a, b) => a.clientName.localeCompare(b.clientName) || a.id - b.id)
+                    .map((project) => (
+                      <ProjectCard key={project.id} project={project} today={today} nowIso={nowIso} />
+                    ))}
                 </div>
               )}
             </section>

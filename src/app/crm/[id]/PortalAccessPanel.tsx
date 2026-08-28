@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
@@ -87,6 +88,12 @@ export function PortalAccessPanel({
           </p>
         </div>
         <div className="flex gap-2">
+          <Link
+            href="/client/login"
+            className="inline-flex min-h-10 items-center rounded-xl border border-zinc-700 px-3.5 text-xs font-black text-zinc-300 transition hover:bg-zinc-800"
+          >
+            Open client login ↗
+          </Link>
           <button
             type="button"
             onClick={issueAccess}

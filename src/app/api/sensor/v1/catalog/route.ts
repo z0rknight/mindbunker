@@ -5,6 +5,10 @@ import {
   authenticateSensorRequest,
   sensorUnauthorized,
 } from "@/modules/sensor/server";
+import {
+  WORK_SESSION_ACTIVITY_TYPES,
+  WORK_SESSION_ACTIVITY_LABELS,
+} from "@/modules/work-sessions/core";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +51,16 @@ export async function GET(request: Request) {
       schema_version: 1,
       generated_at: new Date().toISOString(),
       device: { id: device.publicId, name: device.name },
+      // Client Service Reality Patch (25 Aug 2026): MindBunker owns the
+      // canonical activity vocabulary (see work-sessions/core.ts); this is
+      // now the one place a Sensor client can fetch it instead of
+      // hardcoding its own copy that can silently drift from the server's.
+      // A Sensor build that doesn't read this yet keeps working exactly as
+      // before -- this is a pure addition to the response.
+      activity_types: WORK_SESSION_ACTIVITY_TYPES.map((id) => ({
+        id,
+        label: WORK_SESSION_ACTIVITY_LABELS[id],
+      })),
       clients: clientRows,
       projects: projectRows.map((row) => ({
         id: row.id,

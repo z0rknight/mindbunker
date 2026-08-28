@@ -13,8 +13,11 @@ import {
   debts,
   subscriptions,
   operatingReserveSettings,
+  fxConversions,
 } from "@/db/schema";
-import { eq, gte, desc, sum } from "drizzle-orm";
+import { computeFxCashMovements } from "../fx/core";
+import { getTodayWorkSessionStats } from "../work-sessions/data";
+import { and, eq, desc, sum } from "drizzle-orm";
 import { todayISO, startOfMonthISO } from "@/utils/date";
 import { revalidatePath } from "next/cache";
 import { DEFAULT_CURRENCY, DEFAULT_TAX_RESERVE_PERCENT } from "./config";
@@ -34,9 +37,13 @@ import {
   computeDebtRemainingBalance,
   validateSubscriptionInput,
   computeMonthlyEquivalent,
+  computeFinanceSummaryByCurrency,
+  computeRateEquivalent,
   round2,
   type ReconciliationResult,
+  type RateEquivalent,
 } from "./core";
+import { buildOwnerPayStatements } from "./owner-pay-query";
 
 // ─── FINANCIAL TRUTH: transactions (existing table, extended) ──────────────
 
@@ -61,6 +68,21 @@ export async function addTransaction(data: {
   debtId?: number | null;
   subscriptionId?: number | null;
 }): Promise<AddTransactionResult> {
+  // Client Portal Reality round §B: Owner Pay must always cross the
+  // business/personal boundary through recordOwnerPay's atomic bridge --
+  // this generic entry point accepted type:"owner_pay" with no bridge
+  // call, a latent (never-exercised, but real) way to create an orphaned
+  // business row with zero Personal Finance effect. Closed here rather
+  // than removing the type from the parameter union, since a stray future
+  // call site should get a clear error, not a silent type-widening
+  // failure at the TypeScript layer alone.
+  if (data.type === "owner_pay") {
+    return {
+      success: false,
+      error: "Owner Pay must be recorded via recordOwnerPay, not addTransaction.",
+    };
+  }
+
   const freelanceError = validateFreelanceIncomeInput({
     category: data.category,
     type: data.type,
@@ -106,60 +128,83 @@ export async function recordOwnerPay(data: {
   currency?: string;
   date?: string;
   notes?: string;
-}) {
+  // Client Portal Reality round §C: client-minted, per-form-open
+  // idempotency key -- same convention as recordDebtPayment/recordSubscriptionCharge
+  // (see transactions.idempotencyKey's comment in src/db/schema.ts).
+  // Optional so existing/future non-UI callers (e.g. a repair script)
+  // aren't forced to invent one.
+  idempotencyKey?: string | null;
+}): Promise<AddTransactionResult> {
   if (!Number.isFinite(data.amount) || data.amount <= 0) {
-    throw new Error("Owner Pay amount must be a positive number.");
+    return { success: false, error: "Owner Pay amount must be a positive number." };
   }
-  await addTransaction({
-    type: "owner_pay",
-    amount: data.amount,
-    category: "Owner Pay",
-    date: data.date,
-    notes: data.notes,
-    currency: data.currency ?? DEFAULT_CURRENCY,
-  });
+  const currency = data.currency?.trim() || DEFAULT_CURRENCY;
+  const date = data.date ?? todayISO();
+  const idempotencyKey =
+    data.idempotencyKey?.trim() || `owner-pay:${crypto.randomUUID()}`;
+  const db = await getAuthenticatedDb();
+
+  // D1 batch is one transaction. The second statement resolves the
+  // business row by its unique idempotency key, so it can insert the
+  // dependent Personal receipt without guessing an auto-increment id.
+  // If either statement fails, neither side survives. A replay inserts
+  // neither a second business row nor a second 1:1 receipt.
+  try {
+    // Drizzle validates INSERT ... SELECT structurally before D1 ever sees
+    // the batch: every target-table key must appear in the exact schema
+    // order, including generated/defaulted columns. Omitting id/createdAt
+    // made query construction throw outside the previous try/catch, which
+    // is the precise cause of Finance falling into Next's generic
+    // "Something went wrong" boundary on Owner Pay submission.
+    const [businessInsert, personalInsert] = buildOwnerPayStatements(db, {
+      amount: data.amount,
+      currency,
+      date,
+      notes: data.notes ?? null,
+      idempotencyKey,
+    });
+
+    await db.batch([businessInsert, personalInsert]);
+  } catch {
+    return {
+      success: false,
+      error: "Owner Pay could not be linked to Personal Finance, so nothing was recorded. Please try again.",
+    };
+  }
+
   revalidatePath("/finance");
+  revalidatePath("/finance/personal");
+  return { success: true };
+}
+
+// Business-scope FX conversions with a recorded direction, flattened into
+// per-currency cash movements -- shared by getFinanceSummary and
+// getRmediaCashSummary below so both "business cash" read models fold in
+// exactly the same FX effect and never disagree with each other. Rows with
+// no fromCurrency (legacy, or scope != BUSINESS) contribute nothing, per
+// computeFxCashMovements.
+async function getBusinessFxCashMovements() {
+  const db = await getAuthenticatedDb();
+  const businessFx = await db
+    .select()
+    .from(fxConversions)
+    .where(eq(fxConversions.scope, "BUSINESS"));
+  return businessFx.flatMap((fx) =>
+    computeFxCashMovements({
+      brlAmount: fx.brlAmount,
+      usdAmount: fx.usdAmount,
+      fromCurrency: fx.fromCurrency,
+    }),
+  );
 }
 
 export async function getFinanceSummary() {
   const db = await getAuthenticatedDb();
-  const monthStart = startOfMonthISO();
-
-  const monthlyTransactions = await db
-    .select()
-    .from(transactions)
-    .where(gte(transactions.date, monthStart));
-
-  const monthlyRevenue = monthlyTransactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const monthlyExpenses = monthlyTransactions
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const allTransactions = await db.select().from(transactions);
-  const totalIncome = allTransactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
-  const totalExpenses = allTransactions
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + t.amount, 0);
-  // Monday Money Lab P0: Owner Pay is real cash that has actually left the
-  // business account, so it must reduce the displayed balance -- leaving
-  // it out would show money as still-in-RMEDIA that Emmanuel already paid
-  // himself. Owner Pay still never counts as "expense" above (see
-  // getRmediaCashSummary / the schema comment for why).
-  const totalOwnerPay = allTransactions
-    .filter((t) => t.type === "owner_pay")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  return {
-    monthlyRevenue,
-    monthlyExpenses,
-    monthlyNet: monthlyRevenue - monthlyExpenses,
-    currentBalance: totalIncome - totalExpenses - totalOwnerPay,
-  };
+  const [allTransactions, fxMovements] = await Promise.all([
+    db.select().from(transactions),
+    getBusinessFxCashMovements(),
+  ]);
+  return computeFinanceSummaryByCurrency(allTransactions, startOfMonthISO(), fxMovements);
 }
 
 export async function getAllTransactions() {
@@ -226,26 +271,35 @@ export async function getRmediaCashSummary(): Promise<
   RmediaCashSummaryByCurrency[]
 > {
   const db = await getAuthenticatedDb();
-  const [allTransactions, settings] = await Promise.all([
+  const [allTransactions, settings, fxMovements] = await Promise.all([
     db.select().from(transactions),
     getTaxReserveSettings(),
+    getBusinessFxCashMovements(),
   ]);
 
   const byCurrency = new Map<
     string,
-    { income: number; expense: number; ownerPay: number }
+    { income: number; expense: number; ownerPay: number; fxNet: number }
   >();
+  const getBucket = (currency: string) =>
+    byCurrency.get(currency) ?? { income: 0, expense: 0, ownerPay: 0, fxNet: 0 };
+
   for (const t of allTransactions) {
     const currency = t.currency || "UNKNOWN";
-    const bucket = byCurrency.get(currency) ?? {
-      income: 0,
-      expense: 0,
-      ownerPay: 0,
-    };
+    const bucket = getBucket(currency);
     if (t.type === "income") bucket.income += t.amount;
     else if (t.type === "expense") bucket.expense += t.amount;
     else if (t.type === "owner_pay") bucket.ownerPay += t.amount;
     byCurrency.set(currency, bucket);
+  }
+  // BUSINESS FX conversions move value between currency positions (see
+  // computeFxCashMovements) -- a currency that has only ever appeared in a
+  // conversion (never in a transaction) still needs its own row here, so
+  // this can introduce a new currency key the transactions loop never saw.
+  for (const movement of fxMovements) {
+    const bucket = getBucket(movement.currency);
+    bucket.fxNet += movement.amount;
+    byCurrency.set(movement.currency, bucket);
   }
 
   return Array.from(byCurrency.entries()).map(([currency, bucket]) => {
@@ -253,6 +307,7 @@ export async function getRmediaCashSummary(): Promise<
       totalIncome: bucket.income,
       totalExpense: bucket.expense,
       totalOwnerPay: bucket.ownerPay,
+      fxNet: bucket.fxNet,
       taxReservePercent: settings.taxReservePercent,
     });
     return {
@@ -263,6 +318,58 @@ export async function getRmediaCashSummary(): Promise<
       ...cash,
     };
   });
+}
+
+// ─── NIGHT SHIFT REALITY PATCH §6: contract rate -> attributable work value ─
+//
+// ATTRIBUTABLE WORK VALUE, never revenue/earned/paid. Sensor/Work Session
+// time is MindBunker's own operational-involvement tracking -- a DIFFERENT
+// fact from what a platform (e.g. Upwork) actually billed, which lives in
+// billing_evidence and is entered separately, often conservatively, by the
+// operator. This function only multiplies TODAY's attributable seconds
+// (see getTodayWorkSessionStats, resolved via the same America/Sao_Paulo
+// day-boundary convention as the rest of this patch) by an ACTIVE HOURLY
+// contract's own rate. It creates zero Finance transactions and is never
+// written to the transactions table -- see computeRateEquivalent's own
+// comment in finance/core.ts for the full invariant.
+export type TodayRateEquivalentRow = RateEquivalent & {
+  clientId: number;
+  clientName: string;
+};
+
+export async function getTodayRateEquivalents(): Promise<TodayRateEquivalentRow[]> {
+  const db = await getAuthenticatedDb();
+  const [hourlyContracts, todayStats] = await Promise.all([
+    db
+      .select({
+        clientId: commercialContracts.clientId,
+        clientName: clients.name,
+        hourlyRate: commercialContracts.hourlyRate,
+        currency: commercialContracts.currency,
+      })
+      .from(commercialContracts)
+      .innerJoin(clients, eq(commercialContracts.clientId, clients.id))
+      .where(
+        and(
+          eq(commercialContracts.billingType, "HOURLY"),
+          eq(commercialContracts.status, "ACTIVE"),
+        ),
+      ),
+    getTodayWorkSessionStats(),
+  ]);
+
+  const rows: TodayRateEquivalentRow[] = [];
+  for (const contract of hourlyContracts) {
+    if (contract.hourlyRate === null) continue; // only show when all required facts are explicit
+    const seconds = todayStats.byClient.find((c) => c.clientId === contract.clientId)?.seconds ?? 0;
+    if (seconds <= 0) continue; // omit the money entirely when attribution is absent, never show $0 as if it were a fact
+    rows.push({
+      clientId: contract.clientId,
+      clientName: contract.clientName,
+      ...computeRateEquivalent(seconds, contract.hourlyRate, contract.currency),
+    });
+  }
+  return rows;
 }
 
 // ─── BILLING TRUTH: commercial contracts + billing evidence ────────────────
@@ -998,6 +1105,7 @@ export async function recordSubscriptionPayment(data: {
   }
 
   revalidatePath("/finance/subscriptions");
+  revalidatePath(`/finance/subscriptions/${subscription.id}`);
   return { success: true };
 }
 
@@ -1008,12 +1116,35 @@ export async function updateSubscriptionStatus(
   const db = await getAuthenticatedDb();
   await db.update(subscriptions).set({ status }).where(eq(subscriptions.id, id));
   revalidatePath("/finance/subscriptions");
+  revalidatePath(`/finance/subscriptions/${id}`);
   return { success: true };
 }
 
 export async function getSubscriptions() {
   const db = await getAuthenticatedDb();
   return db.select().from(subscriptions).orderBy(desc(subscriptions.createdAt));
+}
+
+export async function getSubscriptionById(id: number) {
+  if (!Number.isSafeInteger(id) || id <= 0) return null;
+  const db = await getAuthenticatedDb();
+  const rows = await db
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.id, id))
+    .limit(1);
+  const subscription = rows[0];
+  if (!subscription) return null;
+  const payments = await db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.subscriptionId, id))
+    .orderBy(desc(transactions.date), desc(transactions.id));
+  return {
+    ...subscription,
+    monthlyEquivalent: computeMonthlyEquivalent(subscription),
+    payments,
+  };
 }
 
 // §18: MONTHLY RECURRING / ANNUAL COMMITTED / MONTHLY EQUIVALENT / UPCOMING

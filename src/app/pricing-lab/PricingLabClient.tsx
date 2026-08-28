@@ -6,9 +6,12 @@ import {
   computeALaCarteHourlyEstimate,
   centsToDollarsString,
   buildPackageSummaryText,
+  buildClientQuoteText,
+  buildClientQuoteMarkdown,
   type PricingConfig,
   type ProductQuantities,
   type ALaCarteHourlyConfig,
+  type ClientQuotePresentation,
 } from "@/modules/pricing/core";
 import {
   A_LA_CARTE_CONTENT_TYPES,
@@ -23,6 +26,21 @@ import {
 const MAX_QUANTITY = 99;
 const MAX_REVISION_ROUNDS = 10;
 const MAX_THUMBNAILS = 20;
+
+// Client Service Reality Patch (25 Aug 2026) -- presentation-only choices
+// for the "client presentation" view (brief §4/§5). None of these feed
+// the price calculation above; they only describe it. ETA is free text
+// (a few common presets, or type your own) since turnaround isn't a
+// concept the calculation engine has ever tracked.
+const ETA_PRESETS = ["24h", "48h", "3 days", "1 week"];
+const DEFAULT_SCOPE_OPTIONS = [
+  "Color correction",
+  "Audio adjustment",
+  "Captions",
+  "Music",
+  "Graphics / titles",
+  "Export & delivery",
+];
 
 type Tab = "a-la-carte" | "monthly-package";
 
@@ -106,6 +124,268 @@ function QuantityStepper({
   );
 }
 
+// Quick Morning Reality Patch (26 Aug 2026) §10: the actual "showroom" --
+// a real branded card, always visible (not hidden behind a preview
+// toggle), built to be screenshotted and sent as-is. Renders exactly the
+// same client-safe fields buildClientQuoteText/buildClientQuoteMarkdown
+// already produce -- this is a visual rendering of that same data, never
+// a second source of truth for it. No internal hours, labor rate,
+// complexity math, or margin appears anywhere on this card.
+function ShowroomCard({ presentation }: { presentation: ClientQuotePresentation }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-violet-700/40 bg-gradient-to-b from-zinc-900 to-zinc-950 shadow-xl shadow-black/40">
+      <div className="border-b border-violet-900/40 bg-violet-950/20 px-5 py-4">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-violet-300">RMEDIA</p>
+        <p className="mt-0.5 text-lg font-black text-white">Video Production Quote</p>
+      </div>
+
+      <div className="space-y-4 px-5 py-5">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Content</p>
+          <p className="mt-0.5 text-sm font-bold text-white">{presentation.contentTypeLabel}</p>
+        </div>
+
+        {presentation.scopeLines.length > 0 && (
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Includes</p>
+            <ul className="mt-1.5 space-y-1">
+              {presentation.scopeLines.map((line, index) => (
+                <li key={`${line}-${index}`} className="flex items-start gap-2 text-sm text-zinc-200">
+                  <span className="mt-0.5 text-emerald-400" aria-hidden="true">✓</span>
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Delivery</p>
+            <p className="mt-0.5 text-sm font-bold text-white">{presentation.turnaroundLabel}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Revisions</p>
+            <p className="mt-0.5 text-sm font-bold text-white">{presentation.revisionsIncluded}</p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-emerald-700/40 bg-emerald-950/20 px-4 py-3.5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Investment</p>
+          <p className="mt-0.5 text-2xl font-black text-white tabular-nums">
+            {centsToDollarsString(presentation.investmentCents)}
+          </p>
+        </div>
+
+        <p className="text-center text-sm font-semibold text-zinc-400">Sounds good?</p>
+      </div>
+    </div>
+  );
+}
+
+function ClientPresentationPanel({
+  contentTypeLabel,
+  complexityLabel,
+  baseRevisionsIncluded,
+  extraRevisionRounds,
+  investmentCents,
+}: {
+  contentTypeLabel: string;
+  complexityLabel: string;
+  baseRevisionsIncluded: number;
+  extraRevisionRounds: number;
+  investmentCents: number;
+}) {
+  // Client Service Reality Patch (25 Aug 2026, brief §4/§5) -- presentation-
+  // only state. ETA and scope never feed the price; investmentCents is
+  // passed straight through from the one calculation engine
+  // (computeALaCarteHourlyEstimate in the parent). Isolated in its own
+  // component so this interactive state can't perturb
+  // ALaCarteHourlyCalculator's existing breakdown memoization.
+  const [eta, setEta] = useState(ETA_PRESETS[0]);
+  const [selectedScope, setSelectedScope] = useState<string[]>([
+    DEFAULT_SCOPE_OPTIONS[0],
+    DEFAULT_SCOPE_OPTIONS[1],
+  ]);
+  const [customScopeLine, setCustomScopeLine] = useState("");
+  const [customScopeLines, setCustomScopeLines] = useState<string[]>([]);
+  const [clientCopied, setClientCopied] = useState<"text" | "markdown" | null>(null);
+
+  const toggleScopeOption = (option: string) => {
+    setSelectedScope((prev) =>
+      prev.includes(option)
+        ? prev.filter((existing) => existing !== option)
+        : [...prev, option],
+    );
+  };
+
+  const addCustomScopeLine = () => {
+    const line = customScopeLine.trim();
+    if (!line) return;
+    setCustomScopeLines((prev) => [...prev, line]);
+    setCustomScopeLine("");
+  };
+
+  const removeCustomScopeLine = (index: number) => {
+    setCustomScopeLines((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const scopeLines = [
+    ...DEFAULT_SCOPE_OPTIONS.filter((option) => selectedScope.includes(option)),
+    ...customScopeLines,
+  ];
+  const clientPresentation = {
+    contentTypeLabel,
+    turnaroundLabel: eta,
+    complexityLabel,
+    revisionsIncluded: baseRevisionsIncluded + extraRevisionRounds,
+    scopeLines,
+    investmentCents,
+  };
+  const clientQuoteText = buildClientQuoteText(clientPresentation);
+  const clientQuoteMarkdown = buildClientQuoteMarkdown(clientPresentation);
+
+  const handleCopyClientText = async () => {
+    try {
+      await navigator.clipboard.writeText(clientQuoteText);
+      setClientCopied("text");
+      setTimeout(() => setClientCopied(null), 2000);
+    } catch {
+      setClientCopied(null);
+    }
+  };
+
+  const handleCopyClientMarkdown = async () => {
+    try {
+      await navigator.clipboard.writeText(clientQuoteMarkdown);
+      setClientCopied("markdown");
+      setTimeout(() => setClientCopied(null), 2000);
+    } catch {
+      setClientCopied(null);
+    }
+  };
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div>
+        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          ETA (shown to the client, not part of the calculation)
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {ETA_PRESETS.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => setEta(preset)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                eta === preset
+                  ? "border-violet-600 bg-violet-600/20 text-violet-200"
+                  : "border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:border-zinc-700"
+              }`}
+            >
+              {preset}
+            </button>
+          ))}
+          <input
+            type="text"
+            value={ETA_PRESETS.includes(eta) ? "" : eta}
+            onChange={(e) => setEta(e.target.value)}
+            placeholder="Custom ETA..."
+            className="w-32 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          What I will do (shown to the client)
+        </label>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {DEFAULT_SCOPE_OPTIONS.map((option) => (
+            <label
+              key={option}
+              className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300"
+            >
+              <input
+                type="checkbox"
+                checked={selectedScope.includes(option)}
+                onChange={() => toggleScopeOption(option)}
+                className="h-4 w-4 accent-violet-500"
+              />
+              {option}
+            </label>
+          ))}
+        </div>
+        {customScopeLines.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {customScopeLines.map((line, index) => (
+              <li
+                key={`${line}-${index}`}
+                className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-300"
+              >
+                {line}
+                <button
+                  type="button"
+                  onClick={() => removeCustomScopeLine(index)}
+                  aria-label={`Remove ${line}`}
+                  className="text-zinc-600 hover:text-red-400"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-2 flex gap-2">
+          <input
+            type="text"
+            value={customScopeLine}
+            onChange={(e) => setCustomScopeLine(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addCustomScopeLine();
+              }
+            }}
+            placeholder="Add another line..."
+            className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={addCustomScopeLine}
+            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800"
+          >
+            Add
+          </button>
+        </div>
+      </div>
+
+      {/* Quick Morning Reality Patch §10: the showroom card is always
+          visible now (no "Preview quote" toggle to click through) --
+          screenshot-friendly by default, exactly what "Sounds good?" is
+          answering. */}
+      <ShowroomCard presentation={clientPresentation} />
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={handleCopyClientText}
+          className="rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-500"
+        >
+          {clientCopied === "text" ? "Copied ✓" : "Copy client quote"}
+        </button>
+        <button
+          type="button"
+          onClick={handleCopyClientMarkdown}
+          className="rounded-lg border border-zinc-700 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-zinc-800"
+        >
+          {clientCopied === "markdown" ? "Copied ✓" : "Copy as Markdown"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ALaCarteHourlyCalculator({
   hourlyConfig,
 }: {
@@ -120,6 +400,12 @@ function ALaCarteHourlyCalculator({
   const [extraRevisionRounds, setExtraRevisionRounds] = useState(0);
   const [thumbnailCount, setThumbnailCount] = useState(0);
   const [copied, setCopied] = useState(false);
+
+  // Quick Morning Reality Patch (26 Aug 2026) §10: both views render
+  // side by side now (see the grid below) -- no more toggle state needed
+  // here. The presentation-only state (ETA, scope, copy) still lives
+  // entirely in the separate ClientPresentationPanel component so it
+  // can't perturb this component's existing memoization.
 
   const contentType = A_LA_CARTE_CONTENT_TYPES.find(
     (c) => c.id === contentTypeId,
@@ -293,8 +579,16 @@ function ALaCarteHourlyCalculator({
         />
       </div>
 
-      {/* Breakdown + suggested price */}
-      <div className="mt-6 rounded-xl border border-violet-700/40 bg-violet-950/20 p-5">
+      {/* Quick Morning Reality Patch (26 Aug 2026) §10: "One engine. Two
+          views" now means side by side, not a tab you have to click
+          through -- Calculator | Client Quote on desktop, stacked
+          Calculator then Client Quote on mobile (a plain responsive grid
+          gives both for free). breakdown (computed above) still feeds
+          both panels from the exact same numbers. */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
+      <div>
+        <p className="mb-2 text-xs font-black uppercase tracking-widest text-zinc-500">Calculator</p>
+      <div className="rounded-xl border border-violet-700/40 bg-violet-950/20 p-5">
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-violet-300">
           Transparent breakdown
         </h3>
@@ -367,6 +661,19 @@ function ALaCarteHourlyCalculator({
         >
           {copied ? "Copied ✓" : "Copy Estimate"}
         </button>
+      </div>
+      </div>
+
+      <div>
+        <p className="mb-2 text-xs font-black uppercase tracking-widest text-zinc-500">Client Quote</p>
+        <ClientPresentationPanel
+          contentTypeLabel={contentType.label}
+          complexityLabel={complexity.label}
+          baseRevisionsIncluded={A_LA_CARTE_INCLUDED_REVISION_ROUNDS}
+          extraRevisionRounds={extraRevisionRounds}
+          investmentCents={breakdown.totalCents}
+        />
+      </div>
       </div>
     </div>
   );

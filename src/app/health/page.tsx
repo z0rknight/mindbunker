@@ -7,6 +7,7 @@ import { getHealthSummary, getAllHealthLogs } from "@/modules/health/actions";
 import { getCaffeineSummary, getCaffeineDayCountsForTimeline } from "@/modules/caffeine/actions";
 import { buildActivityTimelineDays } from "@/modules/health/core";
 import { formatDate, todayISO } from "@/utils/date";
+import { HealthLogEditor } from "./HealthLogEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -110,9 +111,9 @@ export default async function HealthPage() {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <LastNightSleepButton todayISODate={today} />
           <CoffeeQuickLogButton todayCount={caffeineSummary.todayCount} />
-          <LogTodayButton />
-          <LogBikeRideButton />
-          <LogWalkButton />
+          <LogTodayButton todayISODate={today} />
+          <LogBikeRideButton todayISODate={today} />
+          <LogWalkButton todayISODate={today} />
         </div>
       </div>
 
@@ -132,7 +133,7 @@ export default async function HealthPage() {
           </div>
         ) : (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden overflow-x-auto">
-            <table className="w-full text-sm min-w-[700px]">
+            <table className="w-full text-sm min-w-[780px]">
               <thead>
                 <tr className="border-b border-zinc-800">
                   <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Date</th>
@@ -142,6 +143,7 @@ export default async function HealthPage() {
                   <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">🚴 Cycling</th>
                   <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">🚶 Walk</th>
                   <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Notes</th>
+                  <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Correct</th>
                 </tr>
               </thead>
               <tbody>
@@ -178,6 +180,22 @@ export default async function HealthPage() {
                       ) : <span className="text-zinc-600">—</span>}
                     </td>
                     <td className="px-4 py-3 text-zinc-500 text-xs">{log.substancesNotes ?? "—"}</td>
+                    <td className="px-4 py-3 text-right">
+                      <HealthLogEditor
+                        todayISODate={today}
+                        log={{
+                          id: log.id,
+                          date: log.date,
+                          sleepHours: log.sleepHours,
+                          caffeineMg: log.caffeineMg,
+                          substancesNotes: log.substancesNotes,
+                          screenTimeHours: log.screenTimeHours,
+                          cyclingKm: log.cyclingKm,
+                          cyclingMinutes: log.cyclingMinutes,
+                          walkingMinutes: log.walkingMinutes,
+                        }}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>

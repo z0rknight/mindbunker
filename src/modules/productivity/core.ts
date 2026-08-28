@@ -8,6 +8,7 @@ import {
   type VideoOrientation,
   type VideoStatus,
 } from "./config.ts";
+import { isInternalCoverRoute } from "../media/core.ts";
 
 export type VideoInputValues = {
   title: string;
@@ -96,6 +97,38 @@ export function isPositiveId(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) > 0;
 }
 
+// Pre-Operation Reality Hardening §7: pure derivation of the cached
+// videoLogs.revisionsCount from the real revisions rows for one video.
+// Not currently used to RE-derive the cache on every read (the cached
+// column stays the fast path the UI reads) -- this exists so the
+// invariant "cache === count(revisions rows for this video)" is a
+// testable, greppable fact rather than something only ever asserted by
+// hand. A legacy video with a nonzero revisionsCount but zero revisions
+// rows (recorded before this round) will legitimately disagree with this
+// function's output -- that gap is documented, not silently hidden; see
+// the comment on the `revisions` table in db/schema.ts.
+export function computeRevisionCount(
+  revisions: readonly { videoId: number }[],
+): number {
+  return revisions.length;
+}
+
+// Lunch Reality Patch P1 §7: a video can only be made the "priority now"
+// video for a project it actually belongs to -- a video with no projectId
+// has no group to be the single priority of, so making one the priority is
+// a validation error, not a silent no-op. Clearing priority never has this
+// requirement (a video that somehow has isPriority=true with no project
+// should always be clearable).
+export function validateVideoPriorityInput(
+  makePriority: boolean,
+  projectId: number | null,
+): string | null {
+  if (makePriority && projectId === null) {
+    return "This video isn't part of a project yet.";
+  }
+  return null;
+}
+
 function optionalId(value: unknown) {
   return value === null || value === undefined || value === ""
     ? null
@@ -150,6 +183,10 @@ export function validateCoverUrl(value: unknown) {
   }
   if (candidate.length > 2_048) {
     return { success: false as const, error: "Cover image URL is too long." };
+  }
+
+  if (isInternalCoverRoute(candidate)) {
+    return { success: true as const, value: candidate };
   }
 
   try {

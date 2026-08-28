@@ -3,17 +3,13 @@
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileQuickCapture } from "@/components/ui/MobileQuickCapture";
+import { classifyAppShellRoute } from "@/lib/route-classification";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const normalizedPath = pathname.startsWith("/mindbunker")
-    ? pathname.slice("/mindbunker".length) || "/"
-    : pathname;
-  const isLogin = normalizedPath === "/login";
-  const isPublicGateway = normalizedPath.startsWith("/g/");
-  const isClientPortal = normalizedPath.startsWith("/client/");
+  const { isBareShellRoute } = classifyAppShellRoute(pathname);
 
-  if (isLogin || isPublicGateway || isClientPortal) {
+  if (isBareShellRoute) {
     return <>{children}</>;
   }
 
@@ -22,6 +18,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <main className="min-w-0 flex-1 overflow-auto pt-16 pb-36 md:pt-0 md:pb-0">
         {children}
+        {/* FX + Business Operating Cash Patch §14: discreet, not branding --
+            small/muted/lowercase, one line, no logo, no links. */}
+        <p className="px-4 py-6 text-center text-[10px] text-zinc-800 sm:px-6 md:px-8">
+          software made by emmanuel for emmanuel
+        </p>
       </main>
       <MobileQuickCapture />
     </div>

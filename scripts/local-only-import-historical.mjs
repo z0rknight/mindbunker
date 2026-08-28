@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // scripts/local-only-import-historical.mjs
 //
-// LOCAL-ONLY QA TOOL — Sprint 1.2 P0 / 1.2.1 dogfooding prep.
+// Historical artifact importer — local by default, explicit production mode.
 // Not part of the deployed MindBunker application: lives outside src/,
 // is not imported by any route or component, and next build / opennextjs
 // build do not touch this file.
@@ -19,9 +19,11 @@
 // It talks to the SAME local D1 database that `next dev`
 // (via initOpenNextCloudflareForDev()) and `wrangler d1 migrations apply
 // --local` use -- via wrangler's own getPlatformProxy() API, the officially
-// supported way to reach local bindings from a plain script. It does NOT
-// touch remote/production D1: getPlatformProxy() defaults to the local
-// Miniflare-backed database under .wrangler/state.
+// supported way to reach bindings from a plain script. Wrangler v4 enables
+// remote bindings by default, so this script explicitly passes
+// remoteBindings:false unless --remote and the exact artifact fingerprint
+// confirmation are both supplied. A bare invocation can therefore never
+// touch production.
 //
 // KEEP IN SYNC: the row-building logic below is a deliberate, minimal copy
 // of importHistoricalArtifact()'s body (validation + fingerprint + coverage
@@ -33,13 +35,20 @@
 // USAGE (repo root, local D1 only):
 //   bun run db:migrate:local              # make sure migration 0012 is applied locally
 //   node scripts/local-only-import-historical.mjs
+//   node scripts/local-only-import-historical.mjs --persist-to=/tmp/isolated-d1
 //
-// Safe to run more than once: the same fingerprint-based idempotency as the
-// real action applies here (a second run reports skipped, no writes).
+// REMOTE (deliberate production operation only):
+//   node scripts/local-only-import-historical.mjs --remote \
+//     --confirm-fingerprint=932047bd8bdbf0f3b14672ce7fa9bf88a18e83e4de76e25fa30df3f74d987390
+//
+// Safe to run more than once in either mode: the same fingerprint-based
+// idempotency as the real action applies (a second run reports skipped,
+// no writes).
 
 import { getPlatformProxy } from "wrangler";
 import { drizzle } from "drizzle-orm/d1";
 import { and, eq } from "drizzle-orm";
+import { fileURLToPath } from "node:url";
 import * as schema from "../src/db/schema.ts";
 import {
   computeHistArtifactFingerprint,
@@ -51,7 +60,9 @@ import historicalFactsJson from "../src/modules/historical/artifact/v0_1_0/histo
 import identityMapJson from "../src/modules/historical/artifact/v0_1_0/identity_map_v0.json" with { type: "json" };
 import sourceCoverageJson from "../src/modules/historical/artifact/v0_1_0/source_coverage_v0.json" with { type: "json" };
 
-const INSERT_CHUNK_SIZE = 40;
+// Keep in sync with src/modules/historical/actions.ts. Five rows keep the
+// widest hist_facts statement below D1's accepted bound-variable ceiling.
+const INSERT_CHUNK_SIZE = 5;
 
 function chunk(items, size) {
   const chunks = [];
@@ -66,7 +77,41 @@ const BUNDLE = {
   sourceCoverage: sourceCoverageJson,
 };
 
+const EXPECTED_PRODUCTION_FINGERPRINT =
+  "932047bd8bdbf0f3b14672ce7fa9bf88a18e83e4de76e25fa30df3f74d987390";
+
+function parseMode(argv) {
+  const remote = argv.includes("--remote");
+  const confirmation = argv
+    .find((arg) => arg.startsWith("--confirm-fingerprint="))
+    ?.slice("--confirm-fingerprint=".length);
+  if (confirmation && !remote) {
+    throw new Error("--confirm-fingerprint is only valid together with --remote.");
+  }
+  if (remote && confirmation !== EXPECTED_PRODUCTION_FINGERPRINT) {
+    throw new Error(
+      `Remote import requires --confirm-fingerprint=${EXPECTED_PRODUCTION_FINGERPRINT}`,
+    );
+  }
+  const persistPath = argv
+    .find((arg) => arg.startsWith("--persist-to="))
+    ?.slice("--persist-to=".length);
+  if (remote && persistPath) {
+    throw new Error("--persist-to is local-only and cannot be combined with --remote.");
+  }
+  const configPath = argv
+    .find((arg) => arg.startsWith("--config="))
+    ?.slice("--config=".length);
+  if (remote && !configPath) {
+    throw new Error(
+      "Remote import requires an explicit --config whose DB binding sets remote:true.",
+    );
+  }
+  return { remote, persistPath, configPath };
+}
+
 async function main() {
+  const { remote, persistPath, configPath } = parseMode(process.argv.slice(2));
   const validation = validateHistArtifactBundle(BUNDLE);
   if (!validation.valid) {
     console.error("Embedded artifact failed contract validation:");
@@ -76,9 +121,23 @@ async function main() {
   }
 
   const fingerprint = await computeHistArtifactFingerprint(BUNDLE);
+  if (fingerprint !== EXPECTED_PRODUCTION_FINGERPRINT) {
+    throw new Error(
+      `Artifact fingerprint drifted: ${fingerprint} != ${EXPECTED_PRODUCTION_FINGERPRINT}`,
+    );
+  }
+
+  console.log(
+    remote
+      ? `Mode: REMOTE production D1 (confirmed fingerprint ${fingerprint})`
+      : `Mode: LOCAL Miniflare D1 (fingerprint ${fingerprint})`,
+  );
 
   const proxy = await getPlatformProxy({
-    configPath: new URL("../wrangler.jsonc", import.meta.url).pathname,
+    configPath:
+      configPath ?? fileURLToPath(new URL("../wrangler.jsonc", import.meta.url)),
+    remoteBindings: remote,
+    persist: remote ? false : persistPath ? { path: persistPath } : true,
   });
   const { histFacts, histIdentities, histIdentitySourceLabels, histImportBatches, histSourceCoverage } = schema;
 

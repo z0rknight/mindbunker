@@ -11,7 +11,7 @@ import {
   crmEvents,
   gatewayInvitations,
 } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   cleanEmail,
@@ -21,6 +21,7 @@ import {
   stageAfterBooking,
   validateAvailabilityWindows,
   validateBookingSettings,
+  validatePublicBookingRequestInput,
   type AvailabilityWindowValue,
   type BookingSettingsValue,
 } from "./core";
@@ -31,6 +32,7 @@ import {
 } from "./data";
 import { getCalendarProvider } from "./provider";
 import { PUBLIC_SLOT_LIMIT } from "./config";
+import { BOOK_REQUEST_EVENT_TYPE } from "./core";
 import { getGatewayContext } from "@/modules/gateway/data";
 import { isGatewayToken } from "@/modules/gateway/core";
 
@@ -420,4 +422,130 @@ export async function updateBookingAvailability(input: {
   ]);
   revalidatePath("/crm/availability");
   return { success: true, message: "Availability saved." };
+}
+// --- /book public intake (Sprint 3) -----------------------------------
+//
+// "Requesting contact," never an automatic booked meeting: this does NOT
+// touch bookings/availabilityWindows/gatewayInvitations. It reuses the
+// existing Lead vocabulary -- a Lead is just a clients row with
+// status: "lead" -- and logs the raw request as an immutable crm_events
+// row, the same evidence-preservation pattern submitBriefing already
+// uses for gateway briefings. MindBunker is the source of truth; email
+// notification is a deferred extension point (no email provider is
+// configured anywhere in this repo yet -- see the Sprint 3 report).
+//
+// Lookup-or-create by email avoids blindly duplicating an existing lead
+// or client on a repeat submission. Idempotency: the client mints a
+// random key once per form mount (crypto.randomUUID()); a pre-check
+// against crm_events.idempotencyKey short-circuits an exact resubmit
+// before any lookup-or-create runs, and the insert itself is additionally
+// guarded by the idempotency_key unique index via onConflictDoNothing as
+// a last-resort race guard. This does not claim to close every possible
+// concurrent-request race (see Sprint 3 report) -- it closes the
+// realistic case, a form double-submit.
+
+export type PublicBookingRequestActionState = {
+  success?: boolean;
+  message?: string;
+  errors?: Record<string, string>;
+};
+
+export async function submitPublicBookingRequest(
+  _previousState: PublicBookingRequestActionState,
+  formData: FormData,
+): Promise<PublicBookingRequestActionState> {
+  const idempotencyKey =
+    typeof formData.get("idempotencyKey") === "string"
+      ? (formData.get("idempotencyKey") as string).slice(0, 100)
+      : null;
+
+  const validation = validatePublicBookingRequestInput({
+    name: formData.get("name"),
+    email: formData.get("email"),
+    phone: formData.get("phone"),
+    serviceInterest: formData.get("serviceInterest"),
+    message: formData.get("message"),
+  });
+  if (!validation.success) {
+    return { errors: validation.errors, message: "Check the highlighted fields." };
+  }
+
+  const db = await getDb();
+
+  if (idempotencyKey) {
+    const already = await db
+      .select({ id: crmEvents.id })
+      .from(crmEvents)
+      .where(eq(crmEvents.idempotencyKey, idempotencyKey))
+      .limit(1);
+    if (already.length > 0) {
+      return { success: true };
+    }
+  }
+
+  const data = validation.data;
+  const now = new Date();
+  const descriptionParts = [
+    `Booking request from ${data.name} (${data.email})`,
+    data.phone ? `Phone: ${data.phone}` : null,
+    data.serviceInterest ? `Interested in: ${data.serviceInterest}` : null,
+    data.message ? `Message: ${data.message}` : null,
+  ].filter(Boolean);
+  const description = descriptionParts.join(" — ").slice(0, 4_000);
+
+  const existingClient = await db
+    .select({ id: clients.id })
+    .from(clients)
+    .where(sql`lower(${clients.email}) = ${data.email}`)
+    .limit(1);
+
+  let clientId: number;
+  if (existingClient[0]) {
+    clientId = existingClient[0].id;
+    await db
+      .update(clients)
+      .set({ lastInteractionAt: now })
+      .where(eq(clients.id, clientId));
+  } else {
+    const inserted = await db
+      .insert(clients)
+      .values({
+        name: data.name,
+        status: "lead",
+        opportunityStage: "new",
+        email: data.email,
+        phone: data.phone,
+        serviceInterest: data.serviceInterest,
+        source: "book",
+        contacted: false,
+        converted: false,
+        lastInteractionAt: now,
+      })
+      .returning({ id: clients.id });
+    if (!inserted[0]) {
+      return { message: "Something went wrong. Please try again." };
+    }
+    clientId = inserted[0].id;
+    await db.insert(crmEvents).values({
+      clientId,
+      type: "lead_created",
+      actor: "gateway",
+      description: `Lead created from /book: ${data.name}`,
+    });
+  }
+
+  await db
+    .insert(crmEvents)
+    .values({
+      clientId,
+      type: BOOK_REQUEST_EVENT_TYPE,
+      actor: "gateway",
+      description,
+      idempotencyKey,
+    })
+    .onConflictDoNothing({ target: crmEvents.idempotencyKey });
+
+  revalidatePath(`/crm/${clientId}`);
+  revalidatePath("/crm");
+  return { success: true };
 }

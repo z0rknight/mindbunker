@@ -28,6 +28,12 @@
       "migrations_dir": "src/db/migrations"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "mindbunker-media"
+    }
+  ],
   "observability": {
     "enabled": true
   }

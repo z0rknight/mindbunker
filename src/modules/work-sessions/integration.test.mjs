@@ -28,6 +28,16 @@ const ledgerMigration = readFileSync(
   "utf8",
 );
 
+// NIGHT SHIFT REALITY PATCH §3: chains the real Sensor P1 migration
+// (creates sensor_devices, adds work_sessions.sensor_device_id) so
+// OPEN_WORK_SESSION_SQL's device-attribution LEFT JOIN resolves against
+// the same real schema shape production has, rather than a hand-rolled
+// stub that could drift from it.
+const sensorSyncMigration = readFileSync(
+  new URL("../../db/migrations/0017_sensor_sync.sql", import.meta.url),
+  "utf8",
+);
+
 const plain = (row) => (row ? { ...row } : row);
 
 function createFixtureDatabase(path = ":memory:") {
@@ -73,6 +83,7 @@ function createFixtureDatabase(path = ":memory:") {
   `);
   db.exec(migration);
   db.exec(ledgerMigration);
+  db.exec(sensorSyncMigration);
   return db;
 }
 
@@ -221,8 +232,11 @@ test("refresh or process restart recovers the active session", () => {
       id: 1,
       video_id: 100,
       video_title: "Video A",
+      client_name: "Client A",
+      project_name: "Project A",
       activity_type: "MOTION_GRAPHICS",
       started_at: 1_000,
+      device_name: null,
     });
     reloadedConnection.close();
   } finally {
@@ -267,6 +281,8 @@ test("session attribution remains video-only and derives project and client", ()
       "created_at",
       "source",
       "updated_at",
+      "sensor_device_id",
+      "sensor_local_id",
     ],
   );
   assert.deepEqual(

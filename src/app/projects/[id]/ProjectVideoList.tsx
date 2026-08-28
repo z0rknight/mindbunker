@@ -6,6 +6,7 @@ import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
 import { formatDate } from "@/utils/date";
 import { BulkEditVideosButton } from "./BulkEditVideosButton";
 import type { VideoStatus } from "@/modules/productivity/config";
+import { resolveCoverUrl } from "@/modules/media/core";
 
 type WorkspaceVideo = {
   id: number;
@@ -14,7 +15,32 @@ type WorkspaceVideo = {
   status: VideoStatus;
   revisionsCount: number;
   batchLabel: string | null;
+  coverUrl: string | null;
 };
+
+// Sprint 3 P1 (Project + Video visual covers): a compact 11x11 thumbnail
+// per row -- Video cover -> Project cover -> Client avatar -> initials.
+// Deliberately not next/image here (this is a dense operator list, not a
+// media surface); a plain <img> with object-cover is enough and avoids
+// next/image's layout-shift-prevention overhead for a 44px square.
+function RowThumbnail({
+  url,
+  clientName,
+}: {
+  url: string | null;
+  clientName: string;
+}) {
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800 text-xs font-black text-zinc-400">
+      {url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        clientName.slice(0, 2).toUpperCase()
+      )}
+    </div>
+  );
+}
 
 // Brief C ("Final Local Ingest / Live Readiness") §7/§8/§9: the video list
 // itself needed to become a selection surface (checkboxes + "Edit
@@ -27,9 +53,15 @@ type WorkspaceVideo = {
 export function ProjectVideoList({
   projectId,
   videos,
+  projectCoverUrl = null,
+  clientAvatarUrl = null,
+  clientName = "",
 }: {
   projectId: number;
   videos: WorkspaceVideo[];
+  projectCoverUrl?: string | null;
+  clientAvatarUrl?: string | null;
+  clientName?: string;
 }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const returnTo = encodeURIComponent(`/projects/${projectId}`);
@@ -89,6 +121,10 @@ export function ProjectVideoList({
               onChange={() => toggle(video.id)}
               className="h-4 w-4 shrink-0"
               aria-label={`Select ${video.title ?? "video"}`}
+            />
+            <RowThumbnail
+              url={resolveCoverUrl(video.coverUrl, projectCoverUrl, clientAvatarUrl)}
+              clientName={clientName}
             />
             <Link href={`/productivity?video=${video.id}&returnTo=${returnTo}`} className="min-w-0 flex-1">
               <p className="truncate font-black text-white">{video.title ?? `Video ${formatDate(video.date)}`}</p>

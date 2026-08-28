@@ -1,13 +1,17 @@
 import { PlanVideoButton } from "@/components/ui/QuickActions";
 import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
 import { getProjectWorkspace } from "@/modules/projects/actions";
+import { resolveCurrentWorkVideo } from "@/modules/projects/core";
+import { validateDeliveryUrl } from "@/modules/productivity/core";
+import { CopyLinkButton } from "@/components/ui/CopyLinkButton";
 import { formatDate } from "@/utils/date";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProjectWorkspaceControls } from "./ProjectWorkspaceControls";
 import { AddVideoButton } from "./AddVideoButton";
 import { BulkAddVideosButton } from "./BulkAddVideosButton";
-import { ProjectVideoList } from "./ProjectVideoList";
+import { ProjectVideoWorkspace } from "./ProjectVideoWorkspace";
+import { getCommercialTermsForVideo } from "@/modules/quotes/actions";
 import { AssetsPanel } from "./AssetsPanel";
 import { SourceMediaPanel } from "./SourceMediaPanel";
 import { getAssetsForProject } from "@/modules/assets/actions";
@@ -26,15 +30,39 @@ export default async function ProjectWorkspacePage({
   const project = await getProjectWorkspace(Number(id));
   if (!project) notFound();
 
-  const [assets, sourceMediaReferences] = await Promise.all([
+  const [assets, sourceMediaReferences, commercialTermsByVideoId] = await Promise.all([
     getAssetsForProject(project.id),
     getSourceMediaForProject(project.id),
+    // Quick Morning Reality Patch §7/§9: reuse the exact same commercial-
+    // terms resolution the Video workspace panel already uses (quotes
+    // FIXED, hourly contract, or NONE) plus its tracked-time figure --
+    // one canonical source, no second derivation, no guessing at a
+    // received amount (see ProjectVideoCards' CommercialValueLine).
+    Promise.all(
+      project.videos.map(async (video) => [video.id, await getCommercialTermsForVideo(video.id)] as const),
+    ).then((entries) => new Map(entries)),
   ]);
+
+  const videosWithCommercialTerms = project.videos.map((video) => ({
+    ...video,
+    commercialTerms: commercialTermsByVideoId.get(video.id) ?? null,
+  }));
 
   const doneVideos = project.videos.filter((video) => video.status === "DONE").length;
   const inFlightVideos = project.videos.filter((video) =>
     ["IN_PROGRESS", "READY_FOR_REVIEW", "CHANGES_REQUESTED"].includes(video.status),
   ).length;
+
+  // NIGHT SHIFT REALITY PATCH §7: derived from the same video list already
+  // fetched above -- no new query, no new field. See
+  // resolveCurrentWorkVideo for the preference order.
+  const currentWorkVideo = resolveCurrentWorkVideo(project.videos);
+  const currentWorkReviewUrl = currentWorkVideo
+    ? (() => {
+        const validated = validateDeliveryUrl(currentWorkVideo.reviewUrl);
+        return validated.success ? validated.value : null;
+      })()
+    : null;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 md:p-8">
@@ -78,6 +106,29 @@ export default async function ProjectWorkspacePage({
         </div>
       </section>
 
+      {currentWorkVideo && (
+        <section className="mb-7 rounded-2xl border border-cyan-900/50 bg-gradient-to-br from-zinc-900 to-zinc-950 p-4 sm:p-5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Current work</p>
+          <h2 className="mt-2 text-lg font-black text-white">
+            {currentWorkVideo.title?.trim() || `Video ${currentWorkVideo.date}`}
+          </h2>
+          <p className="mt-1 text-xs text-zinc-500">{currentWorkVideo.status.replaceAll("_", " ")}</p>
+          {currentWorkReviewUrl && (
+            <div className="mt-3 flex items-center gap-3">
+              <a
+                href={currentWorkReviewUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex min-h-10 items-center rounded-xl bg-cyan-500 px-4 text-sm font-black text-zinc-950 hover:bg-cyan-400"
+              >
+                Open review link ↗
+              </a>
+              <CopyLinkButton url={currentWorkReviewUrl} className="text-xs text-zinc-500 hover:text-cyan-300 transition" />
+            </div>
+          )}
+        </section>
+      )}
+
       {project.notes && (
         <section className="mb-7 rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4 sm:p-5">
           <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Project notes</p>
@@ -97,12 +148,25 @@ export default async function ProjectWorkspacePage({
             <AddVideoButton projectId={project.id} />
             <BulkAddVideosButton projectId={project.id} />
             <div className="w-full sm:w-[180px]">
-              <PlanVideoButton initialProjectId={project.id} />
+              <PlanVideoButton
+                initialProjectId={project.id}
+                projectContext={{
+                  id: project.id,
+                  name: project.name,
+                  clientName: project.clientName,
+                }}
+              />
             </div>
           </div>
         </div>
 
-        <ProjectVideoList projectId={project.id} videos={project.videos} />
+        <ProjectVideoWorkspace
+          projectId={project.id}
+          videos={videosWithCommercialTerms}
+          projectCoverUrl={project.coverUrl}
+          clientAvatarUrl={project.clientAvatarUrl}
+          clientName={project.clientName}
+        />
       </section>
 
       <AssetsPanel

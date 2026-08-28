@@ -217,25 +217,28 @@ export default async function WarRoomPage() {
         {/* Top Clients */}
         {income.topClientsByRevenue.length > 0 && (
           <div className="mt-4 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-            <p className="text-zinc-400 text-xs uppercase tracking-widest font-semibold mb-3">
+            <p className="text-zinc-400 text-xs uppercase tracking-widest font-semibold mb-1">
               Top Clients by Revenue
+            </p>
+            <p className="text-zinc-600 text-xs mb-3">
+              Ranked by raw amount, not currency-adjusted — a USD entry can outrank a larger BRL one.
             </p>
             <div className="space-y-2">
               {income.topClientsByRevenue.map((c, i) => (
-                <div key={c.name} className="flex items-center gap-3">
+                <div key={`${c.name}-${c.currency}`} className="flex items-center gap-3">
                   <span className="text-zinc-600 text-xs w-4 font-mono">{i + 1}</span>
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
                       <span className="text-white text-sm font-medium">{c.name}</span>
                       <span className="text-cyan-400 text-sm font-bold">
-                        {formatCurrency(c.revenue)}
+                        {formatCurrency(c.revenue, c.currency)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-zinc-500 text-xs">{c.projects} projects</span>
                       {c.effectiveYield && (
                         <span className="text-zinc-400 text-xs">
-                          · {formatCurrency(c.effectiveYield)}/project
+                          · {formatCurrency(c.effectiveYield, c.currency)}/project
                         </span>
                       )}
                     </div>
@@ -329,11 +332,12 @@ export default async function WarRoomPage() {
               Client Drain Ranking
             </p>
             <p className="text-zinc-600 text-xs mb-3">
-              Sorted by lowest effective yield — these clients cost you the most per R$ earned
+              Sorted by lowest effective yield, ranked by raw amount (not currency-adjusted) —
+              these clients cost you the most per unit of revenue earned
             </p>
             <div className="space-y-2">
               {efficiency.clientDrainRanking.map((c, i) => (
-                <div key={c.name} className="flex items-center gap-3">
+                <div key={`${c.name}-${c.currency}`} className="flex items-center gap-3">
                   <span
                     className={`text-xs w-4 font-mono font-bold ${
                       i === 0 ? "text-red-400" : i === 1 ? "text-amber-400" : "text-zinc-500"
@@ -354,7 +358,7 @@ export default async function WarRoomPage() {
                           : "text-cyan-400"
                       }`}
                     >
-                      {c.effectiveYield ? formatCurrency(c.effectiveYield) + "/proj" : "No data"}
+                      {c.effectiveYield ? formatCurrency(c.effectiveYield, c.currency) + "/proj" : "No data"}
                     </span>
                   </div>
                 </div>
@@ -407,24 +411,20 @@ export default async function WarRoomPage() {
                 </p>
               </div>
               <div>
-                <p className="text-zinc-500 text-xs mb-1">Caffeine / Revenue Ratio</p>
+                <p className="text-zinc-500 text-xs mb-1">Coffees / Video</p>
                 <p
                   className={`text-xl font-bold ${
-                    biological.caffeinePerRevenue === null
-                      ? "text-zinc-500"
-                      : biological.caffeinePerRevenue > 5
-                      ? "text-red-400"
-                      : "text-cyan-400"
+                    biological.coffeesPerVideo === null ? "text-zinc-500" : "text-cyan-400"
                   }`}
                 >
-                  {biological.caffeinePerRevenue !== null
-                    ? `${biological.caffeinePerRevenue} mg/R$`
+                  {biological.coffeesPerVideo !== null
+                    ? `${biological.coffeesPerVideo} ☕/video`
                     : "—"}
                 </p>
                 <p className="text-zinc-600 text-xs mt-1">
-                  {biological.caffeinePerRevenue !== null && biological.caffeinePerRevenue > 5
-                    ? "⚠ High caffeine relative to revenue"
-                    : "Ratio within range"}
+                  {biological.coffeesPerVideo !== null
+                    ? `${biological.totalCoffeesMonth} coffees this month`
+                    : "No completed videos this month yet"}
                 </p>
               </div>
             </div>

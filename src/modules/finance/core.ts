@@ -2,7 +2,10 @@
 // actions.ts); everything below is unit-testable in isolation and is what
 // core.test.mjs exercises directly.
 
-import { isContractBillingType } from "./config.ts";
+import {
+  EFFECTIVE_USD_TO_BRL_RATE,
+  isContractBillingType,
+} from "./config.ts";
 
 export type Provenance = "SOURCE_FACT" | "DERIVED" | "UNATTRIBUTED";
 
@@ -23,6 +26,96 @@ export type ReconciliationResult = {
 
 export function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+export type FinanceSummaryTransaction = {
+  type: "income" | "expense" | "owner_pay";
+  amount: number;
+  currency: string;
+  date: string;
+};
+
+export type FinanceSummaryByCurrency = {
+  currency: string;
+  monthlyRevenue: number;
+  monthlyExpenses: number;
+  monthlyNet: number;
+  currentBalance: number;
+};
+
+// A BUSINESS-scope FX conversion's cash effect on one currency position --
+// see computeFxCashMovements in modules/fx/core.ts, which is what actually
+// derives these from a raw fx_conversions row (direction-aware). Passed in
+// pre-flattened here so this function stays free of FX-specific logic.
+export type FinanceSummaryFxMovement = { currency: string; amount: number };
+
+// Currency is the first grouping key. Raw amounts from different ledgers are
+// never added together; Owner Pay reduces cash but remains outside revenue,
+// expenses, and monthly net. FX movements (fxMovements) shift cash between
+// currency positions the same way -- they are NEVER folded into income,
+// expenses, monthlyRevenue, or monthlyNet (a conversion is neither revenue
+// nor expense), only into currentBalance, exactly like Owner Pay already
+// affects currentBalance without being revenue or expense.
+export function computeFinanceSummaryByCurrency(
+  transactions: FinanceSummaryTransaction[],
+  monthStart: string,
+  fxMovements: FinanceSummaryFxMovement[] = [],
+): FinanceSummaryByCurrency[] {
+  const byCurrency = new Map<
+    string,
+    { monthlyRevenue: number; monthlyExpenses: number; income: number; expenses: number; ownerPay: number; fxNet: number }
+  >();
+  const getBucket = (currency: string) =>
+    byCurrency.get(currency) ?? {
+      monthlyRevenue: 0,
+      monthlyExpenses: 0,
+      income: 0,
+      expenses: 0,
+      ownerPay: 0,
+      fxNet: 0,
+    };
+
+  for (const transaction of transactions) {
+    const currency = transaction.currency.trim().toUpperCase();
+    if (!currency) continue;
+    const bucket = getBucket(currency);
+    const inCurrentMonth = transaction.date >= monthStart;
+    if (transaction.type === "income") {
+      bucket.income += transaction.amount;
+      if (inCurrentMonth) bucket.monthlyRevenue += transaction.amount;
+    } else if (transaction.type === "expense") {
+      bucket.expenses += transaction.amount;
+      if (inCurrentMonth) bucket.monthlyExpenses += transaction.amount;
+    } else {
+      bucket.ownerPay += transaction.amount;
+    }
+    byCurrency.set(currency, bucket);
+  }
+
+  for (const movement of fxMovements) {
+    const currency = movement.currency.trim().toUpperCase();
+    if (!currency) continue;
+    const bucket = getBucket(currency);
+    bucket.fxNet += movement.amount;
+    byCurrency.set(currency, bucket);
+  }
+
+  return Array.from(byCurrency.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([currency, bucket]) => ({
+      currency,
+      monthlyRevenue: round2(bucket.monthlyRevenue),
+      monthlyExpenses: round2(bucket.monthlyExpenses),
+      monthlyNet: round2(bucket.monthlyRevenue - bucket.monthlyExpenses),
+      currentBalance: round2(bucket.income - bucket.expenses - bucket.ownerPay + bucket.fxNet),
+    }));
+}
+
+export function convertUsdToBrl(
+  usdAmount: number,
+  effectiveRate = EFFECTIVE_USD_TO_BRL_RATE,
+): number {
+  return round2(usdAmount * effectiveRate);
 }
 
 // Formats total minutes the way the Monday Money Lab P0 brief's own
@@ -121,9 +214,17 @@ export function computeRmediaCashSummary(input: {
   totalIncome: number;
   totalExpense: number;
   totalOwnerPay: number;
+  // FX + Business Operating Cash Patch §5/§6: net effect of BUSINESS-scope
+  // FX conversions on THIS currency position (positive = this currency was
+  // received, negative = this currency was spent to obtain the other).
+  // Never folded into taxReserve, which stays income-only -- a conversion
+  // is not revenue, so it must not inflate the tax reserve calculation.
+  fxNet?: number;
   taxReservePercent: number;
 }): { businessCash: number; taxReserve: number; availableBusinessCash: number } {
-  const businessCash = round2(input.totalIncome - input.totalExpense - input.totalOwnerPay);
+  const businessCash = round2(
+    input.totalIncome - input.totalExpense - input.totalOwnerPay + (input.fxNet ?? 0),
+  );
   const taxReserve = round2(input.totalIncome * (input.taxReservePercent / 100));
   const availableBusinessCash = round2(businessCash - taxReserve);
   return { businessCash, taxReserve, availableBusinessCash };
@@ -376,4 +477,36 @@ export function validateSubscriptionInput(input: {
     return "Cadence must be MONTHLY or ANNUAL.";
   }
   return null;
+}
+
+// ─── NIGHT SHIFT REALITY PATCH §6: contract rate -> attributable work value ─
+
+export type RateEquivalent = {
+  attributableSeconds: number;
+  hourlyRate: number;
+  currency: string;
+  rateEquivalent: number;
+};
+
+// This is NEVER "earned", "paid", or "revenue" -- see the module-level
+// invariant in finance/actions.ts's getTodayRateEquivalents. It is purely:
+// "if all attributable work were valued at the contract's hourly rate, it
+// corresponds to this many currency units." Sensor/Work Session time is
+// MindBunker's own operational-involvement tracking; it is explicitly NOT
+// the same fact as what Upwork (or any platform) actually billed -- see
+// commercial_contracts vs billing_evidence in db/schema.ts, permanently
+// separate truths. This function never writes to transactions and never
+// gets summed into any revenue figure.
+export function computeRateEquivalent(
+  attributableSeconds: number,
+  hourlyRate: number,
+  currency: string,
+): RateEquivalent {
+  const hours = attributableSeconds / 3_600;
+  return {
+    attributableSeconds,
+    hourlyRate,
+    currency,
+    rateEquivalent: round2(hours * hourlyRate),
+  };
 }

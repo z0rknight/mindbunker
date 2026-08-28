@@ -345,13 +345,23 @@ export function OpportunityPanel({
                   rows={2}
                   className="w-full resize-none rounded-xl border border-violet-500/30 bg-violet-500/5 p-3 text-xs leading-5 text-violet-200 outline-none"
                 />
-                <button
-                  type="button"
-                  onClick={() => copyPrivateLink(gatewayUrl, "Gateway")}
-                  className="min-h-12 w-full rounded-xl border border-violet-500/40 px-4 text-sm font-black text-violet-200 transition hover:bg-violet-500/10 active:scale-[0.99]"
-                >
-                  Copy Gateway link
-                </button>
+                <div className="flex items-stretch gap-2">
+                  <button
+                    type="button"
+                    onClick={() => copyPrivateLink(gatewayUrl, "Gateway")}
+                    className="min-h-12 flex-1 rounded-xl border border-violet-500/40 px-4 text-sm font-black text-violet-200 transition hover:bg-violet-500/10 active:scale-[0.99]"
+                  >
+                    Copy Gateway link
+                  </button>
+                  <a
+                    href={gatewayUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex min-h-12 shrink-0 items-center rounded-xl border border-violet-500/40 px-4 text-sm font-black text-violet-200 transition hover:bg-violet-500/10"
+                  >
+                    Open ↗
+                  </a>
+                </div>
               </div>
 
               <div className="space-y-2 rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-3">
@@ -365,13 +375,23 @@ export function OpportunityPanel({
                   rows={2}
                   className="w-full resize-none rounded-lg border border-cyan-500/20 bg-zinc-950/70 p-3 text-xs leading-5 text-cyan-100 outline-none"
                 />
-                <button
-                  type="button"
-                  onClick={() => copyPrivateLink(clientPortalUrl, "Vault")}
-                  className="min-h-12 w-full rounded-xl bg-cyan-500 px-4 text-sm font-black text-zinc-950 transition hover:bg-cyan-400 active:scale-[0.99]"
-                >
-                  Copy Vault link
-                </button>
+                <div className="flex items-stretch gap-2">
+                  <button
+                    type="button"
+                    onClick={() => copyPrivateLink(clientPortalUrl, "Vault")}
+                    className="min-h-12 flex-1 rounded-xl bg-cyan-500 px-4 text-sm font-black text-zinc-950 transition hover:bg-cyan-400 active:scale-[0.99]"
+                  >
+                    Copy Vault link
+                  </button>
+                  <a
+                    href={clientPortalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex min-h-12 shrink-0 items-center rounded-xl border border-cyan-500/40 px-4 text-sm font-black text-cyan-200 transition hover:bg-cyan-500/10"
+                  >
+                    Open ↗
+                  </a>
+                </div>
               </div>
             </div>
           ) : (

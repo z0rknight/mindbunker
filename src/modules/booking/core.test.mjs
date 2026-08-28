@@ -9,6 +9,7 @@ import {
   stageAfterBooking,
   validateAvailabilityWindows,
   validateBookingSettings,
+  validatePublicBookingRequestInput,
 } from "./core.ts";
 import { MockCalendarProvider } from "./provider.ts";
 
@@ -111,4 +112,56 @@ test("local CalendarProvider returns a deterministic event id", async () => {
     }),
     [],
   );
+});
+
+
+// Sprint 3 — /book public intake ("requesting contact," never an
+// automatic booked meeting).
+test("validatePublicBookingRequestInput requires a name and a valid email", () => {
+  const missing = validatePublicBookingRequestInput({ name: "", email: "" });
+  assert.equal(missing.success, false);
+  assert.ok(missing.errors.name);
+  assert.ok(missing.errors.email);
+
+  const badEmail = validatePublicBookingRequestInput({
+    name: "Jane Doe",
+    email: "not-an-email",
+  });
+  assert.equal(badEmail.success, false);
+  assert.ok(badEmail.errors.email);
+});
+
+test("validatePublicBookingRequestInput accepts the minimum fields and normalizes email", () => {
+  const result = validatePublicBookingRequestInput({
+    name: "  Jane Doe  ",
+    email: "  Jane@Example.COM ",
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data.name, "Jane Doe");
+  assert.equal(result.data.email, "jane@example.com");
+  assert.equal(result.data.phone, null);
+  assert.equal(result.data.serviceInterest, null);
+  assert.equal(result.data.message, null);
+});
+
+test("validatePublicBookingRequestInput passes through optional phone/serviceInterest/message and ignores an invalid serviceInterest", () => {
+  const valid = validatePublicBookingRequestInput({
+    name: "Jane Doe",
+    email: "jane@example.com",
+    phone: "+1 555 000 0000",
+    serviceInterest: "short-form",
+    message: "Need a launch film",
+  });
+  assert.equal(valid.success, true);
+  assert.equal(valid.data.phone, "+1 555 000 0000");
+  assert.equal(valid.data.serviceInterest, "short-form");
+  assert.equal(valid.data.message, "Need a launch film");
+
+  const bogus = validatePublicBookingRequestInput({
+    name: "Jane Doe",
+    email: "jane@example.com",
+    serviceInterest: "not-a-real-option",
+  });
+  assert.equal(bogus.success, true);
+  assert.equal(bogus.data.serviceInterest, null);
 });
