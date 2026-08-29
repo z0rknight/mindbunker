@@ -1,32 +1,79 @@
-/**
- * Get current time in Brazil (GMT-3)
- */
-export function nowBrazil(): Date {
-  return new Date(new Date().getTime() - 3 * 60 * 60 * 1000);
+export const OPERATOR_TIME_ZONE = "America/Sao_Paulo";
+
+type OperatorDateParts = { year: number; month: number; day: number };
+
+const OPERATOR_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: OPERATOR_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function operatorDateParts(instant: Date): OperatorDateParts {
+  const parts = OPERATOR_DATE_FORMATTER.formatToParts(instant);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return { year: value("year"), month: value("month"), day: value("day") };
+}
+
+function formatDateParts({ year, month, day }: OperatorDateParts): string {
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** The operator-facing calendar date for an absolute instant. */
+export function operatorDateKey(instant: Date | string = new Date()): string {
+  const parsed = instant instanceof Date ? instant : new Date(instant);
+  if (Number.isNaN(parsed.getTime())) throw new Error("Invalid instant.");
+  return formatDateParts(operatorDateParts(parsed));
+}
+
+/** Calendar arithmetic on a YYYY-MM-DD key, independent of host timezone. */
+export function shiftDateKey(dateKey: string, deltaDays: number): string {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1, day + deltaDays));
+  return shifted.toISOString().slice(0, 10);
 }
 
 /**
  * Returns today's date as ISO string YYYY-MM-DD (Brazil timezone)
  */
-export function todayISO(): string {
-  return nowBrazil().toISOString().split("T")[0];
+export function todayISO(now: Date = new Date()): string {
+  return operatorDateKey(now);
 }
 
 /**
  * Returns the start of the current month as ISO string YYYY-MM-DD (Brazil timezone)
  */
-export function startOfMonthISO(): string {
-  const now = nowBrazil();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+export function startOfMonthISO(now: Date = new Date()): string {
+  return `${todayISO(now).slice(0, 7)}-01`;
 }
 
 /**
  * Returns a date N days ago as ISO string YYYY-MM-DD
  */
-export function daysAgoISO(days: number): string {
-  const d = nowBrazil();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().split("T")[0];
+export function daysAgoISO(days: number, now: Date = new Date()): string {
+  return shiftDateKey(todayISO(now), -days);
+}
+
+export function previousMonthRangeISO(now: Date = new Date()): {
+  start: string;
+  end: string;
+} {
+  const currentMonth = startOfMonthISO(now).slice(0, 7);
+  const previousMonth = shiftMonthKey(currentMonth, -1);
+  const followingMonth = shiftMonthKey(previousMonth, 1);
+  return {
+    start: `${previousMonth}-01`,
+    end: shiftDateKey(`${followingMonth}-01`, -1),
+  };
+}
+
+export function operatorMonthProgress(now: Date = new Date()): {
+  dayOfMonth: number;
+  daysInMonth: number;
+} {
+  const { year, month, day } = operatorDateParts(now);
+  return { dayOfMonth: day, daysInMonth: new Date(Date.UTC(year, month, 0)).getUTCDate() };
 }
 
 /**
@@ -56,8 +103,11 @@ export function formatCurrency(amount: number, currency: string = "USD"): string
 /**
  * Get current month name (Brazil timezone)
  */
-export function currentMonthName(): string {
-  return nowBrazil().toLocaleString("en-US", { month: "long" });
+export function currentMonthName(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: OPERATOR_TIME_ZONE,
+    month: "long",
+  }).format(now);
 }
 
 /**
@@ -70,8 +120,8 @@ export function currentMonthName(): string {
 /**
  * Returns the current month as "YYYY-MM" (Brazil timezone).
  */
-export function currentMonthKey(): string {
-  return startOfMonthISO().slice(0, 7);
+export function currentMonthKey(now: Date = new Date()): string {
+  return startOfMonthISO(now).slice(0, 7);
 }
 
 /**

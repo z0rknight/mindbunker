@@ -19,17 +19,27 @@
 // both are pure presentation helpers, safe to call from Server or Client
 // Components.
 
-const INTERNAL_CLIENT_NAME = "RMEDIA";
+const INTERNAL_CLIENT_NAMES = new Set(["RMEDIA", "RMEDIA (INTERNAL)"]);
 
 /**
- * True when `name` is RMEDIA's own canonical internal record (exact
- * match, case/whitespace-insensitive) -- never a fuzzy/partial match, so
- * a real external client who happens to mention RMEDIA in their name
- * (unlikely, but not this function's job to guess) is never misclassified.
+ * True when `name` is one of RMEDIA's known exact internal labels (exact
+ * match, case/whitespace-insensitive). The parenthesized label is retained
+ * for existing local/prod rows; neither branch is fuzzy, so an external
+ * client who merely mentions RMEDIA is never misclassified.
  */
 export function isInternalClientName(name: string | null | undefined): boolean {
   if (!name) return false;
-  return name.trim().toUpperCase() === INTERNAL_CLIENT_NAME;
+  return INTERNAL_CLIENT_NAMES.has(name.trim().toUpperCase());
+}
+
+export function isActiveExternalClient(client: {
+  name: string;
+  status: string;
+  archivalState: string;
+}): boolean {
+  return client.status === "active" &&
+    client.archivalState === "ACTIVE_SURFACE" &&
+    !isInternalClientName(client.name);
 }
 
 /**

@@ -6,15 +6,30 @@
  */
 
 import { getAuthenticatedDb } from "@/db";
-import { transactions, videoLogs, clients, healthLogs } from "@/db/schema";
-import { and, eq, gte } from "drizzle-orm";
-import { startOfMonthISO, daysAgoISO, todayISO } from "@/utils/date";
+import { transactions, videoLogs, clients, healthLogs, workSessions } from "@/db/schema";
+import { and, eq, gte, isNotNull } from "drizzle-orm";
+import {
+  previousMonthRangeISO,
+  startOfMonthISO,
+  daysAgoISO,
+  todayISO,
+} from "@/utils/date";
+import { DEFAULT_CURRENCY } from "@/modules/finance/config";
+import {
+  consistencyStreakFromSessions,
+  growthByCurrency,
+  isActiveExternalClient,
+  sumIncomeByCurrency,
+  type CurrencyAmount,
+} from "@/modules/analytics/core";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 export interface PerformanceStats {
   // Revenue per video this month
   revenuePerVideo: number | null;
+  revenueCurrency: string;
+  revenueThisMonthByCurrency: CurrencyAmount[];
 
   // Average revisions per video this month
   avgRevisionsPerVideo: number | null;
@@ -22,11 +37,13 @@ export interface PerformanceStats {
   // Videos per active client this month
   videosPerActiveClient: number | null;
 
-  // Consecutive days with at least one log (video, health, or finance)
+  // Consecutive operator days with at least one closed Work Session
   consistencyStreak: number;
 
   // Revenue growth % vs previous month (null if no previous data)
   revenueGrowthPct: number | null;
+  revenueGrowthCurrency: string;
+  revenueGrowthByCurrency: Array<CurrencyAmount & { growthPct: number | null }>;
 
   // Videos growth % vs previous month (null if no previous data)
   videosGrowthPct: number | null;
@@ -40,19 +57,6 @@ export interface PerformanceStats {
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-function startOfPrevMonthISO(): string {
-  const now = new Date();
-  const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  return prevMonth.toISOString().split("T")[0];
-}
-
-function endOfPrevMonthISO(): string {
-  const now = new Date();
-  // Last day of previous month = day 0 of current month
-  const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
-  return lastDay.toISOString().split("T")[0];
-}
-
 function growthPct(current: number, previous: number): number | null {
   if (previous === 0) return current > 0 ? 100 : null;
   return Math.round(((current - previous) / previous) * 100);
@@ -62,11 +66,13 @@ function growthPct(current: number, previous: number): number | null {
 
 export async function getPerformanceStats(): Promise<PerformanceStats> {
   const db = await getAuthenticatedDb();
-  const monthStart = startOfMonthISO();
-  const prevMonthStart = startOfPrevMonthISO();
-  const prevMonthEnd = endOfPrevMonthISO();
-  const today = todayISO();
-  const thirtyDaysAgo = daysAgoISO(30);
+  const now = new Date();
+  const monthStart = startOfMonthISO(now);
+  const previousMonth = previousMonthRangeISO(now);
+  const prevMonthStart = previousMonth.start;
+  const prevMonthEnd = previousMonth.end;
+  const today = todayISO(now);
+  const thirtyDaysAgo = daysAgoISO(30, now);
 
   // Fetch all needed data in parallel
   const [
@@ -76,8 +82,7 @@ export async function getPerformanceStats(): Promise<PerformanceStats> {
     prevMonthVideos,
     activeClients,
     last30DaysHealthLogs,
-    last30DaysVideoLogs,
-    last30DaysFinanceTransactions,
+    closedWorkSessions,
   ] = await Promise.all([
     db.select().from(transactions).where(gte(transactions.date, monthStart)),
     db
@@ -101,22 +106,26 @@ export async function getPerformanceStats(): Promise<PerformanceStats> {
       ),
     db.select().from(clients),
     db.select().from(healthLogs).where(gte(healthLogs.date, thirtyDaysAgo)),
-    db.select().from(videoLogs).where(gte(videoLogs.date, thirtyDaysAgo)),
     db
-      .select()
-      .from(transactions)
-      .where(gte(transactions.date, thirtyDaysAgo)),
+      .select({ startedAt: workSessions.startedAt, endedAt: workSessions.endedAt })
+      .from(workSessions)
+      .where(isNotNull(workSessions.endedAt)),
   ]);
 
   // ── Revenue per Video ──────────────────────────────────────────────────────
-  const thisMonthRevenue = thisMonthTransactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
+  const revenueThisMonthByCurrency = sumIncomeByCurrency(
+    thisMonthTransactions.filter((transaction) => transaction.date <= today),
+  );
+  const revenueCurrency = DEFAULT_CURRENCY;
+  const revenueInDisplayCurrency = revenueThisMonthByCurrency.find(
+    (row) => row.currency === revenueCurrency,
+  );
+  const thisMonthRevenue = revenueInDisplayCurrency?.amount ?? null;
 
   const thisMonthVideoCount = thisMonthVideos.length;
 
   const revenuePerVideo =
-    thisMonthVideoCount > 0
+    thisMonthVideoCount > 0 && thisMonthRevenue !== null
       ? Math.round(thisMonthRevenue / thisMonthVideoCount)
       : null;
 
@@ -131,43 +140,27 @@ export async function getPerformanceStats(): Promise<PerformanceStats> {
       : null;
 
   // ── Videos per Active Client ───────────────────────────────────────────────
-  const activeClientCount = activeClients.filter(
-    (c) => c.status === "active"
-  ).length;
+  const activeClientCount = activeClients.filter(isActiveExternalClient).length;
   const videosPerActiveClient =
     activeClientCount > 0
       ? Math.round((thisMonthVideoCount / activeClientCount) * 10) / 10
       : null;
 
   // ── Consistency Streak ────────────────────────────────────────────────────
-  // Build a set of dates that have at least one log (video, health, or finance)
-  const loggedDates = new Set<string>();
-
-  last30DaysVideoLogs.forEach((v) => loggedDates.add(v.date));
-  last30DaysHealthLogs.forEach((h) => loggedDates.add(h.date));
-  last30DaysFinanceTransactions.forEach((t) => loggedDates.add(t.date));
-
-  // Count consecutive days backwards from today
-  let streak = 0;
-  let checkDate = new Date();
-  for (let i = 0; i < 30; i++) {
-    const dateStr = checkDate.toISOString().split("T")[0];
-    if (loggedDates.has(dateStr)) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else {
-      break;
-    }
-  }
+  const streak = consistencyStreakFromSessions(closedWorkSessions, now);
 
   // ── Revenue Growth % ──────────────────────────────────────────────────────
-  const prevMonthRevenue = prevMonthTransactions
-    .filter(
-      (t) => t.type === "income" && t.date >= prevMonthStart && t.date <= prevMonthEnd
-    )
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const revenueGrowthPct = growthPct(thisMonthRevenue, prevMonthRevenue);
+  const previousRevenueByCurrency = sumIncomeByCurrency(
+    prevMonthTransactions.filter(
+      (transaction) => transaction.date >= prevMonthStart && transaction.date <= prevMonthEnd,
+    ),
+  );
+  const revenueGrowthByCurrency = growthByCurrency(
+    revenueThisMonthByCurrency,
+    previousRevenueByCurrency,
+  );
+  const revenueGrowthPct =
+    revenueGrowthByCurrency.find((row) => row.currency === revenueCurrency)?.growthPct ?? null;
 
   // ── Videos Growth % ───────────────────────────────────────────────────────
   const prevMonthVideoCount = prevMonthVideos.filter(
@@ -189,11 +182,9 @@ export async function getPerformanceStats(): Promise<PerformanceStats> {
   // ── Productivity Score (Gamified Index) ───────────────────────────────────
   // Formula:
   //   Video Score: videos this month * 10 (capped at 100)
-  //   Revenue Score: revenue per video / 10 (capped at 100)
   //   Streak Bonus: streak * 5 (capped at 50)
   //   Revision Penalty: avg revisions > 2 → subtract (avgRevisions - 2) * 5
   const videoScore = Math.min(thisMonthVideoCount * 10, 100);
-  const revenueScore = revenuePerVideo ? Math.min(revenuePerVideo / 10, 100) : 0;
   const streakBonus = Math.min(streak * 5, 50);
   const revisionPenalty =
     avgRevisionsPerVideo && avgRevisionsPerVideo > 2
@@ -202,15 +193,19 @@ export async function getPerformanceStats(): Promise<PerformanceStats> {
 
   const productivityScore = Math.max(
     0,
-    Math.round(videoScore + revenueScore + streakBonus - revisionPenalty)
+    Math.round(videoScore + streakBonus - revisionPenalty)
   );
 
   return {
     revenuePerVideo,
+    revenueCurrency,
+    revenueThisMonthByCurrency,
     avgRevisionsPerVideo,
     videosPerActiveClient,
     consistencyStreak: streak,
     revenueGrowthPct,
+    revenueGrowthCurrency: revenueCurrency,
+    revenueGrowthByCurrency,
     videosGrowthPct,
     caffeinePerVideo,
     productivityScore,

@@ -23,7 +23,7 @@ import { getSalesThisMonth, getMostRecentSaleThisMonth, getClosedSales } from "@
 import { formatQuoteAmount } from "@/modules/quotes/core";
 import { getPerformanceStats } from "@/utils/statistics";
 import { getWarRoomData } from "@/modules/analytics/service";
-import { formatCurrency, currentMonthName } from "@/utils/date";
+import { formatCurrency, currentMonthKey, currentMonthName } from "@/utils/date";
 import Link from "next/link";
 import { HomeTrackingPanel } from "./HomeTrackingPanel";
 import { CoffeeQuickLogButton } from "@/components/ui/HealthQuickActions";
@@ -75,7 +75,7 @@ export default async function DashboardPage() {
       <div className="mb-8">
         <p className="text-zinc-500 text-sm">{greeting} 👋</p>
         <h1 className="text-2xl font-bold text-white mt-1">Dashboard</h1>
-        <p className="text-zinc-500 text-sm mt-1">{currentMonthName()} {now.getFullYear()}</p>
+        <p className="text-zinc-500 text-sm mt-1">{currentMonthName()} {currentMonthKey().slice(0, 4)}</p>
       </div>
 
       <HomeTrackingPanel

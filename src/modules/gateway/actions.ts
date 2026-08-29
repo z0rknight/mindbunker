@@ -31,6 +31,7 @@ import {
   hasBriefingForInvitation,
 } from "./data";
 import { hashGatewayToken } from "./core";
+import { operatorDateKey } from "@/utils/date";
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1_000;
 
@@ -316,7 +317,7 @@ export async function submitBriefing(
     .set({
       serviceInterest: data.serviceInterest,
       nextAction: "Review submitted briefing",
-      nextActionDate: now.toISOString().slice(0, 10),
+      nextActionDate: operatorDateKey(now),
       lastInteractionAt: now,
     })
     .where(eq(clients.id, context.clientId));

@@ -7,25 +7,42 @@
  */
 
 import { getAuthenticatedDb } from "@/db";
-import { isInternalClientName } from "@/lib/client-identity";
-import { transactions, videoLogs, clients, healthLogs, caffeineEvents, projects } from "@/db/schema";
+import { transactions, videoLogs, clients, healthLogs, caffeineEvents, projects, workSessions } from "@/db/schema";
 import { DEFAULT_CURRENCY } from "@/modules/finance/config";
-import { gte } from "drizzle-orm";
-import { startOfMonthISO, daysAgoISO } from "@/utils/date";
+import { gte, isNotNull } from "drizzle-orm";
+import {
+  daysAgoISO,
+  operatorDateKey,
+  operatorMonthProgress,
+  previousMonthRangeISO,
+  startOfMonthISO,
+} from "@/utils/date";
 import { completedVideoLogs } from "@/modules/productivity/core";
 import { caffeineDayKey, reconcileDailyCaffeineMg, computeCoffeesPerVideo } from "@/modules/caffeine/core";
+import {
+  amountForCurrency,
+  computeConsistencyStreak,
+  consistencyStreakFromSessions,
+  computeGoalProgress,
+  growthByCurrency,
+  isActiveExternalClient,
+  sumIncomeByCurrency,
+  type CurrencyAmount,
+} from "./core";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 export interface IncomeIntelligence {
-  /** Total income this month */
-  monthlyRevenue: number;
+  /** Income in the explicit goal currency only. */
+  monthlyRevenue: number | null;
+  monthlyRevenueByCurrency: CurrencyAmount[];
+  revenueCurrency: string;
   /** Revenue goal (R$20k) */
   revenueGoal: number;
   /** Progress % toward goal */
-  revenueGoalPct: number;
+  revenueGoalPct: number | null;
   /** On track? (pacing check based on day of month) */
-  onTrack: boolean;
+  onTrack: boolean | null;
   /** Revenue per video this month (flat-rate leverage metric) */
   effectiveFlatRateYield: number | null;
   /** Top 5 (client, currency) entries by revenue -- never summed across
@@ -105,6 +122,7 @@ export interface MomentumMetrics {
   revenueStreak: number;
   /** Revenue growth % vs last month */
   revenueGrowthPct: number | null;
+  revenueGrowthCurrency: string;
   /** Output (videos) growth % vs last month */
   outputGrowthPct: number | null;
   /** Revenue slope direction */
@@ -148,18 +166,6 @@ export interface WarRoomData {
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
-
-function startOfPrevMonthISO(): string {
-  const now = new Date();
-  const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  return prevMonth.toISOString().split("T")[0];
-}
-
-function endOfPrevMonthISO(): string {
-  const now = new Date();
-  const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
-  return lastDay.toISOString().split("T")[0];
-}
 
 function growthPct(current: number, previous: number): number | null {
   if (previous === 0) return current > 0 ? 100 : null;
@@ -211,9 +217,11 @@ function calculateLevel(score: number): { level: number; title: string; xpToNext
 
 export async function getWarRoomData(): Promise<WarRoomData> {
   const db = await getAuthenticatedDb();
-  const monthStart = startOfMonthISO();
-  const prevMonthStart = startOfPrevMonthISO();
-  const prevMonthEnd = endOfPrevMonthISO();
+  const now = new Date();
+  const monthStart = startOfMonthISO(now);
+  const previousMonth = previousMonthRangeISO(now);
+  const prevMonthStart = previousMonth.start;
+  const prevMonthEnd = previousMonth.end;
   const sevenDaysAgo = daysAgoISO(7);
   const thirtyDaysAgo = daysAgoISO(30);
 
@@ -226,6 +234,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
     last30HealthLogs,
     last7HealthLogs,
     thisMonthCaffeineEvents,
+    closedWorkSessions,
   ] = await Promise.all([
     db.select().from(transactions),
     db.select().from(videoLogs),
@@ -240,6 +249,10 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       .select({ occurredAt: caffeineEvents.occurredAt, servings: caffeineEvents.servings })
       .from(caffeineEvents)
       .where(gte(caffeineEvents.occurredAt, new Date(monthStart))),
+    db
+      .select({ startedAt: workSessions.startedAt, endedAt: workSessions.endedAt })
+      .from(workSessions)
+      .where(isNotNull(workSessions.endedAt)),
   ]);
 
   // Partition data
@@ -262,9 +275,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   // Geladeira clients are, so it never appears in "Top Clients by
   // Revenue" or the client-drain ranking below. Name-based, presentation
   // scoped to this War Room read model only; no schema change.
-  const activeClients = allClients.filter(
-    (c) => c.status === "active" && c.archivalState !== "GELADEIRA" && !isInternalClientName(c.name),
-  );
+  const activeClients = allClients.filter(isActiveExternalClient);
 
   // Sprint 3 P2: live project counts and per-currency income, replacing
   // the stale clients.totalProjects / clients.totalRevenue columns (see
@@ -311,31 +322,30 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   // ── INCOME INTELLIGENCE ───────────────────────────────────────────────────
 
   const REVENUE_GOAL = 20000;
-
-  const monthlyRevenue = thisMonthTransactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  // Pacing: what % of month has passed?
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const dayOfMonth = now.getDate();
-  const monthPacingPct = dayOfMonth / daysInMonth;
-  const expectedRevenue = REVENUE_GOAL * monthPacingPct;
-  const onTrack = monthlyRevenue >= expectedRevenue;
-
-  const revenueGoalPct = Math.min(Math.round((monthlyRevenue / REVENUE_GOAL) * 100), 100);
+  const REVENUE_CURRENCY = "BRL";
+  const monthlyRevenueByCurrency = sumIncomeByCurrency(thisMonthTransactions);
+  const monthProgress = operatorMonthProgress(now);
+  const goalProgress = computeGoalProgress({
+    revenueByCurrency: monthlyRevenueByCurrency,
+    goalAmount: REVENUE_GOAL,
+    goalCurrency: REVENUE_CURRENCY,
+    ...monthProgress,
+  });
+  const monthlyRevenue = goalProgress.revenue;
+  const onTrack = goalProgress.onTrack;
+  const revenueGoalPct = goalProgress.pct;
 
   const thisMonthVideoCount = thisMonthVideos.length;
   const effectiveFlatRateYield =
-    thisMonthVideoCount > 0
+    thisMonthVideoCount > 0 && monthlyRevenue !== null
       ? Math.round(monthlyRevenue / thisMonthVideoCount)
       : null;
 
   // All-time revenue per video
-  const allTimeRevenue = allTransactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
+  const allTimeRevenue = amountForCurrency(
+    sumIncomeByCurrency(allTransactions),
+    REVENUE_CURRENCY,
+  );
   const revenuePerVideoAllTime =
     allCompletedVideos.length > 0
       ? Math.round(allTimeRevenue / allCompletedVideos.length)
@@ -348,8 +358,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   // place to make these comparable; not fabricated here.
   const topClientsByRevenue = clientRevenueEntries()
     .filter((entry) => entry.revenue > 0)
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 5);
+    .sort((a, b) => a.currency.localeCompare(b.currency) || b.revenue - a.revenue);
 
   // ── EFFICIENCY METRICS ────────────────────────────────────────────────────
 
@@ -369,7 +378,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       : "friction";
 
   const revenuePerVideo =
-    thisMonthVideoCount > 0
+    thisMonthVideoCount > 0 && monthlyRevenue !== null
       ? Math.round(monthlyRevenue / thisMonthVideoCount)
       : null;
 
@@ -383,11 +392,12 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   // on topClientsByRevenue, which applies here too.
   const clientDrainRanking = clientRevenueEntries()
     .sort((a, b) => {
+      const currencyOrder = a.currency.localeCompare(b.currency);
+      if (currencyOrder !== 0) return currencyOrder;
       if (a.effectiveYield === null) return -1;
       if (b.effectiveYield === null) return 1;
       return a.effectiveYield - b.effectiveYield;
-    })
-    .slice(0, 5);
+    });
 
   // ── BIOLOGICAL CORRELATION ────────────────────────────────────────────────
 
@@ -511,45 +521,21 @@ export async function getWarRoomData(): Promise<WarRoomData> {
 
   // ── MOMENTUM METRICS ──────────────────────────────────────────────────────
 
-  // Revenue streak: consecutive days with at least one income transaction
-  let revenueStreak = 0;
-  const checkDate = new Date();
-  for (let i = 0; i < 60; i++) {
-    const dateStr = checkDate.toISOString().split("T")[0];
-    const hasIncome = allTransactions.some(
-      (t) => t.type === "income" && t.date === dateStr
-    );
-    if (hasIncome) {
-      revenueStreak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else {
-      break;
-    }
-  }
+  const revenueStreak = computeConsistencyStreak(
+    allTransactions
+      .filter((transaction) => transaction.type === "income")
+      .map((transaction) => transaction.date),
+    operatorDateKey(now),
+  );
 
-  // Consistency streak (any log)
-  const loggedDates = new Set<string>();
-  allVideoLogs.forEach((v) => loggedDates.add(v.date));
-  last30HealthLogs.forEach((h) => loggedDates.add(h.date));
-  allTransactions.forEach((t) => loggedDates.add(t.date));
-
-  let consistencyStreak = 0;
-  const streakCheck = new Date();
-  for (let i = 0; i < 30; i++) {
-    const dateStr = streakCheck.toISOString().split("T")[0];
-    if (loggedDates.has(dateStr)) {
-      consistencyStreak++;
-      streakCheck.setDate(streakCheck.getDate() - 1);
-    } else {
-      break;
-    }
-  }
+  const consistencyStreak = consistencyStreakFromSessions(closedWorkSessions, now);
 
   // Revenue growth
-  const prevMonthRevenue = prevMonthTransactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
-  const revenueGrowthPct = growthPct(monthlyRevenue, prevMonthRevenue);
+  const previousRevenueByCurrency = sumIncomeByCurrency(prevMonthTransactions);
+  const revenueGrowthPct = growthByCurrency(
+    monthlyRevenueByCurrency,
+    previousRevenueByCurrency,
+  ).find((row) => row.currency === REVENUE_CURRENCY)?.growthPct ?? null;
   const revenueTrend = trendDirection(revenueGrowthPct);
 
   // Output growth
@@ -608,6 +594,8 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   return {
     income: {
       monthlyRevenue,
+      monthlyRevenueByCurrency,
+      revenueCurrency: REVENUE_CURRENCY,
       revenueGoal: REVENUE_GOAL,
       revenueGoalPct,
       onTrack,
@@ -641,6 +629,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
     momentum: {
       revenueStreak,
       revenueGrowthPct,
+      revenueGrowthCurrency: REVENUE_CURRENCY,
       outputGrowthPct,
       revenueTrend,
       outputTrend,

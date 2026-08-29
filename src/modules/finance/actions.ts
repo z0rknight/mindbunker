@@ -14,6 +14,7 @@ import {
   subscriptions,
   operatingReserveSettings,
   fxConversions,
+  personalTransactions,
 } from "@/db/schema";
 import { computeFxCashMovements } from "../fx/core";
 import { getTodayWorkSessionStats } from "../work-sessions/data";
@@ -40,10 +41,15 @@ import {
   computeFinanceSummaryByCurrency,
   computeRateEquivalent,
   round2,
+  validateOwnerPayCorrectionInput,
+  validateTransactionCorrectionInput,
   type ReconciliationResult,
   type RateEquivalent,
 } from "./core";
-import { buildOwnerPayStatements } from "./owner-pay-query";
+import {
+  buildOwnerPayCorrectionStatements,
+  buildOwnerPayStatements,
+} from "./owner-pay-query";
 
 // ─── FINANCIAL TRUTH: transactions (existing table, extended) ──────────────
 
@@ -111,11 +117,75 @@ export async function addTransaction(data: {
   return { success: true };
 }
 
-export async function deleteTransaction(id: number) {
+export async function deleteTransaction(id: number): Promise<AddTransactionResult> {
   const db = await getAuthenticatedDb();
-  await db.delete(transactions).where(eq(transactions.id, id));
+  const existing = await db
+    .select({ type: transactions.type })
+    .from(transactions)
+    .where(eq(transactions.id, id))
+    .limit(1);
+  if (!existing[0]) return { success: false, error: "Transaction not found." };
+  if (existing[0].type === "owner_pay") {
+    return {
+      success: false,
+      error: "Owner Pay is paired with Personal Finance and cannot be deleted in isolation. Use Correct Owner Pay.",
+    };
+  }
+  try {
+    await db.delete(transactions).where(eq(transactions.id, id));
+  } catch {
+    return {
+      success: false,
+      error: "This transaction is linked to other financial evidence and cannot be deleted. Edit it instead.",
+    };
+  }
   revalidatePath("/");
   revalidatePath("/finance");
+  return { success: true };
+}
+
+export async function updateTransaction(
+  id: number,
+  data: {
+    amount: number;
+    category: string;
+    date: string;
+    notes?: string | null;
+    currency: string;
+  },
+): Promise<AddTransactionResult> {
+  const validationError = validateTransactionCorrectionInput(data);
+  if (validationError) return { success: false, error: validationError };
+  const db = await getAuthenticatedDb();
+  const existing = await db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.id, id))
+    .limit(1);
+  const current = existing[0];
+  if (!current) return { success: false, error: "Transaction not found." };
+  if (current.type === "owner_pay") {
+    return { success: false, error: "Use Correct Owner Pay for paired transfers." };
+  }
+  const freelanceError = validateFreelanceIncomeInput({
+    category: data.category,
+    type: current.type,
+    clientId: current.clientId,
+  });
+  if (freelanceError) return { success: false, error: freelanceError };
+  await db
+    .update(transactions)
+    .set({
+      amount: data.amount,
+      category: data.category.trim(),
+      date: data.date,
+      notes: data.notes?.trim() || null,
+      currency: data.currency.trim().toUpperCase(),
+    })
+    .where(eq(transactions.id, id));
+  revalidatePath("/");
+  revalidatePath("/finance");
+  return { success: true };
 }
 
 // Owner Pay: RMEDIA CASH -> PERSONAL MONEY. Deliberately its own action
@@ -172,6 +242,64 @@ export async function recordOwnerPay(data: {
     };
   }
 
+  revalidatePath("/finance");
+  revalidatePath("/finance/personal");
+  return { success: true };
+}
+
+export async function correctOwnerPay(
+  transactionId: number,
+  data: {
+    amount: number;
+    currency: string;
+    date: string;
+    notes?: string | null;
+  },
+): Promise<AddTransactionResult> {
+  if (!Number.isSafeInteger(transactionId) || transactionId <= 0) {
+    return { success: false, error: "Owner Pay transaction is invalid." };
+  }
+  const validationError = validateOwnerPayCorrectionInput(data);
+  if (validationError) return { success: false, error: validationError };
+  const db = await getAuthenticatedDb();
+  const [businessRows, receiptRows] = await Promise.all([
+    db
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(and(eq(transactions.id, transactionId), eq(transactions.type, "owner_pay")))
+      .limit(1),
+    db
+      .select({ id: personalTransactions.id })
+      .from(personalTransactions)
+      .where(
+        and(
+          eq(personalTransactions.ownerPayTransactionId, transactionId),
+          eq(personalTransactions.type, "owner_pay_receipt"),
+        ),
+      )
+      .limit(1),
+  ]);
+  if (!businessRows[0] || !receiptRows[0]) {
+    return {
+      success: false,
+      error: "The paired Owner Pay evidence is incomplete. Nothing was changed.",
+    };
+  }
+  const statements = buildOwnerPayCorrectionStatements(db, transactionId, {
+    amount: data.amount,
+    currency: data.currency.trim().toUpperCase(),
+    date: data.date,
+    notes: data.notes?.trim() || null,
+  });
+  try {
+    await db.batch(statements);
+  } catch {
+    return {
+      success: false,
+      error: "Owner Pay correction could not update both ledgers, so nothing was changed.",
+    };
+  }
+  revalidatePath("/");
   revalidatePath("/finance");
   revalidatePath("/finance/personal");
   return { success: true };

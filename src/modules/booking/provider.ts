@@ -52,7 +52,13 @@ export class MockCalendarProvider implements CalendarProvider {
   }
 }
 
-export function getCalendarProvider(): CalendarProvider {
-  return new MockCalendarProvider();
+/**
+ * The deterministic provider exists for local development and tests only.
+ * Production must fail closed until a real calendar provider is configured:
+ * a mock event is not a confirmed meeting.
+ */
+export function getCalendarProvider(
+  runtime: string | undefined = process.env.NODE_ENV,
+): CalendarProvider | null {
+  return runtime === "production" ? null : new MockCalendarProvider();
 }
-

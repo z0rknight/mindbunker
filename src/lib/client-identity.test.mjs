@@ -11,6 +11,8 @@ test("isInternalClientName matches RMEDIA's canonical record, case/whitespace-in
   assert.equal(isInternalClientName("RMEDIA"), true);
   assert.equal(isInternalClientName("rmedia"), true);
   assert.equal(isInternalClientName("  RMedia  "), true);
+  assert.equal(isInternalClientName("RMEDIA (INTERNAL)"), true);
+  assert.equal(isInternalClientName(" rmedia (internal) "), true);
 });
 
 test("isInternalClientName never fuzzy-matches a real external client", () => {

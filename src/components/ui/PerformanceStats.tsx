@@ -86,8 +86,8 @@ function StatTile({
 // ─── SCORE BAR ────────────────────────────────────────────────────────────────
 
 function ScoreBar({ score }: { score: number }) {
-  // Score is roughly 0–250 range; normalize to 0–100% for display
-  const maxScore = 250;
+  // Videos (100 max) + closed-session streak (50 max), less revision drag.
+  const maxScore = 150;
   const pct = Math.min(Math.round((score / maxScore) * 100), 100);
 
   const color =
@@ -157,7 +157,7 @@ function StreakDisplay({ streak }: { streak: number }) {
       </p>
       <p className="text-zinc-500 text-xs mt-1">
         {streak === 0
-          ? "Log something today to start your streak"
+          ? "Close a Work Session today to start your streak"
           : streak < 3
             ? "Keep going — momentum builds here"
             : streak < 7
@@ -195,7 +195,7 @@ export function PerformanceStatsSection({ stats }: PerformanceStatsProps) {
               {stats.productivityScore}
             </p>
             <p className="text-zinc-500 text-xs mt-1">
-              Videos × Revenue × Streak − Revision Penalty
+              Videos + Work-session streak − Revision penalty
             </p>
           </div>
           <div className="text-right">
@@ -203,7 +203,7 @@ export function PerformanceStatsSection({ stats }: PerformanceStatsProps) {
             <div className="flex flex-col gap-1 items-end">
               {stats.revenueGrowthPct !== null && (
                 <div className="flex items-center gap-1">
-                  <span className="text-zinc-500 text-xs">Revenue</span>
+                  <span className="text-zinc-500 text-xs">{stats.revenueGrowthCurrency} revenue</span>
                   <Trend pct={stats.revenueGrowthPct} />
                 </div>
               )}
@@ -224,16 +224,31 @@ export function PerformanceStatsSection({ stats }: PerformanceStatsProps) {
         <StreakDisplay streak={stats.consistencyStreak} />
       </div>
 
+      {stats.revenueThisMonthByCurrency.length > 0 && (
+        <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+            Revenue this month · separate currencies
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {stats.revenueThisMonthByCurrency.map((row) => (
+              <span key={row.currency} className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm font-semibold text-white">
+                {formatCurrency(row.amount, row.currency)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Derived Metrics Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <StatTile
           label="Revenue / Video"
           value={
             stats.revenuePerVideo !== null
-              ? formatCurrency(stats.revenuePerVideo)
+              ? formatCurrency(stats.revenuePerVideo, stats.revenueCurrency)
               : null
           }
-          sub="This month"
+          sub={`${stats.revenueCurrency} only · this month`}
           trend={stats.revenueGrowthPct}
           accent="emerald"
           icon="💰"
@@ -269,7 +284,7 @@ export function PerformanceStatsSection({ stats }: PerformanceStatsProps) {
               ? `${stats.revenueGrowthPct > 0 ? "+" : ""}${stats.revenueGrowthPct}%`
               : null
           }
-          sub="vs last month"
+          sub={`${stats.revenueGrowthCurrency} vs last month`}
           accent={
             stats.revenueGrowthPct !== null && stats.revenueGrowthPct >= 0
               ? "emerald"

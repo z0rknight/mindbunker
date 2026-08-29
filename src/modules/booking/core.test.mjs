@@ -11,7 +11,7 @@ import {
   validateBookingSettings,
   validatePublicBookingRequestInput,
 } from "./core.ts";
-import { MockCalendarProvider } from "./provider.ts";
+import { getCalendarProvider, MockCalendarProvider } from "./provider.ts";
 
 const settings = {
   enabled: true,
@@ -112,6 +112,12 @@ test("local CalendarProvider returns a deterministic event id", async () => {
     }),
     [],
   );
+});
+
+test("production booking fails closed instead of confirming mock meetings", () => {
+  assert.equal(getCalendarProvider("production"), null);
+  assert.ok(getCalendarProvider("development") instanceof MockCalendarProvider);
+  assert.ok(getCalendarProvider("test") instanceof MockCalendarProvider);
 });
 
 

@@ -79,7 +79,7 @@ export function computeFinanceSummaryByCurrency(
     const currency = transaction.currency.trim().toUpperCase();
     if (!currency) continue;
     const bucket = getBucket(currency);
-    const inCurrentMonth = transaction.date >= monthStart;
+    const inCurrentMonth = transaction.date.slice(0, 7) === monthStart.slice(0, 7);
     if (transaction.type === "income") {
       bucket.income += transaction.amount;
       if (inCurrentMonth) bucket.monthlyRevenue += transaction.amount;
@@ -372,6 +372,42 @@ export function validateFreelanceIncomeInput(input: {
     return "Freelance income must be associated with a client.";
   }
   return null;
+}
+
+export type TransactionCorrectionInput = {
+  amount: number;
+  category: string;
+  date: string;
+  notes?: string | null;
+  currency: string;
+};
+
+function isCalendarDateKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.toISOString().slice(0, 10) === value;
+}
+
+/** Validates correction fields without changing ledger identity or links. */
+export function validateTransactionCorrectionInput(
+  input: TransactionCorrectionInput,
+): string | null {
+  if (!Number.isFinite(input.amount) || input.amount <= 0) {
+    return "Amount must be a positive number.";
+  }
+  if (!input.category.trim()) return "Category is required.";
+  if (!isCalendarDateKey(input.date)) return "Enter a valid transaction date.";
+  if (!/^[A-Za-z]{3}$/u.test(input.currency.trim())) {
+    return "Currency must be a three-letter code.";
+  }
+  return null;
+}
+
+export function validateOwnerPayCorrectionInput(
+  input: Omit<TransactionCorrectionInput, "category">,
+): string | null {
+  return validateTransactionCorrectionInput({ ...input, category: "Owner Pay" });
 }
 
 // ─── §13: billing allocation ────────────────────────────────────────────────

@@ -14,6 +14,8 @@ import {
 import { formatCurrency, formatDate, currentMonthKey, currentMonthName } from "@/utils/date";
 import { formatMinutesAsHours } from "@/modules/finance/core";
 import { DeleteTransactionButton } from "./DeleteTransactionButton";
+import { EditTransactionButton } from "./EditTransactionButton";
+import { CorrectOwnerPayButton } from "./CorrectOwnerPayButton";
 import { RecordOwnerPayButton } from "./RecordOwnerPayButton";
 import { TaxReserveControl } from "./TaxReserveControl";
 import { getAllClients } from "@/modules/crm/actions";
@@ -451,7 +453,16 @@ export default async function FinancePage() {
                     <td className="px-4 py-3 text-zinc-500 text-xs">{t.notes ?? "—"}</td>
                     <td className="px-4 py-3 text-xs">{relatedLink(t) ?? <span className="text-zinc-700">—</span>}</td>
                     <td className="px-4 py-3">
-                      <DeleteTransactionButton id={t.id} />
+                      <div className="flex items-center justify-end gap-3">
+                        {t.type === "owner_pay" ? (
+                          <CorrectOwnerPayButton transaction={t} />
+                        ) : (
+                          <>
+                            <EditTransactionButton transaction={t} />
+                            <DeleteTransactionButton id={t.id} />
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -152,38 +152,44 @@ export default async function WarRoomPage() {
               </p>
               <span
                 className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                  income.onTrack
+                  income.onTrack === true
                     ? "bg-cyan-900/50 text-cyan-400 border border-cyan-700/50"
-                    : "bg-red-900/50 text-red-400 border border-red-700/50"
+                    : income.onTrack === false
+                      ? "bg-red-900/50 text-red-400 border border-red-700/50"
+                      : "bg-zinc-800 text-zinc-400 border border-zinc-700"
                 }`}
               >
-                {income.onTrack ? "ON TRACK" : "BEHIND PACE"}
+                {income.onTrack === true ? "ON TRACK" : income.onTrack === false ? "BEHIND PACE" : "NO BRL BASIS"}
               </span>
             </div>
             <div className="flex items-end gap-2 mb-3">
               <span className="text-3xl font-black text-white">
-                {formatCurrency(income.monthlyRevenue)}
+                {income.monthlyRevenue === null
+                  ? "—"
+                  : formatCurrency(income.monthlyRevenue, income.revenueCurrency)}
               </span>
               <span className="text-zinc-500 text-sm mb-1">
-                / {formatCurrency(income.revenueGoal)}
+                / {formatCurrency(income.revenueGoal, income.revenueCurrency)}
               </span>
             </div>
             <div className="w-full bg-zinc-800 rounded-full h-3 overflow-hidden">
               <div
                 className={`h-3 rounded-full transition-all duration-700 ease-out ${
-                  income.onTrack
+                  income.onTrack === true
                     ? "bg-gradient-to-r from-cyan-600 to-cyan-400"
-                    : "bg-gradient-to-r from-red-700 to-red-500"
+                    : income.onTrack === false
+                      ? "bg-gradient-to-r from-red-700 to-red-500"
+                      : "bg-zinc-700"
                 }`}
-                style={{ width: `${income.revenueGoalPct}%` }}
+                style={{ width: `${income.revenueGoalPct ?? 0}%` }}
               />
             </div>
             <p
               className={`text-sm font-bold mt-2 ${
-                income.onTrack ? "text-cyan-400" : "text-red-400"
+                income.onTrack === true ? "text-cyan-400" : income.onTrack === false ? "text-red-400" : "text-zinc-500"
               }`}
             >
-              {income.revenueGoalPct}% Complete
+              {income.revenueGoalPct === null ? "Unavailable without BRL revenue provenance" : `${income.revenueGoalPct}% Complete`}
             </p>
           </div>
 
@@ -194,7 +200,7 @@ export default async function WarRoomPage() {
               sublabel="LEVERAGE METRIC"
               value={
                 income.effectiveFlatRateYield
-                  ? formatCurrency(income.effectiveFlatRateYield) + "/video"
+                  ? formatCurrency(income.effectiveFlatRateYield, income.revenueCurrency) + "/video"
                   : "—"
               }
               accent="cyan"
@@ -205,7 +211,7 @@ export default async function WarRoomPage() {
               sublabel="Whale Model"
               value={
                 income.revenuePerVideoAllTime
-                  ? formatCurrency(income.revenuePerVideoAllTime)
+                  ? formatCurrency(income.revenuePerVideoAllTime, income.revenueCurrency)
                   : "—"
               }
               accent="zinc"
@@ -214,6 +220,24 @@ export default async function WarRoomPage() {
           </div>
         </div>
 
+        {income.monthlyRevenueByCurrency.length > 0 && (
+          <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
+              This month by currency
+            </p>
+            <p className="mt-1 text-xs text-zinc-600">
+              Separate ledgers; no inferred FX conversion. The R$20k goal uses BRL only.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {income.monthlyRevenueByCurrency.map((row) => (
+                <span key={row.currency} className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm font-semibold text-white">
+                  {formatCurrency(row.amount, row.currency)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Top Clients */}
         {income.topClientsByRevenue.length > 0 && (
           <div className="mt-4 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
@@ -221,7 +245,7 @@ export default async function WarRoomPage() {
               Top Clients by Revenue
             </p>
             <p className="text-zinc-600 text-xs mb-3">
-              Ranked by raw amount, not currency-adjusted — a USD entry can outrank a larger BRL one.
+              Grouped by currency and ranked only within each currency; no inferred FX conversion.
             </p>
             <div className="space-y-2">
               {income.topClientsByRevenue.map((c, i) => (
@@ -310,7 +334,7 @@ export default async function WarRoomPage() {
             label="Revenue / Video"
             value={
               efficiency.revenuePerVideo
-                ? formatCurrency(efficiency.revenuePerVideo)
+                ? formatCurrency(efficiency.revenuePerVideo, income.revenueCurrency)
                 : "—"
             }
             accent="cyan"
@@ -527,7 +551,7 @@ export default async function WarRoomPage() {
                 : "—"
             }
             trend={momentum.revenueTrend}
-            sublabel="vs last month"
+            sublabel={`${momentum.revenueGrowthCurrency} vs last month`}
           />
 
           <TrendCard
@@ -544,7 +568,7 @@ export default async function WarRoomPage() {
           <MetricCard
             label="Consistency Streak"
             value={`${momentum.consistencyStreak}d`}
-            sublabel="Any log activity"
+            sublabel="Closed Work Session days"
             accent="violet"
             icon="📅"
           />

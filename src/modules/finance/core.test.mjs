@@ -11,7 +11,18 @@ import {
   validateBillingEvidenceInput,
   validateContractInput,
   computeRateEquivalent,
+  validateOwnerPayCorrectionInput,
+  validateTransactionCorrectionInput,
 } from "./core.ts";
+
+test("transaction corrections require positive amounts, real dates, and explicit currencies", () => {
+  const valid = { amount: 140, category: "Software", date: "2026-08-24", currency: "USD" };
+  assert.equal(validateTransactionCorrectionInput(valid), null);
+  assert.match(validateTransactionCorrectionInput({ ...valid, amount: 0 }) ?? "", /positive/u);
+  assert.match(validateTransactionCorrectionInput({ ...valid, date: "2026-02-30" }) ?? "", /valid transaction date/u);
+  assert.match(validateTransactionCorrectionInput({ ...valid, currency: "US" }) ?? "", /three-letter/u);
+  assert.equal(validateOwnerPayCorrectionInput({ amount: 140, date: "2026-08-24", currency: "USD" }), null);
+});
 
 // Real Taryn Dubreuil / Upwork fixture from the Monday Money Lab P0 brief:
 //   Period 2026-08-10..2026-08-16, Upwork billed 15h10 (910 min), rate
@@ -158,6 +169,15 @@ test("equal numeric amounts in different currencies remain separate", () => {
   ], "2026-08-01");
   assert.equal(result.find((row) => row.currency === "USD")?.currentBalance, 100);
   assert.equal(result.find((row) => row.currency === "BRL")?.currentBalance, -100);
+});
+
+test("finance month grouping does not pull a future month across Aug 31 / Sep 1", () => {
+  const result = computeFinanceSummaryByCurrency([
+    { type: "income", amount: 100, currency: "USD", date: "2026-08-31" },
+    { type: "income", amount: 200, currency: "USD", date: "2026-09-01" },
+  ], "2026-08-01");
+  assert.equal(result[0].monthlyRevenue, 100);
+  assert.equal(result[0].currentBalance, 300);
 });
 
 test("effective FX converts USD to BRL only in an explicit derived view", () => {

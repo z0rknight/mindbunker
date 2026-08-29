@@ -44,8 +44,9 @@ export function QuoteRequestForm() {
   }
 
   return (
-    <form action={action} className="space-y-5" noValidate>
-      <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+    <>
+      <form action={action} className="space-y-5" noValidate>
+        <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
 
       <div>
         <label htmlFor="name" className="mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">
@@ -218,13 +219,14 @@ export function QuoteRequestForm() {
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="flex h-14 w-full items-center justify-center rounded-xl bg-violet-600 px-5 text-sm font-black uppercase tracking-wide text-white shadow-lg shadow-violet-950/40 transition hover:bg-violet-500 active:scale-[0.99] disabled:cursor-wait disabled:opacity-70"
-      >
-        {pending ? "Sending…" : "Request a video"}
-      </button>
+        <button
+          type="submit"
+          disabled={pending}
+          className="flex h-14 w-full items-center justify-center rounded-xl bg-violet-600 px-5 text-sm font-black uppercase tracking-wide text-white shadow-lg shadow-violet-950/40 transition hover:bg-violet-500 active:scale-[0.99] disabled:cursor-wait disabled:opacity-70"
+        >
+          {pending ? "Sending…" : "Request a video"}
+        </button>
+      </form>
 
       {/* Call request stays available but demoted -- collapsed, visually
           secondary, and reusing the exact same BookingRequestForm/
@@ -233,7 +235,7 @@ export function QuoteRequestForm() {
           (brief section 1). Embedding it here (rather than linking out to
           a separate /book page) is also what lets /book safely redirect
           to /quoteavideo without creating a loop -- see section 2. */}
-      <details className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 px-4 py-3 text-zinc-500">
+      <details className="mt-5 rounded-xl border border-zinc-800/80 bg-zinc-950/40 px-4 py-3 text-zinc-500">
         <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">
           Need to talk first?
         </summary>
@@ -244,6 +246,6 @@ export function QuoteRequestForm() {
           <BookingRequestForm />
         </div>
       </details>
-    </form>
+    </>
   );
 }

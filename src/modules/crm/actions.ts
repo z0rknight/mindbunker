@@ -1,7 +1,7 @@
 "use server";
 
 import { getAuthenticatedDb } from "@/db";
-import { isInternalClientName } from "@/lib/client-identity";
+import { isActiveExternalClient, isInternalClientName } from "@/lib/client-identity";
 import {
   bookings,
   clients,
@@ -394,9 +394,7 @@ export async function getCRMSummary() {
   // client relationship -- it must never inflate "Active Clients" style
   // counts. Presentation-only exclusion, name-based (see client-identity.ts);
   // no schema change, RMEDIA's row and its data are untouched.
-  const activeClients = allClients.filter(
-    (c) => c.status === "active" && c.archivalState !== GELADEIRA && !isInternalClientName(c.name),
-  );
+  const activeClients = allClients.filter(isActiveExternalClient);
   // Ambiguous-counter note (documented, not silently redefined, per the
   // Geladeira prototype's counter-semantics section): "leads this month" is
   // a lead-generation activity metric ("created this month"), not a

@@ -37,6 +37,8 @@ import { getGatewayContext } from "@/modules/gateway/data";
 import { isGatewayToken } from "@/modules/gateway/core";
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1_000;
+const CALENDAR_UNAVAILABLE =
+  "Online booking is unavailable. Send a request and Emmanuel will confirm the next step personally.";
 
 type BookingActionResult =
   | { success: true; message?: string }
@@ -81,6 +83,7 @@ async function calculateSlots({
       configuration.settings.bookingHorizonDays * DAY_IN_MILLISECONDS,
   );
   const provider = getCalendarProvider();
+  if (!provider) return null;
   const [databaseBusy, providerBusy] = await Promise.all([
     getBookingBusyIntervals({
       startsAt: now,
@@ -110,6 +113,7 @@ async function findAvailableSlot(
     excludeBookingId,
     limit: 10_000,
   });
+  if (!calculated) return null;
   const slot = calculated.slots.find((candidate) => candidate.startsAt === startsAt);
   return { ...calculated, slot };
 }
@@ -130,6 +134,9 @@ export async function getAvailableBookingSlots(
     ? requestedTimezone
     : "UTC";
   const calculated = await calculateSlots({ limit: PUBLIC_SLOT_LIMIT });
+  if (!calculated) {
+    return { success: false, error: CALENDAR_UNAVAILABLE };
+  }
   if (!calculated.settings.enabled) {
     return { success: false, error: "Online booking is paused right now." };
   }
@@ -169,6 +176,9 @@ export async function createGatewayBooking(input: {
   }
 
   const calculated = await findAvailableSlot(input.startsAt);
+  if (!calculated) {
+    return { success: false, error: CALENDAR_UNAVAILABLE };
+  }
   if (!calculated.slot) {
     return { success: false, error: "That time is no longer available. Choose another one." };
   }
@@ -268,6 +278,9 @@ export async function rescheduleGatewayBooking(input: {
   }
 
   const calculated = await findAvailableSlot(input.startsAt, booking.id);
+  if (!calculated) {
+    return { success: false, error: CALENDAR_UNAVAILABLE };
+  }
   if (!calculated.slot) {
     return { success: false, error: "That time is no longer available. Choose another one." };
   }
@@ -347,6 +360,9 @@ export async function cancelGatewayBooking(
   }
 
   const provider = getCalendarProvider();
+  if (!provider) {
+    return { success: false, error: CALENDAR_UNAVAILABLE };
+  }
   await provider.cancelBooking(booking.providerEventId);
   const now = new Date();
   const configuration = await getBookingConfiguration();

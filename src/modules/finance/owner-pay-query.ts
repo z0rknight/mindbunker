@@ -1,5 +1,5 @@
 import { personalTransactions, transactions } from "../../db/schema.ts";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "../../db/schema.ts";
 
@@ -56,4 +56,40 @@ export function buildOwnerPayStatements(
     .onConflictDoNothing({ target: personalTransactions.ownerPayTransactionId });
 
   return [businessInsert, personalInsert] as const;
+}
+
+/**
+ * Corrects the two sides of one Owner Pay transfer in a single D1 batch.
+ * Both rows keep their original IDs and 1:1 foreign-key relationship.
+ */
+export function buildOwnerPayCorrectionStatements(
+  db: OwnerPayDb,
+  transactionId: number,
+  input: Omit<OwnerPayStatementInput, "idempotencyKey">,
+) {
+  const normalized = {
+    amount: input.amount,
+    currency: input.currency,
+    date: input.date,
+    notes: input.notes,
+  };
+  const businessUpdate = db
+    .update(transactions)
+    .set({ ...normalized, category: "Owner Pay" })
+    .where(
+      and(
+        eq(transactions.id, transactionId),
+        eq(transactions.type, "owner_pay"),
+      ),
+    );
+  const personalUpdate = db
+    .update(personalTransactions)
+    .set({ ...normalized, category: "Owner Pay" })
+    .where(
+      and(
+        eq(personalTransactions.ownerPayTransactionId, transactionId),
+        eq(personalTransactions.type, "owner_pay_receipt"),
+      ),
+    );
+  return [businessUpdate, personalUpdate] as const;
 }

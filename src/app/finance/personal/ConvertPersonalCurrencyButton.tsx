@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { recordFxConversion } from "@/modules/fx/actions";
+import { todayISO } from "@/utils/date";
 
 type FxCurrency = "USD" | "BRL";
 
 export function ConvertPersonalCurrencyButton() {
   const [open, setOpen] = useState(false);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => todayISO());
   const [brlAmount, setBrlAmount] = useState("");
   const [usdAmount, setUsdAmount] = useState("");
   const [fromCurrency, setFromCurrency] = useState<FxCurrency | "">("");
@@ -16,7 +17,7 @@ export function ConvertPersonalCurrencyButton() {
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
-    setDate(new Date().toISOString().slice(0, 10));
+    setDate(todayISO());
     setBrlAmount("");
     setUsdAmount("");
     setFromCurrency("");

@@ -60,6 +60,25 @@ test("recordOwnerPay builds the exact Drizzle INSERT SELECT shape accepted by D1
   assert.match(receiptSql, /owner_pay_transaction_id/i);
 });
 
+test("Owner Pay correction builds two identity-preserving Drizzle updates", async () => {
+  const [{ buildOwnerPayCorrectionStatements }, schema] = await Promise.all([
+    tsImport("./owner-pay-query.ts", import.meta.url),
+    tsImport("../../db/schema.ts", import.meta.url),
+  ]);
+  const clientThatMustNeverExecute = { prepare() { throw new Error("construction only"); } };
+  const db = drizzle(clientThatMustNeverExecute, { schema });
+  const [businessUpdate, personalUpdate] = buildOwnerPayCorrectionStatements(db, 3, {
+    amount: 175,
+    currency: "USD",
+    date: "2026-08-25",
+    notes: "corrected",
+  });
+  assert.match(businessUpdate.toSQL().sql, /^update "transactions" set /iu);
+  assert.match(businessUpdate.toSQL().sql, /"id" = \? and "transactions"\."type" = \?/iu);
+  assert.match(personalUpdate.toSQL().sql, /^update "personal_transactions" set /iu);
+  assert.match(personalUpdate.toSQL().sql, /"owner_pay_transaction_id" = \?/iu);
+});
+
 // Mirrors linkOwnerPayReceipt (modules/personal-finance/actions.ts).
 function linkOwnerPayReceipt(db, { ownerPayTransactionId, amount, currency, date, notes }) {
   db.prepare(`
@@ -102,6 +121,23 @@ function recordOwnerPay(db, { amount, currency = "USD", date = "2026-08-25", not
   }
 
   return { success: true };
+}
+
+function correctOwnerPay(db, transactionId, { amount, currency, date, notes = null }) {
+  try {
+    db.exec("BEGIN IMMEDIATE");
+    db.prepare(`UPDATE transactions SET amount = ?, currency = ?, date = ?, notes = ?, category = 'Owner Pay' WHERE id = ? AND type = 'owner_pay'`)
+      .run(amount, currency, date, notes, transactionId);
+    db.prepare(`UPDATE personal_transactions SET amount = ?, currency = ?, date = ?, notes = ?, category = 'Owner Pay' WHERE owner_pay_transaction_id = ? AND type = 'owner_pay_receipt'`)
+      .run(amount, currency, date, notes, transactionId);
+    db.exec("COMMIT");
+    return { success: true };
+  } catch {
+    try { db.exec("ROLLBACK"); } catch {
+      // The failing statement may already have closed the transaction.
+    }
+    return { success: false };
+  }
 }
 
 // Mirrors addTransaction's new owner_pay guard.
@@ -186,6 +222,47 @@ test("Owner Pay receipt increases personal cash balance but is never counted as 
   const { balance, income } = personalBalance(db, "USD");
   assert.equal(balance, 140);
   assert.equal(income, 0);
+});
+
+test("Owner Pay correction preserves both IDs, the pair link, and creation identity", () => {
+  const db = buildMigratedDb();
+  recordOwnerPay(db, { amount: 140, currency: "USD", date: "2026-08-24", idempotencyKey: "correct-me" });
+  const beforeBusiness = plain(db.prepare("SELECT * FROM transactions WHERE idempotency_key = 'correct-me'").get());
+  const beforeReceipt = plain(db.prepare("SELECT * FROM personal_transactions WHERE owner_pay_transaction_id = ?").get(beforeBusiness.id));
+  assert.equal(correctOwnerPay(db, beforeBusiness.id, {
+    amount: 175, currency: "BRL", date: "2026-08-25", notes: "corrected",
+  }).success, true);
+  const afterBusiness = plain(db.prepare("SELECT * FROM transactions WHERE id = ?").get(beforeBusiness.id));
+  const afterReceipt = plain(db.prepare("SELECT * FROM personal_transactions WHERE id = ?").get(beforeReceipt.id));
+  assert.equal(afterBusiness.id, beforeBusiness.id);
+  assert.equal(afterBusiness.created_at, beforeBusiness.created_at);
+  assert.equal(afterBusiness.idempotency_key, beforeBusiness.idempotency_key);
+  assert.equal(afterReceipt.id, beforeReceipt.id);
+  assert.equal(afterReceipt.created_at, beforeReceipt.created_at);
+  assert.equal(afterReceipt.owner_pay_transaction_id, beforeBusiness.id);
+  for (const row of [afterBusiness, afterReceipt]) {
+    assert.equal(row.amount, 175);
+    assert.equal(row.currency, "BRL");
+    assert.equal(row.date, "2026-08-25");
+    assert.equal(row.notes, "corrected");
+  }
+});
+
+test("Owner Pay correction rolls back the business side if the personal update fails", () => {
+  const db = buildMigratedDb();
+  recordOwnerPay(db, { amount: 140, currency: "USD", date: "2026-08-24", idempotencyKey: "atomic-correction" });
+  const business = plain(db.prepare("SELECT * FROM transactions WHERE idempotency_key = 'atomic-correction'").get());
+  db.exec(`CREATE TRIGGER reject_owner_pay_correction BEFORE UPDATE ON personal_transactions BEGIN SELECT RAISE(ABORT, 'reject correction'); END`);
+  assert.equal(correctOwnerPay(db, business.id, {
+    amount: 999, currency: "BRL", date: "2026-08-26", notes: "must roll back",
+  }).success, false);
+  const unchanged = plain(db.prepare("SELECT amount, currency, date, notes FROM transactions WHERE id = ?").get(business.id));
+  assert.deepEqual(unchanged, {
+    amount: business.amount,
+    currency: business.currency,
+    date: business.date,
+    notes: business.notes,
+  });
 });
 
 // 8: business Owner Pay is neither expense nor revenue (its own distinct type).
