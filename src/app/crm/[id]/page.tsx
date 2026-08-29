@@ -16,6 +16,8 @@ import { QuotePanel } from "./QuotePanel";
 import { getQuotesForClient } from "@/modules/quotes/data";
 import { computeClientCommercialValue } from "@/modules/quotes/core";
 import { ClientCommercialValuePanel } from "./ClientCommercialValuePanel";
+import { getClientCustody } from "@/modules/custody/data";
+import { ChainOfCustodyPanel } from "@/components/custody/ChainOfCustodyPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +49,7 @@ export default async function ClientDetailPage({
   if (!client) {
     notFound();
   }
-  const [workspace, bookingConfiguration, projects, instagramStatus, clientIntelligence, quotes] =
+  const [workspace, bookingConfiguration, projects, instagramStatus, clientIntelligence, quotes, custody] =
     await Promise.all([
       getAdminGatewayWorkspace(clientId),
       getAdminBookingConfiguration(),
@@ -55,6 +57,7 @@ export default async function ClientDetailPage({
       getInstagramImportStatus(),
       getClientIntelligence(clientId),
       getQuotesForClient(clientId),
+      getClientCustody(clientId),
     ]);
   // Client Service Reality Patch §6/§8 -- Quote rows carry Date | null
   // fields (createdAt) from the DB layer; serialize to string | null
@@ -212,6 +215,8 @@ export default async function ClientDetailPage({
         realizedRevenueByCurrency={clientIntelligence.totalRevenueByCurrency}
         commercialValue={commercialValue}
       />
+
+      {custody && <ChainOfCustodyPanel custody={custody} />}
 
       {/* Internal Client Intelligence (Sunday Systems Round, Phase H) --
           never rendered on the client-facing Vault or Gateway. */}

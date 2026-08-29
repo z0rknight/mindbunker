@@ -9,6 +9,7 @@ import { formatMinutesAsHours } from "@/modules/finance/core";
 import { formatCurrency, formatDate } from "@/utils/date";
 import { RecordBillingEvidenceButton } from "../RecordBillingEvidenceButton";
 import { LinkIncomeButton } from "../LinkIncomeButton";
+import { parseHttpsExternalReference } from "@/modules/custody/core";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export default async function ContractDetailPage({
   ]);
 
   if (!contract) notFound();
+  const externalContractUrl = parseHttpsExternalReference(contract.externalReference);
 
   const requestedEvidenceId = Array.isArray(query.evidence) ? query.evidence[0] : query.evidence;
   const selectedEvidence =
@@ -67,7 +69,6 @@ export default async function ContractDetailPage({
             {contract.billingType === "HOURLY"
               ? `HOURLY · ${contract.currency} ${contract.hourlyRate?.toFixed(2)}/hour`
               : `FIXED · ${contract.currency}`}
-            {contract.externalReference ? ` · ${contract.externalReference}` : ""}
             {" · "}
             <span className={
               contract.status === "ACTIVE" ? "text-emerald-400" :
@@ -76,6 +77,20 @@ export default async function ContractDetailPage({
               {contract.status}
             </span>
           </p>
+          {contract.externalReference && (
+            externalContractUrl ? (
+              <a
+                href={externalContractUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="mt-1 inline-flex text-xs font-bold text-cyan-400 hover:text-cyan-300"
+              >
+                Open external contract ↗
+              </a>
+            ) : (
+              <p className="mt-1 text-xs text-zinc-600">External reference: {contract.externalReference}</p>
+            )
+          )}
           {contract.notes && <p className="text-zinc-600 text-xs mt-1">{contract.notes}</p>}
         </div>
         <RecordBillingEvidenceButton contractId={contractId} defaultCurrency={contract.currency} />

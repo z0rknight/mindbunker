@@ -121,7 +121,7 @@ function QuoteRow({ quote }: { quote: QuotePanelRow }) {
   const hasProduction = quote.projectId !== null && quote.videoId !== null;
 
   return (
-    <li className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3">
+    <li id={`quote-${quote.id}`} className="scroll-mt-24 rounded-xl border border-zinc-800 bg-zinc-900/60 p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <span

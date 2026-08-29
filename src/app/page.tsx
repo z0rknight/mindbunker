@@ -470,7 +470,7 @@ export default async function DashboardPage() {
                   {mostRecentSale.videoTitle ? ` — ${mostRecentSale.videoTitle}` : ""}
                 </p>
                 <p className="text-xs text-zinc-500">
-                  {formatQuoteAmount(mostRecentSale.amountCents, mostRecentSale.currency)} expected
+                  {formatQuoteAmount(mostRecentSale.amountCents, mostRecentSale.currency)} accepted · not cash by itself
                 </p>
               </div>
             </div>
@@ -529,7 +529,7 @@ export default async function DashboardPage() {
                   key={entry.currency}
                   className="rounded-full border border-emerald-700/40 bg-emerald-950/20 px-3 py-1.5 text-xs font-bold text-emerald-300"
                 >
-                  Expected sales value ({entry.currency}): {formatQuoteAmount(entry.totalAmountCents, entry.currency)}
+                  Accepted this month ({entry.currency}): {formatQuoteAmount(entry.totalAmountCents, entry.currency)}
                 </span>
               ))}
             </div>
@@ -542,7 +542,7 @@ export default async function DashboardPage() {
                   key={entry.currency}
                   className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-bold text-zinc-300"
                 >
-                  Value closed ({entry.currency}): {formatQuoteAmount(entry.totalAmountCents, entry.currency)}
+                  Value closed · all time ({entry.currency}): {formatQuoteAmount(entry.totalAmountCents, entry.currency)}
                 </span>
               ))}
             </div>

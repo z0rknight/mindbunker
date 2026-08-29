@@ -16,6 +16,8 @@ import { AssetsPanel } from "./AssetsPanel";
 import { SourceMediaPanel } from "./SourceMediaPanel";
 import { getAssetsForProject } from "@/modules/assets/actions";
 import { getSourceMediaForProject } from "@/modules/assets/actions";
+import { getClientCustody } from "@/modules/custody/data";
+import { ChainOfCustodyPanel } from "@/components/custody/ChainOfCustodyPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +32,7 @@ export default async function ProjectWorkspacePage({
   const project = await getProjectWorkspace(Number(id));
   if (!project) notFound();
 
-  const [assets, sourceMediaReferences, commercialTermsByVideoId] = await Promise.all([
+  const [assets, sourceMediaReferences, commercialTermsByVideoId, custody] = await Promise.all([
     getAssetsForProject(project.id),
     getSourceMediaForProject(project.id),
     // Quick Morning Reality Patch §7/§9: reuse the exact same commercial-
@@ -41,6 +43,7 @@ export default async function ProjectWorkspacePage({
     Promise.all(
       project.videos.map(async (video) => [video.id, await getCommercialTermsForVideo(video.id)] as const),
     ).then((entries) => new Map(entries)),
+    getClientCustody(project.clientId),
   ]);
 
   const videosWithCommercialTerms = project.videos.map((video) => ({
@@ -135,6 +138,8 @@ export default async function ProjectWorkspacePage({
           <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{project.notes}</p>
         </section>
       )}
+
+      {custody && <ChainOfCustodyPanel custody={custody} focusProjectId={project.id} />}
 
       <section aria-labelledby="project-videos">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

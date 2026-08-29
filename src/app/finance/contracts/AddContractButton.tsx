@@ -107,12 +107,12 @@ export function AddContractButton({ clients }: { clients: ClientOption[] }) {
                   />
                 </div>
                 <div>
-                  <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">External Ref</label>
+                  <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">External ref / URL</label>
                   <input
                     type="text"
                     value={externalReference}
                     onChange={(e) => setExternalReference(e.target.value)}
-                    placeholder="Optional"
+                    placeholder="ID or https://…"
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
                   />
                 </div>
