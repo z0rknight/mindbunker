@@ -74,6 +74,15 @@ test("growth compares each currency only with itself", () => {
   ]);
 });
 
+test("growth is unavailable without a prior-period baseline", () => {
+  assert.deepEqual(growthByCurrency(
+    [{ currency: "USD", amount: 100 }],
+    [],
+  ), [
+    { currency: "USD", amount: 100, previousAmount: 0, growthPct: null },
+  ]);
+});
+
 test("consistency streak uses closed-session date keys and may end yesterday", () => {
   assert.equal(computeConsistencyStreak(["2026-08-28", "2026-08-27", "2026-08-26"], "2026-08-28"), 3);
   assert.equal(computeConsistencyStreak(["2026-08-27", "2026-08-26"], "2026-08-28"), 2);

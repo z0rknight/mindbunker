@@ -1,5 +1,4 @@
 import { StatCard } from "@/components/ui/StatCard";
-import { PerformanceStatsSection } from "@/components/ui/PerformanceStats";
 import {
   AddIncomeButton,
   AddExpenseButton,
@@ -21,7 +20,6 @@ import { getCaffeineSummary } from "@/modules/caffeine/actions";
 import { getCRMSummary, getRecentBookRequests } from "@/modules/crm/actions";
 import { getSalesThisMonth, getMostRecentSaleThisMonth, getClosedSales } from "@/modules/quotes/actions";
 import { formatQuoteAmount } from "@/modules/quotes/core";
-import { getPerformanceStats } from "@/utils/statistics";
 import { getWarRoomData } from "@/modules/analytics/service";
 import { formatCurrency, currentMonthKey, currentMonthName } from "@/utils/date";
 import Link from "next/link";
@@ -36,7 +34,6 @@ export default async function DashboardPage() {
     video,
     health,
     crm,
-    perfStats,
     warRoom,
     workSessionOverview,
     caffeineSummary,
@@ -52,7 +49,6 @@ export default async function DashboardPage() {
     getVideoStats(),
     getHealthSummary(),
     getCRMSummary(),
-    getPerformanceStats(),
     getWarRoomData(),
     getWorkSessionOverview(),
     getCaffeineSummary(),
@@ -72,10 +68,18 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
       {/* Header */}
-      <div className="mb-8">
-        <p className="text-zinc-500 text-sm">{greeting} 👋</p>
-        <h1 className="text-2xl font-bold text-white mt-1">Dashboard</h1>
-        <p className="text-zinc-500 text-sm mt-1">{currentMonthName()} {currentMonthKey().slice(0, 4)}</p>
+      <div className="mb-8 flex items-end justify-between gap-4">
+        <div>
+          <p className="text-zinc-500 text-sm">{greeting} 👋</p>
+          <h1 className="text-2xl font-bold text-white mt-1">Dashboard</h1>
+          <p className="text-zinc-500 text-sm mt-1">{currentMonthName()} {currentMonthKey().slice(0, 4)}</p>
+        </div>
+        <Link
+          href="/projects"
+          className="hidden rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-bold text-zinc-200 transition hover:border-cyan-700/60 hover:text-cyan-300 sm:inline-flex"
+        >
+          Open current projects →
+        </Link>
       </div>
 
       <HomeTrackingPanel
@@ -228,7 +232,7 @@ export default async function DashboardPage() {
 
       {/* ── INSIGHTS & CORRELATIONS ───────────────────────────────────────── */}
       <div className="mb-8">
-        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">💡 Insights & Correlations</h2>
+        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">Operational context</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Revenue Trend */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
@@ -248,15 +252,19 @@ export default async function DashboardPage() {
                   ? `${warRoom.momentum.revenueGrowthPct > 0 ? "+" : ""}${warRoom.momentum.revenueGrowthPct}%`
                   : "—"}
               </p>
-              <span className={`text-xl font-black ${
-                warRoom.momentum.revenueTrend === "up" ? "text-cyan-400" :
-                warRoom.momentum.revenueTrend === "down" ? "text-red-400" : "text-zinc-400"
-              }`}>
-                {warRoom.momentum.revenueTrend === "up" ? "↑" :
-                 warRoom.momentum.revenueTrend === "down" ? "↓" : "→"}
-              </span>
+              {warRoom.momentum.revenueGrowthPct !== null && (
+                <span className={`text-xl font-black ${
+                  warRoom.momentum.revenueTrend === "up" ? "text-cyan-400" :
+                  warRoom.momentum.revenueTrend === "down" ? "text-red-400" : "text-zinc-400"
+                }`}>
+                  {warRoom.momentum.revenueTrend === "up" ? "↑" :
+                   warRoom.momentum.revenueTrend === "down" ? "↓" : "→"}
+                </span>
+              )}
             </div>
-            <p className="text-zinc-600 text-xs mt-1">vs last month</p>
+            <p className="text-zinc-600 text-xs mt-1">
+              {warRoom.momentum.revenueGrowthPct === null ? "No prior-month baseline" : "vs last month"}
+            </p>
           </div>
 
           {/* Output Trend */}
@@ -277,29 +285,33 @@ export default async function DashboardPage() {
                   ? `${warRoom.momentum.outputGrowthPct > 0 ? "+" : ""}${warRoom.momentum.outputGrowthPct}%`
                   : "—"}
               </p>
-              <span className={`text-xl font-black ${
-                warRoom.momentum.outputTrend === "up" ? "text-cyan-400" :
-                warRoom.momentum.outputTrend === "down" ? "text-red-400" : "text-zinc-400"
-              }`}>
-                {warRoom.momentum.outputTrend === "up" ? "↑" :
-                 warRoom.momentum.outputTrend === "down" ? "↓" : "→"}
-              </span>
+              {warRoom.momentum.outputGrowthPct !== null && (
+                <span className={`text-xl font-black ${
+                  warRoom.momentum.outputTrend === "up" ? "text-cyan-400" :
+                  warRoom.momentum.outputTrend === "down" ? "text-red-400" : "text-zinc-400"
+                }`}>
+                  {warRoom.momentum.outputTrend === "up" ? "↑" :
+                   warRoom.momentum.outputTrend === "down" ? "↓" : "→"}
+                </span>
+              )}
             </div>
-            <p className="text-zinc-600 text-xs mt-1">videos vs last month</p>
+            <p className="text-zinc-600 text-xs mt-1">
+              {warRoom.momentum.outputGrowthPct === null ? "No prior-month baseline" : "videos vs last month"}
+            </p>
           </div>
 
           {/* Sleep vs Output */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-lg">😴</span>
-              <p className="text-zinc-500 text-xs uppercase tracking-wider">Sleep Impact</p>
+              <p className="text-zinc-500 text-xs uppercase tracking-wider">Output on ≥7h sleep days</p>
             </div>
             <p className="text-2xl font-black text-cyan-400">
               {warRoom.biological.avgVideosGoodSleep !== null
                 ? `${warRoom.biological.avgVideosGoodSleep} videos`
                 : "—"}
             </p>
-            <p className="text-zinc-600 text-xs mt-1">on good sleep days (≥7h)</p>
+            <p className="text-zinc-600 text-xs mt-1">Descriptive average · not causal</p>
           </div>
 
           {/* Coffees / Video */}
@@ -317,61 +329,39 @@ export default async function DashboardPage() {
             </p>
             <p className="text-zinc-600 text-xs mt-1">
               {warRoom.biological.coffeesPerVideo !== null
-                ? `${warRoom.biological.totalCoffeesMonth} coffees this month`
+                ? `${warRoom.biological.totalCoffeesMonth} coffees · ${warRoom.efficiency.videosThisMonth} completed videos`
                 : "No completed videos this month yet"}
             </p>
           </div>
         </div>
 
         {/* Additional Insights Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           {/* Revenue Streak */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-lg">🔥</span>
-              <p className="text-zinc-500 text-xs uppercase tracking-wider">Revenue Streak</p>
+              <p className="text-zinc-500 text-xs uppercase tracking-wider">Recorded Income Streak</p>
             </div>
             <p className="text-2xl font-black text-orange-400">
               {warRoom.momentum.revenueStreak}
               <span className="text-sm font-normal text-zinc-500 ml-1">days</span>
             </p>
-            <p className="text-zinc-600 text-xs mt-1">Consecutive billable days</p>
+            <p className="text-zinc-600 text-xs mt-1">Consecutive days with recorded income</p>
           </div>
 
           {/* Revision Efficiency */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-lg">⚙️</span>
-              <p className="text-zinc-500 text-xs uppercase tracking-wider">Revision Drag</p>
+              <p className="text-zinc-500 text-xs uppercase tracking-wider">Rework Evidence</p>
             </div>
-            <p className={`text-2xl font-black ${
-              warRoom.efficiency.revisionDragTier === "elite" ? "text-cyan-400" :
-              warRoom.efficiency.revisionDragTier === "normal" ? "text-amber-400" : "text-red-400"
-            }`}>
-              {warRoom.efficiency.revisionDragIndex !== null
-                ? warRoom.efficiency.revisionDragIndex.toFixed(2)
-                : "—"}
+            <p className="text-2xl font-black text-zinc-200">
+              {warRoom.efficiency.totalRevisions} revisions
             </p>
-            <p className={`text-xs font-bold mt-1 uppercase ${
-              warRoom.efficiency.revisionDragTier === "elite" ? "text-cyan-500" :
-              warRoom.efficiency.revisionDragTier === "normal" ? "text-amber-500" : "text-red-500"
-            }`}>
-              {warRoom.efficiency.revisionDragTier === "elite" ? "⚡ Elite" :
-               warRoom.efficiency.revisionDragTier === "normal" ? "⚠ Normal" : "🔴 Friction"}
+            <p className="mt-1 text-xs text-zinc-600">
+              {warRoom.efficiency.videosThisMonth} completed videos
             </p>
-          </div>
-
-          {/* Leverage Score */}
-          <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 border border-cyan-900/50 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">💎</span>
-              <p className="text-zinc-400 text-xs uppercase tracking-wider">Leverage Score</p>
-            </div>
-            <div className="flex items-end gap-2">
-              <p className="text-3xl font-black text-white">{warRoom.leverage.score}</p>
-              <span className="text-zinc-500 text-sm mb-1">XP</span>
-            </div>
-            <p className="text-cyan-400 text-xs font-bold mt-1">Level {warRoom.leverage.level}: {warRoom.leverage.levelTitle}</p>
           </div>
         </div>
       </div>
@@ -594,8 +584,6 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Performance Stats — Gamified Section */}
-      <PerformanceStatsSection stats={perfStats} />
     </div>
   );
 }

@@ -76,7 +76,7 @@ export function growthByCurrency(
       const amount = amountForCurrency(current, currency);
       const previousAmount = amountForCurrency(previous, currency);
       const growthPct = previousAmount === 0
-        ? amount > 0 ? 100 : null
+        ? null
         : Math.round(((amount - previousAmount) / previousAmount) * 100);
       return { currency, amount, previousAmount, growthPct };
     });

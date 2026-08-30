@@ -59,6 +59,8 @@ export interface IncomeIntelligence {
 }
 
 export interface EfficiencyMetrics {
+  /** Raw revisions attached to completed videos this month */
+  totalRevisions: number;
   /** Total revisions / videos delivered this month */
   revisionDragIndex: number | null;
   /** Revision drag tier */
@@ -118,7 +120,7 @@ export interface BiologicalCorrelation {
 }
 
 export interface MomentumMetrics {
-  /** Consecutive days with billable delivery */
+  /** Consecutive days with a recorded income transaction */
   revenueStreak: number;
   /** Revenue growth % vs last month */
   revenueGrowthPct: number | null;
@@ -168,7 +170,7 @@ export interface WarRoomData {
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 function growthPct(current: number, previous: number): number | null {
-  if (previous === 0) return current > 0 ? 100 : null;
+  if (previous === 0) return null;
   return Math.round(((current - previous) / previous) * 100);
 }
 
@@ -604,6 +606,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       revenuePerVideoAllTime,
     },
     efficiency: {
+      totalRevisions,
       revisionDragIndex,
       revisionDragTier,
       videosThisMonth: thisMonthVideoCount,

@@ -58,7 +58,7 @@ export interface PerformanceStats {
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 function growthPct(current: number, previous: number): number | null {
-  if (previous === 0) return current > 0 ? 100 : null;
+  if (previous === 0) return null;
   return Math.round(((current - previous) / previous) * 100);
 }
 
