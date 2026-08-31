@@ -36,6 +36,20 @@ const PURPOSE_LABEL: Record<string, string> = {
   OTHER: "Other",
 };
 
+function conversionDirection(conversion: {
+  brlAmount: number;
+  usdAmount: number;
+  fromCurrency: string | null;
+}): string {
+  if (conversion.fromCurrency === "USD") {
+    return `$${conversion.usdAmount.toFixed(2)} → R$${conversion.brlAmount.toFixed(2)}`;
+  }
+  if (conversion.fromCurrency === "BRL") {
+    return `R$${conversion.brlAmount.toFixed(2)} → $${conversion.usdAmount.toFixed(2)}`;
+  }
+  return `R$${conversion.brlAmount.toFixed(2)} ↔ $${conversion.usdAmount.toFixed(2)}`;
+}
+
 function MonthScopeCell({ label, resolution }: { label: string; resolution: FxRateResolution }) {
   return (
     <div className="text-right">
@@ -128,7 +142,7 @@ export default async function FxLedgerPage() {
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-white text-sm font-semibold">
-                    R${c.brlAmount.toFixed(2)} → ${c.usdAmount.toFixed(2)}
+                    {conversionDirection(c)}
                   </p>
                   <span className={`text-[10px] font-semibold uppercase tracking-wider ${SCOPE_ACCENT[c.scope]}`}>
                     {SCOPE_LABEL[c.scope]}
@@ -139,7 +153,14 @@ export default async function FxLedgerPage() {
                     </span>
                   )}
                 </div>
-                <p className="text-zinc-500 text-xs">{formatDate(c.date)}{c.notes ? ` · ${c.notes}` : ""}</p>
+                <p className="text-zinc-500 text-xs">
+                  {formatDate(c.date)}
+                  {c.feeAmount > 0 && c.feeCurrency
+                    ? ` · fee ${c.feeCurrency} ${c.feeAmount.toFixed(2)}`
+                    : ""}
+                  {!c.countsTowardObservedRate ? " · excluded from observed monthly rate" : ""}
+                  {c.notes ? ` · ${c.notes}` : ""}
+                </p>
               </div>
               <div className="flex items-center gap-3 shrink-0 pl-3">
                 <p className="text-zinc-400 text-xs font-semibold whitespace-nowrap">R${(c.brlAmount / c.usdAmount).toFixed(4)}/USD</p>

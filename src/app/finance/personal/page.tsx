@@ -43,10 +43,11 @@ export default async function PersonalFinancePage() {
               <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">{b.currency}</p>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <StatCard
-                  label="Balance"
+                  label="Economic Ledger Net"
                   value={formatCurrency(b.balance, b.currency)}
                   accent={b.balance >= 0 ? "green" : "red"}
                   icon="💳"
+                  sub="Not a Wise pocket balance"
                 />
                 <StatCard label="Opening" value={formatCurrency(b.openingBalance, b.currency)} icon="🏁" />
                 <StatCard label="Owner Pay In" value={formatCurrency(b.ownerPayReceipts, b.currency)} accent="blue" icon="🏦" />

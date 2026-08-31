@@ -8,6 +8,7 @@ import {
   validateFxManualRateInput,
   monthOf,
   computeFxCashMovements,
+  filterRateEligibleConversions,
 } from "./core.ts";
 
 // Sprint C1 required human-QA fixture, reproduced exactly:
@@ -50,6 +51,13 @@ function round4(v) {
 
 test("computeVolumeWeightedRate returns null for an empty list", () => {
   assert.equal(computeVolumeWeightedRate([]), null);
+});
+
+test("cross-account FX evidence can be excluded from the ordinary observed-rate sample", () => {
+  const ordinary = { brlAmount: 510, usdAmount: 100, countsTowardObservedRate: true };
+  const ownerTransfer = { brlAmount: 153.58, usdAmount: 30, countsTowardObservedRate: false };
+  const legacy = { brlAmount: 102.96, usdAmount: 20 };
+  assert.deepEqual(filterRateEligibleConversions([ordinary, ownerTransfer, legacy]), [ordinary, legacy]);
 });
 
 test("resolveFxRateForMonth prefers OBSERVED over MANUAL over FALLBACK", () => {

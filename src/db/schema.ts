@@ -100,6 +100,12 @@ export const transactions = sqliteTable(
     // index permits unlimited NULLs, so it only constrains rows that
     // opted in.
     idempotencyKey: text("idempotency_key"),
+    // Source identity is distinct from UI-submit idempotency above. A Wise
+    // event can be attached to an existing canonical row (for example a
+    // subscription charge that already has a submit key) without erasing
+    // that row's original replay protection.
+    externalSource: text("external_source"),
+    externalId: text("external_id"),
   },
   (table) => [
     check(
@@ -111,6 +117,10 @@ export const transactions = sqliteTable(
     index("transactions_debt_idx").on(table.debtId),
     index("transactions_subscription_idx").on(table.subscriptionId),
     uniqueIndex("transactions_idempotency_key_idx").on(table.idempotencyKey),
+    uniqueIndex("transactions_external_identity_idx").on(
+      table.externalSource,
+      table.externalId,
+    ),
     // §6 hard invariant: a Freelance income row can never be an orphan.
     check(
       "transactions_freelance_requires_client_check",
@@ -1684,6 +1694,21 @@ export const fxConversions = sqliteTable(
     purpose: text("purpose", {
       enum: ["OPERATING_COST", "TAX_RESERVE", "OWNER_TRANSFER", "OTHER"],
     }),
+    externalSource: text("external_source"),
+    externalId: text("external_id"),
+    // Wise reports the fee as evidence, but the source amount already
+    // includes it in the account debit. This is metadata only and is never
+    // subtracted a second time by balance calculations.
+    feeAmount: real("fee_amount").notNull().default(0),
+    feeCurrency: text("fee_currency"),
+    // Cross-account transfers that happen to include an FX rate are real
+    // FX evidence, but are not ordinary conversions for the monthly
+    // observed-rate sample. Defaults true for every historical/manual row.
+    countsTowardObservedRate: integer("counts_toward_observed_rate", {
+      mode: "boolean",
+    })
+      .notNull()
+      .default(true),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),
@@ -1691,6 +1716,10 @@ export const fxConversions = sqliteTable(
   (table) => [
     index("fx_conversions_date_idx").on(table.date),
     index("fx_conversions_scope_idx").on(table.scope),
+    uniqueIndex("fx_conversions_external_identity_idx").on(
+      table.externalSource,
+      table.externalId,
+    ),
     check("fx_conversions_brl_amount_check", sql`${table.brlAmount} > 0`),
     check("fx_conversions_usd_amount_check", sql`${table.usdAmount} > 0`),
     check(
@@ -1761,11 +1790,17 @@ export const personalTransactions = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),
+    externalSource: text("external_source"),
+    externalId: text("external_id"),
   },
   (table) => [
     index("personal_transactions_date_idx").on(table.date),
     uniqueIndex("personal_transactions_owner_pay_txn_idx").on(
       table.ownerPayTransactionId,
+    ),
+    uniqueIndex("personal_transactions_external_identity_idx").on(
+      table.externalSource,
+      table.externalId,
     ),
     check(
       "personal_transactions_type_check",
@@ -1820,6 +1855,117 @@ export const cashBalanceSnapshots = sqliteTable(
     check(
       "cash_balance_snapshots_currency_check",
       sql`${table.currency} in ('USD', 'BRL')`,
+    ),
+  ],
+);
+
+// ─── AUGUST 2026 CANONICAL CASH POCKETS ────────────────────────────────────
+// Business/personal P&L and Wise pocket balances answer different questions.
+// These three deliberately narrow tables preserve the bank/account truth
+// without turning an internal transfer into revenue or an ambiguous debit
+// into an expense. They are not a generic ingestion framework: one explicit
+// account, one signed source movement, and one observed balance snapshot.
+export const cashAccounts = sqliteTable(
+  "cash_accounts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    scope: text("scope", { enum: ["BUSINESS", "PERSONAL"] }).notNull(),
+    currency: text("currency", { enum: ["USD", "BRL"] }).notNull(),
+    pocket: text("pocket", { enum: ["MAIN", "RESERVE"] }).notNull(),
+    label: text("label").notNull(),
+    externalSource: text("external_source").notNull().default("WISE"),
+    externalAccountId: text("external_account_id").notNull(),
+    openingBalance: real("opening_balance").notNull(),
+    openingAsOf: text("opening_as_of").notNull(),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("cash_accounts_external_idx").on(
+      table.externalSource,
+      table.externalAccountId,
+    ),
+    uniqueIndex("cash_accounts_scope_currency_pocket_idx").on(
+      table.scope,
+      table.currency,
+      table.pocket,
+    ),
+    check("cash_accounts_scope_check", sql`${table.scope} in ('BUSINESS', 'PERSONAL')`),
+    check("cash_accounts_currency_check", sql`${table.currency} in ('USD', 'BRL')`),
+    check("cash_accounts_pocket_check", sql`${table.pocket} in ('MAIN', 'RESERVE')`),
+  ],
+);
+
+export const cashMovements = sqliteTable(
+  "cash_movements",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    cashAccountId: integer("cash_account_id")
+      .notNull()
+      .references(() => cashAccounts.id, { onDelete: "restrict" }),
+    date: text("date").notNull(),
+    occurredAt: text("occurred_at").notNull(),
+    amount: real("amount").notNull(), // signed in the account's own currency
+    state: text("state", {
+      enum: [
+        "RECONCILED",
+        "AMBIGUOUS",
+        "EXTERNAL_TRANSFER",
+        "INTERNAL_TRANSFER",
+        "FX",
+        "IGNORE",
+      ],
+    }).notNull(),
+    description: text("description").notNull(),
+    counterparty: text("counterparty"),
+    externalSource: text("external_source").notNull().default("WISE"),
+    externalId: text("external_id").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("cash_movements_account_external_idx").on(
+      table.cashAccountId,
+      table.externalSource,
+      table.externalId,
+    ),
+    index("cash_movements_account_date_idx").on(table.cashAccountId, table.date),
+    check("cash_movements_amount_check", sql`${table.amount} != 0`),
+    check(
+      "cash_movements_state_check",
+      sql`${table.state} in ('RECONCILED', 'AMBIGUOUS', 'EXTERNAL_TRANSFER', 'INTERNAL_TRANSFER', 'FX', 'IGNORE')`,
+    ),
+  ],
+);
+
+export const cashAccountSnapshots = sqliteTable(
+  "cash_account_snapshots",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    cashAccountId: integer("cash_account_id")
+      .notNull()
+      .references(() => cashAccounts.id, { onDelete: "restrict" }),
+    balanceAmount: real("balance_amount").notNull(),
+    observedAt: text("observed_at").notNull(),
+    source: text("source").notNull().default("WISE_CSV"),
+    externalId: text("external_id"),
+    notes: text("notes"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("cash_account_snapshots_account_observed_source_idx").on(
+      table.cashAccountId,
+      table.observedAt,
+      table.source,
+    ),
+    index("cash_account_snapshots_account_date_idx").on(
+      table.cashAccountId,
+      table.observedAt,
     ),
   ],
 );

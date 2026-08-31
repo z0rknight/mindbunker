@@ -29,6 +29,16 @@ export type FxConversionLike = {
   usdAmount: number;
 };
 
+export type FxRateEligibleLike = FxConversionLike & {
+  countsTowardObservedRate?: boolean;
+};
+
+export function filterRateEligibleConversions<T extends FxRateEligibleLike>(
+  conversions: T[],
+): T[] {
+  return conversions.filter((conversion) => conversion.countsTowardObservedRate !== false);
+}
+
 // Implied rate of a single conversion: how many BRL it took to get one USD.
 export function computeImpliedRate(input: FxConversionLike): number {
   return round4(input.brlAmount / input.usdAmount);

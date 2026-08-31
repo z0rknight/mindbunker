@@ -58,6 +58,8 @@ test("recordOwnerPay builds the exact Drizzle INSERT SELECT shape accepted by D1
   assert.match(receiptSql, /select null as "id"/i);
   assert.match(receiptSql, /unixepoch\(\) as "created_at"/i);
   assert.match(receiptSql, /owner_pay_transaction_id/i);
+  assert.match(receiptSql, /null as "external_source"/i);
+  assert.match(receiptSql, /null as "external_id"/i);
 });
 
 test("Owner Pay correction builds two identity-preserving Drizzle updates", async () => {

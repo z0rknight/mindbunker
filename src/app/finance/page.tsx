@@ -201,11 +201,11 @@ export default async function FinancePage() {
         </div>
       </div>
 
-      {/* ── RMEDIA CASH (Monday Money Lab P0) ─────────────────────────────── */}
+      {/* Economic ledger and Wise pockets are deliberately separate facts. */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest">
-            RMEDIA Cash
+            Business Economic Ledger
           </h2>
           <TaxReserveControl currentPercent={taxReserveSettings.taxReservePercent} />
         </div>
@@ -232,9 +232,9 @@ export default async function FinancePage() {
                 )}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <StatCard
-                    label="Business Cash"
+                    label="Operating Ledger Net"
                     value={formatCurrency(row.businessCash, row.currency)}
-                    sub="Real cash position — not profit"
+                    sub="Income − expenses − Owner Pay ± FX; not a Wise pocket"
                     accent={row.businessCash >= 0 ? "green" : "red"}
                     icon="🏢"
                   />
@@ -246,9 +246,9 @@ export default async function FinancePage() {
                     icon="🧯"
                   />
                   <StatCard
-                    label="Available Business Cash"
+                    label="Available Ledger Net"
                     value={formatCurrency(row.availableBusinessCash, row.currency)}
-                    sub="Business Cash − Tax Reserve"
+                    sub="Operating ledger net − Tax Reserve"
                     accent={row.availableBusinessCash >= 0 ? "green" : "red"}
                     icon="✅"
                   />
@@ -327,7 +327,8 @@ export default async function FinancePage() {
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">{row.currency}</p>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <StatCard
-                label="Current Balance"
+                label="Economic Ledger Net"
+                sub="Not a Wise pocket balance"
                 value={formatCurrency(row.currentBalance, row.currency)}
                 accent={row.currentBalance >= 0 ? "green" : "red"}
                 icon="💳"

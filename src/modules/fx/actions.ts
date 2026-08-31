@@ -9,6 +9,7 @@ import {
   validateFxConversionInput,
   validateFxManualRateInput,
   resolveFxRateForMonth,
+  filterRateEligibleConversions,
   monthOf,
   type FxRateResolution,
   type FxScope,
@@ -177,7 +178,7 @@ export async function getFxRateForMonth(
     db.select().from(fxConversions),
     db.select().from(fxManualRates).where(eq(fxManualRates.month, month)),
   ]);
-  const monthConversions = allConversions
+  const monthConversions = filterRateEligibleConversions(allConversions)
     .filter((c) => monthOf(c.date) === month)
     .filter((c) => !scope || c.scope === scope);
   const manualRate = manualRows.length > 0 ? manualRows[0].rate : null;
@@ -201,7 +202,9 @@ export async function getFxRateForMonthByScope(month: string): Promise<FxRateRes
     db.select().from(fxConversions),
     db.select().from(fxManualRates).where(eq(fxManualRates.month, month)),
   ]);
-  const monthConversions = allConversions.filter((c) => monthOf(c.date) === month);
+  const monthConversions = filterRateEligibleConversions(allConversions).filter(
+    (c) => monthOf(c.date) === month,
+  );
   const manualRate = manualRows.length > 0 ? manualRows[0].rate : null;
   return {
     business: resolveFxRateForMonth({
@@ -235,7 +238,9 @@ export async function getFxMonthSummaries(): Promise<
   return Array.from(months)
     .sort((a, b) => b.localeCompare(a))
     .map((month) => {
-      const monthConversions = allConversions.filter((c) => monthOf(c.date) === month);
+      const monthConversions = filterRateEligibleConversions(allConversions).filter(
+        (c) => monthOf(c.date) === month,
+      );
       const manualRate = manualRows.find((m) => m.month === month)?.rate ?? null;
       return {
         month,

@@ -46,6 +46,8 @@ export function buildOwnerPayStatements(
       notes: transactions.notes,
       ownerPayTransactionId: transactions.id,
       createdAt: sql<Date>`unixepoch()`.as("created_at"),
+      externalSource: sql<string | null>`null`.as("external_source"),
+      externalId: sql<string | null>`null`.as("external_id"),
     })
     .from(transactions)
     .where(eq(transactions.idempotencyKey, input.idempotencyKey));
