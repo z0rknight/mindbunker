@@ -253,6 +253,13 @@
       "when": 1788145774153,
       "tag": "0035_hard_wrecking_crew",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1788265638342,
+      "tag": "0036_tired_darkstar",
+      "breakpoints": true
     }
   ]
 }

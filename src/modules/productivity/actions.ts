@@ -4,7 +4,19 @@ import "server-only";
 
 import { getAuthenticatedDb, getDb } from "@/db";
 import { isClientAuthenticated } from "@/lib/client-portal-session";
-import { clients, crmEvents, projects, revisions, videoLogs, workSessions } from "@/db/schema";
+import {
+  blockers,
+  clients,
+  commitments,
+  crmEvents,
+  deliveries,
+  frictionEvents,
+  productionChecklistItems,
+  projects,
+  revisions,
+  videoLogs,
+  workSessions,
+} from "@/db/schema";
 import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { startOfMonthISO, todayISO } from "@/utils/date";
@@ -1052,7 +1064,7 @@ export async function deleteVideoLog(
     .limit(1);
   if (!current[0]) return { success: false, error: "Video not found." };
 
-  const [trackedWork, operationalMemory] = await Promise.all([
+  const [trackedWork, operationalMemory, commitmentMemory, frictionMemory, blockerMemory, deliveryMemory, checklistMemory] = await Promise.all([
     db
       .select({ id: workSessions.id })
       .from(workSessions)
@@ -1068,6 +1080,11 @@ export async function deleteVideoLog(
         ),
       )
       .limit(1),
+    db.select({ id: commitments.id }).from(commitments).where(eq(commitments.videoId, id)).limit(1),
+    db.select({ id: frictionEvents.id }).from(frictionEvents).where(eq(frictionEvents.videoId, id)).limit(1),
+    db.select({ id: blockers.id }).from(blockers).where(eq(blockers.videoId, id)).limit(1),
+    db.select({ id: deliveries.id }).from(deliveries).where(eq(deliveries.videoId, id)).limit(1),
+    db.select({ id: productionChecklistItems.id }).from(productionChecklistItems).where(eq(productionChecklistItems.videoId, id)).limit(1),
   ]);
   if (trackedWork[0]) {
     return {
@@ -1079,6 +1096,18 @@ export async function deleteVideoLog(
     return {
       success: false,
       error: VIDEO_OPERATIONAL_MEMORY_DELETE_ERROR,
+    };
+  }
+  if (
+    commitmentMemory[0] ||
+    frictionMemory[0] ||
+    blockerMemory[0] ||
+    deliveryMemory[0] ||
+    checklistMemory[0]
+  ) {
+    return {
+      success: false,
+      error: "Videos with operational custody records cannot be deleted.",
     };
   }
 

@@ -23,6 +23,16 @@ import {
   VIDEO_STATUSES,
 } from "../modules/productivity/config";
 import { ASSET_TYPES, ASSET_STATUSES } from "../modules/assets/config";
+import {
+  BLOCKER_CATEGORIES,
+  CHECKLIST_STATUSES,
+  COMMITMENT_STATUSES,
+  DELIVERY_STATUSES,
+  FRICTION_CATEGORIES,
+  PRODUCTION_STEPS,
+  REVISION_CATEGORIES,
+  REVISION_CAUSES,
+} from "../modules/video-operations/config";
 
 // ─── PRIVATE ACCESS ──────────────────────────────────────────────────────────
 
@@ -602,11 +612,117 @@ export const revisions = sqliteTable(
     actor: text("actor", { enum: ["admin", "gateway", "system", "client"] })
       .notNull()
       .default("admin"),
+    causedBy: text("caused_by", { enum: REVISION_CAUSES })
+      .notNull()
+      .default("UNKNOWN"),
+    category: text("category", { enum: REVISION_CATEGORIES }),
+    minutesRework: integer("minutes_rework"),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),
   },
-  (table) => [index("revisions_video_created_idx").on(table.videoId, table.createdAt)],
+  (table) => [
+    index("revisions_video_created_idx").on(table.videoId, table.createdAt),
+  ],
+);
+
+// Selective production promotion: small, explicit operational facts anchored
+// to the existing Client -> Project -> Video chain. These tables are not a
+// generic task/workflow system. New rows start empty; historical promises,
+// friction and delivery timestamps are never fabricated.
+export const commitments = sqliteTable(
+  "commitments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    title: text("title").notNull(),
+    dueAt: integer("due_at", { mode: "timestamp" }).notNull(),
+    status: text("status", { enum: COMMITMENT_STATUSES }).notNull().default("OPEN"),
+    videoId: integer("video_id").notNull().references(() => videoLogs.id, { onDelete: "restrict" }),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("commitments_video_status_idx").on(table.videoId, table.status),
+    uniqueIndex("commitments_id_video_unique").on(table.id, table.videoId),
+    check("commitments_status_check", sql`${table.status} in ('OPEN', 'DONE', 'CANCELLED')`),
+  ],
+);
+
+export const frictionEvents = sqliteTable(
+  "friction_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id").notNull().references(() => videoLogs.id, { onDelete: "restrict" }),
+    workSessionId: integer("work_session_id").references(() => workSessions.id, { onDelete: "set null" }),
+    category: text("category", { enum: FRICTION_CATEGORIES }).notNull(),
+    minutesLost: integer("minutes_lost"),
+    note: text("note"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("friction_events_video_created_idx").on(table.videoId, table.createdAt),
+    index("friction_events_session_idx").on(table.workSessionId),
+    check("friction_events_category_check", sql`${table.category} in ('FILES', 'SOFTWARE', 'CLIENT', 'DECISION', 'QA', 'HARDWARE', 'PROCESS', 'INGEST', 'OTHER')`),
+    check("friction_events_minutes_check", sql`${table.minutesLost} is null or (${table.minutesLost} >= 0 and ${table.minutesLost} <= 10080)`),
+  ],
+);
+
+export const blockers = sqliteTable(
+  "blockers",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id").notNull().references(() => videoLogs.id, { onDelete: "restrict" }),
+    category: text("category", { enum: BLOCKER_CATEGORIES }).notNull(),
+    note: text("note"),
+    startedAt: integer("started_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("blockers_video_resolved_idx").on(table.videoId, table.resolvedAt),
+    check("blockers_category_check", sql`${table.category} in ('CLIENT', 'FILES', 'HARDWARE', 'SOFTWARE', 'DECISION', 'PAYMENT', 'INGEST', 'OTHER')`),
+    check("blockers_resolution_check", sql`${table.resolvedAt} is null or ${table.resolvedAt} >= ${table.startedAt}`),
+  ],
+);
+
+export const deliveries = sqliteTable(
+  "deliveries",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id").notNull().references(() => videoLogs.id, { onDelete: "restrict" }),
+    commitmentId: integer("commitment_id"),
+    version: integer("version").notNull(),
+    status: text("status", { enum: DELIVERY_STATUSES }).notNull().default("DELIVERED"),
+    deliveryUrl: text("delivery_url"),
+    note: text("note"),
+    deliveredAt: integer("delivered_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("deliveries_video_version_unique").on(table.videoId, table.version),
+    index("deliveries_commitment_idx").on(table.commitmentId),
+    foreignKey({
+      columns: [table.commitmentId, table.videoId],
+      foreignColumns: [commitments.id, commitments.videoId],
+      name: "deliveries_commitment_video_fk",
+    }).onDelete("restrict"),
+    check("deliveries_version_check", sql`${table.version} > 0`),
+    check("deliveries_status_check", sql`${table.status} in ('DELIVERED', 'REDELIVERED')`),
+  ],
+);
+
+export const productionChecklistItems = sqliteTable(
+  "production_checklist_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id").notNull().references(() => videoLogs.id, { onDelete: "restrict" }),
+    step: text("step", { enum: PRODUCTION_STEPS }).notNull(),
+    status: text("status", { enum: CHECKLIST_STATUSES }).notNull().default("NOT_STARTED"),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("production_checklist_video_step_unique").on(table.videoId, table.step),
+    check("production_checklist_step_check", sql`${table.step} in ('ASSEMBLY', 'COLOR', 'AUDIO', 'MOTION', 'CAPTIONS', 'QA', 'EXPORT', 'DELIVERY')`),
+    check("production_checklist_status_check", sql`${table.status} in ('NOT_STARTED', 'DONE', 'NOT_REQUIRED')`),
+  ],
 );
 
 // MindBunker Sensor P1: one revocable, narrowly-scoped credential per

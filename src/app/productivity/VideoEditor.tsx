@@ -29,6 +29,7 @@ import { VideoMemoryPanel } from "./VideoMemoryPanel";
 import { CommercialTermsPanel } from "./CommercialTermsPanel";
 import { ProjectReferencesPanel } from "./ProjectReferencesPanel";
 import { CoverUploadField } from "@/components/media/CoverUploadField";
+import { OperationalMemoryPanel } from "./OperationalMemoryPanel";
 
 type VideoEditorProps = {
   video: {
@@ -338,6 +339,7 @@ export function VideoEditor({
               <div className="space-y-4">
                 <CommercialTermsPanel videoId={video.id} />
                 <VideoMemoryPanel videoId={video.id} />
+                <OperationalMemoryPanel videoId={video.id} />
                 <form onSubmit={saveMetadata} className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/25 p-4 sm:p-5">
                 <div className="mb-1">
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Video details</p>

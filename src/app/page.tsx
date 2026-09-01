@@ -379,8 +379,9 @@ export default async function DashboardPage() {
                 <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-600">{row.currency}</p>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   <StatCard
-                    label="Current Balance"
+                    label="Economic Ledger Net"
                     value={formatCurrency(row.currentBalance, row.currency)}
+                    sub="Recorded history · not Wise cash"
                     accent={row.currentBalance >= 0 ? "green" : "red"}
                     icon="💳"
                   />
