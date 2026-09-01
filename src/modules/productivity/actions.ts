@@ -985,6 +985,13 @@ export async function setVideoPriorityAsClient(
 export async function changeRevisionCount(
   videoId: number,
   delta: -1 | 1,
+  // September Local Feature Harvest (Cluster E): optional QA/rework
+  // provenance classification for the new revisions row a +1 creates.
+  // Defaults to "UNKNOWN" so every pre-existing caller (both quick-action
+  // buttons in the app today) keeps working byte-for-byte unchanged --
+  // only the new Lab surface passes a real classification. Ignored on
+  // delta === -1 (a correction that deletes a row has no causedBy to set).
+  causedBy: "UNKNOWN" | "OUR_ERROR" | "CLIENT_CHANGE" | "SCOPE_CHANGE" = "UNKNOWN",
 ): Promise<ProductivityActionResult> {
   if (!isPositiveId(videoId) || (delta !== -1 && delta !== 1)) {
     return { success: false, error: "Invalid revision change." };
@@ -1019,6 +1026,7 @@ export async function changeRevisionCount(
     const eventInsert = db.insert(revisions).values({
       videoId,
       actor: "admin",
+      causedBy,
     });
     [, updated] = await db.batch([eventInsert, cacheUpdate]);
   } else {

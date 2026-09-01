@@ -253,6 +253,34 @@
       "when": 1788145774153,
       "tag": "0035_hard_wrecking_crew",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1788230857373,
+      "tag": "0036_regular_gwen_stacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1788231802055,
+      "tag": "0037_material_annihilus",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1788248583513,
+      "tag": "0038_lively_misty_knight",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1788251212397,
+      "tag": "0039_tough_galactus",
+      "breakpoints": true
     }
   ]
 }

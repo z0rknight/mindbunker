@@ -454,6 +454,16 @@ export const projects = sqliteTable(
       .default("planned"),
     deadline: text("deadline"),
     notes: text("notes"),
+    // Wave 2E: single-slot "what's next / what are we waiting for" --
+    // deliberately not a task manager, one nullable field each,
+    // overwritten in place, no history table.
+    nextAction: text("next_action"),
+    waitingOn: text("waiting_on"),
+    // Wave 2G (Economics prototype): rough, optional. Null contractType
+    // means "not classified yet" -- existing projects are not assumed to
+    // be either fixed or hourly.
+    contractType: text("contract_type", { enum: ["FIXED", "HOURLY"] }),
+    fixedPriceCents: integer("fixed_price_cents"),
     // Sprint 3 P1 (Project + Video visual covers): nullable, never
     // backfilled by inference -- same convention as videoLogs.coverUrl
     // above. A Project with no coverUrl falls back through
@@ -461,6 +471,11 @@ export const projects = sqliteTable(
     // a neutral placeholder (resolved in modules/media/core.ts, not
     // stored here).
     coverUrl: text("cover_url"),
+    // Wave 4E (Local Lab): canonical, project-level tags. Comma-separated
+    // plain text on purpose -- "simple strings are enough locally", no
+    // taxonomy table. Videos inherit these by default (see
+    // videoLogs.tagsOverride below) and can add/remove locally.
+    tags: text("tags"),
     createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
       () => new Date(),
     ),
@@ -519,6 +534,10 @@ export const videoLogs = sqliteTable(
     reviewUrl: text("review_url"),
     publishedUrl: text("published_url"),
     notes: text("notes"),
+    // Wave 2E: same single-slot next-action/waiting-on pattern as
+    // projects.nextAction/waitingOn above -- see that comment.
+    nextAction: text("next_action"),
+    waitingOn: text("waiting_on"),
     // Video visual metadata (Sprint 1.2.2 Client Portal round). All three
     // are nullable and never backfilled by inference -- a legacy video
     // simply has no cover/orientation/contentType until the operator sets
@@ -546,6 +565,35 @@ export const videoLogs = sqliteTable(
     isPriority: integer("is_priority", { mode: "boolean" })
       .notNull()
       .default(false),
+    // Wave 4E (Local Lab): video inherits its Project's tags by default.
+    // tagsOverride is JSON-encoded {added: string[], removed: string[]} --
+    // never stores the resolved tag set itself, so a Project tag edit
+    // still propagates to every Video that hasn't locally removed it. Null
+    // means "no local overrides, pure inheritance". Resolution happens in
+    // app code (modules/tags/core.ts), not here.
+    tagsOverride: text("tags_override"),
+    // Wave 4H (Local Lab): explicit classification, separate from the
+    // canonical `status` state machine above (deliberately -- same reason
+    // Wave 2's Lifecycle overlay never touched `status`: this is a rough
+    // lab classification, not a production state-machine change).
+    // CLIENT_WORK is the default so every pre-existing video stays
+    // truthfully classified as real client work, never silently
+    // reclassified.
+    videoKind: text("video_kind", {
+      enum: ["CLIENT_WORK", "SAMPLE_VIDEO", "INTERNAL", "OTHER"],
+    })
+      .notNull()
+      .default("CLIENT_WORK"),
+    // Wave 4G (Local Lab): Video Idea / Pitch, reusing the existing Video
+    // model rather than a separate object, per instruction. Null
+    // ideaStage means "not an idea -- an ordinary production video",
+    // which is every pre-existing row and stays that way until an
+    // operator explicitly creates a pitch. IDEA -> PROPOSED -> APPROVED;
+    // "approved" simply clears ideaStage back to null (the row was always
+    // a real video_logs row, so it needs no conversion step).
+    ideaStage: text("idea_stage", { enum: ["IDEA", "PROPOSED", "APPROVED"] }),
+    pitch: text("pitch"),
+    intendedFormat: text("intended_format"),
     createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
       () => new Date(),
     ),
@@ -602,11 +650,83 @@ export const revisions = sqliteTable(
     actor: text("actor", { enum: ["admin", "gateway", "system", "client"] })
       .notNull()
       .default("admin"),
+    // September Local Feature Harvest (Cluster E -- QA/Rework Provenance):
+    // who/what caused this revision round. TS-level enum only, no CHECK --
+    // same reasoning as crm_events.actor and work_sessions.source above:
+    // this vocabulary is expected to grow, and SQLite/D1 cannot cheaply
+    // ALTER a CHECK on an existing table. UNKNOWN is the default so every
+    // pre-existing revision row (and any caller that hasn't been updated
+    // yet) stays truthfully unclassified rather than silently defaulting
+    // into a specific blame bucket.
+    causedBy: text("caused_by", {
+      enum: ["UNKNOWN", "OUR_ERROR", "CLIENT_CHANGE", "SCOPE_CHANGE"],
+    })
+      .notNull()
+      .default("UNKNOWN"),
+    // Wave 4I (Local Lab): concise revision detail. `category` is a rough,
+    // open-ended label (AUDIO/COLOR/CAPTIONS/etc -- same open-vocabulary,
+    // no-CHECK convention as causedBy above), `minutesRework` an optional
+    // operator estimate. `note` (already existed) carries the free-text
+    // "what was corrected" description -- no new text column needed for
+    // that half.
+    category: text("category"),
+    minutesRework: integer("minutes_rework"),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),
   },
   (table) => [index("revisions_video_created_idx").on(table.videoId, table.createdAt)],
+);
+
+// September Local Feature Harvest (Cluster A -- shared primitive): ONE
+// commitment/promise-tracking table used across Clients, Projects, and
+// Videos rather than three bespoke "next action" fields bolted onto three
+// different tables. `clients.nextAction`/`nextActionDate` (added earlier)
+// stay as-is -- this table is additive, for anything that isn't a
+// client-relationship next-action specifically (project deadlines the
+// operator promised, video-level promises like "send draft cut Friday").
+// ownerType/ownerId is a deliberate polymorphic reference (no FK -- the
+// owner can be clients, projects, or video_logs, and D1/SQLite has no
+// portable polymorphic FK) with correctness enforced at the application
+// layer in modules/commitments, same tradeoff already documented above for
+// work_sessions.sensor_local_id-style app-layer invariants.
+export const commitments = sqliteTable(
+  "commitments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ownerType: text("owner_type", {
+      enum: ["CLIENT", "PROJECT", "VIDEO"],
+    }).notNull(),
+    ownerId: integer("owner_id").notNull(),
+    description: text("description").notNull(),
+    dueAt: integer("due_at", { mode: "timestamp" }),
+    status: text("status", { enum: ["OPEN", "DONE", "CANCELLED"] })
+      .notNull()
+      .default("OPEN"),
+    // Open-ended, no CHECK -- same reasoning as work_sessions.source:
+    // MANUAL today, room for a future SYSTEM-generated source later
+    // without a migration.
+    source: text("source").notNull().default("MANUAL"),
+    actor: text("actor", { enum: ["admin", "gateway", "system", "client"] })
+      .notNull()
+      .default("admin"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("commitments_owner_idx").on(table.ownerType, table.ownerId),
+    index("commitments_status_due_idx").on(table.status, table.dueAt),
+    check(
+      "commitments_owner_type_check",
+      sql`${table.ownerType} in ('CLIENT', 'PROJECT', 'VIDEO')`,
+    ),
+    check(
+      "commitments_status_check",
+      sql`${table.status} in ('OPEN', 'DONE', 'CANCELLED')`,
+    ),
+  ],
 );
 
 // MindBunker Sensor P1: one revocable, narrowly-scoped credential per
@@ -677,6 +797,10 @@ export const workSessions = sqliteTable(
     // fact (see correctWorkSession in actions.ts). Null means "never
     // corrected" — itself meaningful, not just bookkeeping.
     updatedAt: integer("updated_at", { mode: "timestamp" }),
+    // Wave 3A: soft integrity state for the Repair surface. No CHECK --
+    // same open-ended-vocabulary precedent as source/actor above.
+    integrityState: text("integrity_state").notNull().default("NORMAL"),
+    splitFromSessionId: integer("split_from_session_id"),
   },
   (table) => [
     uniqueIndex("work_sessions_one_open_idx")
@@ -1969,3 +2093,309 @@ export const cashAccountSnapshots = sqliteTable(
     ),
   ],
 );
+
+// ─── LOCAL FEATURE HARVEST WAVE 2 (local-only lab, rough-by-design) ────────
+// Everything below is deliberately additive: new tables, or nullable
+// ADD COLUMNs on existing tables. No existing column is renamed, retyped,
+// or removed. Enum-shaped text columns follow the same "no CHECK, TS-level
+// only" precedent used elsewhere for open-ended/small vocabularies
+// (crm_events.actor, work_sessions.source) -- these are rough experimental
+// vocabularies that are expected to change shape as the Lab round finds
+// out which values are actually useful.
+
+export const frictionEvents = sqliteTable(
+  "friction_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    category: text("category", {
+      enum: [
+        "FILES",
+        "SOFTWARE",
+        "CLIENT",
+        "DECISION",
+        "QA",
+        "HARDWARE",
+        "PROCESS",
+        "INGEST",
+        "OTHER",
+      ],
+    }).notNull(),
+    clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
+    projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
+    videoId: integer("video_id").references(() => videoLogs.id, { onDelete: "set null" }),
+    workSessionId: integer("work_session_id").references(() => workSessions.id, { onDelete: "set null" }),
+    note: text("note"),
+    minutesLost: integer("minutes_lost"),
+    actor: text("actor", { enum: ["admin", "gateway", "system", "client"] }).notNull().default("admin"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("friction_events_video_idx").on(table.videoId, table.createdAt),
+    index("friction_events_category_idx").on(table.category, table.createdAt),
+  ],
+);
+
+export const videoLifecycleEvents = sqliteTable(
+  "video_lifecycle_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id").notNull().references(() => videoLogs.id, { onDelete: "cascade" }),
+    stage: text("stage", {
+      enum: [
+        "INGEST",
+        "READY",
+        "ROUGH_CUT",
+        "EDITING",
+        "INTERNAL_QA",
+        "CLIENT_REVIEW",
+        "REVISION",
+        "APPROVED",
+        "DELIVERED",
+      ],
+    }).notNull(),
+    note: text("note"),
+    actor: text("actor", { enum: ["admin", "gateway", "system", "client"] }).notNull().default("admin"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [index("video_lifecycle_events_video_idx").on(table.videoId, table.createdAt)],
+);
+
+export const qaEvents = sqliteTable(
+  "qa_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id").notNull().references(() => videoLogs.id, { onDelete: "cascade" }),
+    result: text("result", { enum: ["PASS", "FAIL", "OVERRIDE"] }).notNull(),
+    // JSON-encoded { [checkKey: string]: boolean } -- a rough checklist
+    // snapshot, not a normalized table. Cheap on purpose (Wave 2 rule:
+    // no production-quality tax on a local experiment).
+    checklist: text("checklist"),
+    overrideReason: text("override_reason"),
+    causedBy: text("caused_by", {
+      enum: ["UNKNOWN", "OUR_ERROR", "CLIENT_CHANGE", "SCOPE_CHANGE"],
+    }),
+    actor: text("actor", { enum: ["admin", "gateway", "system", "client"] }).notNull().default("admin"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [index("qa_events_video_idx").on(table.videoId, table.createdAt)],
+);
+
+export const deliveries = sqliteTable(
+  "deliveries",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id").notNull().references(() => videoLogs.id, { onDelete: "cascade" }),
+    commitmentId: integer("commitment_id").references(() => commitments.id, { onDelete: "set null" }),
+    version: integer("version").notNull().default(1),
+    deliveredAt: integer("delivered_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    deliveryUrl: text("delivery_url"),
+    note: text("note"),
+    status: text("status", { enum: ["DELIVERED", "REDELIVERED"] }).notNull().default("DELIVERED"),
+    actor: text("actor", { enum: ["admin", "gateway", "system", "client"] }).notNull().default("admin"),
+  },
+  (table) => [index("deliveries_video_idx").on(table.videoId, table.deliveredAt)],
+);
+
+export const decisions = sqliteTable("decisions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  statement: text("statement").notNull(),
+  context: text("context"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const hypotheses = sqliteTable("hypotheses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  statement: text("statement").notNull(),
+  evidenceNeeded: text("evidence_needed"),
+  reviewAt: integer("review_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const experiments = sqliteTable("experiments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  hypothesisId: integer("hypothesis_id").references(() => hypotheses.id, { onDelete: "set null" }),
+  successCondition: text("success_condition").notNull(),
+  result: text("result"),
+  verdict: text("verdict", { enum: ["KEEP", "PATCH", "KILL", "INCONCLUSIVE"] }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+});
+
+// ─── LOCAL FEATURE HARVEST WAVE 3 (local-only lab, rough-by-design) ────────
+
+export const assetChecklistItems = sqliteTable(
+  "asset_checklist_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ownerType: text("owner_type", { enum: ["PROJECT", "VIDEO"] }).notNull(),
+    ownerId: integer("owner_id").notNull(),
+    itemType: text("item_type", {
+      enum: ["A_ROLL", "B_ROLL", "LOGO", "MUSIC", "BRAND_GUIDE", "TRANSCRIPT", "OTHER"],
+    }).notNull(),
+    status: text("status", { enum: ["MISSING", "ARRIVING", "READY", "NOT_REQUIRED"] }).notNull().default("MISSING"),
+    note: text("note"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }),
+  },
+  (table) => [index("asset_checklist_owner_idx").on(table.ownerType, table.ownerId)],
+);
+
+export const ingestionEvents = sqliteTable(
+  "ingestion_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id").notNull().references(() => videoLogs.id, { onDelete: "cascade" }),
+    source: text("source"),
+    destination: text("destination"),
+    startedAt: integer("started_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    operatorMinutes: integer("operator_minutes"),
+    machineMinutes: integer("machine_minutes"),
+    blockedWork: integer("blocked_work", { mode: "boolean" }).notNull().default(false),
+  },
+  (table) => [index("ingestion_events_video_idx").on(table.videoId)],
+);
+
+export const blockers = sqliteTable(
+  "blockers",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    category: text("category", {
+      enum: ["CLIENT", "FILES", "HARDWARE", "SOFTWARE", "DECISION", "PAYMENT", "INGEST", "OTHER"],
+    }).notNull(),
+    ownerType: text("owner_type", { enum: ["CLIENT", "PROJECT", "VIDEO"] }).notNull(),
+    ownerId: integer("owner_id").notNull(),
+    note: text("note"),
+    startedAt: integer("started_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+    actor: text("actor", { enum: ["admin", "gateway", "system", "client"] }).notNull().default("admin"),
+  },
+  (table) => [
+    index("blockers_owner_idx").on(table.ownerType, table.ownerId),
+    index("blockers_open_idx").on(table.resolvedAt),
+  ],
+);
+
+export const systemCandidateVerdicts = sqliteTable(
+  "system_candidate_verdicts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    candidateKey: text("candidate_key").notNull().unique(),
+    verdict: text("verdict", { enum: ["IGNORE", "WATCH", "SYSTEMIZE"] }).notNull(),
+    note: text("note"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+);
+
+export const systemInterventions = sqliteTable("system_interventions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  problem: text("problem"),
+  before: text("before"),
+  after: text("after"),
+  relatedFrictionCategory: text("related_friction_category"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const dailyStates = sqliteTable(
+  "daily_states",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    date: text("date").notNull().unique(), // ISO date YYYY-MM-DD
+    sleepHours: real("sleep_hours"),
+    energy: integer("energy"),
+    focus: integer("focus"),
+    note: text("note"),
+    caffeineCount: integer("caffeine_count"),
+    cigarettesCount: integer("cigarettes_count"),
+    movement: integer("movement", { mode: "boolean" }),
+    eveningNote: text("evening_note"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+);
+
+export const claims = sqliteTable("claims", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  statement: text("statement").notNull(),
+  type: text("type", { enum: ["FACT", "INFERENCE", "HYPOTHESIS"] }).notNull(),
+  confidence: text("confidence", { enum: ["HIGH", "MEDIUM", "LOW"] }).notNull().default("LOW"),
+  evidenceNeeded: text("evidence_needed"),
+  sourceRefs: text("source_refs"),
+  reviewAt: integer("review_at", { mode: "timestamp" }),
+  status: text("status", { enum: ["OPEN", "REVIEWED", "RETIRED"] }).notNull().default("OPEN"),
+  linkedHypothesisId: integer("linked_hypothesis_id").references(() => hypotheses.id, { onDelete: "set null" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+// Wave 4N/4O (Local Lab): Action Radar + Capture Inbox. One primitive
+// powering both surfaces -- a free-standing, one-shot action item for
+// intentions that don't naturally belong to a Commitment (a promise to
+// someone), a Blocker (work literally cannot progress), or a CRM
+// follow-up. Deliberately NOT a task manager: no subtasks, no assignee,
+// no recurring rules, no project-management framework.
+export const actionItems = sqliteTable(
+  "action_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    title: text("title").notNull(),
+    priority: text("priority", { enum: ["P0", "P1", "P2", "P3"] }).notNull().default("P2"),
+    status: text("status", { enum: ["OPEN", "DONE", "CANCELLED"] }).notNull().default("OPEN"),
+    dueAt: integer("due_at", { mode: "timestamp" }),
+    note: text("note"),
+    // Optional owner -- same no-FK polymorphic convention as commitments/
+    // blockers/asset_checklist_items above, correctness enforced at the
+    // app layer. Null owner is a genuinely free-standing item (e.g. a
+    // Capture Inbox note not yet triaged).
+    ownerType: text("owner_type", { enum: ["CLIENT", "PROJECT", "VIDEO"] }),
+    ownerId: integer("owner_id"),
+    source: text("source").notNull().default("MANUAL"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("action_items_status_priority_idx").on(table.status, table.priority),
+    index("action_items_owner_idx").on(table.ownerType, table.ownerId),
+  ],
+);
+
+// Wave 4F (Local Lab): restaurant-ticket-style per-video production
+// checklist. Deliberately separate from video_lifecycle_events (Wave 2) --
+// lifecycle stages are sequential ("where is this video in the pipeline
+// right now"), this is a parallel, independently-toggleable checklist
+// ("which production steps are actually done"), and conflating the two
+// would force every stage to imply every step. One row per step per
+// video, upserted in place (not append-only -- toggling a step back is a
+// normal correction, not a new historical fact the way a QA event is).
+export const productionChecklistItems = sqliteTable(
+  "production_checklist_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id").notNull().references(() => videoLogs.id, { onDelete: "cascade" }),
+    step: text("step", {
+      enum: ["ASSEMBLY", "COLOR", "AUDIO", "MOTION", "CAPTIONS", "QA", "EXPORT", "DELIVERY"],
+    }).notNull(),
+    status: text("status", { enum: ["NOT_STARTED", "DONE", "NOT_REQUIRED"] }).notNull().default("NOT_STARTED"),
+    toggledAt: integer("toggled_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("production_checklist_video_step_unique").on(table.videoId, table.step),
+  ],
+);
+
+// Wave 4Q (Local Lab): minimal Objective -- a strategic outcome container,
+// not a task tree. Optional links to a Commitment/Project/Client give it
+// something concrete to point at without duplicating those records.
+export const objectives = sqliteTable("objectives", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  title: text("title").notNull(),
+  period: text("period"),
+  status: text("status", { enum: ["ACTIVE", "DONE", "DROPPED"] }).notNull().default("ACTIVE"),
+  targetText: text("target_text"),
+  currentText: text("current_text"),
+  notes: text("notes"),
+  linkedCommitmentId: integer("linked_commitment_id").references(() => commitments.id, { onDelete: "set null" }),
+  linkedProjectId: integer("linked_project_id").references(() => projects.id, { onDelete: "set null" }),
+  linkedClientId: integer("linked_client_id").references(() => clients.id, { onDelete: "set null" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});

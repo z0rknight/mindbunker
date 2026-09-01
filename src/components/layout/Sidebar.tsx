@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/login/actions";
+import { LOCAL_LAB_ENABLED } from "@/lib/local-features";
 
 // FX + Business Operating Cash Patch §13: the sidebar outgrew a flat list,
 // so each item now carries a lightweight `group` label used only to add
@@ -46,6 +47,14 @@ const navItems = [
   // bar so that bar stays at its current 7 destinations.
   { href: "/all-history", label: "All History", mobileLabel: "History", icon: "🗄️", desktopOnly: true, group: "INTELLIGENCE" },
   { href: "/health", label: "Health", mobileLabel: "Health", icon: "🫀", group: "HEALTH" },
+  // September Local Feature Harvest: local-only experiment bench.
+  // Desktop sidebar only, excluded from the mobile bottom tab bar's fixed
+  // slot count, and only present at all when LOCAL_LAB_ENABLED (dev
+  // builds) -- filtered out of navItems entirely below so it can never
+  // appear in a production build.
+  ...(LOCAL_LAB_ENABLED
+    ? [{ href: "/lab", label: "Local Lab", mobileLabel: "Lab", icon: "🧪", desktopOnly: true, group: "INTELLIGENCE" as const }]
+    : []),
 ];
 
 // Section order is fixed here (not alphabetical, not insertion order of
