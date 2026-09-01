@@ -29,13 +29,18 @@ test("Finance Health is YELLOW when cash is exact but attribution or classificat
 });
 
 test("Finance Health is RED for a pocket difference or structural duplication", () => {
-  assert.equal(computeFinanceHealth({
+  const pocketResult = computeFinanceHealth({
     pocketDifferences: [0, 0, 0, 0, 0, 0, 0.01],
     unresolvedAttribution: 0,
     ambiguousEvidence: 0,
     duplicateExternalIdentities: 0,
     malformedFx: 0,
-  }).status, "RED");
+    businessPocketIssues: 0,
+    personalPocketIssues: 1,
+  });
+  assert.equal(pocketResult.status, "RED");
+  assert.equal(pocketResult.personalPocketIssues, 1);
+  assert.equal(pocketResult.businessPocketIssues, 0);
   assert.equal(computeFinanceHealth({
     pocketDifferences: sevenZero,
     unresolvedAttribution: 0,

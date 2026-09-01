@@ -24,14 +24,24 @@ export {
 // category to "Freelance", so it is the one that needs the client picker.
 export function AddIncomeButton({
   clients = [],
+  contracts = [],
 }: {
   clients?: Array<{ id: number; name: string }>;
+  contracts?: Array<{
+    id: number;
+    clientId: number;
+    label: string;
+    currency: string;
+  }>;
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("Freelance");
   const [clientId, setClientId] = useState("");
+  const [contractId, setContractId] = useState("");
+  const [currency, setCurrency] = useState<"USD" | "BRL">("USD");
+  const [date, setDate] = useState(() => todayISO());
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -50,8 +60,11 @@ export function AddIncomeButton({
         type: "income",
         amount: Number(amount),
         category,
+        currency,
+        date,
         notes,
         clientId: clientId ? Number(clientId) : null,
+        contractId: contractId ? Number(contractId) : null,
       });
       if (!result.success) {
         setError(result.error);
@@ -60,6 +73,8 @@ export function AddIncomeButton({
       setAmount("");
       setNotes("");
       setClientId("");
+      setContractId("");
+      setDate(todayISO());
       setOpen(false);
     });
   }
@@ -67,7 +82,11 @@ export function AddIncomeButton({
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setDate(todayISO());
+          setError(null);
+          setOpen(true);
+        }}
         className="flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm bg-emerald-700 hover:bg-emerald-600 text-white active:scale-95 transition-all w-full cursor-pointer"
       >
         <span className="text-2xl">💰</span>
@@ -77,8 +96,31 @@ export function AddIncomeButton({
       {open && (
         <Modal title="Add Income" onClose={() => setOpen(false)}>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Currency</label>
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value as "USD" | "BRL")}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+                >
+                  <option value="USD">USD</option>
+                  <option value="BRL">BRL</option>
+                </select>
+              </div>
+            </div>
             <div>
-              <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Amount ($)</label>
+              <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Amount ({currency})</label>
               <input
                 type="number"
                 inputMode="decimal"
@@ -110,7 +152,10 @@ export function AddIncomeButton({
                 </label>
                 <select
                   value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
+                  onChange={(e) => {
+                    setClientId(e.target.value);
+                    setContractId("");
+                  }}
                   required
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
                 >
@@ -120,6 +165,32 @@ export function AddIncomeButton({
                       {c.name}
                     </option>
                   ))}
+                </select>
+              </div>
+            )}
+            {clientId && contracts.some((contract) => contract.clientId === Number(clientId)) && (
+              <div>
+                <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">
+                  Contract (optional)
+                </label>
+                <select
+                  value={contractId}
+                  onChange={(e) => {
+                    const nextId = e.target.value;
+                    setContractId(nextId);
+                    const contract = contracts.find((candidate) => candidate.id === Number(nextId));
+                    if (contract?.currency === "USD" || contract?.currency === "BRL") {
+                      setCurrency(contract.currency);
+                    }
+                  }}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+                >
+                  <option value="">No contract link</option>
+                  {contracts
+                    .filter((contract) => contract.clientId === Number(clientId))
+                    .map((contract) => (
+                      <option key={contract.id} value={contract.id}>{contract.label}</option>
+                    ))}
                 </select>
               </div>
             )}
@@ -154,6 +225,7 @@ export function AddExpenseButton() {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => todayISO());
   const [category, setCategory] = useState("Software");
   const [otherCategory, setOtherCategory] = useState("");
   const [currency, setCurrency] = useState<"USD" | "BRL">("USD");
@@ -179,6 +251,7 @@ export function AddExpenseButton() {
         amount: Number(amount),
         category: resolvedCategory,
         currency,
+        date,
         notes,
       });
       if (!result.success) {
@@ -186,6 +259,7 @@ export function AddExpenseButton() {
         return;
       }
       setAmount("");
+      setDate(todayISO());
       setOtherCategory("");
       setNotes("");
       setOpen(false);
@@ -195,7 +269,11 @@ export function AddExpenseButton() {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setDate(todayISO());
+          setError(null);
+          setOpen(true);
+        }}
         className="flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm bg-red-800 hover:bg-red-700 text-white active:scale-95 transition-all w-full cursor-pointer"
       >
         <span className="text-2xl">💸</span>
@@ -205,6 +283,16 @@ export function AddExpenseButton() {
       {open && (
         <Modal title="Add Expense" onClose={() => setOpen(false)}>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Date</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                required
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+              />
+            </div>
             <div>
               <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Amount ({currency})</label>
               <input

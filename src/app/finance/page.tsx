@@ -11,6 +11,7 @@ import {
   getDebts,
   getSubscriptionSummary,
   getFinanceHealth,
+  getCommercialContracts,
 } from "@/modules/finance/actions";
 import { formatCurrency, formatDate, currentMonthKey, currentMonthName } from "@/utils/date";
 import { formatMinutesAsHours } from "@/modules/finance/core";
@@ -44,6 +45,7 @@ export default async function FinancePage() {
     ownerPayReceiptIdsByTransaction,
     businessFx,
     financeHealth,
+    commercialContracts,
   ] = await Promise.all([
     getFinanceSummary(),
     getAllTransactions(),
@@ -58,6 +60,7 @@ export default async function FinancePage() {
     getOwnerPayReceiptIdsByTransaction(),
     getFxRateForMonth(currentMonthKey(), "BUSINESS"),
     getFinanceHealth(),
+    getCommercialContracts(),
   ]);
   const activeDebts = debts.filter((d) => d.status === "ACTIVE");
   const remainingByCurrency = new Map<string, number>();
@@ -65,6 +68,12 @@ export default async function FinancePage() {
     remainingByCurrency.set(d.currency, (remainingByCurrency.get(d.currency) ?? 0) + d.remainingBalance);
   }
   const clientOptions = allClients.map((c) => ({ id: c.id, name: c.name }));
+  const contractOptions = commercialContracts.map((contract) => ({
+    id: contract.id,
+    clientId: contract.clientId,
+    label: `${contract.platform} · ${contract.billingType} · ${contract.status}`,
+    currency: contract.currency,
+  }));
 
   const recentTransactions = [...transactions].reverse().slice(0, 100);
 
@@ -155,6 +164,18 @@ export default async function FinancePage() {
       <div className="mb-6">
         <FinanceHealthPanel health={financeHealth} />
       </div>
+
+      <section className="mb-8" id="business-wise">
+        <div className="mb-3">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
+            Business cash · what Wise holds
+          </h2>
+          <p className="mt-1 text-xs text-zinc-600">
+            Pocket-level custody comes before the economic ledger and planning overlays below.
+          </p>
+        </div>
+        <ReconcileWithWisePanel scope="BUSINESS" />
+      </section>
 
       {/* ── FINANCE COCKPIT: DEBTS + SUBSCRIPTIONS (Taryn August Ingest §4) ─
           Compact summary only -- full payment history / record-charge
@@ -274,11 +295,6 @@ export default async function FinancePage() {
         )}
       </div>
 
-      {/* ── LEDGER vs OBSERVED (Reality Closure, 26 Aug 2026) ─────────────── */}
-      <div className="mb-8">
-        <ReconcileWithWisePanel scope="BUSINESS" />
-      </div>
-
       {/* ── RECONCILIATION REQUIRING ATTENTION ────────────────────────────── */}
       {reconciliationAttention.length > 0 && (
         <div className="mb-8">
@@ -370,7 +386,7 @@ export default async function FinancePage() {
       <div className="mb-8">
         <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">Add Transaction</h2>
         <div className="grid max-w-2xl grid-cols-2 sm:grid-cols-3 gap-3">
-          <AddIncomeButton clients={clientOptions} />
+          <AddIncomeButton clients={clientOptions} contracts={contractOptions} />
           <AddExpenseButton />
           <RecordOwnerPayButton />
         </div>
@@ -416,7 +432,7 @@ export default async function FinancePage() {
       </div>
 
       {/* Transactions Table */}
-      <div>
+      <div id="transactions">
         <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
           Transactions ({transactions.length} total)
         </h2>

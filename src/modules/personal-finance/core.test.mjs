@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   computePersonalBalanceByCurrency,
+  computePersonalFlowByCurrency,
   validatePersonalTransactionInput,
   validatePersonalTransactionCorrectionInput,
   isEditablePersonalTransactionType,
@@ -77,6 +78,19 @@ test("validatePersonalTransactionInput accepts opening_balance, income, and expe
   }
 });
 
+test("validatePersonalTransactionInput rejects impossible calendar dates", () => {
+  assert.match(
+    validatePersonalTransactionInput({
+      type: "expense",
+      amount: 10,
+      category: "Food",
+      currency: "BRL",
+      date: "2026-09-31",
+    }) ?? "",
+    /valid transaction date/u,
+  );
+});
+
 test("validatePersonalTransactionInput rejects non-positive amounts and blank category/currency", () => {
   assert.match(
     validatePersonalTransactionInput({ type: "expense", amount: 0, category: "Food", currency: "BRL" }) ?? "",
@@ -129,6 +143,48 @@ test("an fx movement can introduce a currency that had no ledger rows at all", (
   assert.equal(result[0].currency, "USD");
   assert.equal(result[0].fxNet, 100);
   assert.equal(result[0].balance, 100);
+});
+
+test("Sep 1 flow excludes the August close and keeps FX outside income/expense", () => {
+  const rows = [
+    { type: "opening_balance", amount: 0.25, currency: "USD", date: "2026-08-02" },
+    { type: "owner_pay_receipt", amount: 353.75, currency: "USD", date: "2026-08-31" },
+    { type: "expense", amount: 180, currency: "BRL", date: "2026-09-01" },
+  ];
+  const fx = [
+    { currency: "USD", amount: -35.03, date: "2026-09-01" },
+    { currency: "BRL", amount: 180, date: "2026-09-01" },
+  ];
+  assert.deepEqual(computePersonalFlowByCurrency(rows, fx, "2026-09"), [
+    {
+      currency: "BRL",
+      month: "2026-09",
+      ownerPayIn: 0,
+      externalIncome: 0,
+      expenses: 180,
+      fxNet: 180,
+      netFlow: 0,
+    },
+    {
+      currency: "USD",
+      month: "2026-09",
+      ownerPayIn: 0,
+      externalIncome: 0,
+      expenses: 0,
+      fxNet: -35.03,
+      netFlow: -35.03,
+    },
+  ]);
+});
+
+test("month boundary keeps an Aug 31 owner pay out of September flow", () => {
+  const rows = [
+    { type: "owner_pay_receipt", amount: 100, currency: "USD", date: "2026-08-31" },
+    { type: "owner_pay_receipt", amount: 25, currency: "USD", date: "2026-09-01" },
+  ];
+  const september = computePersonalFlowByCurrency(rows, [], "2026-09");
+  assert.equal(september[0].ownerPayIn, 25);
+  assert.equal(september[0].netFlow, 25);
 });
 
 // Personal Finance Correction Patch -- a compact correction path for

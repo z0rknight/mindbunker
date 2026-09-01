@@ -252,6 +252,20 @@ export function validateContractInput(input: {
   return null;
 }
 
+export function validateIncomeContractAttribution(input: {
+  requestedClientId: number | null;
+  contract: { clientId: number } | null;
+}): string | null {
+  if (!input.contract) return "Selected contract was not found.";
+  if (
+    input.requestedClientId !== null &&
+    input.requestedClientId !== input.contract.clientId
+  ) {
+    return "Selected contract does not belong to the selected client.";
+  }
+  return null;
+}
+
 // Sums CLOSED work_sessions duration (seconds) for one client, attributed
 // the same way WORK_SESSION_HISTORY_SQL already attributes client hours
 // elsewhere in this app (video_logs.client_id directly, no project

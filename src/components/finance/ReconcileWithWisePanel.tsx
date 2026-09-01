@@ -135,8 +135,9 @@ export function ReconcileWithWisePanel({ scope }: { scope: "BUSINESS" | "PERSONA
         </button>
       </div>
       <p className="mt-1 text-xs text-zinc-600">
-        Each Wise pocket closes independently. Observed balances are evidence only — recording
-        one never changes revenue, expenses, FX rate, or the source movements.
+        Each pocket closes independently. The custody ledger uses cash-movement evidence; it is
+        intentionally separate from the economic transaction and FX ledgers. Recording a Wise
+        observation never changes revenue, expenses, FX rate, or source movements.
       </p>
 
       {transferOpen && (
@@ -237,11 +238,11 @@ export function ReconcileWithWisePanel({ scope }: { scope: "BUSINESS" | "PERSONA
             </div>
             <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
               <div>
-                <p className="text-zinc-600">Derived</p>
+                <p className="text-zinc-600">Custody ledger</p>
                 <p className="font-bold text-zinc-200">{formatCurrency(row.ledgerAmount, row.currency)}</p>
               </div>
               <div>
-                <p className="text-zinc-600">Observed</p>
+                <p className="text-zinc-600">Wise observed</p>
                 <p className="font-bold text-zinc-200">
                   {row.observed ? formatCurrency(row.observed.amount, row.currency) : "—"}
                 </p>
@@ -256,6 +257,13 @@ export function ReconcileWithWisePanel({ scope }: { scope: "BUSINESS" | "PERSONA
             {row.observed && (
               <p className="mt-1.5 text-[10px] text-zinc-700">
                 Observed {row.observed.observedAt} · {row.observed.source}
+              </p>
+            )}
+
+            {row.difference !== null && Math.abs(row.difference) >= 0.005 && (
+              <p className="mt-2 rounded-lg border border-amber-900/50 bg-amber-950/20 px-2.5 py-2 text-[11px] text-amber-300">
+                Wise differs by {formatDiff(row.currency, row.difference)} at this observation.
+                Review missing custody evidence; the system will not create a balancing entry.
               </p>
             )}
 

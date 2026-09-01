@@ -9,6 +9,8 @@ export type FinanceHealth = {
   ambiguousEvidence: number;
   duplicateExternalIdentities: number;
   malformedFx: number;
+  businessPocketIssues: number;
+  personalPocketIssues: number;
   actionableItems: number;
 };
 
@@ -19,8 +21,12 @@ export function computeFinanceHealth(input: {
   ambiguousEvidence: number;
   duplicateExternalIdentities: number;
   malformedFx: number;
+  businessPocketIssues?: number;
+  personalPocketIssues?: number;
 }): FinanceHealth {
   const expectedPockets = input.expectedPockets ?? 7;
+  const businessPocketIssues = input.businessPocketIssues ?? 0;
+  const personalPocketIssues = input.personalPocketIssues ?? 0;
   const reconciledPockets = input.pocketDifferences.filter(
     (difference) => difference !== null && Math.abs(difference) < 0.005,
   ).length;
@@ -49,6 +55,8 @@ export function computeFinanceHealth(input: {
       ambiguousEvidence: input.ambiguousEvidence,
       duplicateExternalIdentities: input.duplicateExternalIdentities,
       malformedFx: input.malformedFx,
+      businessPocketIssues,
+      personalPocketIssues,
       actionableItems,
     };
   }
@@ -62,6 +70,8 @@ export function computeFinanceHealth(input: {
       ambiguousEvidence: input.ambiguousEvidence,
       duplicateExternalIdentities: input.duplicateExternalIdentities,
       malformedFx: input.malformedFx,
+      businessPocketIssues,
+      personalPocketIssues,
       actionableItems,
     };
   }
@@ -74,6 +84,8 @@ export function computeFinanceHealth(input: {
     ambiguousEvidence: 0,
     duplicateExternalIdentities: 0,
     malformedFx: 0,
+    businessPocketIssues,
+    personalPocketIssues,
     actionableItems: 0,
   };
 }

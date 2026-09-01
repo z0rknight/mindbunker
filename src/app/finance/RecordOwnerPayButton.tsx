@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { recordOwnerPay } from "@/modules/finance/actions";
 import { DEFAULT_CURRENCY } from "@/modules/finance/config";
+import { todayISO } from "@/utils/date";
 
 // Monday Money Lab P0 §10: RMEDIA CASH -> OWNER PAY -> PERSONAL MONEY. A
 // deliberately plain, explicit form -- no recurring/automatic scheduling
@@ -13,6 +14,7 @@ export function RecordOwnerPayButton() {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => todayISO());
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +24,7 @@ export function RecordOwnerPayButton() {
 
   function openModal() {
     setAmount("");
+    setDate(todayISO());
     setCurrency(DEFAULT_CURRENCY);
     setNotes("");
     setError(null);
@@ -51,6 +54,7 @@ export function RecordOwnerPayButton() {
       const result = await recordOwnerPay({
         amount: parsed,
         currency,
+        date,
         notes: notes || undefined,
         idempotencyKey,
       });
@@ -99,6 +103,16 @@ export function RecordOwnerPayButton() {
               not a business expense — it reduces Business Cash directly.
             </p>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
               <div>
                 <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">
                   Amount ({currency})

@@ -8,6 +8,7 @@ import {
   recordPersonalExpense,
 } from "@/modules/personal-finance/actions";
 import { DEFAULT_CURRENCY } from "@/modules/finance/config";
+import { todayISO } from "@/utils/date";
 import {
   PERSONAL_EXPENSE_CATEGORIES,
   resolveExpenseCategory,
@@ -52,6 +53,7 @@ export function RecordPersonalTransactionButton({ kind }: { kind: Kind }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => todayISO());
   const [category, setCategory] = useState(config.defaultCategory);
   const [otherCategory, setOtherCategory] = useState("");
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
@@ -68,7 +70,7 @@ export function RecordPersonalTransactionButton({ kind }: { kind: Kind }) {
       return;
     }
     startTransition(async () => {
-      const data = { amount: parsed, currency, notes: notes || undefined };
+      const data = { amount: parsed, currency, date, notes: notes || undefined };
       const expenseCategory = kind === "expense"
         ? resolveExpenseCategory(category, otherCategory, PERSONAL_EXPENSE_CATEGORIES)
         : category;
@@ -87,6 +89,7 @@ export function RecordPersonalTransactionButton({ kind }: { kind: Kind }) {
         return;
       }
       setAmount("");
+      setDate(todayISO());
       setCategory(config.defaultCategory);
       setOtherCategory("");
       setNotes("");
@@ -99,7 +102,11 @@ export function RecordPersonalTransactionButton({ kind }: { kind: Kind }) {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setDate(todayISO());
+          setError(null);
+          setOpen(true);
+        }}
         className={`flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm text-white active:scale-95 transition-all w-full cursor-pointer ${config.color}`}
       >
         <span className="text-2xl">{config.icon}</span>
@@ -124,6 +131,16 @@ export function RecordPersonalTransactionButton({ kind }: { kind: Kind }) {
               </button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Amount</label>

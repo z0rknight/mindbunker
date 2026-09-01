@@ -31,6 +31,7 @@ import {
   computeCashReconciliation,
   validateBillingEvidenceInput,
   validateContractInput,
+  validateIncomeContractAttribution,
   validateFreelanceIncomeInput,
   validatePlatformFeeInput,
   validateBillingAllocationInput,
@@ -89,6 +90,18 @@ export async function getFinanceHealth(): Promise<FinanceHealth> {
 
   return computeFinanceHealth({
     pocketDifferences: [...businessPockets, ...personalPockets].map((row) => row.difference),
+    businessPocketIssues: Math.max(
+      0,
+      3 - businessPockets.filter(
+        (row) => row.difference !== null && Math.abs(row.difference) < 0.005,
+      ).length,
+    ),
+    personalPocketIssues: Math.max(
+      0,
+      4 - personalPockets.filter(
+        (row) => row.difference !== null && Math.abs(row.difference) < 0.005,
+      ).length,
+    ),
     unresolvedAttribution,
     ambiguousEvidence: movementRows.filter((row) => row.state === "AMBIGUOUS").length,
     duplicateExternalIdentities,
@@ -134,25 +147,54 @@ export async function addTransaction(data: {
     };
   }
 
+  const date = data.date ?? todayISO();
+  const currency = data.currency?.trim().toUpperCase() || DEFAULT_CURRENCY;
+  const category = data.category.trim();
+  const validationError = validateTransactionCorrectionInput({
+    amount: data.amount,
+    category,
+    date,
+    notes: data.notes,
+    currency,
+  });
+  if (validationError) return { success: false, error: validationError };
+
+  const db = await getAuthenticatedDb();
+  let resolvedClientId = data.clientId ?? null;
+  if (data.contractId) {
+    const contractRows = await db
+      .select({ clientId: commercialContracts.clientId })
+      .from(commercialContracts)
+      .where(eq(commercialContracts.id, data.contractId))
+      .limit(1);
+    const contract = contractRows[0] ?? null;
+    const attributionError = validateIncomeContractAttribution({
+      requestedClientId: resolvedClientId,
+      contract,
+    });
+    if (attributionError) return { success: false, error: attributionError };
+    if (!contract) return { success: false, error: "Selected contract was not found." };
+    resolvedClientId = contract.clientId;
+  }
+
   const freelanceError = validateFreelanceIncomeInput({
     category: data.category,
     type: data.type,
-    clientId: data.clientId ?? null,
+    clientId: resolvedClientId,
   });
   if (freelanceError) {
     return { success: false, error: freelanceError };
   }
 
-  const db = await getAuthenticatedDb();
   await db.insert(transactions).values({
     type: data.type,
     amount: data.amount,
-    category: data.category,
-    date: data.date ?? todayISO(),
+    category,
+    date,
     notes: data.notes ?? null,
-    currency: data.currency?.trim() || DEFAULT_CURRENCY,
+    currency,
     billingEvidenceId: data.billingEvidenceId ?? null,
-    clientId: data.clientId ?? null,
+    clientId: resolvedClientId,
     contractId: data.contractId ?? null,
     debtId: data.debtId ?? null,
     subscriptionId: data.subscriptionId ?? null,

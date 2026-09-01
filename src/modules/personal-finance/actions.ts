@@ -9,6 +9,7 @@ import { DEFAULT_CURRENCY } from "../finance/config";
 import { computeFxCashMovements } from "../fx/core";
 import {
   computePersonalBalanceByCurrency,
+  computePersonalFlowByCurrency,
   validatePersonalTransactionInput,
   validatePersonalTransactionCorrectionInput,
   isDeletablePersonalTransactionType,
@@ -46,11 +47,13 @@ export async function recordPersonalOpeningBalance(data: {
   notes?: string;
 }): Promise<PersonalActionResult> {
   const currency = data.currency?.trim() || DEFAULT_CURRENCY;
+  const date = data.date ?? todayISO();
   const error = validatePersonalTransactionInput({
     type: "opening_balance",
     amount: data.amount,
     category: "Opening Balance",
     currency,
+    date,
   });
   if (error) return { success: false, error };
   await insertPersonalTransaction({
@@ -58,7 +61,7 @@ export async function recordPersonalOpeningBalance(data: {
     amount: data.amount,
     category: "Opening Balance",
     currency,
-    date: data.date,
+    date,
     notes: data.notes,
   });
   revalidatePath("/finance/personal");
@@ -75,11 +78,13 @@ export async function recordPersonalIncome(data: {
   notes?: string;
 }): Promise<PersonalActionResult> {
   const currency = data.currency?.trim() || DEFAULT_CURRENCY;
+  const date = data.date ?? todayISO();
   const error = validatePersonalTransactionInput({
     type: "income",
     amount: data.amount,
     category: data.category,
     currency,
+    date,
   });
   if (error) return { success: false, error };
   await insertPersonalTransaction({
@@ -87,7 +92,7 @@ export async function recordPersonalIncome(data: {
     amount: data.amount,
     category: data.category,
     currency,
-    date: data.date,
+    date,
     notes: data.notes,
   });
   revalidatePath("/finance/personal");
@@ -102,11 +107,13 @@ export async function recordPersonalExpense(data: {
   notes?: string;
 }): Promise<PersonalActionResult> {
   const currency = data.currency?.trim() || DEFAULT_CURRENCY;
+  const date = data.date ?? todayISO();
   const error = validatePersonalTransactionInput({
     type: "expense",
     amount: data.amount,
     category: data.category,
     currency,
+    date,
   });
   if (error) return { success: false, error };
   await insertPersonalTransaction({
@@ -114,7 +121,7 @@ export async function recordPersonalExpense(data: {
     amount: data.amount,
     category: data.category,
     currency,
-    date: data.date,
+    date,
     notes: data.notes,
   });
   revalidatePath("/finance/personal");
@@ -278,6 +285,23 @@ export async function getPersonalBalanceSummary() {
     computeFxCashMovements({ brlAmount: fx.brlAmount, usdAmount: fx.usdAmount, fromCurrency: fx.fromCurrency }),
   );
   return computePersonalBalanceByCurrency(rows, fxMovements);
+}
+
+export async function getPersonalFlowSummary(month: string) {
+  if (!/^\d{4}-\d{2}$/.test(month)) return [];
+  const db = await getAuthenticatedDb();
+  const [rows, personalFx] = await Promise.all([
+    db.select().from(personalTransactions),
+    db.select().from(fxConversions).where(eq(fxConversions.scope, "PERSONAL")),
+  ]);
+  const fxMovements = personalFx.flatMap((fx) =>
+    computeFxCashMovements({
+      brlAmount: fx.brlAmount,
+      usdAmount: fx.usdAmount,
+      fromCurrency: fx.fromCurrency,
+    }).map((movement) => ({ ...movement, date: fx.date })),
+  );
+  return computePersonalFlowByCurrency(rows, fxMovements, month);
 }
 
 

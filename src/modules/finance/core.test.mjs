@@ -10,6 +10,7 @@ import {
   formatMinutesAsHours,
   validateBillingEvidenceInput,
   validateContractInput,
+  validateIncomeContractAttribution,
   computeRateEquivalent,
   validateOwnerPayCorrectionInput,
   validateTransactionCorrectionInput,
@@ -218,6 +219,21 @@ test("validateContractInput allows FIXED contracts without an hourly rate", () =
       currency: "USD",
     }),
     null,
+  );
+});
+
+test("income attribution rejects a contract from another client and accepts the canonical owner", () => {
+  assert.equal(
+    validateIncomeContractAttribution({ requestedClientId: 2, contract: { clientId: 2 } }),
+    null,
+  );
+  assert.match(
+    validateIncomeContractAttribution({ requestedClientId: 3, contract: { clientId: 2 } }) ?? "",
+    /does not belong/i,
+  );
+  assert.match(
+    validateIncomeContractAttribution({ requestedClientId: 2, contract: null }) ?? "",
+    /not found/i,
   );
 });
 

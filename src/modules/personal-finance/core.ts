@@ -29,6 +29,77 @@ export type PersonalBalanceByCurrency = {
 // computeFxCashMovements' business-side counterpart in finance/core.ts.
 export type PersonalFxMovement = { currency: string; amount: number };
 
+export type DatedPersonalTransactionLike = PersonalTransactionLike & {
+  date: string;
+};
+
+export type DatedPersonalFxMovement = PersonalFxMovement & {
+  date: string;
+};
+
+export type PersonalFlowByCurrency = {
+  currency: string;
+  month: string;
+  ownerPayIn: number;
+  externalIncome: number;
+  expenses: number;
+  fxNet: number;
+  netFlow: number;
+};
+
+// September Finance Operator Patch: flow is period activity, not a balance.
+// Opening balances never appear here, and FX only changes the currency
+// positions involved -- it never becomes income or expense. Keeping this
+// separate from computePersonalBalanceByCurrency prevents an Aug 31 closing
+// fact from being presented as Sep 1 income.
+export function computePersonalFlowByCurrency(
+  rows: DatedPersonalTransactionLike[],
+  fxMovements: DatedPersonalFxMovement[],
+  month: string,
+): PersonalFlowByCurrency[] {
+  const byCurrency = new Map<
+    string,
+    { ownerPayIn: number; externalIncome: number; expenses: number; fxNet: number }
+  >();
+
+  const getBucket = (currencyRaw: string) => {
+    const currency = currencyRaw.trim().toUpperCase();
+    const existing = byCurrency.get(currency);
+    if (existing) return { currency, bucket: existing };
+    const bucket = { ownerPayIn: 0, externalIncome: 0, expenses: 0, fxNet: 0 };
+    byCurrency.set(currency, bucket);
+    return { currency, bucket };
+  };
+
+  for (const row of rows) {
+    if (!row.currency.trim() || row.date.slice(0, 7) !== month) continue;
+    const { bucket } = getBucket(row.currency);
+    if (row.type === "owner_pay_receipt") bucket.ownerPayIn += row.amount;
+    else if (row.type === "income") bucket.externalIncome += row.amount;
+    else if (row.type === "expense") bucket.expenses += row.amount;
+    // opening_balance is deliberately ignored: it is stock, not flow.
+  }
+
+  for (const movement of fxMovements) {
+    if (!movement.currency.trim() || movement.date.slice(0, 7) !== month) continue;
+    getBucket(movement.currency).bucket.fxNet += movement.amount;
+  }
+
+  return Array.from(byCurrency.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([currency, bucket]) => ({
+      currency,
+      month,
+      ownerPayIn: round2(bucket.ownerPayIn),
+      externalIncome: round2(bucket.externalIncome),
+      expenses: round2(bucket.expenses),
+      fxNet: round2(bucket.fxNet),
+      netFlow: round2(
+        bucket.ownerPayIn + bucket.externalIncome - bucket.expenses + bucket.fxNet,
+      ),
+    }));
+}
+
 // Personal cash balance is entirely separate from Business Cash (see
 // getRmediaCashSummary in modules/finance/actions.ts) -- there is no
 // shared total anywhere. Owner Pay receipts increase this balance but are
@@ -99,6 +170,7 @@ export function validatePersonalTransactionInput(input: {
   amount: number;
   category: string;
   currency: string;
+  date?: string;
 }): string | null {
   if (!["opening_balance", "owner_pay_receipt", "income", "expense"].includes(input.type)) {
     return "Invalid personal transaction type.";
@@ -111,6 +183,14 @@ export function validatePersonalTransactionInput(input: {
   }
   if (!input.category || !input.category.trim()) return "Category is required.";
   if (!input.currency || !input.currency.trim()) return "Currency is required.";
+  if (input.date) {
+    if (!/^\d{4}-\d{2}-\d{2}$/u.test(input.date)) return "Enter a valid transaction date.";
+    const [year, month, day] = input.date.split("-").map(Number);
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    if (parsed.toISOString().slice(0, 10) !== input.date) {
+      return "Enter a valid transaction date.";
+    }
+  }
   return null;
 }
 
