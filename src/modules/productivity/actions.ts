@@ -9,6 +9,7 @@ import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { startOfMonthISO, todayISO } from "@/utils/date";
 import { mondayOfWeek } from "../work-sessions/core";
+import { PRODUCTION_COUNT_KINDS } from "../video-classification/core";
 import {
   completedVideoLogs,
   getVideoMetadataChanges,
@@ -480,16 +481,30 @@ export async function getVideoStats() {
   const today = todayISO();
   const monthStart = startOfMonthISO();
 
+  // Promotion Prep Patch P0: today/month counts must reflect real client
+  // production output, not a Sample Video or Internal video that happens
+  // to be status DONE -- see video-classification/core.ts's
+  // countsTowardProduction / PRODUCTION_COUNT_KINDS.
   const [todayCount, monthCount, allLogs] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)` })
       .from(videoLogs)
-      .where(and(eq(videoLogs.date, today), eq(videoLogs.status, "DONE"))),
+      .where(
+        and(
+          eq(videoLogs.date, today),
+          eq(videoLogs.status, "DONE"),
+          inArray(videoLogs.videoKind, PRODUCTION_COUNT_KINDS),
+        ),
+      ),
     db
       .select({ count: sql<number>`count(*)` })
       .from(videoLogs)
       .where(
-        and(gte(videoLogs.date, monthStart), eq(videoLogs.status, "DONE")),
+        and(
+          gte(videoLogs.date, monthStart),
+          eq(videoLogs.status, "DONE"),
+          inArray(videoLogs.videoKind, PRODUCTION_COUNT_KINDS),
+        ),
       ),
     db.select().from(videoLogs).orderBy(videoLogs.createdAt),
   ]);

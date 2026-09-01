@@ -45,7 +45,6 @@ import { CurrentWorkPanel } from "./CurrentWorkPanel";
 import { CurrentProjectsBoard } from "./CurrentProjectsBoard";
 import { ObjectivesPanel } from "./ObjectivesPanel";
 import { BusinessPressurePanel } from "./BusinessPressurePanel";
-import { FinanceContextPanel } from "./FinanceContextPanel";
 import { ActionRadarPanel } from "./ActionRadarPanel";
 import { IngestEventPanel } from "./IngestEventPanel";
 import { EconomicsPanel } from "./EconomicsPanel";
@@ -201,9 +200,12 @@ export default async function LabPage() {
         <CapacityPanel capacity={capacity} />
       </div>
 
-      <div id="business-pressure" className="grid gap-6 md:grid-cols-2 mb-6">
+      {/* Promotion Prep Patch P1: standalone FinanceContextPanel (its own
+          client/video selector) killed as UX-redundant -- its read-only
+          facts are now folded into the Economics panel below, keyed off
+          that panel's own existing selector. */}
+      <div id="business-pressure" className="mb-6">
         <BusinessPressurePanel facts={pressure} />
-        <FinanceContextPanel videos={ownerOptions.videos} />
       </div>
 
       <div id="economics" className="grid gap-6 md:grid-cols-2 mb-6">

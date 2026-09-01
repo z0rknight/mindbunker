@@ -31,17 +31,3 @@ export async function recordRevisionDetail(
 
   return { success: true, message: "Revision recorded with detail." };
 }
-
-// Rough counts only, per the brief ("avoid fancy percentages with tiny
-// samples") -- most common OUR_ERROR categories, raw counts, no rate math.
-export async function getTopOurErrorCategories(limit = 5) {
-  const db = await getAuthenticatedDb();
-  const rows = await db
-    .select({ category: revisions.category, count: sql<number>`count(*)`.as("count") })
-    .from(revisions)
-    .where(sql`${revisions.causedBy} = 'OUR_ERROR' and ${revisions.category} is not null`)
-    .groupBy(revisions.category)
-    .orderBy(sql`count(*) desc`)
-    .limit(limit);
-  return rows;
-}

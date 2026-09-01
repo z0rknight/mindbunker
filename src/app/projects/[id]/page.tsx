@@ -3,6 +3,7 @@ import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
 import { getProjectWorkspace } from "@/modules/projects/actions";
 import { resolveCurrentWorkVideo } from "@/modules/projects/core";
 import { validateDeliveryUrl } from "@/modules/productivity/core";
+import { countsTowardProduction } from "@/modules/video-classification/core";
 import { CopyLinkButton } from "@/components/ui/CopyLinkButton";
 import { formatDate } from "@/utils/date";
 import Link from "next/link";
@@ -51,7 +52,11 @@ export default async function ProjectWorkspacePage({
     commercialTerms: commercialTermsByVideoId.get(video.id) ?? null,
   }));
 
-  const doneVideos = project.videos.filter((video) => video.status === "DONE").length;
+  // Promotion Prep Patch P0: a Sample Video or Internal video must not
+  // count as completed client production output on the project header.
+  const doneVideos = project.videos.filter(
+    (video) => video.status === "DONE" && countsTowardProduction(video.videoKind),
+  ).length;
   const inFlightVideos = project.videos.filter((video) =>
     ["IN_PROGRESS", "READY_FOR_REVIEW", "CHANGES_REQUESTED"].includes(video.status),
   ).length;

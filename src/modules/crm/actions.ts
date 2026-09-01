@@ -18,6 +18,7 @@ import { startOfMonthISO } from "@/utils/date";
 import { getLastActiveByClient } from "@/modules/work-sessions/data";
 import { BOOK_REQUEST_EVENT_TYPE } from "@/modules/booking/core";
 import { QUOTE_REQUEST_EVENT_TYPE } from "@/modules/quote-intake/core";
+import { countsTowardProduction } from "@/modules/video-classification/core";
 import { revalidatePath } from "next/cache";
 import {
   normalizeInstagramUsername,
@@ -584,6 +585,7 @@ export async function getClientIntelligence(
         date: videoLogs.date,
         status: videoLogs.status,
         revisionsCount: videoLogs.revisionsCount,
+        videoKind: videoLogs.videoKind,
       })
       .from(videoLogs)
       .where(eq(videoLogs.clientId, clientId)),
@@ -630,13 +632,21 @@ export async function getClientIntelligence(
   const activeProjectsCount = projectRows.filter(
     (row) => row.status === "active" || row.status === "review",
   ).length;
+  // Promotion Prep Patch P0: Client Intelligence's production counts
+  // (in-progress and completed) must reflect real client production
+  // output only -- a Sample Video or Internal video logged against this
+  // client is neither "in progress client work" nor "completed client
+  // work" for these purposes. See countsTowardProduction.
   const videosInProgressCount = videoRows.filter(
     (row) =>
-      row.status === "IN_PROGRESS" ||
-      row.status === "READY_FOR_REVIEW" ||
-      row.status === "CHANGES_REQUESTED",
+      countsTowardProduction(row.videoKind) &&
+      (row.status === "IN_PROGRESS" ||
+        row.status === "READY_FOR_REVIEW" ||
+        row.status === "CHANGES_REQUESTED"),
   ).length;
-  const completedVideoRows = videoRows.filter((row) => row.status === "DONE");
+  const completedVideoRows = videoRows.filter(
+    (row) => row.status === "DONE" && countsTowardProduction(row.videoKind),
+  );
   const completedVideosCount = completedVideoRows.length;
   const revisionCount = completedVideoRows.reduce(
     (sum, row) => sum + row.revisionsCount,

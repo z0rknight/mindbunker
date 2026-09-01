@@ -15,12 +15,3 @@ export async function setVideoKind(videoId: number, kind: unknown): Promise<Resu
   revalidatePath("/lab");
   return { success: true, message: "Classification saved." };
 }
-
-// Wave 4S support: mark a Sample Video as converted once its lead becomes
-// a paying client -- pure record-keeping, no automatic scoring.
-export async function markSampleConverted(videoId: number, conversionDateIso: string): Promise<Result> {
-  const db = await getAuthenticatedDb();
-  await db.update(videoLogs).set({ notes: `Sample converted ${conversionDateIso}`, updatedAt: new Date() }).where(eq(videoLogs.id, videoId));
-  revalidatePath("/lab");
-  return { success: true, message: "Marked converted." };
-}

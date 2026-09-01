@@ -55,14 +55,17 @@ async function aggregate(videoRows: { id: number; videoKind: string; title: stri
   };
 }
 
-export async function getProjectEconomics(projectId: number): Promise<AggregateEconomics & { contractType: string | null; fixedPriceCents: number | null }> {
+export async function getProjectEconomics(projectId: number): Promise<AggregateEconomics & { contractType: string | null; fixedPriceCents: number | null; clientId: number | null }> {
   const db = await getAuthenticatedDb();
   const [proj, videoRows] = await Promise.all([
-    db.select({ contractType: projects.contractType, fixedPriceCents: projects.fixedPriceCents }).from(projects).where(eq(projects.id, projectId)).limit(1),
+    // Promotion Prep Patch P1: clientId exposed so the Economics panel
+    // (PROJECT mode) can pull Finance context for the same project's
+    // client without a second selector.
+    db.select({ contractType: projects.contractType, fixedPriceCents: projects.fixedPriceCents, clientId: projects.clientId }).from(projects).where(eq(projects.id, projectId)).limit(1),
     db.select({ id: videoLogs.id, videoKind: videoLogs.videoKind, title: videoLogs.title }).from(videoLogs).where(eq(videoLogs.projectId, projectId)),
   ]);
   const agg = await aggregate(videoRows);
-  return { ...agg, contractType: proj[0]?.contractType ?? null, fixedPriceCents: proj[0]?.fixedPriceCents ?? null };
+  return { ...agg, contractType: proj[0]?.contractType ?? null, fixedPriceCents: proj[0]?.fixedPriceCents ?? null, clientId: proj[0]?.clientId ?? null };
 }
 
 export async function getClientEconomics(clientId: number): Promise<AggregateEconomics> {

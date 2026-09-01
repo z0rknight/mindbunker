@@ -13,13 +13,14 @@ import { listAssetChecklist } from "@/modules/asset-readiness/actions";
 import { isReadyToProduce } from "@/modules/asset-readiness/core";
 import { blockers as blockersTable, projects } from "@/db/schema";
 import { getActivityOverlayForRange } from "@/modules/activity-overlay/data";
+import { listIngestionEventsForVideo } from "@/modules/asset-readiness/ingestion-actions";
 import { listChecklistForVideo } from "@/modules/production-checklist/actions";
-import { resolveVideoTags } from "@/modules/tags/core";
+import { parseTagList, resolveVideoTags } from "@/modules/tags/core";
 import { resolveCoverUrl } from "@/modules/media/core";
 
 export async function getVideoWorkbenchData(videoId: number) {
   const db = await getAuthenticatedDb();
-  const [video, lifecycle, qa, friction, deliveries, economics, commitmentsForVideo, revisionRows, assetChecklist, videoBlockers, checklist] = await Promise.all([
+  const [video, lifecycle, qa, friction, deliveries, economics, commitmentsForVideo, revisionRows, assetChecklist, videoBlockers, checklist, ingestionEvents] = await Promise.all([
     db.select().from(videoLogs).where(eq(videoLogs.id, videoId)).limit(1),
     getLifecycleState(videoId),
     listQaEventsForVideo(videoId),
@@ -34,6 +35,12 @@ export async function getVideoWorkbenchData(videoId: number) {
     // at the SQL level now.
     db.select().from(blockersTable).where(and(eq(blockersTable.ownerType, "VIDEO"), eq(blockersTable.ownerId, videoId))),
     listChecklistForVideo(videoId),
+    // Promotion Prep Patch P1: listIngestionEventsForVideo had zero
+    // callers despite recordIngestionEvent already writing rows keyed
+    // by this exact videoId -- the same per-video evidence pattern
+    // every other domain here already uses (qa/friction/deliveries/
+    // revisions/blockers above).
+    listIngestionEventsForVideo(videoId),
   ]);
 
   // Wave 3B: activity overlay for the video's most recent CLOSED work
@@ -66,7 +73,14 @@ export async function getVideoWorkbenchData(videoId: number) {
     activityOverlay,
     checklist,
     recentSessions: allSessions.slice(0, 5),
+    ingestionEvents,
     tags: video[0] ? resolveVideoTags(project?.tags ?? null, video[0].tagsOverride) : [],
     coverUrl: video[0] ? resolveCoverUrl(video[0].coverUrl, project?.coverUrl, null) : null,
+    // Promotion Prep Patch P1: the canonical, project-owned tag list
+    // (distinct from `tags` above, which is the resolved video-level
+    // view -- project tags minus local removals plus local additions).
+    // Exposed so the Workbench can offer a minimal editor for the
+    // canonical project tags themselves, not just video-local overrides.
+    projectTags: parseTagList(project?.tags ?? null),
   };
 }

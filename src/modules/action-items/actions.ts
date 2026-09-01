@@ -2,7 +2,7 @@
 import "server-only";
 import { getAuthenticatedDb } from "@/db";
 import { actionItems } from "@/db/schema";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { sortActionItemsByPriority, type ActionPriority } from "./core";
 
@@ -77,13 +77,4 @@ export async function listOpenActionItems(limit = 100) {
     .orderBy(desc(actionItems.createdAt))
     .limit(limit);
   return sortActionItemsByPriority(rows);
-}
-
-export async function listInboxItems() {
-  const db = await getAuthenticatedDb();
-  return db
-    .select()
-    .from(actionItems)
-    .where(and(eq(actionItems.status, "OPEN"), eq(actionItems.source, "INBOX"), isNull(actionItems.ownerType)))
-    .orderBy(desc(actionItems.createdAt));
 }

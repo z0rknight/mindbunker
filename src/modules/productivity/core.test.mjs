@@ -271,17 +271,36 @@ test("Finished Video can only complete an existing directly finishable identity"
 
 test("only DONE counts as completed output across the five lifecycle states", () => {
   const date = "2026-08-21";
+  // Promotion Prep Patch P0: completedVideoLogs now also requires
+  // countsTowardProduction(videoKind) -- every fixture row here is
+  // CLIENT_WORK so this test still isolates the status dimension only;
+  // the kind dimension is covered separately below.
   const videos = [
-    { id: 1, date, status: "PLANNED" },
-    { id: 2, date, status: "IN_PROGRESS" },
-    { id: 3, date, status: "READY_FOR_REVIEW" },
-    { id: 4, date, status: "CHANGES_REQUESTED" },
-    { id: 5, date, status: "DONE" },
+    { id: 1, date, status: "PLANNED", videoKind: "CLIENT_WORK" },
+    { id: 2, date, status: "IN_PROGRESS", videoKind: "CLIENT_WORK" },
+    { id: 3, date, status: "READY_FOR_REVIEW", videoKind: "CLIENT_WORK" },
+    { id: 4, date, status: "CHANGES_REQUESTED", videoKind: "CLIENT_WORK" },
+    { id: 5, date, status: "DONE", videoKind: "CLIENT_WORK" },
   ];
 
   assert.deepEqual(
     completedVideoLogs(videos).map((video) => video.id),
     [5],
+  );
+});
+
+test("a DONE Sample Video or Internal video is excluded from completed output, even though a DONE CLIENT_WORK/OTHER video is included", () => {
+  const date = "2026-08-21";
+  const videos = [
+    { id: 1, date, status: "DONE", videoKind: "CLIENT_WORK" },
+    { id: 2, date, status: "DONE", videoKind: "OTHER" },
+    { id: 3, date, status: "DONE", videoKind: "SAMPLE_VIDEO" },
+    { id: 4, date, status: "DONE", videoKind: "INTERNAL" },
+  ];
+
+  assert.deepEqual(
+    completedVideoLogs(videos).map((video) => video.id),
+    [1, 2],
   );
 });
 

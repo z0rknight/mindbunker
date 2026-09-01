@@ -6,8 +6,16 @@ test("mapToCrmState: opportunityStage lost always maps to LOST regardless of cli
   assert.equal(mapToCrmState({ status: "active", opportunityStage: "lost", archivalState: "ACTIVE_SURFACE", lastInteractionAt: null }, true), "LOST");
 });
 
-test("mapToCrmState: active + GELADEIRA is DORMANT", () => {
-  assert.equal(mapToCrmState({ status: "active", opportunityStage: "active", archivalState: "GELADEIRA", lastInteractionAt: null }, true), "DORMANT");
+test("mapToCrmState: active + GELADEIRA is ARCHIVED, not an inferred DORMANT", () => {
+  // Promotion Prep Patch P1: archivalState is reason-agnostic (see
+  // docs/architecture/GELADEIRA_DOMAIN_PROTOTYPE.md) -- this must not
+  // assert an inactivity story the data doesn't support.
+  assert.equal(mapToCrmState({ status: "active", opportunityStage: "active", archivalState: "GELADEIRA", lastInteractionAt: null }, true), "ARCHIVED");
+});
+
+test("mapToCrmState: an active-with-open-work GELADEIRA client is still ARCHIVED, not ACTIVE -- archival wins", () => {
+  const recent = new Date();
+  assert.equal(mapToCrmState({ status: "active", opportunityStage: "active", archivalState: "GELADEIRA", lastInteractionAt: recent }, true), "ARCHIVED");
 });
 
 test("mapToCrmState: lead + new stage is LEAD", () => {

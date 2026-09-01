@@ -1,11 +1,13 @@
 "use client";
 import { useState, useTransition } from "react";
 import { getProjectEconomics, getClientEconomics } from "@/modules/economics/aggregate";
+import { getClientFinanceContext } from "./finance-context-data";
 import { EvidenceDrawer } from "./EvidenceDrawer";
 
 type Option = { id: number; name?: string; title?: string };
 type ProjectAgg = Awaited<ReturnType<typeof getProjectEconomics>>;
 type ClientAgg = Awaited<ReturnType<typeof getClientEconomics>>;
+type FinanceContext = Awaited<ReturnType<typeof getClientFinanceContext>>;
 
 // Wave 4K/4L: Project-level and Client-level economics, both restrained --
 // raw counts + tracked seconds + revision provenance, NEVER a combined
@@ -18,6 +20,11 @@ export function EconomicsPanel({ clients, projects }: { clients: Option[]; proje
   const [id, setId] = useState("");
   const [projectAgg, setProjectAgg] = useState<ProjectAgg | null>(null);
   const [clientAgg, setClientAgg] = useState<ClientAgg | null>(null);
+  // Promotion Prep Patch P1: the standalone FinanceContextPanel was
+  // killed as redundant -- its facts (contracts, income transaction
+  // count) are folded in here, keyed off the SAME client/project
+  // selector above, never a second selector.
+  const [financeContext, setFinanceContext] = useState<FinanceContext | null>(null);
   const [pending, startTransition] = useTransition();
   const options = mode === "PROJECT" ? projects : clients;
   const agg = mode === "PROJECT" ? projectAgg : clientAgg;
@@ -34,10 +41,16 @@ export function EconomicsPanel({ clients, projects }: { clients: Option[]; proje
         value={id}
         onChange={(e) => {
           setId(e.target.value);
-          if (!e.target.value) { setProjectAgg(null); setClientAgg(null); return; }
+          if (!e.target.value) { setProjectAgg(null); setClientAgg(null); setFinanceContext(null); return; }
           startTransition(async () => {
-            if (mode === "PROJECT") setProjectAgg(await getProjectEconomics(Number(e.target.value)));
-            else setClientAgg(await getClientEconomics(Number(e.target.value)));
+            if (mode === "PROJECT") {
+              const p = await getProjectEconomics(Number(e.target.value));
+              setProjectAgg(p);
+              setFinanceContext(await getClientFinanceContext(p.clientId));
+            } else {
+              setClientAgg(await getClientEconomics(Number(e.target.value)));
+              setFinanceContext(await getClientFinanceContext(Number(e.target.value)));
+            }
           });
         }}
         className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-white"
@@ -54,6 +67,13 @@ export function EconomicsPanel({ clients, projects }: { clients: Option[]; proje
           <p>Revisions: {agg.ourErrorCount} our error, {agg.clientChangeCount} client change</p>
           {mode === "PROJECT" && projectAgg && (
             <p className="text-zinc-500">Contract: {projectAgg.contractType ?? "—"}{projectAgg.fixedPriceCents ? ` (${(projectAgg.fixedPriceCents / 100).toFixed(2)})` : ""}</p>
+          )}
+          {financeContext && (
+            financeContext.unattributed ? (
+              <p className="text-amber-400">No contracts or income transactions attributed to this client yet — genuinely unknown, not zero.</p>
+            ) : (
+              <p className="text-zinc-500">Finance: {financeContext.contracts.length} contract(s), {financeContext.incomeTransactionCount} income transaction(s) — cash ≠ sale ≠ billed ≠ tracked work, never summed here.</p>
+            )
           )}
           <EvidenceDrawer
             label="economics aggregation"

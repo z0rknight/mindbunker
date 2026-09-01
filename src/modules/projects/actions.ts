@@ -12,6 +12,7 @@ import {
   sortProjectWorkspaceVideos,
   validateProjectInput,
 } from "./core";
+import { countsTowardProduction } from "@/modules/video-classification/core";
 
 type ProjectActionResult =
   | { success: true; message?: string; projectId?: number }
@@ -56,6 +57,7 @@ export async function getProjectWorkspace(projectId: number) {
       title: videoLogs.title,
       date: videoLogs.date,
       status: videoLogs.status,
+      videoKind: videoLogs.videoKind,
       revisionsCount: videoLogs.revisionsCount,
       deliveryUrl: videoLogs.deliveryUrl,
       reviewUrl: videoLogs.reviewUrl,
@@ -145,7 +147,14 @@ export async function getProjectsOverview() {
       coverUrl: projects.coverUrl,
       updatedAt: projects.updatedAt,
       totalVideos: sql<number>`count(${videoLogs.id})`,
-      doneVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'DONE' then 1 else 0 end), 0)`,
+      // Promotion Prep Patch P0: "done" here must mean completed real
+      // client production, not merely status DONE -- a Sample Video or
+      // Internal video must not inflate the Projects overview's done
+      // count. totalVideos/inFlightVideos/plannedVideos intentionally
+      // remain kind-agnostic: an operator still wants to see a Sample or
+      // Internal video in their overall/in-progress/planned totals, it
+      // just must never register as completed client output.
+      doneVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'DONE' and ${videoLogs.videoKind} in ('CLIENT_WORK', 'OTHER') then 1 else 0 end), 0)`,
       inFlightVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} in ('IN_PROGRESS', 'READY_FOR_REVIEW', 'CHANGES_REQUESTED') then 1 else 0 end), 0)`,
       plannedVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'PLANNED' then 1 else 0 end), 0)`,
     })

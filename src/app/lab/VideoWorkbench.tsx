@@ -24,6 +24,8 @@ import { setVideoKind } from "@/modules/video-classification/actions";
 import { VIDEO_KINDS } from "@/modules/video-classification/core";
 import { setPublishedUrl } from "@/modules/delivery-outcome/actions";
 import { addVideoLocalTag, removeVideoTag } from "@/modules/tags/actions";
+import { setProjectTags } from "@/modules/tags/actions";
+import { recordRevisionDetail } from "@/modules/revision-detail/actions";
 
 type VideoOption = { id: number; title: string; clientName: string | null; projectName: string | null };
 type WorkbenchData = Awaited<ReturnType<typeof getVideoWorkbenchData>>;
@@ -57,6 +59,16 @@ export function VideoWorkbench({
   const [blockerNote, setBlockerNote] = useState("");
   const [liveUrlInput, setLiveUrlInput] = useState("");
   const [newTag, setNewTag] = useState("");
+  const [newProjectTag, setNewProjectTag] = useState("");
+  // Promotion Prep Patch P1: recordRevisionDetail (Wave 4I) had zero
+  // callers -- this is the smallest inline control that reaches it, so
+  // an operator can actually attach category/minutesRework/note to a
+  // revision from the UI, not just the bare +1 the two existing quick
+  // actions produce.
+  const [revisionCause, setRevisionCause] = useState<"OUR_ERROR" | "CLIENT_CHANGE" | "SCOPE_CHANGE" | "UNKNOWN">("OUR_ERROR");
+  const [revisionCategory, setRevisionCategory] = useState("");
+  const [revisionMinutes, setRevisionMinutes] = useState("");
+  const [revisionNote, setRevisionNote] = useState("");
 
   function load(id: string) {
     onVideoIdChange(id);
@@ -167,6 +179,49 @@ export function VideoWorkbench({
                         className="w-16 rounded-md border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-[10px] text-white"
                       />
                     </div>
+                    {/* Promotion Prep Patch P1: setProjectTags had zero
+                        callers -- canonical project tags, distinct from
+                        the video-local override row above. Editing here
+                        writes projects.tags directly (replace-all), so
+                        every video's inherited-tag resolution updates
+                        immediately without touching per-video overrides. */}
+                    {data.video?.projectId != null && (
+                      <div className="flex flex-wrap items-center gap-1 pt-1">
+                        <span className="text-[10px] text-zinc-600">project tags:</span>
+                        {data.projectTags.map((t) => (
+                          <span key={t} className="flex items-center gap-1 rounded bg-violet-950 px-1.5 py-0.5 text-[10px] text-violet-300">
+                            {t}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                startTransition(async () => {
+                                  await setProjectTags(data.video!.projectId!, data.projectTags.filter((x) => x !== t));
+                                  refresh();
+                                })
+                              }
+                              className="text-violet-600 hover:text-red-400"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          value={newProjectTag}
+                          onChange={(e) => setNewProjectTag(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && newProjectTag.trim()) {
+                              startTransition(async () => {
+                                await setProjectTags(data.video!.projectId!, [...data.projectTags, newProjectTag.trim()]);
+                                setNewProjectTag("");
+                                refresh();
+                              });
+                            }
+                          }}
+                          placeholder="+ project tag"
+                          className="w-24 rounded-md border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-[10px] text-white"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -470,6 +525,27 @@ export function VideoWorkbench({
                   </ul>
                 )}
               </div>
+
+              {/* Promotion Prep Patch P1: listIngestionEventsForVideo had
+                  zero callers -- this per-video evidence list matches the
+                  same read-only pattern every other domain above already
+                  uses. Operator vs machine minutes shown side by side,
+                  never summed (same convention as IngestEventPanel). */}
+              <div className="rounded-lg border border-zinc-800 p-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Ingestion</p>
+                {data.ingestionEvents.length === 0 ? (
+                  <p className="text-xs text-zinc-500">None logged.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {data.ingestionEvents.map((ev) => (
+                      <li key={ev.id} className="text-[11px] text-zinc-400">
+                        {ev.source ?? "?"} → {ev.destination ?? "?"} · operator {ev.operatorMinutes ?? "—"}m · machine {ev.machineMinutes ?? "—"}m
+                        {ev.blockedWork ? " · blocked work" : ""}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </details>
 
@@ -543,6 +619,67 @@ export function VideoWorkbench({
               {/* Revision provenance */}
               <div className="rounded-lg border border-zinc-800 p-3">
                 <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Revisions (OUR_ERROR / CLIENT_CHANGE)</p>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {(["OUR_ERROR", "CLIENT_CHANGE", "SCOPE_CHANGE", "UNKNOWN"] as const).map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setRevisionCause(c)}
+                      className={`rounded-lg px-2 py-1 text-[11px] font-semibold ${
+                        revisionCause === c ? "bg-violet-600 text-white" : "bg-zinc-800 text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  <input
+                    type="text"
+                    value={revisionCategory}
+                    onChange={(e) => setRevisionCategory(e.target.value)}
+                    placeholder="Category (e.g. AUDIO, COLOR)"
+                    className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-white"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    value={revisionMinutes}
+                    onChange={(e) => setRevisionMinutes(e.target.value)}
+                    placeholder="Min rework"
+                    className="w-24 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-white"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={revisionNote}
+                  onChange={(e) => setRevisionNote(e.target.value)}
+                  placeholder="Short note"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-white mb-2"
+                />
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      const r = await recordRevisionDetail(
+                        Number(videoId),
+                        revisionCause,
+                        revisionNote,
+                        revisionCategory || undefined,
+                        revisionMinutes ? Number(revisionMinutes) : undefined,
+                      );
+                      setMessage(r.success ? r.message : r.error);
+                      setRevisionCategory("");
+                      setRevisionMinutes("");
+                      setRevisionNote("");
+                      refresh();
+                    })
+                  }
+                  className="w-full rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 mb-2"
+                >
+                  Log revision with detail
+                </button>
                 {data.revisions.length === 0 ? (
                   <p className="text-xs text-zinc-500">None logged.</p>
                 ) : (

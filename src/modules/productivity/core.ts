@@ -9,6 +9,7 @@ import {
   type VideoStatus,
 } from "./config.ts";
 import { isInternalCoverRoute } from "../media/core.ts";
+import { countsTowardProduction } from "../video-classification/core.ts";
 
 export type VideoInputValues = {
   title: string;
@@ -475,10 +476,17 @@ export function planVideoTransition(input: {
   };
 }
 
-export function completedVideoLogs<T extends { status: VideoStatus }>(
+// Promotion Prep Patch P0: "completed" here means completed *production
+// output*, not merely status === DONE -- a DONE Sample Video or Internal
+// video is not real client production and must not inflate War Room /
+// Productivity dashboard "completed" counts. See
+// video-classification/core.ts#countsTowardProduction.
+export function completedVideoLogs<T extends { status: VideoStatus; videoKind: string }>(
   videos: readonly T[],
 ) {
-  return videos.filter((video) => video.status === "DONE");
+  return videos.filter(
+    (video) => video.status === "DONE" && countsTowardProduction(video.videoKind),
+  );
 }
 
 export type ProductivityGroup =
