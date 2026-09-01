@@ -4,6 +4,10 @@ import { useState, useTransition } from "react";
 import { addTransaction } from "@/modules/finance/actions";
 import { upsertHealthLog } from "@/modules/health/actions";
 import { todayISO } from "@/utils/date";
+import {
+  BUSINESS_EXPENSE_CATEGORIES,
+  resolveExpenseCategory,
+} from "@/modules/finance/categories";
 
 export {
   AddRevisionButton,
@@ -151,19 +155,38 @@ export function AddExpenseButton() {
   const [isPending, startTransition] = useTransition();
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("Software");
+  const [otherCategory, setOtherCategory] = useState("");
+  const [currency, setCurrency] = useState<"USD" | "BRL">("USD");
   const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!amount || isNaN(Number(amount))) return;
+    setError(null);
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) return;
+    const resolvedCategory = resolveExpenseCategory(
+      category,
+      otherCategory,
+      BUSINESS_EXPENSE_CATEGORIES,
+    );
+    if (!resolvedCategory) {
+      setError(category === "Other" ? "Describe the Other category briefly." : "Select a category.");
+      return;
+    }
     startTransition(async () => {
-      await addTransaction({
+      const result = await addTransaction({
         type: "expense",
         amount: Number(amount),
-        category,
+        category: resolvedCategory,
+        currency,
         notes,
       });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
       setAmount("");
+      setOtherCategory("");
       setNotes("");
       setOpen(false);
     });
@@ -183,7 +206,7 @@ export function AddExpenseButton() {
         <Modal title="Add Expense" onClose={() => setOpen(false)}>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Amount ($)</label>
+              <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Amount ({currency})</label>
               <input
                 type="number"
                 inputMode="decimal"
@@ -197,17 +220,46 @@ export function AddExpenseButton() {
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
               />
             </div>
-            <div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Currency</label>
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value as "USD" | "BRL")}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+                >
+                  <option value="USD">USD</option>
+                  <option value="BRL">BRL</option>
+                </select>
+              </div>
+              <div>
               <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Category</label>
-              <input
-                type="text"
+              <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                placeholder="Software, Equipment..."
                 required
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
-              />
+              >
+                {BUSINESS_EXPENSE_CATEGORIES.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+              </div>
             </div>
+            {category === "Other" && (
+              <div>
+                <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Other detail</label>
+                <input
+                  type="text"
+                  maxLength={80}
+                  value={otherCategory}
+                  onChange={(e) => setOtherCategory(e.target.value)}
+                  placeholder="Short description"
+                  required
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+                />
+              </div>
+            )}
             <div>
               <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Notes (optional)</label>
               <input
@@ -218,6 +270,7 @@ export function AddExpenseButton() {
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
               />
             </div>
+            {error && <p role="alert" className="text-red-400 text-xs">{error}</p>}
             <button
               type="submit"
               disabled={isPending}

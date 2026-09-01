@@ -10,6 +10,7 @@ import {
   getReconciliationRequiringAttention,
   getDebts,
   getSubscriptionSummary,
+  getFinanceHealth,
 } from "@/modules/finance/actions";
 import { formatCurrency, formatDate, currentMonthKey, currentMonthName } from "@/utils/date";
 import { formatMinutesAsHours } from "@/modules/finance/core";
@@ -24,6 +25,7 @@ import { OperatingReserveControl } from "./OperatingReserveControl";
 import { getOwnerPayReceiptIdsByTransaction } from "@/modules/personal-finance/actions";
 import { getFxRateForMonth } from "@/modules/fx/actions";
 import { ReconcileWithWisePanel } from "@/components/finance/ReconcileWithWisePanel";
+import { FinanceHealthPanel } from "@/components/finance/FinanceHealthPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +43,7 @@ export default async function FinancePage() {
     subscriptionSummary,
     ownerPayReceiptIdsByTransaction,
     businessFx,
+    financeHealth,
   ] = await Promise.all([
     getFinanceSummary(),
     getAllTransactions(),
@@ -54,6 +57,7 @@ export default async function FinancePage() {
     getSubscriptionSummary(),
     getOwnerPayReceiptIdsByTransaction(),
     getFxRateForMonth(currentMonthKey(), "BUSINESS"),
+    getFinanceHealth(),
   ]);
   const activeDebts = debts.filter((d) => d.status === "ACTIVE");
   const remainingByCurrency = new Map<string, number>();
@@ -108,7 +112,7 @@ export default async function FinancePage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
+    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
       <div className="mb-8 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">💰 Finance</h1>
@@ -146,6 +150,10 @@ export default async function FinancePage() {
             👤 Personal
           </Link>
         </div>
+      </div>
+
+      <div className="mb-6">
+        <FinanceHealthPanel health={financeHealth} />
       </div>
 
       {/* ── FINANCE COCKPIT: DEBTS + SUBSCRIPTIONS (Taryn August Ingest §4) ─

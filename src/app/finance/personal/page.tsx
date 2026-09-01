@@ -21,7 +21,7 @@ export default async function PersonalFinancePage() {
   ]);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-5 sm:px-6 md:p-8">
+    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
       <div className="mb-6">
         <Link href="/finance" className="text-zinc-500 text-xs hover:text-white">← Finance</Link>
         <h1 className="text-2xl font-bold text-white mt-1">👤 Personal Finance</h1>

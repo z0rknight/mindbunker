@@ -15,6 +15,7 @@ import {
   operatingReserveSettings,
   fxConversions,
   personalTransactions,
+  cashMovements,
 } from "@/db/schema";
 import { computeFxCashMovements } from "../fx/core";
 import { getTodayWorkSessionStats } from "../work-sessions/data";
@@ -50,6 +51,50 @@ import {
   buildOwnerPayCorrectionStatements,
   buildOwnerPayStatements,
 } from "./owner-pay-query";
+import { getCashPocketReconciliation } from "../cash-accounts/actions";
+import { computeFinanceHealth, type FinanceHealth } from "./health";
+
+export async function getFinanceHealth(): Promise<FinanceHealth> {
+  const db = await getAuthenticatedDb();
+  const [businessPockets, personalPockets, businessRows, personalRows, fxRows, movementRows] =
+    await Promise.all([
+      getCashPocketReconciliation("BUSINESS"),
+      getCashPocketReconciliation("PERSONAL"),
+      db.select().from(transactions),
+      db.select().from(personalTransactions),
+      db.select().from(fxConversions),
+      db.select({ state: cashMovements.state }).from(cashMovements),
+    ]);
+
+  const externalIdentities = new Map<string, number>();
+  for (const row of [...businessRows, ...personalRows, ...fxRows]) {
+    if (!row.externalSource || !row.externalId) continue;
+    const key = `${row.externalSource}:${row.externalId}`;
+    externalIdentities.set(key, (externalIdentities.get(key) ?? 0) + 1);
+  }
+  const duplicateExternalIdentities = [...externalIdentities.values()].filter((count) => count > 1).length;
+  const malformedFx = fxRows.filter(
+    (row) =>
+      row.brlAmount <= 0 ||
+      row.usdAmount <= 0 ||
+      !["BUSINESS", "PERSONAL", "UNCLASSIFIED"].includes(row.scope) ||
+      !row.fromCurrency,
+  ).length;
+  const unresolvedAttribution = businessRows.filter(
+    (row) =>
+      row.type === "income" &&
+      row.externalSource === "WISE" &&
+      row.notes?.includes("commercial client/contract/earning period unresolved"),
+  ).length;
+
+  return computeFinanceHealth({
+    pocketDifferences: [...businessPockets, ...personalPockets].map((row) => row.difference),
+    unresolvedAttribution,
+    ambiguousEvidence: movementRows.filter((row) => row.state === "AMBIGUOUS").length,
+    duplicateExternalIdentities,
+    malformedFx,
+  });
+}
 
 // ─── FINANCIAL TRUTH: transactions (existing table, extended) ──────────────
 

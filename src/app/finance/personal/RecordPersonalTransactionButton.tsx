@@ -8,6 +8,10 @@ import {
   recordPersonalExpense,
 } from "@/modules/personal-finance/actions";
 import { DEFAULT_CURRENCY } from "@/modules/finance/config";
+import {
+  PERSONAL_EXPENSE_CATEGORIES,
+  resolveExpenseCategory,
+} from "@/modules/finance/categories";
 
 type Kind = "opening_balance" | "income" | "expense";
 
@@ -49,6 +53,7 @@ export function RecordPersonalTransactionButton({ kind }: { kind: Kind }) {
   const [isPending, startTransition] = useTransition();
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState(config.defaultCategory);
+  const [otherCategory, setOtherCategory] = useState("");
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -64,18 +69,26 @@ export function RecordPersonalTransactionButton({ kind }: { kind: Kind }) {
     }
     startTransition(async () => {
       const data = { amount: parsed, currency, notes: notes || undefined };
+      const expenseCategory = kind === "expense"
+        ? resolveExpenseCategory(category, otherCategory, PERSONAL_EXPENSE_CATEGORIES)
+        : category;
+      if (kind === "expense" && !expenseCategory) {
+        setError(category === "Other" ? "Describe the Other category briefly." : "Select a category.");
+        return;
+      }
       const result =
         kind === "opening_balance"
           ? await recordPersonalOpeningBalance(data)
           : kind === "income"
             ? await recordPersonalIncome({ ...data, category: category || "Income" })
-            : await recordPersonalExpense({ ...data, category: category || "Expense" });
+            : await recordPersonalExpense({ ...data, category: expenseCategory || "Expense" });
       if (!result.success) {
         setError(result.error);
         return;
       }
       setAmount("");
       setCategory(config.defaultCategory);
+      setOtherCategory("");
       setNotes("");
       setOpen(false);
       router.refresh();
@@ -142,11 +155,39 @@ export function RecordPersonalTransactionButton({ kind }: { kind: Kind }) {
               {config.showCategory && (
                 <div>
                   <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Category</label>
+                  {kind === "expense" ? (
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      required
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+                    >
+                      <option value="">Select a category…</option>
+                      {PERSONAL_EXPENSE_CATEGORIES.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      placeholder="Gift, side job..."
+                      required
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+                    />
+                  )}
+                </div>
+              )}
+              {kind === "expense" && category === "Other" && (
+                <div>
+                  <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Other detail</label>
                   <input
                     type="text"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    placeholder={kind === "income" ? "Gift, side job..." : "Food, Transport..."}
+                    maxLength={80}
+                    value={otherCategory}
+                    onChange={(e) => setOtherCategory(e.target.value)}
+                    placeholder="Short description"
                     required
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
                   />

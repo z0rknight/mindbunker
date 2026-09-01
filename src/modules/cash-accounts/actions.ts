@@ -4,13 +4,15 @@ import "server-only";
 
 import { getAuthenticatedDb } from "@/db";
 import { cashAccounts, cashAccountSnapshots, cashMovements } from "@/db/schema";
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   computeCashPocketBalance,
   computePocketDifference,
   isCashPocketScope,
   validateAccountSnapshotInput,
+  validateInternalPocketTransferInput,
+  validateInternalPocketPair,
   type CashPocketScope,
 } from "./core";
 
@@ -73,6 +75,90 @@ export async function getCashPocketReconciliation(
       difference: observed ? computePocketDifference(ledgerAmount, observed.amount) : null,
     };
   });
+}
+
+export async function recordInternalPocketTransfer(input: {
+  scope: string;
+  fromAccountId: number;
+  toAccountId: number;
+  amount: number;
+  date: string;
+  notes?: string;
+  idempotencyKey: string;
+}): Promise<{ success: true } | { success: false; error: string }> {
+  if (!isCashPocketScope(input.scope)) return { success: false, error: "Cash scope is invalid." };
+  const error = validateInternalPocketTransferInput(input);
+  if (error) return { success: false, error };
+
+  const db = await getAuthenticatedDb();
+  const accounts = await db
+    .select()
+    .from(cashAccounts)
+    .where(inArray(cashAccounts.id, [input.fromAccountId, input.toAccountId]));
+  const from = accounts.find((row) => row.id === input.fromAccountId);
+  const to = accounts.find((row) => row.id === input.toAccountId);
+  if (!from || !to) return { success: false, error: "Both pockets must belong to this Finance scope." };
+  const pairError = validateInternalPocketPair(from, to, input.scope);
+  if (pairError) return { success: false, error: pairError };
+
+  const existing = await db
+    .select({ id: cashMovements.id })
+    .from(cashMovements)
+    .where(
+      and(
+        eq(cashMovements.externalSource, "MINDBUNKER"),
+        eq(cashMovements.externalId, input.idempotencyKey),
+      ),
+    );
+  if (existing.length === 2) return { success: true };
+  if (existing.length !== 0) {
+    return { success: false, error: "This transfer is incomplete. Nothing new was recorded." };
+  }
+
+  const occurredAt = input.date;
+  const noteSuffix = input.notes?.trim() ? ` · ${input.notes.trim()}` : "";
+  try {
+    await db.batch([
+      db.insert(cashMovements).values({
+        cashAccountId: from.id,
+        date: input.date,
+        occurredAt,
+        amount: -input.amount,
+        state: "INTERNAL_TRANSFER",
+        description: `Moved ${input.amount.toFixed(2)} ${from.currency} to ${to.label}${noteSuffix}`,
+        counterparty: to.label,
+        externalSource: "MINDBUNKER",
+        externalId: input.idempotencyKey,
+      }),
+      db.insert(cashMovements).values({
+        cashAccountId: to.id,
+        date: input.date,
+        occurredAt,
+        amount: input.amount,
+        state: "INTERNAL_TRANSFER",
+        description: `Moved ${input.amount.toFixed(2)} ${to.currency} from ${from.label}${noteSuffix}`,
+        counterparty: from.label,
+        externalSource: "MINDBUNKER",
+        externalId: input.idempotencyKey,
+      }),
+    ]);
+  } catch {
+    const replay = await db
+      .select({ id: cashMovements.id })
+      .from(cashMovements)
+      .where(
+        and(
+          eq(cashMovements.externalSource, "MINDBUNKER"),
+          eq(cashMovements.externalId, input.idempotencyKey),
+        ),
+      );
+    if (replay.length !== 2) {
+      return { success: false, error: "Pocket transfer was not recorded. Please try again." };
+    }
+  }
+  revalidatePath("/finance");
+  revalidatePath("/finance/personal");
+  return { success: true };
 }
 
 export async function recordCashAccountSnapshot(input: {

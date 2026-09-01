@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   getCashPocketReconciliation,
   recordCashAccountSnapshot,
+  recordInternalPocketTransfer,
   type CashPocketReconciliationRow,
 } from "@/modules/cash-accounts/actions";
 import { formatCurrency, todayISO } from "@/utils/date";
@@ -37,6 +38,13 @@ export function ReconcileWithWisePanel({ scope }: { scope: "BUSINESS" | "PERSONA
   const [observedAt, setObservedAt] = useState(todayISO());
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [fromAccountId, setFromAccountId] = useState("");
+  const [toAccountId, setToAccountId] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferDate, setTransferDate] = useState(todayISO());
+  const [transferNotes, setTransferNotes] = useState("");
+  const [transferKey, setTransferKey] = useState("");
 
   const load = () => {
     getCashPocketReconciliation(scope).then(setRows);
@@ -76,19 +84,138 @@ export function ReconcileWithWisePanel({ scope }: { scope: "BUSINESS" | "PERSONA
     });
   };
 
+  const openTransfer = () => {
+    setFromAccountId("");
+    setToAccountId("");
+    setTransferAmount("");
+    setTransferDate(todayISO());
+    setTransferNotes("");
+    setTransferKey(`pocket-transfer:${crypto.randomUUID()}`);
+    setError(null);
+    setTransferOpen(true);
+  };
+
+  const submitTransfer = () => {
+    const amountValue = Number(transferAmount);
+    setError(null);
+    startTransition(async () => {
+      const result = await recordInternalPocketTransfer({
+        scope,
+        fromAccountId: Number(fromAccountId),
+        toAccountId: Number(toAccountId),
+        amount: amountValue,
+        date: transferDate,
+        notes: transferNotes,
+        idempotencyKey: transferKey,
+      });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      setTransferOpen(false);
+      load();
+      router.refresh();
+    });
+  };
+
   if (!rows) return null;
 
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 sm:p-5">
-      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
-        Reconcile with Wise
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
+          Reconcile with Wise
+        </p>
+        <button
+          type="button"
+          onClick={openTransfer}
+          className="rounded-lg border border-zinc-700 px-3 py-2 text-[11px] font-bold text-violet-300 hover:bg-zinc-800"
+        >
+          Move between pockets
+        </button>
+      </div>
       <p className="mt-1 text-xs text-zinc-600">
         Each Wise pocket closes independently. Observed balances are evidence only — recording
         one never changes revenue, expenses, FX rate, or the source movements.
       </p>
 
-      <div className="mt-3 space-y-3">
+      {transferOpen && (
+        <div className="mt-4 rounded-xl border border-violet-900/60 bg-violet-950/20 p-3">
+          <p className="text-xs font-bold text-white">Internal pocket transfer</p>
+          <p className="mt-1 text-[11px] text-zinc-500">
+            Same currency only. This moves custody between pockets and never creates revenue or expense.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <select
+              value={fromAccountId}
+              onChange={(event) => {
+                setFromAccountId(event.target.value);
+                setToAccountId("");
+              }}
+              className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-white"
+            >
+              <option value="">From pocket…</option>
+              {rows.map((row) => <option key={row.accountId} value={row.accountId}>{row.label}</option>)}
+            </select>
+            <select
+              value={toAccountId}
+              onChange={(event) => setToAccountId(event.target.value)}
+              className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-white"
+            >
+              <option value="">To pocket…</option>
+              {rows
+                .filter((row) => {
+                  const source = rows.find((candidate) => candidate.accountId === Number(fromAccountId));
+                  return source && row.accountId !== source.accountId && row.currency === source.currency;
+                })
+                .map((row) => <option key={row.accountId} value={row.accountId}>{row.label}</option>)}
+            </select>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={transferAmount}
+              onChange={(event) => setTransferAmount(event.target.value)}
+              placeholder="Amount"
+              className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-white"
+            />
+            <input
+              type="date"
+              value={transferDate}
+              onChange={(event) => setTransferDate(event.target.value)}
+              className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-white"
+            />
+          </div>
+          <input
+            type="text"
+            value={transferNotes}
+            onChange={(event) => setTransferNotes(event.target.value)}
+            placeholder="Notes (optional)"
+            className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-white"
+          />
+          {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={submitTransfer}
+              disabled={isPending}
+              className="flex-1 rounded-lg bg-violet-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+            >
+              {isPending ? "Moving…" : "Move money"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setTransferOpen(false)}
+              className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-400"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-3">
         {rows.map((row) => (
           <div key={row.accountId} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
             <div className="flex items-center justify-between">

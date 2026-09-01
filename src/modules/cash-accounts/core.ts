@@ -47,3 +47,45 @@ export function validateAccountSnapshotInput(input: {
   }
   return null;
 }
+
+export function validateInternalPocketTransferInput(input: {
+  fromAccountId: unknown;
+  toAccountId: unknown;
+  amount: unknown;
+  date: unknown;
+  idempotencyKey: unknown;
+}): string | null {
+  const from = Number(input.fromAccountId);
+  const to = Number(input.toAccountId);
+  if (!Number.isSafeInteger(from) || from <= 0 || !Number.isSafeInteger(to) || to <= 0) {
+    return "Select valid source and destination pockets.";
+  }
+  if (from === to) return "Source and destination pockets must be different.";
+  const amount = Number(input.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return "Transfer amount must be positive.";
+  if (typeof input.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
+    return "Enter a valid transfer date.";
+  }
+  if (
+    typeof input.idempotencyKey !== "string" ||
+    !/^pocket-transfer:[0-9a-f-]{36}$/i.test(input.idempotencyKey)
+  ) {
+    return "Transfer request is invalid. Reopen the form and try again.";
+  }
+  return null;
+}
+
+export function validateInternalPocketPair(
+  from: { id: number; scope: string; currency: string } | null,
+  to: { id: number; scope: string; currency: string } | null,
+  expectedScope: string,
+): string | null {
+  if (!from || !to || from.scope !== expectedScope || to.scope !== expectedScope) {
+    return "Both pockets must belong to this Finance scope.";
+  }
+  if (from.id === to.id) return "Source and destination pockets must be different.";
+  if (from.currency !== to.currency) {
+    return "Pocket transfers must keep the same currency. Use FX for conversions.";
+  }
+  return null;
+}
