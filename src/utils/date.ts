@@ -55,6 +55,21 @@ export function daysAgoISO(days: number, now: Date = new Date()): string {
   return shiftDateKey(todayISO(now), -days);
 }
 
+/**
+ * Inclusive rolling-window start. A seven-day window containing today starts
+ * six calendar days ago, not seven. Keeping this explicit prevents the common
+ * `gte(today - 7)` eight-day window bug.
+ */
+export function inclusiveWindowStartISO(
+  days: number,
+  now: Date = new Date(),
+): string {
+  if (!Number.isSafeInteger(days) || days < 1) {
+    throw new Error("Window days must be a positive integer.");
+  }
+  return shiftDateKey(todayISO(now), -(days - 1));
+}
+
 export function previousMonthRangeISO(now: Date = new Date()): {
   start: string;
   end: string;
@@ -65,6 +80,22 @@ export function previousMonthRangeISO(now: Date = new Date()): {
   return {
     start: `${previousMonth}-01`,
     end: shiftDateKey(`${followingMonth}-01`, -1),
+  };
+}
+
+/** Previous month, clipped to the same elapsed operator-calendar day. */
+export function previousMonthComparableRangeISO(now: Date = new Date()): {
+  start: string;
+  end: string;
+} {
+  const currentKey = todayISO(now);
+  const previousMonth = shiftMonthKey(currentKey.slice(0, 7), -1);
+  const [year, month] = previousMonth.split("-").map(Number);
+  const daysInPreviousMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const elapsedDay = Math.min(Number(currentKey.slice(8, 10)), daysInPreviousMonth);
+  return {
+    start: `${previousMonth}-01`,
+    end: `${previousMonth}-${String(elapsedDay).padStart(2, "0")}`,
   };
 }
 

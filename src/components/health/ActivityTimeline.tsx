@@ -117,7 +117,9 @@ export function ActivityTimeline({ days }: { days: ActivityTimelineDay[] }) {
               </div>
               <div className="flex items-center justify-between">
                 <dt className="text-zinc-400">☕ Coffees</dt>
-                <dd className="text-white tabular-nums">{selected.caffeineCount}</dd>
+                <dd className="text-white tabular-nums">
+                  {selected.caffeineCount !== null ? selected.caffeineCount : "—"}
+                </dd>
               </div>
             </dl>
           </div>

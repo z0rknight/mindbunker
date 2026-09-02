@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **🧭 Tuesday Operator Intelligence patch — code-only candidate (2026-09-02)**
+  - [x] Added deterministic Dashboard NOW and ATTENTION projections over existing Work Sessions, Promises, blockers, and video lifecycle facts
+  - [x] Made Promise entry and correction explicitly America/Sao_Paulo → UTC, runtime-timezone independent, and rejected due dates before creation; historical invalid rows remain unchanged and surface as DATA ISSUE
+  - [x] Corrected seven-day windows to exactly today plus six prior operator days and month trends to comparable elapsed MTD spans with small-sample guards
+  - [x] Replaced the Health history surface with a union-derived daily ledger from health logs, quick coffee events, and closed intentional Work Sessions; missing evidence stays unknown rather than zero
+  - [x] Labeled quick-coffee caffeine as estimated, preserved manual mg as precise override, and quarantined untrustworthy Sensor input counters from intelligence
+  - [x] Consolidated Health reads, added focused operator-intelligence tests, and verified synthetic local dogfood plus 390×844 / 768×1024 / 1440×900 QA with no global overflow or console errors
+  - [x] No schema/migration change; 671/671 tests, TypeScript, ESLint (0 errors), Next build, OpenNext build, and diff check pass
+
 - [x] **🩹 Live correction sprint — local release gate (2026-08-27)**
   - [x] Fixed Owner Pay's Drizzle `INSERT … SELECT` projection/order crash while preserving one atomic, idempotent Business → Personal bridge
   - [x] Added truthful historical Health dates and stable-ID correction; `created_at` is preserved and `updated_at` records the edit

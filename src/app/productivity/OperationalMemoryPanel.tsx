@@ -10,6 +10,7 @@ import {
   resolveVideoBlocker,
   setCommitmentStatus,
   setProductionChecklistStep,
+  updateVideoCommitmentDue,
   type VideoOperationalSnapshot,
 } from "@/modules/video-operations/actions";
 import {
@@ -25,6 +26,11 @@ import {
   type RevisionCategory,
   type RevisionCause,
 } from "@/modules/video-operations/config";
+import {
+  commitmentChronologyIssue,
+  instantToOperatorDateTimeLocal,
+  operatorLocalDateTimeToIso,
+} from "@/modules/video-operations/core";
 import { formatClosedDuration } from "@/modules/work-sessions/core";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
@@ -38,6 +44,7 @@ const smallButton =
 function formatWhen(value: Date | string | null) {
   if (!value) return "No due date";
   return new Intl.DateTimeFormat("en", {
+    timeZone: "America/Sao_Paulo",
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -54,6 +61,8 @@ export function OperationalMemoryPanel({ videoId }: { videoId: number }) {
 
   const [commitmentTitle, setCommitmentTitle] = useState("");
   const [commitmentDue, setCommitmentDue] = useState("");
+  const [editingCommitmentId, setEditingCommitmentId] = useState<number | null>(null);
+  const [editingCommitmentDue, setEditingCommitmentDue] = useState("");
   const [frictionCategory, setFrictionCategory] = useState<FrictionCategory>("FILES");
   const [frictionMinutes, setFrictionMinutes] = useState("");
   const [frictionNote, setFrictionNote] = useState("");
@@ -115,6 +124,15 @@ export function OperationalMemoryPanel({ videoId }: { videoId: number }) {
     });
   }
 
+  function canonicalDue(localValue: string) {
+    const instant = operatorLocalDateTimeToIso(localValue);
+    if (!instant) {
+      setError("Choose a valid São Paulo date and time.");
+      return null;
+    }
+    return instant;
+  }
+
   async function copyContext() {
     if (!snapshot) return;
     const lines = [
@@ -166,21 +184,86 @@ export function OperationalMemoryPanel({ videoId }: { videoId: number }) {
             </summary>
             <div className="mt-3 space-y-3">
               {openCommitments.map((item) => (
-                <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-zinc-800 bg-zinc-950/70 p-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
+                <div key={item.id} className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <p className="text-sm font-bold text-white">{item.title}</p>
-                    <p className="text-[11px] text-zinc-500">{formatWhen(item.dueAt)}</p>
+                    <p className="text-[11px] text-zinc-500">Due {formatWhen(item.dueAt)} · São Paulo</p>
+                    {commitmentChronologyIssue(item) && (
+                      <p className="mt-1 text-[11px] font-black uppercase tracking-wide text-red-300">
+                        Data issue · deadline is before this promise was created
+                      </p>
+                    )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      disabled={pending}
+                      onClick={() => {
+                        setEditingCommitmentId(item.id);
+                        setEditingCommitmentDue(instantToOperatorDateTimeLocal(item.dueAt) ?? "");
+                      }}
+                      className={smallButton}
+                    >
+                      Edit deadline
+                    </button>
                     <button disabled={pending} onClick={() => run(() => setCommitmentStatus(videoId, item.id, "DONE"))} className={smallButton}>Done</button>
                     <button disabled={pending} onClick={() => run(() => setCommitmentStatus(videoId, item.id, "CANCELLED"))} className={smallButton}>Cancel</button>
                   </div>
+                  </div>
+                  {editingCommitmentId === item.id && (
+                    <div className="mt-3 grid gap-2 border-t border-zinc-800 pt-3 sm:grid-cols-[minmax(0,220px)_auto_auto]">
+                      <input
+                        aria-label={`Correct deadline for ${item.title}`}
+                        type="datetime-local"
+                        value={editingCommitmentDue}
+                        onChange={(event) => setEditingCommitmentDue(event.target.value)}
+                        className={inputClass}
+                      />
+                      <button
+                        disabled={pending || !editingCommitmentDue}
+                        onClick={() => {
+                          const dueAt = canonicalDue(editingCommitmentDue);
+                          if (!dueAt) return;
+                          run(
+                            () => updateVideoCommitmentDue(videoId, item.id, dueAt),
+                            () => {
+                              setEditingCommitmentId(null);
+                              setEditingCommitmentDue("");
+                            },
+                          );
+                        }}
+                        className={smallButton}
+                      >
+                        Save deadline
+                      </button>
+                      <button
+                        disabled={pending}
+                        onClick={() => setEditingCommitmentId(null)}
+                        className={smallButton}
+                      >
+                        Keep unchanged
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
               <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_190px_auto]">
                 <input value={commitmentTitle} onChange={(event) => setCommitmentTitle(event.target.value)} placeholder="Promise made…" maxLength={300} className={inputClass} />
                 <input aria-label="Promise due date" type="datetime-local" value={commitmentDue} onChange={(event) => setCommitmentDue(event.target.value)} className={inputClass} />
-                <button disabled={pending || !commitmentTitle.trim() || !commitmentDue} onClick={() => run(() => createVideoCommitment({ videoId, title: commitmentTitle, dueAt: commitmentDue }), () => { setCommitmentTitle(""); setCommitmentDue(""); })} className={smallButton}>Add promise</button>
+                <button
+                  disabled={pending || !commitmentTitle.trim() || !commitmentDue}
+                  onClick={() => {
+                    const dueAt = canonicalDue(commitmentDue);
+                    if (!dueAt) return;
+                    run(
+                      () => createVideoCommitment({ videoId, title: commitmentTitle, dueAt }),
+                      () => { setCommitmentTitle(""); setCommitmentDue(""); },
+                    );
+                  }}
+                  className={smallButton}
+                >
+                  Add promise
+                </button>
               </div>
 
               <div className="border-t border-zinc-800 pt-3">

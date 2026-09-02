@@ -5,6 +5,8 @@ import {
   cleanRequiredText,
   computeChecklistProgress,
   computePromiseAccuracy,
+  commitmentChronologyIssue,
+  instantToOperatorDateTimeLocal,
   isBlockerCategory,
   isChecklistStatus,
   isFrictionCategory,
@@ -13,6 +15,7 @@ import {
   isRevisionCause,
   parseOptionalDueAt,
   parseOptionalNonNegativeMinutes,
+  operatorLocalDateTimeToIso,
 } from "./core.ts";
 
 test("operational vocabularies accept only the promoted finite values", () => {
@@ -51,6 +54,53 @@ test("promise accuracy reports raw evidence counts without percentages", () => {
     { sampleCount: 2, onTimeCount: 1, lateCount: 1 },
   );
   assert.equal(parseOptionalDueAt("not-a-date"), false);
+  assert.equal(parseOptionalDueAt("2026-09-05T12:00:00"), false);
+  assert.equal(
+    parseOptionalDueAt("2026-09-05T12:00:00-03:00").toISOString(),
+    "2026-09-05T15:00:00.000Z",
+  );
+});
+
+test("promise datetime-local input becomes an explicit Sao Paulo instant", () => {
+  assert.equal(
+    operatorLocalDateTimeToIso("2026-09-05T12:30"),
+    "2026-09-05T15:30:00.000Z",
+  );
+  assert.equal(
+    instantToOperatorDateTimeLocal("2026-09-05T15:30:00.000Z"),
+    "2026-09-05T12:30",
+  );
+  assert.equal(operatorLocalDateTimeToIso("2026-02-30T12:00"), null);
+  assert.equal(operatorLocalDateTimeToIso("2026-09-05 12:00"), null);
+});
+
+test("promise conversion is independent of the runtime timezone", () => {
+  const previous = process.env.TZ;
+  process.env.TZ = "Pacific/Honolulu";
+  const honolulu = operatorLocalDateTimeToIso("2026-09-05T12:30");
+  process.env.TZ = "Asia/Tokyo";
+  const tokyo = operatorLocalDateTimeToIso("2026-09-05T12:30");
+  if (previous === undefined) delete process.env.TZ;
+  else process.env.TZ = previous;
+  assert.equal(honolulu, "2026-09-05T15:30:00.000Z");
+  assert.equal(tokyo, honolulu);
+});
+
+test("impossible promise chronology is a data issue, not overdue work", () => {
+  assert.equal(
+    commitmentChronologyIssue({
+      createdAt: "2026-09-01T20:38:56.000Z",
+      dueAt: "2026-08-31T17:38:00.000Z",
+    }),
+    "DUE_BEFORE_CREATED",
+  );
+  assert.equal(
+    commitmentChronologyIssue({
+      createdAt: "2026-09-01T20:38:56.000Z",
+      dueAt: "2026-09-03T12:00:00.000Z",
+    }),
+    null,
+  );
 });
 
 test("empty checklist is unknown, not falsely complete", () => {

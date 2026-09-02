@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   buildActivityTimelineDays,
+  buildDailyHealthLedger,
+  computeHealthWindowSummary,
   groupTimelineDaysIntoWeekColumns,
   isValidHealthDate,
   validateHealthLogMutableValues,
@@ -92,8 +94,83 @@ test("buildActivityTimelineDays never fabricates data for days with no log", () 
     cycled: false,
     cyclingKm: null,
     sleepHours: null,
-    caffeineCount: 0,
+    caffeineCount: null,
   });
+});
+
+test("daily ledger preserves unknown, explicit zero, and caffeine provenance", () => {
+  const rows = buildDailyHealthLedger([
+    {
+      id: 1,
+      date: "2026-09-01",
+      sleepHours: 7,
+      caffeineMg: 0,
+      substancesNotes: null,
+      screenTimeHours: null,
+      walkingMinutes: 0,
+      cyclingKm: null,
+      cyclingMinutes: null,
+    },
+    {
+      id: 2,
+      date: "2026-08-30",
+      sleepHours: 6,
+      caffeineMg: null,
+      substancesNotes: null,
+      screenTimeHours: null,
+      walkingMinutes: null,
+      cyclingKm: null,
+      cyclingMinutes: null,
+    },
+  ], {
+    "2026-08-31": 2,
+  }, [], "2026-09-01", 3);
+
+  assert.equal(rows[0].caffeineMg, 0);
+  assert.equal(rows[0].caffeineSource, "MANUAL");
+  assert.equal(rows[0].walkingMinutes, 0);
+  assert.equal(rows[1].coffeeServings, 2);
+  assert.equal(rows[1].caffeineMg, 180);
+  assert.equal(rows[1].caffeineSource, "ESTIMATED");
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].coffeeServings, null);
+  assert.equal(rows[0].caffeineMg, 0);
+  assert.equal(rows[0].caffeineSource, "MANUAL");
+  assert.equal(rows[2].coffeeServings, null);
+  assert.equal(rows[2].caffeineMg, null);
+  assert.equal(rows[2].caffeineSource, "NOT_MEASURED");
+});
+
+test("daily ledger sums only closed work sessions on their Sao Paulo start day", () => {
+  const rows = buildDailyHealthLedger([], {}, [
+    { startedAt: "2026-09-01T02:30:00Z", endedAt: "2026-09-01T03:00:00Z" },
+    { startedAt: "2026-09-01T04:00:00Z", endedAt: "2026-09-01T04:45:00Z" },
+  ], "2026-09-01", 2);
+  assert.equal(rows[0].workSeconds, 2_700);
+  assert.equal(rows[0].workSessionCount, 1);
+  assert.equal(rows[1].workSeconds, 1_800);
+  assert.equal(rows[1].workSessionCount, 1);
+});
+
+test("health summary uses exactly seven day keys and preserves missing versus zero", () => {
+  const dates = ["2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28", "2026-08-29", "2026-08-30", "2026-08-31", "2026-09-01"];
+  const logs = dates.map((date, index) => ({
+    id: index + 1,
+    date,
+    sleepHours: 6,
+    caffeineMg: null,
+    substancesNotes: null,
+    screenTimeHours: null,
+    walkingMinutes: index === 0 ? 60 : index === 7 ? 0 : null,
+    cyclingKm: null,
+    cyclingMinutes: null,
+  }));
+  const summary = computeHealthWindowSummary(logs, {}, "2026-09-01");
+  assert.equal(summary.windowStart, "2026-08-26");
+  assert.equal(summary.avgSleep7Days, 6);
+  assert.equal(summary.totalWalkingMin7d, 0);
+  assert.equal(summary.totalCyclingKm7d, null);
+  assert.equal(summary.coffeeServingsToday, null);
 });
 
 test("buildActivityTimelineDays marks walked/cycled true only for positive values", () => {

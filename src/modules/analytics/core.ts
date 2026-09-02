@@ -82,6 +82,11 @@ export function growthByCurrency(
     });
 }
 
+/** A one- or two-day month comparison is too weak for an authoritative % card. */
+export function hasComparableTrendSample(elapsedDays: number, minimumDays = 3) {
+  return Number.isSafeInteger(elapsedDays) && elapsedDays >= minimumDays;
+}
+
 /**
  * Consecutive local calendar days with a closed canonical Work Session.
  * The sequence may end today or yesterday; an empty today does not erase a

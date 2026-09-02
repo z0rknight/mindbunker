@@ -1,12 +1,15 @@
 "use server";
 
 import { getAuthenticatedDb } from "@/db";
-import { healthLogs, caffeineEvents } from "@/db/schema";
-import { eq, gte } from "drizzle-orm";
-import { todayISO, daysAgoISO } from "@/utils/date";
+import { healthLogs, caffeineEvents, workSessions } from "@/db/schema";
+import { and, eq, gte, isNotNull } from "drizzle-orm";
+import { inclusiveWindowStartISO, shiftDateKey, todayISO } from "@/utils/date";
 import { revalidatePath } from "next/cache";
-import { caffeineDayKey, resolveCaffeineTodayDisplay } from "@/modules/caffeine/core";
+import { caffeineDayKey, computeCaffeineSummary } from "@/modules/caffeine/core";
 import {
+  buildActivityTimelineDays,
+  buildDailyHealthLedger,
+  computeHealthWindowSummary,
   validateHealthLogMutableValues,
   type HealthLogMutableValues,
 } from "./core";
@@ -185,7 +188,8 @@ export async function getTodayHealthLog() {
 
 export async function getHealthSummary() {
   const db = await getAuthenticatedDb();
-  const sevenDaysAgo = daysAgoISO(7);
+  const today = todayISO();
+  const sevenDaysAgo = inclusiveWindowStartISO(7);
   const [logs, recentCaffeineEvents] = await Promise.all([
     db.select().from(healthLogs).where(gte(healthLogs.date, sevenDaysAgo)),
     // Taryn August Ingest Readiness §17: root cause of "caffeine ratio /
@@ -199,41 +203,60 @@ export async function getHealthSummary() {
     db
       .select({ occurredAt: caffeineEvents.occurredAt, servings: caffeineEvents.servings })
       .from(caffeineEvents)
-      .where(gte(caffeineEvents.occurredAt, new Date(daysAgoISO(2)))),
+      .where(gte(caffeineEvents.occurredAt, new Date(`${sevenDaysAgo}T00:00:00-03:00`))),
   ]);
 
-  const today = todayISO();
-  const todayLog = logs.find((l) => l.date === today);
-  const todayServings = recentCaffeineEvents
-    .filter((e) => caffeineDayKey(e.occurredAt.toISOString()) === today)
-    .reduce((sum, e) => sum + e.servings, 0);
-  const caffeineToday = resolveCaffeineTodayDisplay(todayLog?.caffeineMg ?? null, todayServings);
-
-  const sleepLogs = logs.filter((l) => l.sleepHours !== null);
-  const avgSleep =
-    sleepLogs.length > 0
-      ? sleepLogs.reduce((sum, l) => sum + (l.sleepHours ?? 0), 0) / sleepLogs.length
-      : null;
-
-  const cyclingLogs = logs.filter((l) => l.cyclingKm !== null && l.cyclingKm > 0);
-  const totalCyclingKm7d = cyclingLogs.reduce((sum, l) => sum + (l.cyclingKm ?? 0), 0);
-
-  const walkingLogs = logs.filter((l) => l.walkingMinutes !== null && l.walkingMinutes > 0);
-  const totalWalkingMin7d = walkingLogs.reduce((sum, l) => sum + (l.walkingMinutes ?? 0), 0);
-
-  return {
-    avgSleep7Days: avgSleep ? Math.round(avgSleep * 10) / 10 : null,
-    caffeineToday,
-    screenTimeToday: todayLog?.screenTimeHours ?? null,
-    cyclingKmToday: todayLog?.cyclingKm ?? null,
-    walkingMinutesToday: todayLog?.walkingMinutes ?? null,
-    totalCyclingKm7d: Math.round(totalCyclingKm7d * 10) / 10,
-    totalWalkingMin7d,
-    todayLog,
-  };
+  const counts: Record<string, number> = {};
+  for (const event of recentCaffeineEvents) {
+    const key = caffeineDayKey(event.occurredAt.toISOString());
+    if (key < sevenDaysAgo || key > today) continue;
+    counts[key] = (counts[key] ?? 0) + event.servings;
+  }
+  return computeHealthWindowSummary(logs, counts, today);
 }
 
 export async function getAllHealthLogs() {
   const db = await getAuthenticatedDb();
   return db.select().from(healthLogs).orderBy(healthLogs.date);
+}
+
+export async function getHealthPageData(options: {
+  timelineDays?: number;
+  ledgerDays?: number;
+} = {}) {
+  const timelineDays = options.timelineDays ?? 84;
+  const ledgerDays = options.ledgerDays ?? 30;
+  const today = todayISO();
+  const earliest = shiftDateKey(today, -(Math.max(timelineDays, ledgerDays, 7) - 1));
+  const earliestInstant = new Date(`${earliest}T00:00:00-03:00`);
+  const db = await getAuthenticatedDb();
+  const [logs, caffeineRows, workRows] = await Promise.all([
+    db.select().from(healthLogs).where(gte(healthLogs.date, earliest)),
+    db
+      .select({ occurredAt: caffeineEvents.occurredAt, servings: caffeineEvents.servings })
+      .from(caffeineEvents)
+      .where(gte(caffeineEvents.occurredAt, earliestInstant)),
+    db
+      .select({ startedAt: workSessions.startedAt, endedAt: workSessions.endedAt })
+      .from(workSessions)
+      .where(and(gte(workSessions.startedAt, earliestInstant), isNotNull(workSessions.endedAt))),
+  ]);
+
+  const caffeineCounts: Record<string, number> = {};
+  for (const event of caffeineRows) {
+    const key = caffeineDayKey(event.occurredAt.toISOString());
+    if (key < earliest || key > today) continue;
+    caffeineCounts[key] = (caffeineCounts[key] ?? 0) + event.servings;
+  }
+  const closedWorkRows = workRows.filter(
+    (row): row is { startedAt: Date; endedAt: Date } => row.endedAt !== null,
+  );
+
+  return {
+    summary: computeHealthWindowSummary(logs, caffeineCounts, today),
+    caffeineSummary: computeCaffeineSummary(caffeineCounts, today),
+    timelineDays: buildActivityTimelineDays(logs, caffeineCounts, today, timelineDays),
+    ledger: buildDailyHealthLedger(logs, caffeineCounts, closedWorkRows, today, ledgerDays),
+    today,
+  };
 }

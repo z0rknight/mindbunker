@@ -6,6 +6,7 @@ import {
   consistencyStreakFromSessions,
   computeGoalProgress,
   growthByCurrency,
+  hasComparableTrendSample,
   isActiveExternalClient,
   sumIncomeByCurrency,
 } from "./core.ts";
@@ -81,6 +82,12 @@ test("growth is unavailable without a prior-period baseline", () => {
   ), [
     { currency: "USD", amount: 100, previousAmount: 0, growthPct: null },
   ]);
+});
+
+test("very early month comparisons fail closed instead of producing dramatic percentages", () => {
+  assert.equal(hasComparableTrendSample(1), false);
+  assert.equal(hasComparableTrendSample(2), false);
+  assert.equal(hasComparableTrendSample(3), true);
 });
 
 test("consistency streak uses closed-session date keys and may end yesterday", () => {

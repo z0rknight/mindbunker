@@ -13,6 +13,115 @@ import {
   type RevisionCause,
 } from "./config.ts";
 
+const OPERATOR_TIME_ZONE = "America/Sao_Paulo";
+const EXPLICIT_INSTANT_PATTERN = /(Z|[+-]\d{2}:\d{2})$/u;
+const LOCAL_DATE_TIME_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/u;
+const OPERATOR_DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: OPERATOR_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+type DateTimeParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+};
+
+function operatorParts(instant: Date): DateTimeParts {
+  const parts = OPERATOR_DATE_TIME_FORMATTER.formatToParts(instant);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return {
+    year: value("year"),
+    month: value("month"),
+    day: value("day"),
+    hour: value("hour"),
+    minute: value("minute"),
+    second: value("second"),
+  };
+}
+
+function utcFromParts(parts: DateTimeParts): number {
+  return Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  );
+}
+
+function equalParts(left: DateTimeParts, right: DateTimeParts) {
+  return (
+    left.year === right.year &&
+    left.month === right.month &&
+    left.day === right.day &&
+    left.hour === right.hour &&
+    left.minute === right.minute &&
+    left.second === right.second
+  );
+}
+
+/**
+ * Converts a browser datetime-local value as an America/Sao_Paulo wall time
+ * into an explicit UTC instant. This never depends on the Worker/browser host
+ * timezone, and the round-trip check rejects impossible or DST-skipped times.
+ */
+export function operatorLocalDateTimeToIso(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const match = LOCAL_DATE_TIME_PATTERN.exec(value.trim());
+  if (!match) return null;
+  const desired: DateTimeParts = {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+    hour: Number(match[4]),
+    minute: Number(match[5]),
+    second: Number(match[6] ?? 0),
+  };
+  const wallClockEpoch = utcFromParts(desired);
+  const wallClockDate = new Date(wallClockEpoch);
+  if (
+    wallClockDate.getUTCFullYear() !== desired.year ||
+    wallClockDate.getUTCMonth() + 1 !== desired.month ||
+    wallClockDate.getUTCDate() !== desired.day ||
+    desired.hour > 23 ||
+    desired.minute > 59 ||
+    desired.second > 59
+  ) {
+    return null;
+  }
+
+  // Resolve the IANA-zone offset at the candidate instant, then once more at
+  // the corrected instant in case the first guess crossed an offset boundary.
+  let candidate = wallClockEpoch;
+  for (let index = 0; index < 2; index += 1) {
+    const representedWallClock = utcFromParts(operatorParts(new Date(candidate)));
+    candidate = wallClockEpoch - (representedWallClock - candidate);
+  }
+  const instant = new Date(candidate);
+  return equalParts(operatorParts(instant), desired) ? instant.toISOString() : null;
+}
+
+/** Formats an absolute instant for a datetime-local input in operator time. */
+export function instantToOperatorDateTimeLocal(value: Date | string): string | null {
+  const instant = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(instant.getTime())) return null;
+  const parts = operatorParts(instant);
+  return `${String(parts.year).padStart(4, "0")}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}T${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
+}
+
 export function isPositiveId(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
@@ -64,9 +173,21 @@ export function parseOptionalNonNegativeMinutes(value: unknown): number | null |
 
 export function parseOptionalDueAt(value: unknown): Date | null | false {
   if (value == null || value === "") return null;
-  if (typeof value !== "string") return false;
+  if (typeof value !== "string" || !EXPLICIT_INSTANT_PATTERN.test(value)) return false;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? false : parsed;
+}
+
+export function commitmentChronologyIssue(input: {
+  createdAt: Date | string;
+  dueAt: Date | string;
+}): "DUE_BEFORE_CREATED" | null {
+  const createdAt = new Date(input.createdAt);
+  const dueAt = new Date(input.dueAt);
+  if (Number.isNaN(createdAt.getTime()) || Number.isNaN(dueAt.getTime())) {
+    return "DUE_BEFORE_CREATED";
+  }
+  return dueAt.getTime() < createdAt.getTime() ? "DUE_BEFORE_CREATED" : null;
 }
 
 export function computePromiseAccuracy(

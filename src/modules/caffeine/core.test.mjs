@@ -56,10 +56,10 @@ test("computeCaffeineSummary: today count and week count", () => {
   assert.strictEqual(summary.weekCount, 6); // 3 + 2 + 1, excludes last week's 5
 });
 
-test("computeCaffeineSummary: a day with zero events is 0, not undefined/null", () => {
+test("computeCaffeineSummary: no event evidence remains unknown", () => {
   const summary = computeCaffeineSummary({}, "2026-08-27");
-  assert.strictEqual(summary.todayCount, 0);
-  assert.strictEqual(summary.weekCount, 0);
+  assert.strictEqual(summary.todayCount, null);
+  assert.strictEqual(summary.weekCount, null);
 });
 
 // Taryn August Ingest Readiness §17: regression coverage for the Dashboard
@@ -79,8 +79,8 @@ test("resolveCaffeineTodayDisplay: a manual entry higher than the quick-log esti
   assert.strictEqual(resolveCaffeineTodayDisplay(300, 1), 300);
 });
 
-test("resolveCaffeineTodayDisplay: a quick-log estimate higher than a small manual entry wins", () => {
-  assert.strictEqual(resolveCaffeineTodayDisplay(50, 1), 90);
+test("resolveCaffeineTodayDisplay: a precise manual entry overrides the quick-log estimate", () => {
+  assert.strictEqual(resolveCaffeineTodayDisplay(50, 1), 50);
 });
 
 // NIGHT SHIFT REALITY PATCH -- P0 regression coverage for the exact root

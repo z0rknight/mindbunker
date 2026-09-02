@@ -3,6 +3,8 @@
 // src/app/health/page.tsx, which fetch health_logs + caffeine day counts
 // and pass them in.
 
+import { estimateCaffeineMgFromServings } from "../caffeine/core.ts";
+
 export type HealthLogForTimeline = {
   date: string; // ISO YYYY-MM-DD
   sleepHours: number | null;
@@ -133,8 +135,86 @@ export type ActivityTimelineDay = {
   cycled: boolean;
   cyclingKm: number | null;
   sleepHours: number | null;
-  caffeineCount: number;
+  caffeineCount: number | null;
 };
+
+export type HealthLogForLedger = HealthLogForTimeline & {
+  id: number;
+  caffeineMg: number | null;
+  substancesNotes: string | null;
+  screenTimeHours: number | null;
+  cyclingMinutes: number | null;
+};
+
+export type ClosedWorkSessionForLedger = {
+  startedAt: Date | string;
+  endedAt: Date | string;
+};
+
+export type DailyHealthLedgerRow = {
+  date: string;
+  healthLogId: number | null;
+  sleepHours: number | null;
+  coffeeServings: number | null;
+  caffeineMg: number | null;
+  caffeineSource: "MANUAL" | "ESTIMATED" | "NOT_MEASURED";
+  walkingMinutes: number | null;
+  cyclingKm: number | null;
+  cyclingMinutes: number | null;
+  workSeconds: number | null;
+  workSessionCount: number | null;
+  substancesNotes: string | null;
+  screenTimeHours: number | null;
+};
+
+export function computeHealthWindowSummary(
+  healthLogs: readonly HealthLogForLedger[],
+  caffeineDayCounts: Readonly<Record<string, number>>,
+  todayISODate: string,
+  windowDays = 7,
+) {
+  const windowStart = addDaysISO(todayISODate, -(windowDays - 1));
+  const logs = healthLogs.filter(
+    (log) => log.date >= windowStart && log.date <= todayISODate,
+  );
+  const todayLog = logs.find((log) => log.date === todayISODate) ?? null;
+  const sleepLogs = logs.filter((log) => log.sleepHours !== null);
+  const cyclingLogs = logs.filter((log) => log.cyclingKm !== null);
+  const walkingLogs = logs.filter((log) => log.walkingMinutes !== null);
+  const coffeeServingsToday = Object.hasOwn(caffeineDayCounts, todayISODate)
+    ? caffeineDayCounts[todayISODate]
+    : null;
+  const manualCaffeineToday = todayLog?.caffeineMg ?? null;
+  const caffeineTodaySource = manualCaffeineToday !== null
+    ? "MANUAL" as const
+    : coffeeServingsToday !== null
+      ? "ESTIMATED" as const
+      : "NOT_MEASURED" as const;
+
+  return {
+    avgSleep7Days: sleepLogs.length > 0
+      ? Math.round((sleepLogs.reduce((sum, log) => sum + (log.sleepHours ?? 0), 0) / sleepLogs.length) * 10) / 10
+      : null,
+    caffeineToday: manualCaffeineToday !== null
+      ? manualCaffeineToday
+      : coffeeServingsToday !== null
+        ? estimateCaffeineMgFromServings(coffeeServingsToday)
+        : null,
+    caffeineTodaySource,
+    coffeeServingsToday,
+    screenTimeToday: todayLog?.screenTimeHours ?? null,
+    cyclingKmToday: todayLog?.cyclingKm ?? null,
+    walkingMinutesToday: todayLog?.walkingMinutes ?? null,
+    totalCyclingKm7d: cyclingLogs.length > 0
+      ? Math.round(cyclingLogs.reduce((sum, log) => sum + (log.cyclingKm ?? 0), 0) * 10) / 10
+      : null,
+    totalWalkingMin7d: walkingLogs.length > 0
+      ? walkingLogs.reduce((sum, log) => sum + (log.walkingMinutes ?? 0), 0)
+      : null,
+    todayLog,
+    windowStart,
+  };
+}
 
 function isoToMondayIndexedWeekday(dateStr: string): number {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -183,9 +263,90 @@ export function buildActivityTimelineDays(
       cycled: (cyclingKm ?? 0) > 0,
       cyclingKm,
       sleepHours: log?.sleepHours ?? null,
-      caffeineCount: caffeineDayCounts[cursor] ?? 0,
+      caffeineCount: Object.hasOwn(caffeineDayCounts, cursor)
+        ? caffeineDayCounts[cursor]
+        : null,
     });
     cursor = addDaysISO(cursor, 1);
+  }
+  return result;
+}
+
+/**
+ * One truthful row per operator calendar day. Missing means null; an explicit
+ * stored zero remains zero. Quick coffees produce a clearly labelled estimate,
+ * while a manual caffeine value is the precise daily authority and is never
+ * added to that estimate.
+ */
+export function buildDailyHealthLedger(
+  healthLogs: readonly HealthLogForLedger[],
+  caffeineDayCounts: Readonly<Record<string, number>>,
+  workSessions: readonly ClosedWorkSessionForLedger[],
+  todayISODate: string,
+  days: number,
+): DailyHealthLedgerRow[] {
+  const logsByDate = new Map(healthLogs.map((log) => [log.date, log]));
+  const workByDate = new Map<string, { seconds: number; sessions: number }>();
+  for (const session of workSessions) {
+    const startedAt = new Date(session.startedAt);
+    const endedAt = new Date(session.endedAt);
+    if (Number.isNaN(startedAt.getTime()) || Number.isNaN(endedAt.getTime())) continue;
+    const seconds = Math.max(0, Math.floor((endedAt.getTime() - startedAt.getTime()) / 1_000));
+    const date = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(startedAt);
+    const current = workByDate.get(date) ?? { seconds: 0, sessions: 0 };
+    current.seconds += seconds;
+    current.sessions += 1;
+    workByDate.set(date, current);
+  }
+
+  const start = addDaysISO(todayISODate, -(days - 1));
+  const dayKeys = new Set<string>();
+  for (const log of healthLogs) {
+    if (log.date >= start && log.date <= todayISODate) dayKeys.add(log.date);
+  }
+  for (const date of Object.keys(caffeineDayCounts)) {
+    if (date >= start && date <= todayISODate) dayKeys.add(date);
+  }
+  for (const date of workByDate.keys()) {
+    if (date >= start && date <= todayISODate) dayKeys.add(date);
+  }
+
+  const result: DailyHealthLedgerRow[] = [];
+  for (const cursor of [...dayKeys].sort().reverse()) {
+    const log = logsByDate.get(cursor);
+    const hasCoffee = Object.hasOwn(caffeineDayCounts, cursor);
+    const coffeeServings = hasCoffee ? caffeineDayCounts[cursor] : null;
+    const manualMg = log?.caffeineMg ?? null;
+    const caffeineSource = manualMg !== null
+      ? "MANUAL"
+      : coffeeServings !== null
+        ? "ESTIMATED"
+        : "NOT_MEASURED";
+    const work = workByDate.get(cursor);
+    result.push({
+      date: cursor,
+      healthLogId: log?.id ?? null,
+      sleepHours: log?.sleepHours ?? null,
+      coffeeServings,
+      caffeineMg: manualMg !== null
+        ? manualMg
+        : coffeeServings !== null
+          ? estimateCaffeineMgFromServings(coffeeServings)
+          : null,
+      caffeineSource,
+      walkingMinutes: log?.walkingMinutes ?? null,
+      cyclingKm: log?.cyclingKm ?? null,
+      cyclingMinutes: log?.cyclingMinutes ?? null,
+      workSeconds: work?.seconds ?? null,
+      workSessionCount: work?.sessions ?? null,
+      substancesNotes: log?.substancesNotes ?? null,
+      screenTimeHours: log?.screenTimeHours ?? null,
+    });
   }
   return result;
 }

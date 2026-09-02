@@ -11,10 +11,11 @@ import { transactions, videoLogs, clients, healthLogs, caffeineEvents, projects,
 import { DEFAULT_CURRENCY } from "@/modules/finance/config";
 import { gte, isNotNull } from "drizzle-orm";
 import {
-  daysAgoISO,
+  inclusiveWindowStartISO,
   operatorDateKey,
   operatorMonthProgress,
-  previousMonthRangeISO,
+  previousMonthComparableRangeISO,
+  shiftDateKey,
   startOfMonthISO,
 } from "@/utils/date";
 import { completedVideoLogs } from "@/modules/productivity/core";
@@ -25,6 +26,7 @@ import {
   consistencyStreakFromSessions,
   computeGoalProgress,
   growthByCurrency,
+  hasComparableTrendSample,
   isActiveExternalClient,
   sumIncomeByCurrency,
   type CurrencyAmount,
@@ -87,12 +89,19 @@ export interface EfficiencyMetrics {
 export interface BiologicalCorrelation {
   /** Avg videos on days with sleep >= 7h (good sleep) */
   avgVideosGoodSleep: number | null;
+  goodSleepSampleCount: number;
   /** Avg videos on days with sleep < 5h (crash nights) */
   avgVideosCrashSleep: number | null;
+  crashSleepSampleCount: number;
   /** Avg videos on vampire nights (sleep after 4AM proxy: sleep < 4h) */
   avgVideosVampireNights: number | null;
+  vampireSleepSampleCount: number;
   /** Total caffeine this month (mg) */
   totalCaffeineMonth: number;
+  /** Days whose caffeine total came from a precise manual entry. */
+  manualCaffeineDaysMonth: number;
+  /** Days whose caffeine total was estimated from quick coffee events. */
+  estimatedCaffeineDaysMonth: number;
   /** Total quick-logged coffees (servings) this month -- no mg inference,
    *  same honest source as "Coffees Today/This Week". */
   totalCoffeesMonth: number;
@@ -108,8 +117,10 @@ export interface BiologicalCorrelation {
   physicalActivityScore: number;
   /** Avg cycling km last 7 days */
   avgCyclingKm7d: number | null;
+  cyclingSampleCount7d: number;
   /** Avg walking minutes last 7 days */
   avgWalkingMin7d: number | null;
+  walkingSampleCount7d: number;
   /** Physical activity timeline for last 7 days */
   activityTimeline: Array<{
     date: string;
@@ -133,6 +144,8 @@ export interface MomentumMetrics {
   outputTrend: "up" | "down" | "flat";
   /** Consistency streak (any log) */
   consistencyStreak: number;
+  /** Number of elapsed calendar days used by the MTD comparison. */
+  comparableDays: number;
 }
 
 export interface LeverageScore {
@@ -221,11 +234,12 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   const db = await getAuthenticatedDb();
   const now = new Date();
   const monthStart = startOfMonthISO(now);
-  const previousMonth = previousMonthRangeISO(now);
+  const previousMonth = previousMonthComparableRangeISO(now);
   const prevMonthStart = previousMonth.start;
   const prevMonthEnd = previousMonth.end;
-  const sevenDaysAgo = daysAgoISO(7);
-  const thirtyDaysAgo = daysAgoISO(30);
+  const today = operatorDateKey(now);
+  const sevenDaysAgo = inclusiveWindowStartISO(7, now);
+  const thirtyDaysAgo = inclusiveWindowStartISO(30, now);
 
   // ── Fetch all data in parallel ─────────────────────────────────────────────
   const [
@@ -250,7 +264,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
     db
       .select({ occurredAt: caffeineEvents.occurredAt, servings: caffeineEvents.servings })
       .from(caffeineEvents)
-      .where(gte(caffeineEvents.occurredAt, new Date(monthStart))),
+      .where(gte(caffeineEvents.occurredAt, new Date(`${monthStart}T00:00:00-03:00`))),
     db
       .select({ startedAt: workSessions.startedAt, endedAt: workSessions.endedAt })
       .from(workSessions)
@@ -258,12 +272,12 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   ]);
 
   // Partition data
-  const thisMonthTransactions = allTransactions.filter((t) => t.date >= monthStart);
+  const thisMonthTransactions = allTransactions.filter((t) => t.date >= monthStart && t.date <= today);
   const prevMonthTransactions = allTransactions.filter(
     (t) => t.date >= prevMonthStart && t.date <= prevMonthEnd
   );
   const allCompletedVideos = completedVideoLogs(allVideoLogs);
-  const thisMonthVideos = allCompletedVideos.filter((v) => v.date >= monthStart);
+  const thisMonthVideos = allCompletedVideos.filter((v) => v.date >= monthStart && v.date <= today);
   const prevMonthVideos = allCompletedVideos.filter(
     (v) => v.date >= prevMonthStart && v.date <= prevMonthEnd
   );
@@ -442,11 +456,12 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   // Today").
   const thisMonthHealthLogs = last30HealthLogs.filter((h) => h.date >= monthStart);
   const manualCaffeineMgByDay = new Map(
-    thisMonthHealthLogs.map((h) => [h.date, h.caffeineMg ?? 0]),
+    thisMonthHealthLogs.map((h) => [h.date, h.caffeineMg]),
   );
   const quickLogServingsByDay = new Map<string, number>();
   for (const event of thisMonthCaffeineEvents) {
     const dayKey = caffeineDayKey(event.occurredAt.toISOString());
+    if (dayKey < monthStart || dayKey > today) continue;
     quickLogServingsByDay.set(
       dayKey,
       (quickLogServingsByDay.get(dayKey) ?? 0) + event.servings,
@@ -465,6 +480,14 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       ),
     0,
   );
+  const manualCaffeineDaysMonth = Array.from(caffeineDayKeys).filter(
+    (day) => manualCaffeineMgByDay.get(day) !== null && manualCaffeineMgByDay.get(day) !== undefined,
+  ).length;
+  const estimatedCaffeineDaysMonth = Array.from(caffeineDayKeys).filter(
+    (day) =>
+      (manualCaffeineMgByDay.get(day) === null || manualCaffeineMgByDay.get(day) === undefined) &&
+      (quickLogServingsByDay.get(day) ?? 0) > 0,
+  ).length;
   const totalCoffeesMonth = Array.from(quickLogServingsByDay.values()).reduce(
     (sum, servings) => sum + servings,
     0,
@@ -481,7 +504,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   const last7Videos = allCompletedVideos.filter(
     (v) => v.date >= sevenDaysAgo,
   ).length;
-  const prev7Start = daysAgoISO(14);
+  const prev7Start = shiftDateKey(sevenDaysAgo, -7);
   const prev7Videos = allCompletedVideos.filter(
     (v) => v.date >= prev7Start && v.date < sevenDaysAgo
   ).length;
@@ -502,14 +525,14 @@ export async function getWarRoomData(): Promise<WarRoomData> {
     50
   );
 
-  const avgCyclingKm7d =
-    last7HealthLogs.filter((h) => h.cyclingKm !== null && h.cyclingKm > 0).length > 0
-      ? Math.round((totalCyclingKm7d / 7) * 10) / 10
-      : null;
-  const avgWalkingMin7d =
-    last7HealthLogs.filter((h) => h.walkingMinutes !== null && h.walkingMinutes > 0).length > 0
-      ? Math.round(totalWalkingMin7d / 7)
-      : null;
+  const cyclingSampleCount7d = last7HealthLogs.filter((h) => h.cyclingKm !== null).length;
+  const walkingSampleCount7d = last7HealthLogs.filter((h) => h.walkingMinutes !== null).length;
+  const avgCyclingKm7d = cyclingSampleCount7d > 0
+    ? Math.round((totalCyclingKm7d / cyclingSampleCount7d) * 10) / 10
+    : null;
+  const avgWalkingMin7d = walkingSampleCount7d > 0
+    ? Math.round(totalWalkingMin7d / walkingSampleCount7d)
+    : null;
 
   // Physical activity timeline for last 7 days
   const activityTimeline = last7HealthLogs
@@ -534,14 +557,20 @@ export async function getWarRoomData(): Promise<WarRoomData> {
 
   // Revenue growth
   const previousRevenueByCurrency = sumIncomeByCurrency(prevMonthTransactions);
-  const revenueGrowthPct = growthByCurrency(
+  const rawRevenueGrowthPct = growthByCurrency(
     monthlyRevenueByCurrency,
     previousRevenueByCurrency,
   ).find((row) => row.currency === REVENUE_CURRENCY)?.growthPct ?? null;
+  const comparableDays = monthProgress.dayOfMonth;
+  const revenueGrowthPct = hasComparableTrendSample(comparableDays)
+    ? rawRevenueGrowthPct
+    : null;
   const revenueTrend = trendDirection(revenueGrowthPct);
 
   // Output growth
-  const outputGrowthPct = growthPct(thisMonthVideoCount, prevMonthVideos.length);
+  const outputGrowthPct = hasComparableTrendSample(comparableDays)
+    ? growthPct(thisMonthVideoCount, prevMonthVideos.length)
+    : null;
   const outputTrend = trendDirection(outputGrowthPct);
 
   // ── LEVERAGE SCORE ────────────────────────────────────────────────────────
@@ -617,16 +646,23 @@ export async function getWarRoomData(): Promise<WarRoomData> {
     },
     biological: {
       avgVideosGoodSleep,
+      goodSleepSampleCount: goodSleepDays.length,
       avgVideosCrashSleep,
+      crashSleepSampleCount: crashSleepDays.length,
       avgVideosVampireNights,
+      vampireSleepSampleCount: vampireNightDays.length,
       totalCaffeineMonth,
+      manualCaffeineDaysMonth,
+      estimatedCaffeineDaysMonth,
       totalCoffeesMonth,
       coffeesPerVideo,
       crashDetected,
       crashReason,
       physicalActivityScore,
       avgCyclingKm7d,
+      cyclingSampleCount7d,
       avgWalkingMin7d,
+      walkingSampleCount7d,
       activityTimeline,
     },
     momentum: {
@@ -637,6 +673,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       revenueTrend,
       outputTrend,
       consistencyStreak,
+      comparableDays,
     },
     leverage: {
       score: finalScore,

@@ -153,16 +153,16 @@ export function LastNightSleepButton({ todayISODate }: { todayISODate: string })
 // during render (comparing todayCount against a ref-tracked previous
 // value), per React's documented "adjusting state when a prop changes"
 // pattern -- not inside a useEffect, which would cause an extra render.
-export function CoffeeQuickLogButton({ todayCount }: { todayCount: number }) {
+export function CoffeeQuickLogButton({ todayCount }: { todayCount: number | null }) {
   const [isPending, startTransition] = useTransition();
   const [flash, setFlash] = useState(false);
-  const [displayCount, setDisplayCount] = useState(todayCount);
+  const [displayCount, setDisplayCount] = useState(todayCount ?? 0);
   const [syncedTodayCount, setSyncedTodayCount] = useState(todayCount);
   const router = useRouter();
 
   if (todayCount !== syncedTodayCount) {
     setSyncedTodayCount(todayCount);
-    setDisplayCount(todayCount);
+    setDisplayCount(todayCount ?? 0);
   }
 
   function handleClick() {
@@ -188,9 +188,11 @@ export function CoffeeQuickLogButton({ todayCount }: { todayCount: number }) {
     >
       <span className="text-xl">☕</span>
       <span>{flash ? "Logged!" : "+1 Coffee"}</span>
-      <span className="ml-1 rounded-full bg-black/20 px-2 py-0.5 text-xs tabular-nums">
-        {displayCount}
-      </span>
+      {(todayCount !== null || displayCount > 0) && (
+        <span className="ml-1 rounded-full bg-black/20 px-2 py-0.5 text-xs tabular-nums">
+          {displayCount}
+        </span>
+      )}
     </button>
   );
 }

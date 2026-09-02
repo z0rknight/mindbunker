@@ -58,17 +58,19 @@ export function sumCaffeineForDays(
 }
 
 export type CaffeineSummary = {
-  todayCount: number;
-  weekCount: number;
+  todayCount: number | null;
+  weekCount: number | null;
 };
 
 export function computeCaffeineSummary(
   counts: CaffeineDayCounts,
   todayKey: string,
 ): CaffeineSummary {
+  const weekDays = daysInWeekOf(todayKey);
+  const hasWeekEvidence = weekDays.some((key) => Object.hasOwn(counts, key));
   return {
-    todayCount: counts[todayKey] ?? 0,
-    weekCount: sumCaffeineForDays(counts, daysInWeekOf(todayKey)),
+    todayCount: Object.hasOwn(counts, todayKey) ? counts[todayKey] : null,
+    weekCount: hasWeekEvidence ? sumCaffeineForDays(counts, weekDays) : null,
   };
 }
 
@@ -89,14 +91,13 @@ export function estimateCaffeineMgFromServings(servings: number): number {
 // paths: a manually-typed health_logs.caffeineMg total (precise, when
 // entered) and quick-logged caffeineEvents servings (fast, estimate-based).
 // These are NOT additive — they are two different ways of recording the
-// SAME real-world quantity — so the day's contribution is whichever source
-// reports a higher figure, never their sum (which would silently double
-// count a day where both a manual note AND a quick-log exist).
+// SAME real-world quantity. A manual mg value is the precise daily override;
+// otherwise quick logs provide a visibly estimated value.
 export function reconcileDailyCaffeineMg(
   manualMg: number | null,
   quickLogServings: number,
 ): number {
-  return Math.max(manualMg ?? 0, estimateCaffeineMgFromServings(quickLogServings));
+  return manualMg ?? estimateCaffeineMgFromServings(quickLogServings);
 }
 
 // Taryn August Ingest Readiness §17: the same reconcile-don't-sum logic,

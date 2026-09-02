@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   daysAgoISO,
+  inclusiveWindowStartISO,
   operatorDateKey,
   operatorMonthProgress,
+  previousMonthComparableRangeISO,
   previousMonthRangeISO,
   startOfMonthISO,
   todayISO,
@@ -12,6 +14,23 @@ import {
 
 test("23:30 in Sao Paulo stays on the operator's local calendar day", () => {
   assert.equal(operatorDateKey("2026-09-01T02:30:00.000Z"), "2026-08-31");
+});
+
+test("inclusive seven-day windows contain today plus exactly six prior dates", () => {
+  const now = new Date("2026-09-01T12:00:00.000Z");
+  assert.equal(inclusiveWindowStartISO(7, now), "2026-08-26");
+  assert.throws(() => inclusiveWindowStartISO(0, now), /positive integer/);
+});
+
+test("month comparisons use the same elapsed operator-calendar days", () => {
+  assert.deepEqual(
+    previousMonthComparableRangeISO(new Date("2026-09-01T12:00:00.000Z")),
+    { start: "2026-08-01", end: "2026-08-01" },
+  );
+  assert.deepEqual(
+    previousMonthComparableRangeISO(new Date("2026-03-31T12:00:00.000Z")),
+    { start: "2026-02-01", end: "2026-02-28" },
+  );
 });
 
 test("UTC midnight does not silently move an operator event to tomorrow", () => {

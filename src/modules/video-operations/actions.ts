@@ -29,6 +29,7 @@ import {
   cleanRequiredText,
   computeChecklistProgress,
   computePromiseAccuracy,
+  commitmentChronologyIssue,
   isBlockerCategory,
   isChecklistStatus,
   isFrictionCategory,
@@ -130,13 +131,67 @@ export async function createVideoCommitment(input: {
   const title = cleanRequiredText(input.title, "Commitment", 300);
   if (!title.success) return title;
   const dueAt = parseOptionalDueAt(input.dueAt);
-  if (dueAt === false) return { success: false, error: "Enter a valid due date." };
+  if (dueAt === false) return { success: false, error: "Enter a valid due date with an explicit timezone." };
+  if (dueAt === null) return { success: false, error: "Due date is required." };
+  const createdAt = new Date();
+  if (commitmentChronologyIssue({ createdAt, dueAt })) {
+    return { success: false, error: "Due date cannot be before the promise was created." };
+  }
+
+  const db = await getAuthenticatedDb();
+  await db.insert(commitments).values({
+    videoId: input.videoId,
+    title: title.value,
+    dueAt,
+    createdAt,
+  });
+  revalidateVideoOperations(input.videoId);
+  return { success: true, message: "Commitment recorded." };
+}
+
+export async function updateVideoCommitmentDue(
+  videoId: number,
+  commitmentId: number,
+  dueAtInput: unknown,
+): Promise<Result> {
+  if (!isPositiveId(videoId) || !isPositiveId(commitmentId)) {
+    return { success: false, error: "Invalid commitment." };
+  }
+  const dueAt = parseOptionalDueAt(dueAtInput);
+  if (dueAt === false) {
+    return { success: false, error: "Enter a valid due date with an explicit timezone." };
+  }
   if (dueAt === null) return { success: false, error: "Due date is required." };
 
   const db = await getAuthenticatedDb();
-  await db.insert(commitments).values({ videoId: input.videoId, title: title.value, dueAt });
-  revalidateVideoOperations(input.videoId);
-  return { success: true, message: "Commitment recorded." };
+  const current = await db
+    .select({ id: commitments.id, createdAt: commitments.createdAt })
+    .from(commitments)
+    .where(
+      and(
+        eq(commitments.id, commitmentId),
+        eq(commitments.videoId, videoId),
+        eq(commitments.status, "OPEN"),
+      ),
+    )
+    .limit(1);
+  if (!current[0]) return { success: false, error: "Open commitment not found." };
+  if (commitmentChronologyIssue({ createdAt: current[0].createdAt, dueAt })) {
+    return { success: false, error: "Due date cannot be before the promise was created." };
+  }
+
+  await db
+    .update(commitments)
+    .set({ dueAt })
+    .where(
+      and(
+        eq(commitments.id, commitmentId),
+        eq(commitments.videoId, videoId),
+        eq(commitments.status, "OPEN"),
+      ),
+    );
+  revalidateVideoOperations(videoId);
+  return { success: true, message: "Commitment deadline corrected." };
 }
 
 export async function setCommitmentStatus(

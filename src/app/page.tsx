@@ -25,6 +25,8 @@ import { formatCurrency, currentMonthKey, currentMonthName } from "@/utils/date"
 import Link from "next/link";
 import { HomeTrackingPanel } from "./HomeTrackingPanel";
 import { CoffeeQuickLogButton } from "@/components/ui/HealthQuickActions";
+import { getDashboardOperatorIntelligence } from "@/modules/operator-intelligence/data";
+import { selectDashboardNow, type AttentionReason } from "@/modules/operator-intelligence/core";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +46,7 @@ export default async function DashboardPage() {
     salesThisMonth,
     mostRecentSale,
     closedSales,
+    operatorIntelligence,
   ] = await Promise.all([
     getFinanceSummary(),
     getVideoStats(),
@@ -59,11 +62,16 @@ export default async function DashboardPage() {
     getSalesThisMonth(),
     getMostRecentSaleThisMonth(),
     getClosedSales(),
+    getDashboardOperatorIntelligence(),
   ]);
 
   const now = new Date();
   const greeting =
     now.getHours() < 12 ? "Good morning" : now.getHours() < 18 ? "Good afternoon" : "Good evening";
+  const dashboardNow = selectDashboardNow(
+    workSessionOverview.openSession,
+    operatorIntelligence.recentCurrentTargets,
+  );
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
@@ -86,6 +94,64 @@ export default async function DashboardPage() {
         openSession={workSessionOverview.openSession}
         openSessionElapsedSeconds={workSessionOverview.openSessionElapsedSeconds}
       />
+
+      {dashboardNow.mode === "RECENT" && dashboardNow.targets.length > 0 && (
+        <section className="mb-6" data-testid="dashboard-now">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-400">Now</h2>
+            <span className="text-[11px] text-zinc-600">Recent in-progress work</span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {dashboardNow.targets.map((target) => (
+              <Link
+                key={target.videoId}
+                href={`/productivity?video=${target.videoId}`}
+                className="rounded-xl border border-cyan-900/50 bg-cyan-950/10 p-4 transition hover:border-cyan-600/60"
+              >
+                <p className="truncate text-sm font-black text-white">{target.videoTitle}</p>
+                <p className="mt-1 truncate text-xs text-zinc-500">
+                  {[target.clientName, target.projectName].filter(Boolean).join(" / ") || "Unattributed video"}
+                </p>
+                <p className="mt-2 text-[11px] font-bold text-cyan-300">
+                  Last worked {formatLastActive(target.lastWorkedAt, now.toISOString())} · Continue →
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {operatorIntelligence.attention.length > 0 && (
+        <section className="mb-8" data-testid="dashboard-attention">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-400">Attention</h2>
+            <span className="text-[11px] text-zinc-600">Highest-priority operational facts</span>
+          </div>
+          <div className="space-y-2">
+            {operatorIntelligence.attention.map((item) => (
+              <Link
+                key={`${item.source}-${item.sourceId}`}
+                href={`/productivity?video=${item.videoId}`}
+                className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-3 transition ${attentionClass(item.reason)}`}
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider">{attentionLabel(item.reason)}</span>
+                    <p className="truncate text-sm font-bold text-white">{item.title}</p>
+                  </div>
+                  <p className="mt-1 truncate text-[11px] text-zinc-500">
+                    {[item.clientName, item.projectName, item.videoTitle].filter(Boolean).join(" / ")}
+                  </p>
+                  {item.reason === "DATA_ISSUE" && (
+                    <p className="mt-1 text-[11px] text-red-300">Deadline precedes promise creation · edit the deadline in Video Workspace</p>
+                  )}
+                </div>
+                <span className="shrink-0 text-xs font-black">Open →</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* MICRO PATCH §4 (/book highlight), broadened by Client Service
           Reality Patch §18: intake already persists (see
@@ -263,7 +329,7 @@ export default async function DashboardPage() {
               )}
             </div>
             <p className="text-zinc-600 text-xs mt-1">
-              {warRoom.momentum.revenueGrowthPct === null ? "No prior-month baseline" : "vs last month"}
+              {warRoom.momentum.revenueGrowthPct === null ? `Insufficient comparable sample · N=${warRoom.momentum.comparableDays} days` : `MTD vs same ${warRoom.momentum.comparableDays} days last month`}
             </p>
           </div>
 
@@ -296,7 +362,7 @@ export default async function DashboardPage() {
               )}
             </div>
             <p className="text-zinc-600 text-xs mt-1">
-              {warRoom.momentum.outputGrowthPct === null ? "No prior-month baseline" : "videos vs last month"}
+              {warRoom.momentum.outputGrowthPct === null ? `Insufficient comparable sample · N=${warRoom.momentum.comparableDays} days` : `MTD videos vs same ${warRoom.momentum.comparableDays} days`}
             </p>
           </div>
 
@@ -307,11 +373,11 @@ export default async function DashboardPage() {
               <p className="text-zinc-500 text-xs uppercase tracking-wider">Output on ≥7h sleep days</p>
             </div>
             <p className="text-2xl font-black text-cyan-400">
-              {warRoom.biological.avgVideosGoodSleep !== null
+              {warRoom.biological.goodSleepSampleCount >= 5 && warRoom.biological.avgVideosGoodSleep !== null
                 ? `${warRoom.biological.avgVideosGoodSleep} videos`
-                : "—"}
+                : "Insufficient sample"}
             </p>
-            <p className="text-zinc-600 text-xs mt-1">Descriptive average · not causal</p>
+            <p className="text-zinc-600 text-xs mt-1">Recorded days N={warRoom.biological.goodSleepSampleCount} · descriptive, not causal</p>
           </div>
 
           {/* Coffees / Video */}
@@ -435,7 +501,7 @@ export default async function DashboardPage() {
               icon="🗓️"
             />
             <StatCard
-              label="Total Revisions"
+              label="Total Revisions · All Time"
               value={video.totalRevisions}
               accent="zinc"
               icon="🔄"
@@ -552,7 +618,20 @@ export default async function DashboardPage() {
             />
             <StatCard
               label="Caffeine Today"
-              value={health.caffeineToday !== null ? `${health.caffeineToday}mg` : "—"}
+              value={
+                health.caffeineToday === null
+                  ? "—"
+                  : health.caffeineTodaySource === "ESTIMATED"
+                    ? `~${health.caffeineToday}mg`
+                    : `${health.caffeineToday}mg`
+              }
+              sub={
+                health.caffeineTodaySource === "ESTIMATED"
+                  ? `${health.coffeeServingsToday} coffees · estimated`
+                  : health.caffeineTodaySource === "MANUAL"
+                    ? "Manual precise entry"
+                    : undefined
+              }
               accent="amber"
               icon="☕"
             />
@@ -576,7 +655,7 @@ export default async function DashboardPage() {
             />
             <StatCard
               label="Cycling (7d)"
-              value={health.totalCyclingKm7d > 0 ? `${health.totalCyclingKm7d}km` : "—"}
+              value={health.totalCyclingKm7d !== null ? `${health.totalCyclingKm7d}km` : "—"}
               sub="Total last 7 days"
               accent="zinc"
               icon="📊"
@@ -587,4 +666,27 @@ export default async function DashboardPage() {
 
     </div>
   );
+}
+
+function attentionLabel(reason: AttentionReason) {
+  const labels: Record<AttentionReason, string> = {
+    DATA_ISSUE: "Data issue",
+    OVERDUE: "Overdue",
+    BLOCKED: "Blocked",
+    CHANGES_REQUESTED: "Changes requested",
+    READY_FOR_REVIEW: "Ready for review",
+    DUE_TODAY: "Due today",
+    DUE_NEXT_7_DAYS: "Due soon",
+  };
+  return labels[reason];
+}
+
+function attentionClass(reason: AttentionReason) {
+  if (reason === "DATA_ISSUE" || reason === "OVERDUE" || reason === "BLOCKED") {
+    return "border-red-900/60 bg-red-950/15 text-red-300 hover:border-red-700";
+  }
+  if (reason === "CHANGES_REQUESTED") {
+    return "border-orange-900/60 bg-orange-950/15 text-orange-300 hover:border-orange-700";
+  }
+  return "border-violet-900/60 bg-violet-950/10 text-violet-300 hover:border-violet-700";
 }

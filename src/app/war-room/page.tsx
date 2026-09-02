@@ -221,16 +221,19 @@ export default async function WarRoomPage() {
               <SleepCorrelationRow
                 label="Good Sleep (≥7h)"
                 value={biological.avgVideosGoodSleep}
+                sampleCount={biological.goodSleepSampleCount}
                 color="cyan"
               />
               <SleepCorrelationRow
                 label="Recorded sleep <5h"
                 value={biological.avgVideosCrashSleep}
+                sampleCount={biological.crashSleepSampleCount}
                 color="red"
               />
               <SleepCorrelationRow
                 label="Recorded sleep <4h"
                 value={biological.avgVideosVampireNights}
+                sampleCount={biological.vampireSleepSampleCount}
                 color="amber"
               />
             </div>
@@ -248,8 +251,16 @@ export default async function WarRoomPage() {
               <div>
                 <p className="text-zinc-500 text-xs mb-1">Total Caffeine This Month</p>
                 <p className="text-2xl font-black text-amber-400">
+                  {biological.estimatedCaffeineDaysMonth > 0 ? "~" : ""}
                   {biological.totalCaffeineMonth}
                   <span className="text-sm font-normal text-zinc-500 ml-1">mg</span>
+                </p>
+                <p className="text-zinc-600 text-xs mt-1">
+                  {biological.estimatedCaffeineDaysMonth > 0
+                    ? `${biological.estimatedCaffeineDaysMonth} estimated day${biological.estimatedCaffeineDaysMonth === 1 ? "" : "s"} from quick coffee logs`
+                    : biological.manualCaffeineDaysMonth > 0
+                      ? `${biological.manualCaffeineDaysMonth} precise manual day${biological.manualCaffeineDaysMonth === 1 ? "" : "s"}`
+                      : "No caffeine evidence this month"}
                 </p>
               </div>
               <div>
@@ -279,19 +290,25 @@ export default async function WarRoomPage() {
             </p>
             <div className="space-y-4">
               <div>
-                <p className="text-zinc-500 text-xs mb-1">Cycling (7d avg)</p>
+                <p className="text-zinc-500 text-xs mb-1">Cycling (measured-day avg · 7d)</p>
                 <p className="text-2xl font-black text-cyan-400">
                   {biological.avgCyclingKm7d !== null
                     ? `${biological.avgCyclingKm7d} km/day`
                     : "—"}
                 </p>
+                <p className="text-zinc-600 text-xs mt-1">
+                  N={biological.cyclingSampleCount7d} recorded days
+                </p>
               </div>
               <div>
-                <p className="text-zinc-500 text-xs mb-1">Walking (7d avg)</p>
+                <p className="text-zinc-500 text-xs mb-1">Walking (measured-day avg · 7d)</p>
                 <p className="text-xl font-bold text-cyan-300">
                   {biological.avgWalkingMin7d !== null
                     ? `${biological.avgWalkingMin7d} min/day`
                     : "—"}
+                </p>
+                <p className="text-zinc-600 text-xs mt-1">
+                  N={biological.walkingSampleCount7d} recorded days
                 </p>
               </div>
             </div>
@@ -347,8 +364,8 @@ export default async function WarRoomPage() {
             trend={momentum.revenueTrend}
             sublabel={
               momentum.revenueGrowthPct === null
-                ? "No prior-month baseline"
-                : `${momentum.revenueGrowthCurrency} vs last month`
+                ? `Insufficient comparable sample · N=${momentum.comparableDays} days`
+                : `${momentum.revenueGrowthCurrency} MTD vs same ${momentum.comparableDays} days`
             }
           />
 
@@ -362,8 +379,8 @@ export default async function WarRoomPage() {
             trend={momentum.outputTrend}
             sublabel={
               momentum.outputGrowthPct === null
-                ? "No prior-month baseline"
-                : "videos vs last month"
+                ? `Insufficient comparable sample · N=${momentum.comparableDays} days`
+                : `MTD videos vs same ${momentum.comparableDays} days`
             }
           />
 
@@ -456,10 +473,12 @@ function TrendCard({
 function SleepCorrelationRow({
   label,
   value,
+  sampleCount,
   color,
 }: {
   label: string;
   value: number | null;
+  sampleCount: number;
   color: "cyan" | "red" | "amber";
 }) {
   const colorMap = {
@@ -472,7 +491,7 @@ function SleepCorrelationRow({
     <div className="flex items-center justify-between">
       <span className="text-zinc-400 text-xs">{label}</span>
       <span className={`text-sm font-bold ${colorMap[color]}`}>
-        {value !== null ? `${value} videos/day` : "No data"}
+        {sampleCount >= 5 && value !== null ? `${value} videos/day · N=${sampleCount}` : `Insufficient · N=${sampleCount}`}
       </span>
     </div>
   );
