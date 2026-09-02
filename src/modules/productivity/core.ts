@@ -2,9 +2,11 @@ import {
   VIDEO_STATUS_TRANSITIONS,
   deliveredForVideoStatus,
   isVideoContentType,
+  isVideoKind,
   isVideoOrientation,
   isVideoStatus,
   type VideoContentType,
+  type VideoKind,
   type VideoOrientation,
   type VideoStatus,
 } from "./config.ts";
@@ -23,6 +25,10 @@ export type VideoInputValues = {
   coverUrl?: string | null;
   orientation?: VideoOrientation | null;
   contentType?: VideoContentType | null;
+  // Operator Intelligence Patch Phase 1A: optional on input -- absent
+  // means "leave/default to CLIENT_WORK", never "unknown counts as
+  // production." See validateVideoInput.
+  videoKind?: VideoKind | null;
   // Taryn August Ingest Readiness §6: an optional historical date
   // (YYYY-MM-DD), only meaningful at creation. Undefined/null means "use
   // today", exactly the previous hardcoded behavior -- existing callers
@@ -57,6 +63,7 @@ export type ValidatedVideoMetadata = {
   coverUrl: string | null;
   orientation: VideoOrientation | null;
   contentType: VideoContentType | null;
+  videoKind: VideoKind;
   date?: string | null;
 };
 
@@ -84,7 +91,8 @@ export type VideoMetadataField =
   | "notes"
   | "coverUrl"
   | "orientation"
-  | "contentType";
+  | "contentType"
+  | "videoKind";
 
 export type VideoLifecycleEventType =
   | "video.started"
@@ -225,6 +233,19 @@ function validateContentType(value: unknown) {
   return { success: true as const, value };
 }
 
+// Operator Intelligence Patch Phase 1A: unlike orientation/contentType
+// (nullable "unknown until set"), videoKind is never null -- absence on
+// input means "keep the conservative default," not "unknown."
+function validateVideoKind(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return { success: true as const, value: "CLIENT_WORK" as VideoKind };
+  }
+  if (!isVideoKind(value)) {
+    return { success: false as const, error: "Choose a valid video classification." };
+  }
+  return { success: true as const, value };
+}
+
 export function validateVideoInput(values: VideoInputValues): VideoInputResult {
   const title = typeof values.title === "string"
     ? values.title.trim().slice(0, 180)
@@ -257,6 +278,9 @@ export function validateVideoInput(values: VideoInputValues): VideoInputResult {
   const contentType = validateContentType(values.contentType);
   if (!contentType.success) return contentType;
 
+  const videoKind = validateVideoKind(values.videoKind);
+  if (!videoKind.success) return videoKind;
+
   const notes = typeof values.notes === "string"
     ? values.notes.trim().slice(0, 2_000) || null
     : null;
@@ -282,6 +306,7 @@ export function validateVideoInput(values: VideoInputValues): VideoInputResult {
       coverUrl: coverUrl.value,
       orientation: orientation.value,
       contentType: contentType.value,
+      videoKind: videoKind.value,
       date,
     },
   };
@@ -361,6 +386,7 @@ export function getVideoMetadataChanges(
     "coverUrl",
     "orientation",
     "contentType",
+    "videoKind",
   ];
   return fields.filter((field) => current[field] !== next[field]);
 }
@@ -475,10 +501,24 @@ export function planVideoTransition(input: {
   };
 }
 
-export function completedVideoLogs<T extends { status: VideoStatus }>(
-  videos: readonly T[],
-) {
-  return videos.filter((video) => video.status === "DONE");
+// Operator Intelligence Patch Phase 1A / Core Alignment Audit P0: the one
+// eligibility predicate for "does this video count as real client
+// production." Every production-facing read path (Productivity
+// today/month/week counts, CRM completed-work counts, Projects
+// done-videos, this function) must go through this, never re-derive
+// eligibility from client name, project title, revenue, or notes.
+export const PRODUCTION_COUNT_KINDS = ["CLIENT_WORK"] as const;
+
+export function countsTowardProduction(kind: VideoKind): boolean {
+  return kind === "CLIENT_WORK";
+}
+
+export function completedVideoLogs<
+  T extends { status: VideoStatus; videoKind: VideoKind },
+>(videos: readonly T[]) {
+  return videos.filter(
+    (video) => video.status === "DONE" && countsTowardProduction(video.videoKind),
+  );
 }
 
 export type ProductivityGroup =

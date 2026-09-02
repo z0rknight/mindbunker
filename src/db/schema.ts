@@ -19,6 +19,7 @@ import {
 import { PROJECT_STATUSES } from "../modules/projects/config";
 import {
   VIDEO_CONTENT_TYPES,
+  VIDEO_KINDS,
   VIDEO_ORIENTATIONS,
   VIDEO_STATUSES,
 } from "../modules/productivity/config";
@@ -556,6 +557,13 @@ export const videoLogs = sqliteTable(
     isPriority: integer("is_priority", { mode: "boolean" })
       .notNull()
       .default(false),
+    // Operator Intelligence Patch Phase 1A: production-eligibility
+    // classification. NOT NULL with a conservative default so every
+    // historical row and every existing create path is unaffected --
+    // see the VIDEO_KINDS comment in modules/productivity/config.ts.
+    videoKind: text("video_kind", { enum: VIDEO_KINDS })
+      .notNull()
+      .default("CLIENT_WORK"),
     createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
       () => new Date(),
     ),
@@ -580,6 +588,10 @@ export const videoLogs = sqliteTable(
     check(
       "video_logs_content_type_check",
       sql`${table.contentType} is null or ${table.contentType} in ('short-form', 'long-form', 'mini-doc', 'testimonial', 'other')`,
+    ),
+    check(
+      "video_logs_kind_check",
+      sql`${table.videoKind} in ('CLIENT_WORK', 'SAMPLE', 'INTERNAL')`,
     ),
   ],
 );
@@ -2082,6 +2094,49 @@ export const cashAccountSnapshots = sqliteTable(
     index("cash_account_snapshots_account_date_idx").on(
       table.cashAccountId,
       table.observedAt,
+    ),
+  ],
+);
+
+// Operator Intelligence Patch Phase 5: the smallest useful persistent
+// Decision Loop, closing SIGNAL -> DECISION -> RESULT. Not a task manager
+// -- work entities (videos, commitments, blockers) already exist. A
+// Decision exists only because: the system surfaced evidence (usually an
+// Active Signal), the operator decided something in response, and later
+// the operator should see whether it worked. Deliberately three plain
+// nullable FKs rather than a polymorphic (contextType, contextId) pair --
+// simpler and just as honest for a single-operator tool, and every
+// context a Signal can point to (video/client/project) already has its
+// own FK-checked column elsewhere in this schema.
+export const decisions = sqliteTable(
+  "decisions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    // Free-form label naming which Active Signal (if any) prompted this
+    // decision -- e.g. "REPEATED_FRICTION", "OVERDUE_PROMISE". Not a
+    // foreign key: signals are computed on read, never stored, so there
+    // is nothing to reference. Null when the operator recorded a decision
+    // without a triggering signal.
+    signalType: text("signal_type"),
+    videoId: integer("video_id").references(() => videoLogs.id, { onDelete: "set null" }),
+    clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
+    projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
+    decision: text("decision").notNull(),
+    reviewAt: integer("review_at", { mode: "timestamp" }),
+    status: text("status", { enum: ["OPEN", "REVIEWED", "CANCELLED"] })
+      .notNull()
+      .default("OPEN"),
+    result: text("result"),
+    resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("decisions_status_created_idx").on(table.status, table.createdAt),
+    check(
+      "decisions_status_check",
+      sql`${table.status} in ('OPEN', 'REVIEWED', 'CANCELLED')`,
     ),
   ],
 );

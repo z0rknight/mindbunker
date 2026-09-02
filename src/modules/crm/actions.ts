@@ -16,6 +16,7 @@ import {
 import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
 import { startOfMonthISO } from "@/utils/date";
 import { getLastActiveByClient } from "@/modules/work-sessions/data";
+import { countsTowardProduction } from "@/modules/productivity/core";
 import { BOOK_REQUEST_EVENT_TYPE } from "@/modules/booking/core";
 import { QUOTE_REQUEST_EVENT_TYPE } from "@/modules/quote-intake/core";
 import { revalidatePath } from "next/cache";
@@ -584,6 +585,7 @@ export async function getClientIntelligence(
         date: videoLogs.date,
         status: videoLogs.status,
         revisionsCount: videoLogs.revisionsCount,
+        videoKind: videoLogs.videoKind,
       })
       .from(videoLogs)
       .where(eq(videoLogs.clientId, clientId)),
@@ -632,11 +634,14 @@ export async function getClientIntelligence(
   ).length;
   const videosInProgressCount = videoRows.filter(
     (row) =>
-      row.status === "IN_PROGRESS" ||
-      row.status === "READY_FOR_REVIEW" ||
-      row.status === "CHANGES_REQUESTED",
+      countsTowardProduction(row.videoKind) &&
+      (row.status === "IN_PROGRESS" ||
+        row.status === "READY_FOR_REVIEW" ||
+        row.status === "CHANGES_REQUESTED"),
   ).length;
-  const completedVideoRows = videoRows.filter((row) => row.status === "DONE");
+  const completedVideoRows = videoRows.filter(
+    (row) => row.status === "DONE" && countsTowardProduction(row.videoKind),
+  );
   const completedVideosCount = completedVideoRows.length;
   const revisionCount = completedVideoRows.reduce(
     (sum, row) => sum + row.revisionsCount,

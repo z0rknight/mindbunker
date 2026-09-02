@@ -99,3 +99,31 @@ export function isVideoContentType(value: unknown): value is VideoContentType {
     VIDEO_CONTENT_TYPES.includes(value as VideoContentType)
   );
 }
+
+// --- Video classification (Operator Intelligence Patch, Phase 1A) ---------
+//
+// Core Alignment Audit finding: production has no way to distinguish real
+// client production from Sample/Internal work, so any "production count"
+// (Productivity today/month, CRM completed work, Projects done-videos, War
+// Room production facts) can be silently contaminated by a portfolio
+// sample or an internal RMedia video. This is a small, closed vocabulary,
+// not a general tagging system -- exactly the three cases that actually
+// need to be told apart. Defaults to CLIENT_WORK everywhere (both the DB
+// column default and validateVideoInput's fallback below) so every
+// existing video and every existing create path keeps counting exactly as
+// it always has; the operator explicitly reclassifies a video as SAMPLE or
+// INTERNAL only when it genuinely is one. A SAMPLE/INTERNAL video is not
+// deleted or hidden -- it keeps its sessions, revisions, friction,
+// blockers and deliveries; it is simply excluded from the count of real
+// client production. See countsTowardProduction in core.ts, the single
+// eligibility predicate every production-facing read path must use.
+export const VIDEO_KINDS = ["CLIENT_WORK", "SAMPLE", "INTERNAL"] as const;
+export type VideoKind = (typeof VIDEO_KINDS)[number];
+export const VIDEO_KIND_LABELS: Record<VideoKind, string> = {
+  CLIENT_WORK: "Client work",
+  SAMPLE: "Sample / portfolio",
+  INTERNAL: "Internal (RMedia)",
+};
+export function isVideoKind(value: unknown): value is VideoKind {
+  return typeof value === "string" && VIDEO_KINDS.includes(value as VideoKind);
+}

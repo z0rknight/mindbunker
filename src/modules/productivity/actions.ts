@@ -23,6 +23,7 @@ import { startOfMonthISO, todayISO } from "@/utils/date";
 import { mondayOfWeek } from "../work-sessions/core";
 import {
   completedVideoLogs,
+  PRODUCTION_COUNT_KINDS,
   getVideoMetadataChanges,
   isPositiveId,
   planVideoTransition,
@@ -496,12 +497,22 @@ export async function getVideoStats() {
     db
       .select({ count: sql<number>`count(*)` })
       .from(videoLogs)
-      .where(and(eq(videoLogs.date, today), eq(videoLogs.status, "DONE"))),
+      .where(
+        and(
+          eq(videoLogs.date, today),
+          eq(videoLogs.status, "DONE"),
+          inArray(videoLogs.videoKind, PRODUCTION_COUNT_KINDS),
+        ),
+      ),
     db
       .select({ count: sql<number>`count(*)` })
       .from(videoLogs)
       .where(
-        and(gte(videoLogs.date, monthStart), eq(videoLogs.status, "DONE")),
+        and(
+          gte(videoLogs.date, monthStart),
+          eq(videoLogs.status, "DONE"),
+          inArray(videoLogs.videoKind, PRODUCTION_COUNT_KINDS),
+        ),
       ),
     db.select().from(videoLogs).orderBy(videoLogs.createdAt),
   ]);
@@ -560,6 +571,7 @@ export async function getAllVideoLogs() {
       coverUrl: videoLogs.coverUrl,
       orientation: videoLogs.orientation,
       contentType: videoLogs.contentType,
+      videoKind: videoLogs.videoKind,
       createdAt: videoLogs.createdAt,
       updatedAt: videoLogs.updatedAt,
     })
@@ -650,6 +662,7 @@ export async function updateVideoMetadata(
       coverUrl: videoLogs.coverUrl,
       orientation: videoLogs.orientation,
       contentType: videoLogs.contentType,
+      videoKind: videoLogs.videoKind,
     })
     .from(videoLogs)
     .where(eq(videoLogs.id, videoId))
@@ -674,6 +687,7 @@ export async function updateVideoMetadata(
       coverUrl: current[0].coverUrl,
       orientation: current[0].orientation,
       contentType: current[0].contentType,
+      videoKind: current[0].videoKind,
     },
     next,
   );

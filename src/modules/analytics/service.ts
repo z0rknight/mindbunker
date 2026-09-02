@@ -148,35 +148,28 @@ export interface MomentumMetrics {
   comparableDays: number;
 }
 
-export interface LeverageScore {
-  /** Raw composite score */
-  score: number;
-  /** Level number (1-10) */
-  level: number;
-  /** Level title */
-  levelTitle: string;
-  /** Score breakdown for transparency */
-  breakdown: {
-    effectiveYieldBonus: number;
-    revenueGrowthBonus: number;
-    outputVolumeBonus: number;
-    revisionDragPenalty: number;
-    crashPenalty: number;
-    physicalActivityBonus: number;
-    streakBonus: number;
-  };
-  /** XP to next level */
-  xpToNextLevel: number;
-  /** Max XP for current level */
-  levelMaxXp: number;
-}
-
+// Operator Intelligence Patch Phase 1B / Core Alignment Audit P0: the
+// "Leverage Score" composite (Level/Title/XP, arbitrary point weights for
+// revenue growth, output volume, sleep, streaks...) was demoted and
+// removed here. It was never rendered anywhere in the app (confirmed:
+// `leverage` was destructured out of getWarRoomData()'s result in both
+// war-room/page.tsx and page.tsx and never read again) and its weights
+// had no operational justification -- +5 per R$100 yield, +3 per % growth,
+// -50 for a "crash," etc. were invented numbers, not a modeled
+// relationship. Every fact that fed it is still here, honestly named and
+// separately exposed: revenue growth in MomentumMetrics, output volume in
+// EfficiencyMetrics.videosThisMonth, revision drag in
+// EfficiencyMetrics.revisionDragIndex, sleep/crash detection in
+// BiologicalCorrelation, streaks in MomentumMetrics.consistencyStreak. No
+// replacement composite was added -- see the Operator Intelligence Patch
+// report's anti-bloat rule: facts may be combined only when the result
+// has an explainable operational meaning, and no game mechanics disguised
+// as business intelligence.
 export interface WarRoomData {
   income: IncomeIntelligence;
   efficiency: EfficiencyMetrics;
   biological: BiologicalCorrelation;
   momentum: MomentumMetrics;
-  leverage: LeverageScore;
   generatedAt: string;
 }
 
@@ -192,40 +185,6 @@ function trendDirection(growthPct: number | null): "up" | "down" | "flat" {
   if (growthPct > 5) return "up";
   if (growthPct < -5) return "down";
   return "flat";
-}
-
-const LEVEL_THRESHOLDS = [0, 50, 120, 220, 350, 500, 680, 880, 1100, 1350, 1650];
-const LEVEL_TITLES = [
-  "Rookie",
-  "Operator",
-  "Grinder",
-  "Specialist",
-  "Tactician",
-  "Strategist",
-  "Enforcer",
-  "Weaponized",
-  "Apex",
-  "Elite",
-  "LEGEND",
-];
-
-function calculateLevel(score: number): { level: number; title: string; xpToNext: number; levelMax: number } {
-  let level = 1;
-  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
-    if (score >= LEVEL_THRESHOLDS[i]) {
-      level = i + 1;
-      break;
-    }
-  }
-  level = Math.min(level, 10);
-  const xpToNext = level < 10 ? LEVEL_THRESHOLDS[level] - score : 0;
-  const levelMax = level < 10 ? LEVEL_THRESHOLDS[level] - LEVEL_THRESHOLDS[level - 1] : LEVEL_THRESHOLDS[10] - LEVEL_THRESHOLDS[9];
-  return {
-    level,
-    title: LEVEL_TITLES[level - 1] ?? "Elite",
-    xpToNext: Math.max(0, xpToNext),
-    levelMax,
-  };
 }
 
 // ─── MAIN FUNCTION ────────────────────────────────────────────────────────────
@@ -573,55 +532,6 @@ export async function getWarRoomData(): Promise<WarRoomData> {
     : null;
   const outputTrend = trendDirection(outputGrowthPct);
 
-  // ── LEVERAGE SCORE ────────────────────────────────────────────────────────
-
-  // Effective yield bonus: +5 per R$100 effective yield (capped at 200)
-  const effectiveYieldBonus = effectiveFlatRateYield
-    ? Math.min(Math.round((effectiveFlatRateYield / 100) * 5), 200)
-    : 0;
-
-  // Revenue growth bonus: +3 per % growth (capped at 150)
-  const revenueGrowthBonus = revenueGrowthPct
-    ? Math.min(Math.max(revenueGrowthPct * 3, 0), 150)
-    : 0;
-
-  // Output volume bonus: +2 per video delivered this month (capped at
-  // 100). Renamed from "deepWorkBonus" (Sunday Systems Round, Phase F,
-  // RMEDIA_OPERATIONAL_INVARIANTS.md rule on honest metric naming) --
-  // this has only ever counted completed videos, never time or effort, so
-  // it must not carry a name that implies a future time-based signal. If
-  // a real deep-work/focus-time metric is ever built from work_sessions or
-  // a sensor, it is a separate, honestly-named metric alongside this one,
-  // never a silent redefinition of it.
-  const outputVolumeBonus = Math.min(thisMonthVideoCount * 2, 100);
-
-  // Revision drag penalty: -4 per 0.1 above 0.5 threshold
-  const revisionDragPenalty =
-    revisionDragIndex !== null && revisionDragIndex > 0.5
-      ? Math.round((revisionDragIndex - 0.5) * 40)
-      : 0;
-
-  // Crash penalty: -50 if crash detected, -20 if warning
-  const crashPenalty = crashDetected ? 50 : crashSleepCount >= 2 ? 20 : 0;
-
-  // Physical activity bonus: up to +50
-  const physicalActivityBonus = physicalActivityScore;
-
-  // Streak bonus: +5 per day (capped at 50)
-  const streakBonus = Math.min(consistencyStreak * 5, 50);
-
-  const rawScore =
-    effectiveYieldBonus +
-    revenueGrowthBonus +
-    outputVolumeBonus +
-    physicalActivityBonus +
-    streakBonus -
-    revisionDragPenalty -
-    crashPenalty;
-
-  const finalScore = Math.max(0, Math.round(rawScore));
-  const { level, title, xpToNext, levelMax } = calculateLevel(finalScore);
-
   return {
     income: {
       monthlyRevenue,
@@ -674,22 +584,6 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       outputTrend,
       consistencyStreak,
       comparableDays,
-    },
-    leverage: {
-      score: finalScore,
-      level,
-      levelTitle: title,
-      breakdown: {
-        effectiveYieldBonus,
-        revenueGrowthBonus,
-        outputVolumeBonus,
-        revisionDragPenalty,
-        crashPenalty,
-        physicalActivityBonus,
-        streakBonus,
-      },
-      xpToNextLevel: xpToNext,
-      levelMaxXp: levelMax,
     },
     generatedAt: new Date().toISOString(),
   };

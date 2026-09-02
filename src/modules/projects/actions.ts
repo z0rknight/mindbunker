@@ -62,6 +62,7 @@ export async function getProjectWorkspace(projectId: number) {
       publishedUrl: videoLogs.publishedUrl,
       coverUrl: videoLogs.coverUrl,
       orientation: videoLogs.orientation,
+      videoKind: videoLogs.videoKind,
       batchLabel: videoLogs.batchLabel,
       // Quick Morning Reality Patch §4/§7: read-only here (priority is
       // client-settable, see PriorityToggle) -- the operator command-card
@@ -145,7 +146,7 @@ export async function getProjectsOverview() {
       coverUrl: projects.coverUrl,
       updatedAt: projects.updatedAt,
       totalVideos: sql<number>`count(${videoLogs.id})`,
-      doneVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'DONE' then 1 else 0 end), 0)`,
+      doneVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'DONE' and ${videoLogs.videoKind} = 'CLIENT_WORK' then 1 else 0 end), 0)`,
       inFlightVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} in ('IN_PROGRESS', 'READY_FOR_REVIEW', 'CHANGES_REQUESTED') then 1 else 0 end), 0)`,
       plannedVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'PLANNED' then 1 else 0 end), 0)`,
     })

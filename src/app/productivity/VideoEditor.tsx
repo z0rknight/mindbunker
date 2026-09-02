@@ -10,11 +10,14 @@ import { CopyLinkButton } from "@/components/ui/CopyLinkButton";
 import {
   VIDEO_CONTENT_TYPE_LABELS,
   VIDEO_CONTENT_TYPES,
+  VIDEO_KIND_LABELS,
+  VIDEO_KINDS,
   VIDEO_ORIENTATION_LABELS,
   VIDEO_ORIENTATIONS,
   VIDEO_STATUS_LABELS,
   getAllowedVideoTransitions,
   type VideoContentType,
+  type VideoKind,
   type VideoOrientation,
   type VideoStatus,
 } from "@/modules/productivity/config";
@@ -48,6 +51,7 @@ type VideoEditorProps = {
     coverUrl: string | null;
     orientation: VideoOrientation | null;
     contentType: VideoContentType | null;
+    videoKind: VideoKind;
     status: VideoStatus;
     revisionsCount: number;
   };
@@ -97,6 +101,7 @@ export function VideoEditor({
   const [coverUrl, setCoverUrl] = useState(video.coverUrl ?? "");
   const [orientation, setOrientation] = useState(video.orientation ?? "");
   const [contentType, setContentType] = useState(video.contentType ?? "");
+  const [videoKind, setVideoKind] = useState<VideoKind>(video.videoKind);
   const [status, setStatus] = useState(video.status);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
@@ -129,6 +134,7 @@ export function VideoEditor({
     setCoverUrl(video.coverUrl ?? "");
     setOrientation(video.orientation ?? "");
     setContentType(video.contentType ?? "");
+    setVideoKind(video.videoKind);
     setStatus(video.status);
     setFeedback("");
     setError("");
@@ -159,6 +165,7 @@ export function VideoEditor({
         coverUrl,
         orientation: (orientation || null) as VideoOrientation | null,
         contentType: (contentType || null) as VideoContentType | null,
+        videoKind,
       });
       if (!result.success) {
         setError(result.error);
@@ -531,6 +538,27 @@ export function VideoEditor({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label htmlFor={`video-kind-${video.id}`} className="mb-1.5 block text-xs font-bold text-zinc-400">
+                  Classification
+                </label>
+                <select
+                  id={`video-kind-${video.id}`}
+                  value={videoKind}
+                  onChange={(event) => setVideoKind(event.target.value as VideoKind)}
+                  className={fieldClassName}
+                >
+                  {VIDEO_KINDS.map((value) => (
+                    <option key={value} value={value}>
+                      {VIDEO_KIND_LABELS[value]}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-[11px] leading-4 text-zinc-600">
+                  Only Client work counts toward production stats (Productivity, CRM, Projects, War Room). Sample and Internal videos keep their full history but are excluded from those counts.
+                </p>
               </div>
 
               <div>

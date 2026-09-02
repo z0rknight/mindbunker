@@ -2,6 +2,7 @@ import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
 import type { OperationalVideoEntry } from "@/modules/productivity/core";
 import type {
   VideoContentType,
+  VideoKind,
   VideoOrientation,
   VideoStatus,
 } from "@/modules/productivity/config";
@@ -37,6 +38,7 @@ type VideoRow = {
   coverUrl: string | null;
   orientation: VideoOrientation | null;
   contentType: VideoContentType | null;
+  videoKind: VideoKind;
   createdAt: Date | null;
   updatedAt: Date | null;
 };

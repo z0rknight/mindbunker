@@ -1,14 +1,27 @@
 import { getWarRoomData } from "@/modules/analytics/service";
+import { getActiveSignals, type Signal, type SignalConfidence, type SignalSeverity } from "@/modules/signals";
+import { getDailyLedger, type DailyLedgerRow } from "@/modules/daily-ledger";
+import { listOpenDecisions, type OpenDecisionRow } from "@/modules/decisions/actions";
+import { OpenDecisionCard, RecordDecisionButton } from "./DecisionControls";
 import { formatCurrency } from "@/utils/date";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function WarRoomPage() {
-  const data = await getWarRoomData();
+  const [data, signals, dailyLedger, openDecisions] = await Promise.all([
+    getWarRoomData(),
+    getActiveSignals(),
+    getDailyLedger(7),
+    listOpenDecisions(),
+  ]);
   const { income, efficiency, biological, momentum } = data;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-5 sm:p-6">
+      <ActiveSignalsSection signals={signals} />
+      <DecisionsSection decisions={openDecisions} />
+      <DailyLedgerSection rows={dailyLedger} />
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="mb-8 flex flex-col items-start justify-between gap-3 sm:flex-row">
         <div>
@@ -494,5 +507,162 @@ function SleepCorrelationRow({
         {sampleCount >= 5 && value !== null ? `${value} videos/day · N=${sampleCount}` : `Insufficient · N=${sampleCount}`}
       </span>
     </div>
+  );
+}
+
+// ─── OPERATOR INTELLIGENCE PATCH: ACTIVE SIGNALS (Phase 2) ─────────────────
+
+function severityClass(severity: SignalSeverity) {
+  if (severity === "ACTION") return "border-red-900/60 bg-red-950/15 text-red-300";
+  if (severity === "WATCH") return "border-amber-900/60 bg-amber-950/15 text-amber-300";
+  return "border-zinc-700 bg-zinc-900 text-zinc-400";
+}
+
+function confidenceLabel(confidence: SignalConfidence) {
+  if (confidence === "HIGH") return "HIGH CONFIDENCE";
+  if (confidence === "MEDIUM") return "MEDIUM CONFIDENCE";
+  return "INSUFFICIENT DATA";
+}
+
+function ActiveSignalsSection({ signals }: { signals: Signal[] }) {
+  return (
+    <section className="mb-8">
+      <SectionHeader label="ACTIVE SIGNALS" icon="📡" />
+      {signals.length === 0 ? (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5 text-sm text-zinc-500">
+          No active signals. Nothing overdue, blocked, or repeating right now.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {signals.map((signal) => (
+            <div
+              key={signal.id}
+              className={`flex flex-col gap-1 rounded-xl border p-3.5 sm:flex-row sm:items-center sm:justify-between ${severityClass(signal.severity)}`}
+            >
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest">
+                    {signal.severity}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                    {confidenceLabel(signal.confidence)}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm font-bold text-white">{signal.statement}</p>
+                <p className="mt-0.5 text-xs text-zinc-500">{signal.evidence}</p>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-start gap-2">
+                {signal.action && (
+                  <Link
+                    href={signal.action.href}
+                    className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-center text-xs font-bold text-zinc-200 hover:border-violet-500 hover:text-violet-200"
+                  >
+                    {signal.action.label} →
+                  </Link>
+                )}
+                <RecordDecisionButton signalType={signal.kind} context={signal.context} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ─── OPERATOR INTELLIGENCE PATCH: DECISION LOG (Phase 5) ───────────────────
+
+function DecisionsSection({ decisions }: { decisions: OpenDecisionRow[] }) {
+  if (decisions.length === 0) return null;
+  return (
+    <section className="mb-8">
+      <SectionHeader label="OPEN DECISIONS" icon="🧭" />
+      <div className="space-y-2">
+        {decisions.map((decision) => (
+          <OpenDecisionCard key={decision.id} decision={decision} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ─── OPERATOR INTELLIGENCE PATCH: DAILY OPERATIONAL LEDGER (Phase 3) ───────
+
+function formatDuration(seconds: number): string {
+  if (seconds <= 0) return "0m";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  return hours > 0 ? `${hours}h${minutes > 0 ? ` ${minutes}m` : ""}` : `${minutes}m`;
+}
+
+function formatTimeOfDay(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  });
+}
+
+function DailyLedgerSection({ rows }: { rows: DailyLedgerRow[] }) {
+  return (
+    <section className="mb-8">
+      <SectionHeader label="DAILY OPERATIONAL LEDGER · LAST 7 DAYS" icon="📓" />
+      <p className="mb-3 text-xs text-zinc-600">
+        What actually happened each day, derived from evidence already recorded elsewhere. &ldquo;—&rdquo; means no evidence for that day, not zero.
+      </p>
+      <div className="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900">
+        <table className="w-full min-w-[720px] text-left text-xs">
+          <thead>
+            <tr className="border-b border-zinc-800 text-zinc-500">
+              <th className="px-3 py-2 font-semibold uppercase tracking-wider">Date</th>
+              <th className="px-3 py-2 font-semibold uppercase tracking-wider">Capacity</th>
+              <th className="px-3 py-2 font-semibold uppercase tracking-wider">Work</th>
+              <th className="px-3 py-2 font-semibold uppercase tracking-wider">Output</th>
+              <th className="px-3 py-2 font-semibold uppercase tracking-wider">Quality</th>
+              <th className="px-3 py-2 font-semibold uppercase tracking-wider">Money</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.date} className="border-b border-zinc-800/60 last:border-0">
+                <td className="whitespace-nowrap px-3 py-2 font-mono text-zinc-400">{row.date}</td>
+                <td className="px-3 py-2 text-zinc-300">
+                  {row.capacity.sleepHours !== null ? `${row.capacity.sleepHours}h sleep` : "— sleep"}
+                  {row.capacity.caffeineMg !== null ? ` · ${row.capacity.caffeineMg}mg` : ""}
+                  {row.capacity.walkingMinutes !== null ? ` · ${row.capacity.walkingMinutes}m walk` : ""}
+                  {row.capacity.cyclingKm !== null ? ` · ${row.capacity.cyclingKm}km cycle` : ""}
+                </td>
+                <td className="px-3 py-2 text-zinc-300">
+                  {formatDuration(row.work.trackedSeconds)}
+                  {row.work.sessionCount > 0 ? ` · ${row.work.sessionCount} session${row.work.sessionCount === 1 ? "" : "s"}` : ""}
+                  {row.work.videosTouched > 0 ? ` · ${row.work.videosTouched} video${row.work.videosTouched === 1 ? "" : "s"}` : ""}
+                  {row.work.sessionCount > 0 ? ` · ${formatTimeOfDay(row.work.firstSessionAt)}–${formatTimeOfDay(row.work.lastSessionAt)}` : ""}
+                </td>
+                <td className="px-3 py-2 text-zinc-300">
+                  {row.output.videosDelivered} delivered
+                  {row.output.commitmentsDue > 0 ? ` · ${row.output.commitmentsDue} due` : ""}
+                  {row.output.commitmentsMissed > 0 ? ` · ${row.output.commitmentsMissed} missed` : ""}
+                </td>
+                <td className="px-3 py-2 text-zinc-300">
+                  {row.quality.detailedRevisions} revisions
+                  {row.quality.ourErrorRevisions > 0 ? ` (${row.quality.ourErrorRevisions} our error)` : ""}
+                  {row.quality.reworkMinutes !== null ? ` · ${row.quality.reworkMinutes}m rework` : ""}
+                  {row.quality.frictionEvents > 0 ? ` · ${row.quality.frictionEvents} friction` : ""}
+                </td>
+                <td className="px-3 py-2 text-zinc-300">
+                  {row.economics.revenueByCurrency.length === 0 && row.economics.expenseByCurrency.length === 0
+                    ? "—"
+                    : [
+                        ...row.economics.revenueByCurrency.map((c) => `+${formatCurrency(c.amount, c.currency)}`),
+                        ...row.economics.expenseByCurrency.map((c) => `-${formatCurrency(c.amount, c.currency)}`),
+                      ].join(" · ")}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

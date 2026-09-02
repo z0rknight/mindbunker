@@ -90,6 +90,7 @@ test("video input preserves its project and client references", () => {
       coverUrl: null,
       orientation: null,
       contentType: null,
+      videoKind: "CLIENT_WORK",
       date: null,
     });
   }
@@ -271,17 +272,34 @@ test("Finished Video can only complete an existing directly finishable identity"
 
 test("only DONE counts as completed output across the five lifecycle states", () => {
   const date = "2026-08-21";
+  // Operator Intelligence Patch Phase 1A: completedVideoLogs now also
+  // requires videoKind -- every row here is CLIENT_WORK so this test
+  // still isolates only the status dimension, unchanged from before.
   const videos = [
-    { id: 1, date, status: "PLANNED" },
-    { id: 2, date, status: "IN_PROGRESS" },
-    { id: 3, date, status: "READY_FOR_REVIEW" },
-    { id: 4, date, status: "CHANGES_REQUESTED" },
-    { id: 5, date, status: "DONE" },
+    { id: 1, date, status: "PLANNED", videoKind: "CLIENT_WORK" },
+    { id: 2, date, status: "IN_PROGRESS", videoKind: "CLIENT_WORK" },
+    { id: 3, date, status: "READY_FOR_REVIEW", videoKind: "CLIENT_WORK" },
+    { id: 4, date, status: "CHANGES_REQUESTED", videoKind: "CLIENT_WORK" },
+    { id: 5, date, status: "DONE", videoKind: "CLIENT_WORK" },
   ];
 
   assert.deepEqual(
     completedVideoLogs(videos).map((video) => video.id),
     [5],
+  );
+});
+
+test("a DONE Sample or Internal video does not count toward production output", () => {
+  const date = "2026-08-21";
+  const videos = [
+    { id: 1, date, status: "DONE", videoKind: "CLIENT_WORK" },
+    { id: 2, date, status: "DONE", videoKind: "SAMPLE" },
+    { id: 3, date, status: "DONE", videoKind: "INTERNAL" },
+  ];
+
+  assert.deepEqual(
+    completedVideoLogs(videos).map((video) => video.id),
+    [1],
   );
 });
 
