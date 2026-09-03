@@ -27,6 +27,7 @@ import { useState, useTransition } from "react";
 import { WorkSessionPanel } from "./WorkSessionPanel";
 import { VideoMemoryPanel } from "./VideoMemoryPanel";
 import { CommercialTermsPanel } from "./CommercialTermsPanel";
+import { DeliveryMessagePanel } from "./DeliveryMessagePanel";
 import { ProjectReferencesPanel } from "./ProjectReferencesPanel";
 import { CoverUploadField } from "@/components/media/CoverUploadField";
 
@@ -337,6 +338,7 @@ export function VideoEditor({
 
               <div className="space-y-4">
                 <CommercialTermsPanel videoId={video.id} />
+                <DeliveryMessagePanel videoId={video.id} />
                 <VideoMemoryPanel videoId={video.id} />
                 <form onSubmit={saveMetadata} className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/25 p-4 sm:p-5">
                 <div className="mb-1">

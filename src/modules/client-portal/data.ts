@@ -12,7 +12,8 @@ import {
   type ClientVideoDetail,
 } from "./core";
 import { getApprovedQuoteForVideo } from "@/modules/quotes/data";
-import { buildClientQuoteSummary } from "@/modules/quotes/core";
+import { buildClientQuoteSummary, buildClientHourlySummary } from "@/modules/quotes/core";
+import { getCommercialTermsForVideo } from "@/modules/quotes/actions";
 
 export type ClientPortalView =
   | { status: "unavailable" }
@@ -249,6 +250,11 @@ export async function getClientVideoDetailView(
 
   const approvedQuote = await getApprovedQuoteForVideo(videoId);
   const quote = approvedQuote ? buildClientQuoteSummary(approvedQuote) : null;
+  // Post-Job Commercial + Delivery Sniper §9: reuse the SAME canonical
+  // commercial engine every operator surface already calls -- no second
+  // derivation for the client portal.
+  const commercialTerms = quote ? null : await getCommercialTermsForVideo(videoId);
+  const hourly = commercialTerms ? buildClientHourlySummary(commercialTerms) : null;
 
   // Quick Morning Reality Patch §4: sibling count within the SAME
   // clientId+projectId ownership check as the main query above, so this
@@ -271,6 +277,6 @@ export async function getClientVideoDetailView(
   return {
     status: "active",
     clientName: clientRow[0].name,
-    video: buildClientVideoDetail(video, projectNameById, quote, projectVideoCount),
+    video: buildClientVideoDetail(video, projectNameById, quote, projectVideoCount, hourly),
   };
 }

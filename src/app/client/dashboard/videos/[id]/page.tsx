@@ -137,6 +137,24 @@ export default async function ClientVideoDetailPage({
           />
         )}
 
+        {video.hourly && (
+          <section className="rounded-2xl border border-cyan-900/40 bg-cyan-950/10 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Hourly contract</p>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <p className="text-sm text-zinc-400">
+                Rate <span className="font-black text-white">{video.hourly.hourlyRateLabel}</span>
+              </p>
+              <p className="text-sm text-zinc-400">
+                Estimated accrued{" "}
+                <span className="font-black text-emerald-300">{video.hourly.estimatedAccruedLabel}</span>
+              </p>
+            </div>
+            <p className="mt-2 text-[10px] text-zinc-600">
+              Estimate based on tracked production time x contract rate -- not a paid or invoiced amount.
+            </p>
+          </section>
+        )}
+
         {video.quote && (
           <section className="rounded-2xl border border-emerald-900/40 bg-emerald-950/10 p-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Approved quote</p>

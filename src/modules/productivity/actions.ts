@@ -4,7 +4,7 @@ import "server-only";
 
 import { getAuthenticatedDb, getDb } from "@/db";
 import { isClientAuthenticated } from "@/lib/client-portal-session";
-import { clients, crmEvents, projects, revisions, videoLogs, workSessions } from "@/db/schema";
+import { clients, commercialContracts, crmEvents, projects, revisions, videoLogs, workSessions } from "@/db/schema";
 import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { startOfMonthISO, todayISO } from "@/utils/date";
@@ -1108,4 +1108,51 @@ export async function deleteVideoLog(
   await db.delete(videoLogs).where(eq(videoLogs.id, id));
   revalidateProductivityViews(current[0].clientId);
   return { success: true, message: "Video removed." };
+}
+
+
+// Post-Job Commercial + Delivery Sniper §1: explicit, video-specific
+// commercial_contracts link -- overrides the parent project's contract
+// and the legacy client-single-active-contract inference (see
+// resolveContractForVideo in modules/quotes/actions.ts). Same-client
+// validation is unconditional here, matching setProjectContract in
+// modules/projects/actions.ts: a contract belonging to a different
+// client can never be attached to this video.
+export async function setVideoContract(
+  videoId: number,
+  contractId: number | null,
+): Promise<ProductivityActionResult> {
+  if (!isPositiveId(videoId)) {
+    return { success: false, error: "Invalid video." };
+  }
+  const db = await getAuthenticatedDb();
+  const current = await db
+    .select({ id: videoLogs.id, clientId: videoLogs.clientId })
+    .from(videoLogs)
+    .where(eq(videoLogs.id, videoId))
+    .limit(1);
+  if (!current[0]) return { success: false, error: "Video not found." };
+  if (current[0].clientId === null) {
+    return { success: false, error: "This video has no client attached yet -- attach one before linking a contract." };
+  }
+
+  if (contractId !== null) {
+    if (!isPositiveId(contractId)) {
+      return { success: false, error: "Invalid contract." };
+    }
+    const contractRows = await db
+      .select({ id: commercialContracts.id, clientId: commercialContracts.clientId })
+      .from(commercialContracts)
+      .where(eq(commercialContracts.id, contractId))
+      .limit(1);
+    const contract = contractRows[0];
+    if (!contract) return { success: false, error: "Contract not found." };
+    if (contract.clientId !== current[0].clientId) {
+      return { success: false, error: "This contract belongs to a different client -- it cannot be linked here." };
+    }
+  }
+
+  await db.update(videoLogs).set({ contractId, updatedAt: new Date() }).where(eq(videoLogs.id, videoId));
+  revalidateProductivityViews(current[0].clientId);
+  return { success: true, message: contractId ? "Contract linked." : "Contract unlinked." };
 }

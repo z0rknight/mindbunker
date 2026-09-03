@@ -464,6 +464,18 @@ export const projects = sqliteTable(
     // be either fixed or hourly.
     contractType: text("contract_type", { enum: ["FIXED", "HOURLY"] }),
     fixedPriceCents: integer("fixed_price_cents"),
+    // Post-Job Commercial + Delivery Sniper §1: explicit, operator-set
+    // link to the canonical commercial_contracts table (Monday Money Lab
+    // P0's BILLING TRUTH, defined further below in this file -- forward
+    // reference is safe, same pattern already used by
+    // transactions.contractId elsewhere in this file). Distinct from
+    // contractType/fixedPriceCents above (the disconnected Local Lab
+    // "Economics prototype", left untouched): this is the real, reusable
+    // Finance/Contracts domain. Nullable -- existing projects stay
+    // unattributed until an operator explicitly links one, never
+    // inferred. onDelete: set null so removing a contract record can
+    // never cascade-delete project history.
+    contractId: integer("contract_id").references(() => commercialContracts.id, { onDelete: "set null" }),
     // Sprint 3 P1 (Project + Video visual covers): nullable, never
     // backfilled by inference -- same convention as videoLogs.coverUrl
     // above. A Project with no coverUrl falls back through
@@ -533,6 +545,14 @@ export const videoLogs = sqliteTable(
     // docs/architecture/MONDAY_REAL_OPERATION_PRE_FREEZE.md.
     reviewUrl: text("review_url"),
     publishedUrl: text("published_url"),
+    // Post-Job Commercial + Delivery Sniper §1: explicit, video-specific
+    // override of the project's contractId -- resolution order is this
+    // field first, then the parent project's contractId, then (legacy,
+    // preserved unchanged) the client's single ACTIVE HOURLY
+    // commercial_contracts row that getCommercialTermsForVideo already
+    // fell back to before this column existed. Same nullable/never-
+    // inferred discipline as projects.contractId above.
+    contractId: integer("contract_id").references(() => commercialContracts.id, { onDelete: "set null" }),
     notes: text("notes"),
     // Wave 2E: same single-slot next-action/waiting-on pattern as
     // projects.nextAction/waitingOn above -- see that comment.

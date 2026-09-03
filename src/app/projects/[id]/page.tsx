@@ -13,6 +13,7 @@ import { AddVideoButton } from "./AddVideoButton";
 import { BulkAddVideosButton } from "./BulkAddVideosButton";
 import { ProjectVideoWorkspace } from "./ProjectVideoWorkspace";
 import { getCommercialTermsForVideo } from "@/modules/quotes/actions";
+import { aggregateProjectCommercialSummary } from "@/modules/quotes/core";
 import { AssetsPanel } from "./AssetsPanel";
 import { SourceMediaPanel } from "./SourceMediaPanel";
 import { getAssetsForProject } from "@/modules/assets/actions";
@@ -51,6 +52,13 @@ export default async function ProjectWorkspacePage({
     ...video,
     commercialTerms: commercialTermsByVideoId.get(video.id) ?? null,
   }));
+
+  // Post-Job Commercial + Delivery Sniper §5: one aggregation of the same
+  // per-video CommercialTerms already fetched above -- no second query,
+  // no independent recompute.
+  const commercialSummary = aggregateProjectCommercialSummary(
+    Array.from(commercialTermsByVideoId.values()),
+  );
 
   // Promotion Prep Patch P0: a Sample Video or Internal video must not
   // count as completed client production output on the project header.
@@ -137,11 +145,57 @@ export default async function ProjectWorkspacePage({
         </section>
       )}
 
+      {commercialSummary.videoCount > 0 &&
+        (commercialSummary.byCurrency.length > 0 || commercialSummary.trackedSecondsTotal > 0) && (
+          <section className="mb-7 rounded-2xl border border-emerald-900/40 bg-emerald-950/10 p-4 sm:p-5">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300">
+              Commercial summary
+            </p>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-2">
+              <p className="text-xs text-zinc-500">
+                Tracked work{" "}
+                <span className="font-black text-white">
+                  {Math.floor(commercialSummary.trackedSecondsTotal / 3600)}h{" "}
+                  {Math.round((commercialSummary.trackedSecondsTotal % 3600) / 60)}m
+                </span>
+              </p>
+              {commercialSummary.byCurrency.map((bucket) => (
+                <div key={bucket.currency} className="flex items-baseline gap-3 text-xs text-zinc-500">
+                  {bucket.agreedTotalCents !== null && (
+                    <span>
+                      Agreed{" "}
+                      <span className="font-black text-emerald-300">
+                        {bucket.currency} {(bucket.agreedTotalCents / 100).toFixed(2)}
+                      </span>
+                    </span>
+                  )}
+                  {bucket.estimatedAccruedTotal !== null && (
+                    <span>
+                      Estimated accrued{" "}
+                      <span className="font-black text-cyan-300">
+                        {bucket.currency} {bucket.estimatedAccruedTotal.toFixed(2)}
+                      </span>
+                    </span>
+                  )}
+                </div>
+              ))}
+              {commercialSummary.unattributedCount > 0 && (
+                <p className="text-[11px] text-zinc-600">
+                  {commercialSummary.unattributedCount} of {commercialSummary.videoCount} video
+                  {commercialSummary.videoCount === 1 ? "" : "s"} with no commercial terms yet
+                </p>
+              )}
+            </div>
+          </section>
+        )}
+
       {project.notes && (
-        <section className="mb-7 rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4 sm:p-5">
-          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Project notes</p>
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-zinc-400">{project.notes}</p>
-        </section>
+        <details className="mb-7 rounded-2xl border border-zinc-800 bg-zinc-950/35">
+          <summary className="cursor-pointer select-none px-4 py-3 text-[10px] font-black uppercase tracking-widest text-zinc-600 sm:px-5">
+            Project notes
+          </summary>
+          <p className="whitespace-pre-wrap px-4 pb-4 text-sm leading-6 text-zinc-400 sm:px-5">{project.notes}</p>
+        </details>
       )}
 
       {custody && <ChainOfCustodyPanel custody={custody} focusProjectId={project.id} />}

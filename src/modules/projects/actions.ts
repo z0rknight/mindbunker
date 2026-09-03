@@ -3,7 +3,7 @@
 import "server-only";
 
 import { getAuthenticatedDb } from "@/db";
-import { clients, crmEvents, projects, videoLogs } from "@/db/schema";
+import { clients, commercialContracts, crmEvents, projects, videoLogs } from "@/db/schema";
 import { desc, eq, ne, sql } from "drizzle-orm";
 import { getLastActiveByProject } from "../work-sessions/data";
 import { revalidatePath } from "next/cache";
@@ -324,4 +324,49 @@ export async function deleteProject(
 
   revalidateProjectViews(current[0].clientId);
   return { success: true, message: "Project deleted. Its videos were kept." };
+}
+
+
+// Post-Job Commercial + Delivery Sniper §1: sets or clears the project-
+// level commercial_contracts link. Same-client validation happens here,
+// server-side, unconditionally -- a contract belonging to a different
+// client can never be attached, closing the exact cross-client
+// misattribution risk a client with multiple contracts (or two clients on
+// the same platform) would otherwise create.
+export async function setProjectContract(
+  projectId: number,
+  contractId: number | null,
+): Promise<ProjectActionResult> {
+  if (!isPositiveId(projectId)) {
+    return { success: false, error: "Invalid project." };
+  }
+  const db = await getAuthenticatedDb();
+  const current = await db
+    .select({ id: projects.id, clientId: projects.clientId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+  if (!current[0]) return { success: false, error: "Project not found." };
+
+  if (contractId !== null) {
+    if (!isPositiveId(contractId)) {
+      return { success: false, error: "Invalid contract." };
+    }
+    const contractRows = await db
+      .select({ id: commercialContracts.id, clientId: commercialContracts.clientId })
+      .from(commercialContracts)
+      .where(eq(commercialContracts.id, contractId))
+      .limit(1);
+    const contract = contractRows[0];
+    if (!contract) return { success: false, error: "Contract not found." };
+    if (contract.clientId !== current[0].clientId) {
+      return { success: false, error: "This contract belongs to a different client -- it cannot be linked here." };
+    }
+  }
+
+  await db.update(projects).set({ contractId, updatedAt: new Date() }).where(eq(projects.id, projectId));
+
+  revalidateProjectViews(current[0].clientId);
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true, message: contractId ? "Contract linked." : "Contract unlinked." };
 }

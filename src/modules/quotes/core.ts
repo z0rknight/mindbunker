@@ -10,6 +10,7 @@ import {
   QUOTE_STATUS_TRANSITIONS,
   type QuoteStatus,
 } from "./config.ts";
+import type { CommercialTerms } from "./actions";
 
 export function isQuoteStatus(value: unknown): value is QuoteStatus {
   return (
@@ -347,4 +348,122 @@ export function computeOperationalEffectiveRateCents(
 export function computeRateEquivalent(trackedSeconds: number, hourlyRate: number): number {
   const trackedHours = trackedSeconds / 3600;
   return trackedHours * hourlyRate;
+}
+
+// Post-Job Commercial + Delivery Sniper §5: aggregates a project's video-
+// level CommercialTerms (already fetched once per video via
+// getCommercialTermsForVideo -- no second derivation) into the summary
+// the Project workspace header shows. Currencies and billing models are
+// kept SEPARATE, never collapsed into one number: a FIXED "agreed" amount
+// is a real recorded fact, an HOURLY "estimated accrued" amount is a
+// derived estimate, and BRL is never added to USD. unattributedCount lets
+// the UI say "3 of 7 videos have no commercial terms yet" instead of
+// silently treating them as $0.
+// Post-Job Commercial + Delivery Sniper §9: client-safe HOURLY summary --
+// same discipline as ClientQuoteSummary/buildClientQuoteSummary above (no
+// contractId, no platform name, no Upwork billing-evidence totals -- only
+// facts the client is entitled to see about their own tracked work).
+// FIXED already has buildClientQuoteSummary; this is HOURLY's equivalent.
+// Never includes a "Paid"/"Unpaid" figure -- that requires canonical
+// payment evidence this function has no access to and must not guess at.
+export type ClientHourlySummary = {
+  hourlyRateLabel: string;
+  trackedSeconds: number;
+  estimatedAccruedLabel: string;
+  currency: string;
+};
+
+export function buildClientHourlySummary(terms: CommercialTerms): ClientHourlySummary | null {
+  if (terms.billingModel !== "HOURLY") return null;
+  return {
+    hourlyRateLabel: formatCurrencyPerHour(terms.hourlyRate, terms.currency),
+    trackedSeconds: terms.trackedSeconds,
+    estimatedAccruedLabel: formatCurrencyPlain(terms.estimatedAccruedValue, terms.currency),
+    currency: terms.currency,
+  };
+}
+
+function formatCurrencyPerHour(rate: number, currency: string): string {
+  try {
+    return (
+      new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currency || "USD",
+        minimumFractionDigits: 2,
+      }).format(rate) + "/h"
+    );
+  } catch {
+    return `${currency} ${rate.toFixed(2)}/h`;
+  }
+}
+
+function formatCurrencyPlain(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || "USD",
+      minimumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
+}
+
+export type ProjectCommercialCurrencyBucket = {
+  currency: string;
+  agreedTotalCents: number | null;
+  estimatedAccruedTotal: number | null;
+};
+
+export type ProjectCommercialSummary = {
+  trackedSecondsTotal: number;
+  videoCount: number;
+  unattributedCount: number;
+  byCurrency: ProjectCommercialCurrencyBucket[];
+};
+
+export function aggregateProjectCommercialSummary(
+  termsList: readonly CommercialTerms[],
+): ProjectCommercialSummary {
+  const buckets = new Map<string, ProjectCommercialCurrencyBucket>();
+  const getBucket = (currency: string) => {
+    const existing = buckets.get(currency);
+    if (existing) return existing;
+    const created: ProjectCommercialCurrencyBucket = {
+      currency,
+      agreedTotalCents: null,
+      estimatedAccruedTotal: null,
+    };
+    buckets.set(currency, created);
+    return created;
+  };
+
+  let trackedSecondsTotal = 0;
+  let unattributedCount = 0;
+
+  for (const terms of termsList) {
+    trackedSecondsTotal += terms.trackedSeconds;
+    if (terms.billingModel === "FIXED") {
+      const bucket = getBucket(terms.currency);
+      bucket.agreedTotalCents = (bucket.agreedTotalCents ?? 0) + terms.agreedPriceCents;
+    } else if (terms.billingModel === "HOURLY") {
+      const bucket = getBucket(terms.currency);
+      bucket.estimatedAccruedTotal = round2(
+        (bucket.estimatedAccruedTotal ?? 0) + terms.estimatedAccruedValue,
+      );
+    } else {
+      unattributedCount += 1;
+    }
+  }
+
+  return {
+    trackedSecondsTotal,
+    videoCount: termsList.length,
+    unattributedCount,
+    byCurrency: Array.from(buckets.values()),
+  };
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }

@@ -3,7 +3,8 @@
 import "server-only";
 
 import { getAuthenticatedDb } from "@/db";
-import { billingEvidence, clients, commercialContracts, crmEvents, quotes } from "@/db/schema";
+import { billingEvidence, clients, commercialContracts, crmEvents, projects, quotes } from "@/db/schema";
+import { computeRateEquivalent } from "@/modules/finance/core";
 import { and, desc, eq, sql as drizzleSql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
@@ -23,6 +24,8 @@ import type { QuoteStatus } from "./config";
 import { createProject } from "@/modules/projects/actions";
 import { createVideoLog } from "@/modules/productivity/actions";
 import { getQuoteForVideoAsOperator } from "./data";
+import { getCommercialContracts, type CommercialContractRow } from "@/modules/finance/actions";
+export type { CommercialContractRow };
 
 function isPositiveId(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) > 0;
@@ -377,11 +380,90 @@ export type CommercialTerms =
       currency: string;
       hourlyRate: number;
       trackedSeconds: number;
+      // Post-Job Commercial + Delivery Sniper §2: tracked duration x the
+      // contract's hourly rate, computed by the ONE canonical function
+      // (computeRateEquivalent, modules/finance/core.ts -- the same
+      // formula the Dashboard's "today" figure already uses). Never
+      // "paid"/"received"/"revenue" -- see that function's own invariant
+      // comment. UI must label this "Estimated accrued value", never
+      // "Paid" or "Invoice total".
+      estimatedAccruedValue: number;
       upworkBilledTotal: number | null;
       upworkBilledCurrency: string | null;
       upworkEvidenceCount: number;
+      // Post-Job Commercial + Delivery Sniper §1: which link produced this
+      // HOURLY attribution -- surfaced so a UI can distinguish "you set
+      // this explicitly" from "inferred from your only active contract",
+      // never hidden provenance.
+      attribution: "VIDEO_CONTRACT" | "PROJECT_CONTRACT" | "CLIENT_SINGLE_ACTIVE_CONTRACT";
     }
   | { billingModel: "NONE"; trackedSeconds: number };
+
+// Post-Job Commercial + Delivery Sniper §1: resolves which commercial_
+// contracts row, if any, applies to a video -- explicit video.contractId
+// first (most specific operator intent), then the parent project's
+// contractId, then (legacy, preserved for every video that predates this
+// column) the client's own single ACTIVE HOURLY contract, exactly as
+// getCommercialTermsForVideo already inferred before contractId existed.
+// Server-side same-client validation happens at WRITE time (see
+// setVideoContract/setProjectContract below) -- a contract_id can never be
+// saved for a different client's contract, so this resolver does not need
+// to re-validate ownership on every read, only resolve precedence.
+async function resolveContractForVideo(
+  db: Awaited<ReturnType<typeof getAuthenticatedDb>>,
+  video: { id: number; clientId: number | null; projectId: number | null; contractId: number | null },
+): Promise<{ contractId: number; attribution: "VIDEO_CONTRACT" | "PROJECT_CONTRACT" | "CLIENT_SINGLE_ACTIVE_CONTRACT" } | null> {
+  if (video.contractId !== null) {
+    return { contractId: video.contractId, attribution: "VIDEO_CONTRACT" };
+  }
+  if (video.projectId !== null) {
+    const projectRows = await db
+      .select({ contractId: projects.contractId })
+      .from(projects)
+      .where(eq(projects.id, video.projectId))
+      .limit(1);
+    const projectContractId = projectRows[0]?.contractId ?? null;
+    if (projectContractId !== null) {
+      return { contractId: projectContractId, attribution: "PROJECT_CONTRACT" };
+    }
+  }
+  if (video.clientId === null) return null;
+  const contractRows = await db
+    .select({ id: commercialContracts.id })
+    .from(commercialContracts)
+    .where(
+      and(
+        eq(commercialContracts.clientId, video.clientId),
+        eq(commercialContracts.billingType, "HOURLY"),
+        eq(commercialContracts.status, "ACTIVE"),
+      ),
+    )
+    .limit(1);
+  const legacy = contractRows[0];
+  return legacy ? { contractId: legacy.id, attribution: "CLIENT_SINGLE_ACTIVE_CONTRACT" } : null;
+}
+
+// Post-Job Commercial + Delivery Sniper §4: contracts the operator could
+// link to THIS video's "Link contract" affordance -- scoped to the
+// video's own client only, so the picker can never offer a contract that
+// setVideoContract would then reject for cross-client attribution. Reuses
+// the same getCommercialContracts() Finance already exposes -- no second
+// contracts query.
+export async function getLinkableContractsForVideo(
+  videoId: number,
+): Promise<CommercialContractRow[]> {
+  if (!isPositiveId(videoId)) return [];
+  const db = await getAuthenticatedDb();
+  const videoRows = await db
+    .select({ clientId: videoLogs.clientId })
+    .from(videoLogs)
+    .where(eq(videoLogs.id, videoId))
+    .limit(1);
+  const clientId = videoRows[0]?.clientId ?? null;
+  if (clientId === null) return [];
+  const all = await getCommercialContracts();
+  return all.filter((contract) => contract.clientId === clientId);
+}
 
 export async function getCommercialTermsForVideo(videoId: number): Promise<CommercialTerms> {
   if (!isPositiveId(videoId)) {
@@ -408,37 +490,50 @@ export async function getCommercialTermsForVideo(videoId: number): Promise<Comme
     };
   }
 
-  // No video-specific quote -- fall back to the client's ACTIVE HOURLY
-  // commercial contract, if one exists (the Taryn/$25-per-hour shape).
+  // No video-specific quote -- resolve an HOURLY contract via explicit
+  // video link -> explicit project link -> legacy client-single-contract
+  // fallback (see resolveContractForVideo).
   const db = await getAuthenticatedDb();
   const videoRows = await db
-    .select({ clientId: videoLogs.clientId })
+    .select({ clientId: videoLogs.clientId, projectId: videoLogs.projectId, contractId: videoLogs.contractId })
     .from(videoLogs)
     .where(eq(videoLogs.id, videoId))
     .limit(1);
-  const clientId = videoRows[0]?.clientId ?? null;
-  if (clientId === null) {
+  const videoRow = videoRows[0];
+  if (!videoRow || videoRow.clientId === null) {
+    return { billingModel: "NONE", trackedSeconds };
+  }
+
+  const resolved = await resolveContractForVideo(db, { id: videoId, ...videoRow });
+  if (!resolved) {
     return { billingModel: "NONE", trackedSeconds };
   }
 
   const contractRows = await db
     .select({
       id: commercialContracts.id,
+      clientId: commercialContracts.clientId,
       platform: commercialContracts.platform,
+      billingType: commercialContracts.billingType,
       hourlyRate: commercialContracts.hourlyRate,
       currency: commercialContracts.currency,
+      status: commercialContracts.status,
     })
     .from(commercialContracts)
-    .where(
-      and(
-        eq(commercialContracts.clientId, clientId),
-        eq(commercialContracts.billingType, "HOURLY"),
-        eq(commercialContracts.status, "ACTIVE"),
-      ),
-    )
+    .where(eq(commercialContracts.id, resolved.contractId))
     .limit(1);
   const contract = contractRows[0];
-  if (!contract || contract.hourlyRate === null) {
+  // Defense in depth: an explicit link can only ever be saved for a
+  // contract belonging to the SAME client (enforced at write time in
+  // setVideoContract/setProjectContract), but a read path never trusts
+  // that alone -- cross-client attribution must be impossible even if a
+  // future write path regresses that check.
+  if (
+    !contract ||
+    contract.clientId !== videoRow.clientId ||
+    contract.billingType !== "HOURLY" ||
+    contract.hourlyRate === null
+  ) {
     return { billingModel: "NONE", trackedSeconds };
   }
 
@@ -464,9 +559,11 @@ export async function getCommercialTermsForVideo(videoId: number): Promise<Comme
     currency: contract.currency,
     hourlyRate: contract.hourlyRate,
     trackedSeconds,
+    estimatedAccruedValue: computeRateEquivalent(trackedSeconds, contract.hourlyRate, contract.currency).rateEquivalent,
     upworkBilledTotal: evidenceTotal[0]?.total ?? null,
     upworkBilledCurrency: evidenceTotal[0]?.currency ?? null,
     upworkEvidenceCount: evidenceTotal[0]?.count ?? 0,
+    attribution: resolved.attribution,
   };
 }
 

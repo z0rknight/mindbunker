@@ -39,6 +39,22 @@ function formatHourlyRate(rate: number, currency: string): string {
   }
 }
 
+// Post-Job Commercial + Delivery Sniper §2: plain (non-cents) currency
+// amount -- estimatedAccruedValue is already a dollars-and-cents float
+// from the ONE canonical function (computeRateEquivalent), not an
+// integer-cents column like agreedPriceCents above.
+function formatCurrencyAmount(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || "USD",
+      minimumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
+}
+
 function formatDuration(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds));
   if (seconds === 0) return "0m";
@@ -69,10 +85,21 @@ function CommercialValueLine({ terms }: { terms: CommercialTerms }) {
   }
   if (terms.billingModel === "HOURLY") {
     return (
-      <div className="flex items-center gap-3 text-[11px]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
         <span className="text-zinc-500">
           Rate <span className="font-black text-cyan-300">{formatHourlyRate(terms.hourlyRate, terms.currency)}</span>
         </span>
+        {terms.trackedSeconds > 0 && (
+          <>
+            <span className="text-zinc-700">·</span>
+            <span className="text-zinc-500">
+              Estimated accrued{" "}
+              <span className="font-black text-emerald-300">
+                {formatCurrencyAmount(terms.estimatedAccruedValue, terms.currency)}
+              </span>
+            </span>
+          </>
+        )}
       </div>
     );
   }

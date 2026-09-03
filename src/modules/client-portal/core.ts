@@ -7,7 +7,7 @@ import { VIDEO_CONTENT_TYPE_LABELS } from "../productivity/config.ts";
 import { validateDeliveryUrl, validateCoverUrl } from "../productivity/core.ts";
 import type { ProjectStatus } from "../projects/config.ts";
 import { resolveCoverUrl } from "../media/core.ts";
-import type { ClientQuoteSummary } from "../quotes/core.ts";
+import type { ClientQuoteSummary, ClientHourlySummary } from "../quotes/core.ts";
 
 export const CLIENT_VIDEO_STATUS_LABELS: Record<VideoStatus, string> = {
   PLANNED: "Planned",
@@ -486,6 +486,11 @@ export function filterClientDashboardVideos(
 // fields the list card already exposes, plus the quote.
 export type ClientVideoDetail = ClientDashboardVideoCard & {
   quote: ClientQuoteSummary | null;
+  // Post-Job Commercial + Delivery Sniper §9: HOURLY equivalent of quote
+  // above -- exactly one of quote/hourly is non-null when a commercial
+  // fact exists, both null when the video has no commercial terms yet.
+  // Never a "Paid"/"Unpaid" figure -- see buildClientHourlySummary.
+  hourly: ClientHourlySummary | null;
 };
 
 export function buildClientVideoDetail(
@@ -493,6 +498,7 @@ export function buildClientVideoDetail(
   projectNameById: Map<number, string>,
   quote: ClientQuoteSummary | null,
   projectVideoCount: number | null,
+  hourly: ClientHourlySummary | null = null,
 ): ClientVideoDetail {
   const projectVideoCounts =
     video.projectId !== null && projectVideoCount !== null
@@ -501,5 +507,6 @@ export function buildClientVideoDetail(
   return {
     ...toCard(video, projectNameById, projectVideoCounts),
     quote,
+    hourly,
   };
 }

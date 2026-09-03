@@ -4,6 +4,7 @@ import { getAuthenticatedDb } from "@/db";
 import { videoLogs } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { validateDeliveryUrl } from "@/modules/productivity/core";
 
 type Result = { success: true; message: string } | { success: false; error: string };
 
@@ -14,13 +15,29 @@ type Result = { success: true; message: string } | { success: false; error: stri
 // setter deliberately separate from the full updateVideoLog validation
 // path, matching the same "small single-purpose actions" pattern used
 // throughout the Lab (upsertAssetItem, resolveBlocker, etc).
+//
+// Post-Job Commercial + Delivery Sniper §10 root-cause fix: this used to
+// accept any http:// OR https:// URL with its own looser regex, while
+// every read path (toCard in modules/client-portal/core.ts) re-validates
+// publishedUrl through validateDeliveryUrl, which is HTTPS-only. A plain
+// http:// URL saved here would pass THIS write, show up if the operator
+// reopened the Lab panel (so it looked "on file"), and then be silently
+// nulled out on every client-facing card/detail page -- the exact
+// diary-reported bug ("client can't open it even when the link exists").
+// Reusing the one canonical validator everywhere closes that gap for good
+// instead of just tightening this one call site.
 export async function setPublishedUrl(videoId: number, url: string): Promise<Result> {
-  const trimmed = url.trim();
-  if (trimmed && !/^https?:\/\//i.test(trimmed)) {
-    return { success: false, error: "Live URL must start with http:// or https://" };
+  const validated = validateDeliveryUrl(url);
+  if (!validated.success) {
+    return { success: false, error: validated.error };
   }
   const db = await getAuthenticatedDb();
-  await db.update(videoLogs).set({ publishedUrl: trimmed || null, updatedAt: new Date() }).where(eq(videoLogs.id, videoId));
+  await db
+    .update(videoLogs)
+    .set({ publishedUrl: validated.value, updatedAt: new Date() })
+    .where(eq(videoLogs.id, videoId));
   revalidatePath("/lab");
+  revalidatePath("/productivity");
+  revalidatePath("/client/dashboard");
   return { success: true, message: "Live URL saved." };
 }

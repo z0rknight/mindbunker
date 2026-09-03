@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation";
 import {
   createManualApprovedQuoteForVideo,
   getCommercialTermsForVideo,
+  getLinkableContractsForVideo,
   type CommercialTerms,
+  type CommercialContractRow,
 } from "@/modules/quotes/actions";
+import { setVideoContract } from "@/modules/productivity/actions";
 import {
   RECURRING_SCOPE_OPTIONS,
   computeOperationalEffectiveRateCents,
@@ -24,6 +27,70 @@ function formatQuoteCurrency(amountCents: number, currency: string): string {
   } catch {
     return `${currency} ${(amountCents / 100).toFixed(2)}`;
   }
+}
+
+// Post-Job Commercial + Delivery Sniper §4/§1: compact "Link contract"
+// affordance for a video with no commercial terms yet but whose client
+// already has an HOURLY contract on file (e.g. a second Meta Ads-style
+// video for a client whose contract predates this column, or a client
+// with more than one contract where the legacy single-active inference
+// is ambiguous). Self-fetches the client's own contracts only --
+// setVideoContract re-validates same-client server-side regardless.
+function LinkContractControl({ videoId, onLinked }: { videoId: number; onLinked: () => void }) {
+  const [contracts, setContracts] = useState<CommercialContractRow[] | null>(null);
+  const [selected, setSelected] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getLinkableContractsForVideo(videoId).then((rows) => {
+      if (active) setContracts(rows);
+    });
+    return () => {
+      active = false;
+    };
+  }, [videoId]);
+
+  if (!contracts || contracts.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <select
+        value={selected}
+        onChange={(e) => setSelected(e.target.value)}
+        className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300"
+      >
+        <option value="">Link an existing contract…</option>
+        {contracts.map((contract) => (
+          <option key={contract.id} value={contract.id}>
+            {contract.platform} · {contract.billingType}
+            {contract.billingType === "HOURLY" && contract.hourlyRate !== null
+              ? ` (${contract.currency} ${contract.hourlyRate}/h)`
+              : ""}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        disabled={!selected || isPending}
+        onClick={() =>
+          startTransition(async () => {
+            const result = await setVideoContract(videoId, Number(selected));
+            if (!result.success) {
+              setError(result.error);
+              return;
+            }
+            onLinked();
+          })
+        }
+        className="rounded-lg bg-cyan-600 px-2.5 py-1 text-xs font-black text-white disabled:opacity-40"
+      >
+        Link
+      </button>
+      {error && <span className="text-[10px] text-rose-400">{error}</span>}
+    </div>
+  );
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -155,6 +222,11 @@ function ManualTermsForm({ videoId, onDone }: { videoId: number; onDone: () => v
 export function CommercialTermsPanel({ videoId }: { videoId: number }) {
   const [terms, setTerms] = useState<CommercialTerms | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const router = useRouter();
+
+  const refetch = () => {
+    getCommercialTermsForVideo(videoId).then(setTerms);
+  };
 
   useEffect(() => {
     let active = true;
@@ -186,6 +258,13 @@ export function CommercialTermsPanel({ videoId }: { videoId: number }) {
           )}
         </div>
         <p className="mt-1 text-xs text-zinc-600">No commercial terms recorded for this video yet.</p>
+        <LinkContractControl
+          videoId={videoId}
+          onLinked={() => {
+            refetch();
+            router.refresh();
+          }}
+        />
         {showForm && (
           <ManualTermsForm videoId={videoId} onDone={() => setShowForm(false)} />
         )}
@@ -258,8 +337,13 @@ export function CommercialTermsPanel({ videoId }: { videoId: number }) {
     );
   }
 
-  // HOURLY
-  const rateEquivalent = (terms.trackedSeconds / 3600) * terms.hourlyRate;
+  // HOURLY -- Post-Job Commercial + Delivery Sniper §2: terms.estimatedAccruedValue
+  // is now computed by the ONE canonical function (computeRateEquivalent,
+  // modules/finance/core.ts) inside getCommercialTermsForVideo itself.
+  // This panel used to recompute (trackedSeconds/3600)*hourlyRate inline
+  // -- a second, unrounded copy of the same math that could silently
+  // drift from the canonical one (e.g. never applying round2). Rendering
+  // terms.estimatedAccruedValue directly closes that gap.
   return (
     <div className="mb-6 rounded-xl border border-cyan-700/40 bg-cyan-950/20 p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -267,16 +351,29 @@ export function CommercialTermsPanel({ videoId }: { videoId: number }) {
           Commercial terms · Hourly
         </span>
         <span className="text-xs text-zinc-500">{terms.platform} contract</span>
+        <span className="text-[10px] text-zinc-700">
+          ({terms.attribution === "VIDEO_CONTRACT"
+            ? "linked to this video"
+            : terms.attribution === "PROJECT_CONTRACT"
+              ? "linked to this project"
+              : "inferred: client's only active contract"})
+        </span>
       </div>
       <p className="mt-2 text-sm font-bold text-white">
         Contract rate: {formatCurrency(terms.hourlyRate, terms.currency)}/h
       </p>
       <div className="mt-3 border-t border-cyan-900/40 pt-3 space-y-1">
         <p className="text-xs text-zinc-500">
-          Operational tracked: {formatDuration(terms.trackedSeconds)}
+          Tracked production time: {formatDuration(terms.trackedSeconds)}
         </p>
         <p className="text-xs text-zinc-500">
-          Rate-equivalent: {formatCurrency(rateEquivalent, terms.currency)}
+          Estimated accrued value:{" "}
+          <span className="font-bold text-emerald-300">
+            {formatCurrency(terms.estimatedAccruedValue, terms.currency)}
+          </span>
+        </p>
+        <p className="text-[10px] text-zinc-700">
+          Tracked time x contract rate. Not revenue, not billed, not paid on its own.
         </p>
         {terms.upworkBilledTotal !== null ? (
           <>
