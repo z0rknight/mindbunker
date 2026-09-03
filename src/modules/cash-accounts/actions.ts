@@ -9,11 +9,13 @@ import { revalidatePath } from "next/cache";
 import {
   computeCashPocketBalance,
   computePocketDifference,
+  computeCashHeadlineByCurrency,
   isCashPocketScope,
   validateAccountSnapshotInput,
   validateInternalPocketTransferInput,
   validateInternalPocketPair,
   type CashPocketScope,
+  type CashHeadlineRow,
 } from "./core";
 
 export type CashPocketReconciliationRow = {
@@ -75,6 +77,23 @@ export async function getCashPocketReconciliation(
       difference: observed ? computePocketDifference(ledgerAmount, observed.amount) : null,
     };
   });
+}
+
+// Dashboard-safe aggregate: MAIN vs RESERVE cash per currency, preferring a
+// real Wise-observed snapshot over the derived ledger figure. See
+// computeCashHeadlineByCurrency for the "*Observed" semantics. Callers must
+// treat `availableObserved: false` / `reservedObserved: false` as "not yet
+// bank-confirmed" and must never present that figure as verified cash.
+export async function getCashHeadline(scope: CashPocketScope): Promise<CashHeadlineRow[]> {
+  const rows = await getCashPocketReconciliation(scope);
+  return computeCashHeadlineByCurrency(
+    rows.map((row) => ({
+      currency: row.currency,
+      pocket: row.pocket,
+      ledgerAmount: row.ledgerAmount,
+      observed: row.observed,
+    })),
+  );
 }
 
 export async function recordInternalPocketTransfer(input: {

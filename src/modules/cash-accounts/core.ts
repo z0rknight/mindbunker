@@ -33,6 +33,85 @@ export function isCashPocketScope(value: unknown): value is CashPocketScope {
   return value === "BUSINESS" || value === "PERSONAL";
 }
 
+// A Dashboard-safe cash headline: aggregates per-pocket reconciliation rows
+// into "available" (MAIN pockets) vs "reserved" (RESERVE pockets) totals per
+// currency, preferring a real Wise-observed snapshot over the derived ledger
+// figure wherever one exists. `*Observed` is true only when EVERY pocket
+// contributing to that total has a real observed snapshot behind it — if any
+// pocket is still ledger-only, the aggregate is flagged unverified rather
+// than silently presented as confirmed cash. This never merges MAIN and
+// RESERVE, and never mixes currencies or scopes (call once per scope).
+export type CashHeadlineRow = {
+  currency: CashPocketCurrency;
+  availableAmount: number;
+  availableObserved: boolean;
+  availableAsOf: string | null;
+  availableSource: string | null;
+  reservedAmount: number;
+  reservedObserved: boolean;
+  reservedAsOf: string | null;
+  reservedSource: string | null;
+};
+
+export type CashHeadlineSourceRow = {
+  currency: CashPocketCurrency;
+  pocket: CashPocketKind;
+  ledgerAmount: number;
+  observed: { amount: number; observedAt: string; source: string } | null;
+};
+
+export function computeCashHeadlineByCurrency(
+  rows: CashHeadlineSourceRow[],
+): CashHeadlineRow[] {
+  const byCurrency = new Map<CashPocketCurrency, CashHeadlineRow>();
+
+  const ensure = (currency: CashPocketCurrency): CashHeadlineRow => {
+    const existing = byCurrency.get(currency);
+    if (existing) return existing;
+    const created: CashHeadlineRow = {
+      currency,
+      availableAmount: 0,
+      availableObserved: true,
+      availableAsOf: null,
+      availableSource: null,
+      reservedAmount: 0,
+      reservedObserved: true,
+      reservedAsOf: null,
+      reservedSource: null,
+    };
+    byCurrency.set(currency, created);
+    return created;
+  };
+
+  for (const account of rows) {
+    const row = ensure(account.currency);
+    const amount = account.observed ? account.observed.amount : account.ledgerAmount;
+    const isMain = account.pocket === "MAIN";
+    const total = isMain ? row.availableAmount : row.reservedAmount;
+    const nextTotal = roundCash(total + amount);
+
+    if (isMain) {
+      row.availableAmount = nextTotal;
+      if (!account.observed) {
+        row.availableObserved = false;
+      } else if (!row.availableAsOf || account.observed.observedAt > row.availableAsOf) {
+        row.availableAsOf = account.observed.observedAt;
+        row.availableSource = account.observed.source;
+      }
+    } else {
+      row.reservedAmount = nextTotal;
+      if (!account.observed) {
+        row.reservedObserved = false;
+      } else if (!row.reservedAsOf || account.observed.observedAt > row.reservedAsOf) {
+        row.reservedAsOf = account.observed.observedAt;
+        row.reservedSource = account.observed.source;
+      }
+    }
+  }
+
+  return Array.from(byCurrency.values()).sort((a, b) => a.currency.localeCompare(b.currency));
+}
+
 export function validateAccountSnapshotInput(input: {
   cashAccountId: unknown;
   balanceAmount: unknown;

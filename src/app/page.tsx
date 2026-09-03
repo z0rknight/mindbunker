@@ -8,6 +8,7 @@ import {
   AddRevisionButton,
 } from "@/components/ui/QuickActions";
 import { getFinanceSummary, getTodayRateEquivalents } from "@/modules/finance/actions";
+import { getCashHeadline } from "@/modules/cash-accounts/actions";
 import { getVideoStats } from "@/modules/productivity/actions";
 import {
   getProjectStreaks,
@@ -35,6 +36,7 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const [
     finance,
+    cashHeadline,
     video,
     health,
     crm,
@@ -51,6 +53,7 @@ export default async function DashboardPage() {
     operatorIntelligence,
   ] = await Promise.all([
     getFinanceSummary(),
+    getCashHeadline("BUSINESS"),
     getVideoStats(),
     getHealthSummary(),
     getCRMSummary(),
@@ -455,13 +458,37 @@ export default async function DashboardPage() {
         <div className="mb-6">
           <h3 className="text-zinc-500 text-xs font-semibold uppercase tracking-widest mb-3">💰 Finance</h3>
           <div className="space-y-4">
-            {finance.map((row) => (
+            {finance.map((row) => {
+              const headline = cashHeadline.find((entry) => entry.currency === row.currency);
+              return (
               <div key={row.currency}>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-600">{row.currency}</p>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   <EconomicLedgerCard
                     amount={row.economicLedgerNet}
                     currency={row.currency}
+                  />
+                  <StatCard
+                    label="Available Cash"
+                    value={headline ? formatCurrency(headline.availableAmount, row.currency) : "—"}
+                    sub={
+                      headline?.availableObserved
+                        ? `Wise-observed ${headline.availableAsOf ?? ""}`.trim()
+                        : "⚠ Not yet reconciled with Wise"
+                    }
+                    accent={headline?.availableObserved ? "green" : "amber"}
+                    icon="💵"
+                  />
+                  <StatCard
+                    label="Reserved Cash"
+                    value={headline ? formatCurrency(headline.reservedAmount, row.currency) : "—"}
+                    sub={
+                      headline?.reservedObserved
+                        ? `Wise-observed ${headline.reservedAsOf ?? ""}`.trim()
+                        : "⚠ Not yet reconciled with Wise"
+                    }
+                    accent={headline?.reservedObserved ? "blue" : "amber"}
+                    icon="🔒"
                   />
                   <StatCard
                     label="Monthly Revenue"
@@ -480,12 +507,14 @@ export default async function DashboardPage() {
                   <StatCard
                     label="Net This Month"
                     value={formatCurrency(row.monthlyNet, row.currency)}
+                    sub={currentMonthName()}
                     accent={row.monthlyNet >= 0 ? "green" : "red"}
                     icon="⚖️"
                   />
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

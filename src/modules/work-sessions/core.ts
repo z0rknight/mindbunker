@@ -39,11 +39,18 @@ export const WORK_SESSION_ACTIVITY_LABELS: Record<
 // see the comment on work_sessions.source in schema.ts for why this column
 // carries no CHECK constraint. WEB_TIMER remains the browser capture path;
 // MAC_SENSOR identifies the native macOS bridge without changing correction
-// semantics. Future MANUAL/IMPORTED values remain deliberately deferred.
+// semantics.
+// JOURNAL_RECONSTRUCTION (Reality Reconciliation round): a session inserted
+// from operator journal/log evidence rather than live capture, for a gap the
+// Sensor and WEB_TIMER both missed. It is never inserted automatically and
+// never overlaps an existing session — see docs/architecture and
+// reconciliation_notes for the "annotate, don't fabricate" fallback when
+// evidence is too thin to justify a canonical session at all.
 export const WORK_SESSION_SOURCES = [
   "WEB_TIMER",
   "MAC_SENSOR",
   "MAC_SENSOR_APPROVED",
+  "JOURNAL_RECONSTRUCTION",
 ] as const;
 export type WorkSessionSource = (typeof WORK_SESSION_SOURCES)[number];
 export const DEFAULT_WORK_SESSION_SOURCE: WorkSessionSource = "WEB_TIMER";

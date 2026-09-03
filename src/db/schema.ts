@@ -817,6 +817,17 @@ export const workSessions = sqliteTable(
     // fact (see correctWorkSession in actions.ts). Null means "never
     // corrected" — itself meaningful, not just bookkeeping.
     updatedAt: integer("updated_at", { mode: "timestamp" }),
+    // Reality Reconciliation round: provenance for JOURNAL_RECONSTRUCTION
+    // (and any future non-live-capture) rows. Both nullable, both free text,
+    // both no CHECK -- same open-vocabulary precedent as `source` above.
+    // Null on every WEB_TIMER/MAC_SENSOR* row; only meaningful once `source`
+    // is not a live-capture value. `confidence` is an operator-entered
+    // epistemic label (e.g. HIGH/MEDIUM/LOW), never a computed score.
+    // `sourceReference` names the evidence document a reconstructed session
+    // was built from (e.g. a journal filename and page range) so a human can
+    // always trace a reconstructed row back to what justified it.
+    confidence: text("confidence"),
+    sourceReference: text("source_reference"),
   },
   (table) => [
     uniqueIndex("work_sessions_one_open_idx")

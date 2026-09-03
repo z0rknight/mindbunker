@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   computeCashPocketBalance,
   computePocketDifference,
+  computeCashHeadlineByCurrency,
   validateAccountSnapshotInput,
   validateInternalPocketPair,
   validateInternalPocketTransferInput,
@@ -79,3 +80,80 @@ test("snapshot validation rejects invalid account/date/amount", () => {
   assert.match(validateAccountSnapshotInput({ cashAccountId: 1, balanceAmount: 1, observedAt: "08-30-2026" }), /valid date/i);
   assert.equal(validateAccountSnapshotInput({ cashAccountId: 1, balanceAmount: 0, observedAt: "2026-08-30" }), null);
 });
+
+test("cash headline sums MAIN pockets as available and RESERVE pockets as reserved, per currency", () => {
+  const rows = computeCashHeadlineByCurrency([
+    {
+      currency: "USD",
+      pocket: "MAIN",
+      ledgerAmount: 128.85,
+      observed: { amount: 128.85, observedAt: "2026-08-31", source: "WISE_PDF" },
+    },
+    {
+      currency: "USD",
+      pocket: "RESERVE",
+      ledgerAmount: 300,
+      observed: { amount: 300, observedAt: "2026-08-31", source: "WISE_PDF" },
+    },
+    {
+      currency: "BRL",
+      pocket: "MAIN",
+      ledgerAmount: 995.5,
+      observed: { amount: 995.5, observedAt: "2026-08-31", source: "WISE_PDF" },
+    },
+  ]);
+
+  const usd = rows.find((row) => row.currency === "USD");
+  assert.ok(usd);
+  assert.equal(usd.availableAmount, 128.85);
+  assert.equal(usd.availableObserved, true);
+  assert.equal(usd.reservedAmount, 300);
+  assert.equal(usd.reservedObserved, true);
+
+  const brl = rows.find((row) => row.currency === "BRL");
+  assert.ok(brl);
+  assert.equal(brl.availableAmount, 995.5);
+  // No RESERVE pocket contributed for BRL, so it stays at 0 and (vacuously) observed.
+  assert.equal(brl.reservedAmount, 0);
+});
+
+test("cash headline never mixes currencies together", () => {
+  const rows = computeCashHeadlineByCurrency([
+    { currency: "USD", pocket: "MAIN", ledgerAmount: 100, observed: null },
+    { currency: "BRL", pocket: "MAIN", ledgerAmount: 500, observed: null },
+  ]);
+  assert.equal(rows.length, 2);
+  const usd = rows.find((row) => row.currency === "USD");
+  const brl = rows.find((row) => row.currency === "BRL");
+  assert.equal(usd.availableAmount, 100);
+  assert.equal(brl.availableAmount, 500);
+});
+
+test("cash headline flags a currency total as unobserved when any contributing pocket lacks a real snapshot", () => {
+  const rows = computeCashHeadlineByCurrency([
+    {
+      currency: "USD",
+      pocket: "MAIN",
+      ledgerAmount: 918.85,
+      observed: null, // no real bank snapshot behind this pocket yet
+    },
+  ]);
+  const usd = rows.find((row) => row.currency === "USD");
+  assert.equal(usd.availableAmount, 918.85);
+  assert.equal(
+    usd.availableObserved,
+    false,
+    "an unreconciled pocket must never be presented as verified cash",
+  );
+});
+
+test("cash headline falls back to the ledger figure only when no observed snapshot exists, and still flags it unverified", () => {
+  const rows = computeCashHeadlineByCurrency([
+    { currency: "USD", pocket: "RESERVE", ledgerAmount: 200, observed: null },
+  ]);
+  const usd = rows.find((row) => row.currency === "USD");
+  assert.equal(usd.reservedAmount, 200);
+  assert.equal(usd.reservedObserved, false);
+  assert.equal(usd.reservedAsOf, null);
+});
+
