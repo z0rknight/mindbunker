@@ -1,4 +1,5 @@
 import {
+  type AnySQLiteColumn,
   check,
   foreignKey,
   index,
@@ -24,6 +25,17 @@ import {
   VIDEO_STATUSES,
 } from "../modules/productivity/config";
 import { ASSET_TYPES, ASSET_STATUSES } from "../modules/assets/config";
+import {
+  EQUIPMENT_ACQUISITION_PRIORITIES,
+  EQUIPMENT_ACQUISITION_STAGES,
+  EQUIPMENT_CONDITIONS,
+  EQUIPMENT_CRITICALITIES,
+  EQUIPMENT_DOMAINS,
+  EQUIPMENT_MAINTENANCE_TYPES,
+  EQUIPMENT_OWNERSHIPS,
+  EQUIPMENT_STATUSES,
+  EQUIPMENT_SYSTEM_STATUSES,
+} from "../modules/equipment/config";
 import {
   BLOCKER_CATEGORIES,
   CHECKLIST_STATUSES,
@@ -2137,6 +2149,250 @@ export const decisions = sqliteTable(
     check(
       "decisions_status_check",
       sql`${table.status} in ('OPEN', 'REVIEWED', 'CANCELLED')`,
+    ),
+  ],
+);
+
+// ─── EQUIPMENT (Equipment Wave 1: Foundation + Command Center + Asset Registry) ──
+//
+// Equipment is the operational and patrimonial registry of the physical
+// infrastructure that enables Emmanuel/RMedia to work -- NOT a wishlist,
+// NOT a generic inventory. ONE master asset registry: `ownership`
+// (PERSONAL/RMEDIA/FAMILY/THIRD_PARTY) is a classification column on the
+// same table, never a split into separate Personal/RMedia tables or
+// databases (Equipment Wave 1 brief §2).
+//
+// System != Category. `category` (free text, e.g. "Workstation", "HDD",
+// "Switch") answers "what kind of thing is this?"; `systemId` (FK below)
+// answers "what operational setup does this participate in?" -- a Mac
+// mini's category is "Workstation" but its system is "RMedia Editing
+// Suite". These are orthogonal by design (brief §3).
+//
+// `parentAssetId` self-references this same table so a logical asset can
+// contain components (e.g. RMedia NAS -> Case/Motherboard/CPU/RAM/HDDs)
+// without a separate composition table. See
+// src/modules/equipment/core.ts#selectCountableAssets for the anti-
+// double-count aggregation rule this composition enables.
+//
+// `condition` is categorical (EXCELLENT/GOOD/ATTENTION/CRITICAL), never a
+// fabricated percentage -- same discipline Health already applies (no
+// composite "Health Score 83/100"; see MINDBUNKER_MASTER_QA_LEDGER.md
+// HEALTH-005). `purchasePrice`/`currentValue`/`replacementCost` are three
+// deliberately independent nullable columns (brief §10): missing data
+// stays missing (NULL), never silently treated as the purchase price or
+// as zero -- see core.ts#computeInvestmentSummary's coverage-aware
+// aggregation.
+
+export const equipmentSystems = sqliteTable(
+  "equipment_systems",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    ownership: text("ownership", { enum: EQUIPMENT_OWNERSHIPS }).notNull(),
+    description: text("description"),
+    status: text("status", { enum: EQUIPMENT_SYSTEM_STATUSES })
+      .notNull()
+      .default("ACTIVE"),
+    location: text("location"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    check(
+      "equipment_systems_ownership_check",
+      sql`${table.ownership} in ('PERSONAL', 'RMEDIA', 'FAMILY', 'THIRD_PARTY')`,
+    ),
+    check(
+      "equipment_systems_status_check",
+      sql`${table.status} in ('ACTIVE', 'RESERVE', 'RETIRED')`,
+    ),
+  ],
+);
+
+export const equipmentAssets = sqliteTable(
+  "equipment_assets",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    // Derived deterministically from `id` after insert -- see
+    // core.ts#buildAssetCode for why this is id-seeded rather than a
+    // racy per-domain counter under D1's concurrent-write model.
+    assetCode: text("asset_code").notNull(),
+    name: text("name").notNull(),
+    ownership: text("ownership", { enum: EQUIPMENT_OWNERSHIPS }).notNull(),
+    domain: text("domain", { enum: EQUIPMENT_DOMAINS }).notNull(),
+    category: text("category").notNull(),
+    systemId: integer("system_id").references(() => equipmentSystems.id, {
+      onDelete: "set null",
+    }),
+    parentAssetId: integer("parent_asset_id").references(
+      (): AnySQLiteColumn => equipmentAssets.id,
+      { onDelete: "set null" },
+    ),
+    location: text("location"),
+    assignedTo: text("assigned_to"),
+    status: text("status", { enum: EQUIPMENT_STATUSES })
+      .notNull()
+      .default("ACTIVE"),
+    condition: text("condition", { enum: EQUIPMENT_CONDITIONS })
+      .notNull()
+      .default("GOOD"),
+    criticality: text("criticality", { enum: EQUIPMENT_CRITICALITIES })
+      .notNull()
+      .default("CONVENIENCE"),
+    purchaseDate: text("purchase_date"), // ISO date string, nullable
+    purchasePrice: real("purchase_price"),
+    currentValue: real("current_value"),
+    replacementCost: real("replacement_cost"),
+    warrantyUntil: text("warranty_until"), // ISO date string, nullable
+    serialNumber: text("serial_number"),
+    notes: text("notes"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    uniqueIndex("equipment_assets_code_idx").on(table.assetCode),
+    index("equipment_assets_system_idx").on(table.systemId),
+    index("equipment_assets_parent_idx").on(table.parentAssetId),
+    index("equipment_assets_ownership_domain_idx").on(table.ownership, table.domain),
+    check(
+      "equipment_assets_ownership_check",
+      sql`${table.ownership} in ('PERSONAL', 'RMEDIA', 'FAMILY', 'THIRD_PARTY')`,
+    ),
+    check(
+      "equipment_assets_domain_check",
+      sql`${table.domain} in ('COMPUTE', 'STORAGE', 'NETWORK', 'VIDEO', 'PHOTO', 'AUDIO', 'POWER', 'OTHER')`,
+    ),
+    check(
+      "equipment_assets_status_check",
+      sql`${table.status} in ('ACTIVE', 'RESERVE', 'LOANED', 'MAINTENANCE', 'RETIRED', 'SOLD')`,
+    ),
+    check(
+      "equipment_assets_condition_check",
+      sql`${table.condition} in ('EXCELLENT', 'GOOD', 'ATTENTION', 'CRITICAL')`,
+    ),
+    check(
+      "equipment_assets_criticality_check",
+      sql`${table.criticality} in ('CRITICAL', 'PRODUCTION', 'CONVENIENCE', 'HOBBY')`,
+    ),
+    check(
+      "equipment_assets_purchase_price_check",
+      sql`${table.purchasePrice} IS NULL OR ${table.purchasePrice} >= 0`,
+    ),
+    check(
+      "equipment_assets_current_value_check",
+      sql`${table.currentValue} IS NULL OR ${table.currentValue} >= 0`,
+    ),
+    check(
+      "equipment_assets_replacement_cost_check",
+      sql`${table.replacementCost} IS NULL OR ${table.replacementCost} >= 0`,
+    ),
+  ],
+);
+
+// ─── Equipment Wave 2: Maintenance + Acquisitions ──────────────────────
+//
+// Maintenance history belongs to exactly one asset (cascade delete: a
+// maintenance log with no asset to describe is meaningless). No health
+// score, no auto-generated schedule -- see
+// modules/equipment/core.ts#computeMaintenanceStatus for how
+// OVERDUE/DUE_SOON/NONE is derived purely from the most recent recorded
+// nextInspection vs. today.
+export const equipmentMaintenanceEvents = sqliteTable(
+  "equipment_maintenance_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    assetId: integer("asset_id")
+      .notNull()
+      .references(() => equipmentAssets.id, { onDelete: "cascade" }),
+    type: text("type", { enum: EQUIPMENT_MAINTENANCE_TYPES }).notNull(),
+    performedAt: text("performed_at").notNull(), // ISO date string
+    cost: real("cost"),
+    issue: text("issue"),
+    action: text("action"),
+    result: text("result"),
+    nextInspection: text("next_inspection"), // ISO date string, nullable
+    notes: text("notes"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("equipment_maintenance_events_asset_idx").on(table.assetId),
+    index("equipment_maintenance_events_performed_at_idx").on(table.performedAt),
+    check(
+      "equipment_maintenance_events_type_check",
+      sql`${table.type} in ('INSPECTION', 'CLEANING', 'REPAIR', 'UPGRADE', 'REPLACEMENT', 'FIRMWARE', 'TEST', 'OTHER')`,
+    ),
+    check(
+      "equipment_maintenance_events_cost_check",
+      sql`${table.cost} IS NULL OR ${table.cost} >= 0`,
+    ),
+  ],
+);
+
+// A restrained investment/acquisition pipeline (Wave 2 brief §5) -- NOT a
+// wishlist and NOT procurement accounting. `systemId`/`domain` are both
+// optional context, not identity: an acquisition only becomes a real
+// Asset through an explicit "Create asset from acquisition" operator
+// action (see actions.ts#createEquipmentAssetFromAcquisition), never
+// automatically on reaching DEPLOYED.
+export const equipmentAcquisitions = sqliteTable(
+  "equipment_acquisitions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    stage: text("stage", { enum: EQUIPMENT_ACQUISITION_STAGES })
+      .notNull()
+      .default("IDEA"),
+    problem: text("problem").notNull(),
+    expectedImpact: text("expected_impact"),
+    estimatedCost: real("estimated_cost"),
+    priority: text("priority", { enum: EQUIPMENT_ACQUISITION_PRIORITIES })
+      .notNull()
+      .default("MEDIUM"),
+    requiredBy: text("required_by"), // ISO date string, nullable
+    riskReduction: text("risk_reduction"),
+    revenueImpact: text("revenue_impact"),
+    systemId: integer("system_id").references(() => equipmentSystems.id, {
+      onDelete: "set null",
+    }),
+    domain: text("domain", { enum: EQUIPMENT_DOMAINS }),
+    // Set once "Create asset from acquisition" is actually used --
+    // explicit provenance from the resulting Asset back to the decision
+    // that produced it, never inferred.
+    resultingAssetId: integer("resulting_asset_id").references(
+      (): AnySQLiteColumn => equipmentAssets.id,
+      { onDelete: "set null" },
+    ),
+    notes: text("notes"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("equipment_acquisitions_stage_idx").on(table.stage),
+    index("equipment_acquisitions_priority_idx").on(table.priority),
+    check(
+      "equipment_acquisitions_stage_check",
+      sql`${table.stage} in ('IDEA', 'RESEARCH', 'APPROVED', 'BUDGETED', 'ORDERED', 'RECEIVED', 'DEPLOYED', 'CANCELLED')`,
+    ),
+    check(
+      "equipment_acquisitions_priority_check",
+      sql`${table.priority} in ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')`,
+    ),
+    check(
+      "equipment_acquisitions_domain_check",
+      sql`${table.domain} IS NULL OR ${table.domain} in ('COMPUTE', 'STORAGE', 'NETWORK', 'VIDEO', 'PHOTO', 'AUDIO', 'POWER', 'OTHER')`,
+    ),
+    check(
+      "equipment_acquisitions_estimated_cost_check",
+      sql`${table.estimatedCost} IS NULL OR ${table.estimatedCost} >= 0`,
     ),
   ],
 );

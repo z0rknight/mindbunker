@@ -25,6 +25,14 @@ const navItems = [
   // discoverable only by URL. Desktop sidebar only, so the mobile bottom
   // tab bar keeps its current fixed 7-destination slot count.
   { href: "/productivity/sessions", label: "Sessions", mobileLabel: "Sessions", icon: "📜", desktopOnly: true, group: "OPERATIONS" },
+  // Equipment Wave 1 §4: the physical/patrimonial asset registry --
+  // grouped with OPERATIONS (it's the infrastructure operations depends
+  // on, not a cash concept -- see brief §10 on why Equipment's money
+  // fields stay conceptually separate from Finance's MONEY group).
+  // desktopOnly, same "protect the mobile tab bar's fixed 7-slot count"
+  // discipline as Sessions/Pricing Lab/Subscriptions/Debts/Contracts/All
+  // History above.
+  { href: "/equipment", label: "Equipment", mobileLabel: "Equipment", icon: "🧰", desktopOnly: true, group: "OPERATIONS" },
   { href: "/crm", label: "CRM", mobileLabel: "CRM", icon: "👥", group: "COMMERCIAL" },
   // Internal sales tool, occasional use -- desktop sidebar only, kept out
   // of the mobile bottom tab bar so that bar stays at its fixed 7 destinations.
