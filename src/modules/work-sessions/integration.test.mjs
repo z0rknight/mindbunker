@@ -232,6 +232,7 @@ test("refresh or process restart recovers the active session", () => {
       id: 1,
       video_id: 100,
       video_title: "Video A",
+      client_id: 1,
       client_name: "Client A",
       project_name: "Project A",
       activity_type: "MOTION_GRAPHICS",

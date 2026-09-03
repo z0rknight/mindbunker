@@ -27,6 +27,8 @@ import { HomeTrackingPanel } from "./HomeTrackingPanel";
 import { CoffeeQuickLogButton } from "@/components/ui/HealthQuickActions";
 import { getDashboardOperatorIntelligence } from "@/modules/operator-intelligence/data";
 import { selectDashboardNow, type AttentionReason } from "@/modules/operator-intelligence/core";
+import { EconomicLedgerCard } from "@/components/finance/EconomicLedgerCard";
+import { isInternalClientName, splitIntentionalWork } from "@/lib/client-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +74,7 @@ export default async function DashboardPage() {
     workSessionOverview.openSession,
     operatorIntelligence.recentCurrentTargets,
   );
+  const todayWorkSplit = splitIntentionalWork(todayWorkStats);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
@@ -205,18 +208,25 @@ export default async function DashboardPage() {
           {todayWorkStats.sessionCount > 0 && (
             <div>
               <h2 className="mb-3 text-zinc-400 text-xs font-semibold uppercase tracking-widest">Today</h2>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <StatCard
-                  label="Work Today"
-                  value={formatClosedDuration(todayWorkStats.totalSeconds)}
-                  accent="green"
-                  icon="⏱️"
+                  label="Client Production"
+                  value={formatClosedDuration(todayWorkSplit.clientProductionSeconds)}
+                  accent="blue"
+                  icon="🎬"
                 />
                 <StatCard
-                  label="Sessions Today"
-                  value={todayWorkStats.sessionCount}
+                  label="Internal Operations"
+                  value={formatClosedDuration(todayWorkSplit.internalOperationsSeconds)}
                   accent="zinc"
-                  icon="🎬"
+                  icon="🛠️"
+                />
+                <StatCard
+                  label="Total Intentional"
+                  value={formatClosedDuration(todayWorkSplit.totalIntentionalSeconds)}
+                  sub={`${todayWorkStats.sessionCount} ${todayWorkStats.sessionCount === 1 ? "session" : "sessions"}`}
+                  accent="green"
+                  icon="⏱️"
                 />
               </div>
               {todayRateEquivalents.length > 0 && (
@@ -250,7 +260,12 @@ export default async function DashboardPage() {
                     key={streak.projectId}
                     className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3"
                   >
-                    <p className="truncate text-sm font-bold text-white">{streak.projectName}</p>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-white">{streak.projectName}</p>
+                      <p className="mt-0.5 text-[10px] font-black uppercase tracking-wide text-zinc-600">
+                        {isInternalClientName(streak.clientName) ? "Internal operations" : "Client production"}
+                      </p>
+                    </div>
                     <span
                       className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black ${
                         streak.isActiveToday
@@ -444,12 +459,9 @@ export default async function DashboardPage() {
               <div key={row.currency}>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-600">{row.currency}</p>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  <StatCard
-                    label="Economic Ledger Net"
-                    value={formatCurrency(row.currentBalance, row.currency)}
-                    sub="Recorded history · not Wise cash"
-                    accent={row.currentBalance >= 0 ? "green" : "red"}
-                    icon="💳"
+                  <EconomicLedgerCard
+                    amount={row.economicLedgerNet}
+                    currency={row.currency}
                   />
                   <StatCard
                     label="Monthly Revenue"

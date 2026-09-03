@@ -131,27 +131,21 @@ function ProjectCard({
               style={{ width: `${progress}%` }}
             />
           </div>
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-xl bg-zinc-950/60 p-2">
-              <p className="text-lg font-black text-emerald-300">{project.doneVideos}</p>
-              <p className="text-[9px] font-bold uppercase tracking-wide text-zinc-600">Done</p>
-            </div>
-            <div className="rounded-xl bg-zinc-950/60 p-2">
-              <p className="text-lg font-black text-cyan-300">{project.inFlightVideos}</p>
-              <p className="text-[9px] font-bold uppercase tracking-wide text-zinc-600">In flight</p>
-            </div>
-            <div className="rounded-xl bg-zinc-950/60 p-2">
-              <p className="text-lg font-black text-zinc-300">{project.plannedVideos}</p>
-              <p className="text-[9px] font-bold uppercase tracking-wide text-zinc-600">Planned</p>
-            </div>
+          <div
+            className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-bold"
+            aria-label={`${project.doneVideos} done, ${project.inFlightVideos} in flight, ${project.plannedVideos} planned`}
+          >
+            <span className="text-emerald-300">✓ {project.doneVideos} done</span>
+            <span className="text-cyan-300">▶ {project.inFlightVideos} in flight</span>
+            <span className="text-zinc-400">○ {project.plannedVideos} planned</span>
           </div>
         </div>
       </div>
 
-      <div className="border-t border-zinc-800 p-3">
+      <div className="flex justify-end border-t border-zinc-800 px-4 py-3">
         <Link
           href={`/projects/${project.id}`}
-          className="flex min-h-12 w-full items-center justify-center rounded-xl bg-cyan-700 px-4 text-sm font-black text-white transition hover:bg-cyan-600"
+          className="inline-flex min-h-10 items-center rounded-lg border border-cyan-700/50 px-3 text-xs font-black text-cyan-200 transition hover:bg-cyan-900/30"
         >
           Open project →
         </Link>
@@ -188,7 +182,7 @@ export default async function ProjectsPage({
   const nowIso = new Date().toISOString();
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
+    <div className="mx-auto max-w-[1680px] px-4 py-5 sm:px-6 md:p-8">
       <header className="mb-8">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300">
           Clients → projects → videos
@@ -249,7 +243,7 @@ export default async function ProjectsPage({
                   Nothing here right now.
                 </div>
               ) : (
-                <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {/* Quick Morning Reality Patch §5: cluster same-client
                       projects next to each other within each lifecycle
                       group (cheap client grouping, no restructuring of

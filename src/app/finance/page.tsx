@@ -2,9 +2,8 @@ import Link from "next/link";
 import { StatCard } from "@/components/ui/StatCard";
 import { AddIncomeButton, AddExpenseButton } from "@/components/ui/QuickActions";
 import {
-  getFinanceSummary,
+  getFinanceOverview,
   getAllTransactions,
-  getRmediaCashSummary,
   getTaxReserveSettings,
   getRecentIncome,
   getReconciliationRequiringAttention,
@@ -27,14 +26,14 @@ import { getOwnerPayReceiptIdsByTransaction } from "@/modules/personal-finance/a
 import { getFxRateForMonth } from "@/modules/fx/actions";
 import { ReconcileWithWisePanel } from "@/components/finance/ReconcileWithWisePanel";
 import { FinanceHealthPanel } from "@/components/finance/FinanceHealthPanel";
+import { EconomicLedgerCard } from "@/components/finance/EconomicLedgerCard";
 
 export const dynamic = "force-dynamic";
 
 export default async function FinancePage() {
   const [
-    summary,
+    financeOverview,
     transactions,
-    rmediaCash,
     taxReserveSettings,
     recentIncome,
     reconciliationAttention,
@@ -47,9 +46,8 @@ export default async function FinancePage() {
     financeHealth,
     commercialContracts,
   ] = await Promise.all([
-    getFinanceSummary(),
+    getFinanceOverview(),
     getAllTransactions(),
-    getRmediaCashSummary(),
     getTaxReserveSettings(),
     getRecentIncome(8),
     getReconciliationRequiringAttention(),
@@ -62,6 +60,7 @@ export default async function FinancePage() {
     getFinanceHealth(),
     getCommercialContracts(),
   ]);
+  const { summary, ledgerPlanning: rmediaCash } = financeOverview;
   const activeDebts = debts.filter((d) => d.status === "ACTIVE");
   const remainingByCurrency = new Map<string, number>();
   for (const d of activeDebts) {
@@ -260,12 +259,9 @@ export default async function FinancePage() {
                   </p>
                 )}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <StatCard
-                    label="Operating Ledger Net"
-                    value={formatCurrency(row.businessCash, row.currency)}
-                    sub="Income − expenses − Owner Pay ± FX; not a Wise pocket"
-                    accent={row.businessCash >= 0 ? "green" : "red"}
-                    icon="🏢"
+                  <EconomicLedgerCard
+                    amount={row.economicLedgerNet}
+                    currency={row.currency}
                   />
                   <StatCard
                     label="Tax Reserve"
@@ -276,9 +272,9 @@ export default async function FinancePage() {
                   />
                   <StatCard
                     label="Available Ledger Net"
-                    value={formatCurrency(row.availableBusinessCash, row.currency)}
-                    sub="Operating ledger net − Tax Reserve"
-                    accent={row.availableBusinessCash >= 0 ? "green" : "red"}
+                    value={formatCurrency(row.availableLedgerNet, row.currency)}
+                    sub="Economic ledger net − Tax Reserve"
+                    accent={row.availableLedgerNet >= 0 ? "green" : "red"}
                     icon="✅"
                   />
                   <StatCard
@@ -349,14 +345,7 @@ export default async function FinancePage() {
         {summary.map((row) => (
           <div key={row.currency}>
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">{row.currency}</p>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <StatCard
-                label="Economic Ledger Net"
-                sub="Not a Wise pocket balance"
-                value={formatCurrency(row.currentBalance, row.currency)}
-                accent={row.currentBalance >= 0 ? "green" : "red"}
-                icon="💳"
-              />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <StatCard
                 label="Monthly Revenue"
                 value={formatCurrency(row.monthlyRevenue, row.currency)}

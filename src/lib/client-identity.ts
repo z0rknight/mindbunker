@@ -32,6 +32,49 @@ export function isInternalClientName(name: string | null | undefined): boolean {
   return INTERNAL_CLIENT_NAMES.has(name.trim().toUpperCase());
 }
 
+export type CanonicalVideoKind = "CLIENT_WORK" | "INTERNAL" | "SAMPLE";
+
+/**
+ * Creation default only. The owning client is the canonical fact: videos
+ * created under RMEDIA begin as INTERNAL, while real clients begin as
+ * CLIENT_WORK. An explicit operator choice is preserved verbatim.
+ */
+export function resolveVideoKindForClient(
+  clientName: string | null | undefined,
+  explicitKind?: CanonicalVideoKind | null,
+): CanonicalVideoKind {
+  if (explicitKind) return explicitKind;
+  return isInternalClientName(clientName) ? "INTERNAL" : "CLIENT_WORK";
+}
+
+export type IntentionalWorkSplit = {
+  clientProductionSeconds: number;
+  internalOperationsSeconds: number;
+  totalIntentionalSeconds: number;
+};
+
+/**
+ * Splits one already-deduplicated total. Attributed external-client time is
+ * client production; RMEDIA and unattributed intentional time remain internal
+ * operations. The remainder-based calculation guarantees the displayed
+ * invariant without counting any session twice.
+ */
+export function splitIntentionalWork(input: {
+  totalSeconds: number;
+  byClient: ReadonlyArray<{ clientName: string; seconds: number }>;
+}): IntentionalWorkSplit {
+  const totalIntentionalSeconds = Math.max(0, input.totalSeconds);
+  const externalSeconds = input.byClient
+    .filter((row) => !isInternalClientName(row.clientName))
+    .reduce((sum, row) => sum + Math.max(0, row.seconds), 0);
+  const clientProductionSeconds = Math.min(totalIntentionalSeconds, externalSeconds);
+  return {
+    clientProductionSeconds,
+    internalOperationsSeconds: totalIntentionalSeconds - clientProductionSeconds,
+    totalIntentionalSeconds,
+  };
+}
+
 export function isActiveExternalClient(client: {
   name: string;
   status: string;

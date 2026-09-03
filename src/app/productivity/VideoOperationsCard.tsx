@@ -14,7 +14,6 @@ import {
 import { formatDate } from "@/utils/date";
 import Link from "next/link";
 import { DeleteVideoLogButton } from "./DeleteVideoLogButton";
-import { RevisionControls } from "./RevisionControls";
 import { VideoEditor } from "./VideoEditor";
 
 type VideoRow = {
@@ -171,13 +170,10 @@ export function VideoOperationsCard({
       </div>
 
       <div className="mt-4 flex flex-col gap-3 border-t border-zinc-800/80 pt-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex items-end gap-4">
-          <div>
-            <p className="mb-1 text-[9px] font-black uppercase tracking-[0.16em] text-zinc-600">
-              Revisions
-            </p>
-            <RevisionControls videoId={video.id} initialCount={video.revisionsCount} />
-          </div>
+        <div className="flex items-center gap-4">
+          <p className="text-xs font-bold text-zinc-500" aria-label={`${video.revisionsCount} revisions`}>
+            ↻ {video.revisionsCount} {video.revisionsCount === 1 ? "revision" : "revisions"}
+          </p>
           <DeleteVideoLogButton id={video.id} />
         </div>
         <div className="flex flex-col items-stretch gap-2 sm:items-end">

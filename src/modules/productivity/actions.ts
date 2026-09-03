@@ -48,6 +48,7 @@ import {
   VIDEO_OPERATIONAL_NOTE_EVENT_TYPE,
   videoOperationalMemoryBlocksDeletion,
 } from "@/modules/video-memory/core";
+import { resolveVideoKindForClient } from "@/lib/client-identity";
 
 type ProductivityActionResult =
   | {
@@ -98,18 +99,20 @@ async function resolveVideoAssignment(
   });
   if (!assignment.success) return assignment;
 
-  if (!input.projectId && assignment.clientId) {
+  let clientName: string | null = null;
+  if (assignment.clientId) {
     const owner = await db
-      .select({ id: clients.id })
+      .select({ id: clients.id, name: clients.name })
       .from(clients)
       .where(eq(clients.id, assignment.clientId))
       .limit(1);
     if (!owner[0]) {
       return { success: false as const, error: "Client not found." };
     }
+    clientName = owner[0].name;
   }
 
-  return { success: true as const, clientId: assignment.clientId };
+  return { success: true as const, clientId: assignment.clientId, clientName };
 }
 
 export async function createVideoLog(
@@ -139,6 +142,10 @@ export async function createVideoLog(
       coverUrl: parsed.data.coverUrl,
       orientation: parsed.data.orientation,
       contentType: parsed.data.contentType,
+      videoKind: resolveVideoKindForClient(
+        assignment.clientName,
+        values.videoKind,
+      ),
       createdAt: now,
       updatedAt: now,
     })
@@ -270,6 +277,10 @@ export async function createVideoLogsBulk(
           coverUrl: row.coverUrl,
           orientation: row.orientation,
           contentType: row.contentType,
+          videoKind: resolveVideoKindForClient(
+            assignment.clientName,
+            undefined,
+          ),
           batchLabel: cleanBatchLabel,
           createdAt: now,
           updatedAt: now,

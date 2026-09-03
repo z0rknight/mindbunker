@@ -100,7 +100,7 @@ export function RecordOwnerPayButton() {
             </div>
             <p className="text-zinc-500 text-xs mb-4">
               RMEDIA Cash → Owner Pay → Personal Money. This is not revenue and
-              not a business expense — it reduces Business Cash directly.
+              not a business expense — it reduces the Economic Ledger Net directly.
             </p>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>

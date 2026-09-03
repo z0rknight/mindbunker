@@ -101,7 +101,7 @@ export function computePersonalFlowByCurrency(
 }
 
 // Personal cash balance is entirely separate from Business Cash (see
-// getRmediaCashSummary in modules/finance/actions.ts) -- there is no
+// getEconomicLedgerPlanning in modules/finance/actions.ts) -- there is no
 // shared total anywhere. Owner Pay receipts increase this balance but are
 // never counted as `income`: `income` here is reserved for genuine
 // external personal income (a gift, a second job), never money that

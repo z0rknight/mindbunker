@@ -18,6 +18,7 @@ import { computeClientCommercialValue } from "@/modules/quotes/core";
 import { ClientCommercialValuePanel } from "./ClientCommercialValuePanel";
 import { getClientCustody } from "@/modules/custody/data";
 import { ChainOfCustodyPanel } from "@/components/custody/ChainOfCustodyPanel";
+import { ClientOperationalDossier } from "./ClientOperationalDossier";
 
 export const dynamic = "force-dynamic";
 
@@ -134,6 +135,16 @@ export default async function ClientDetailPage({
         </div>
       </div>
 
+      <ClientOperationalDossier
+        status={client.status}
+        lastInteractionAt={client.lastInteractionAt?.toISOString() ?? null}
+        realizedRevenue={clientIntelligence.totalRevenueByCurrency}
+        activeProjectsCount={clientIntelligence.activeProjectsCount}
+        currentProductionCount={clientIntelligence.videosInProgressCount}
+        nextAction={client.nextAction}
+        nextActionDate={client.nextActionDate}
+      />
+
       {/* Brief C ("Final Local Ingest / Live Readiness") §11B: real QA
           found Active Projects "too buried" -- reachable only inside the
           Projects tab several clicks down. This surfaces them right at the
@@ -167,17 +178,8 @@ export default async function ClientDetailPage({
         );
       })()}
 
-      <GeladeiraControl
-        clientId={client.id}
-        archivalState={client.archivalState}
-        archivedAt={client.archivedAt ? client.archivedAt.toISOString() : null}
-        invitation={
-          workspace.invitation
-            ? { id: workspace.invitation.id, status: workspace.invitation.status }
-            : null
-        }
-        hasPortalPassword={Boolean(client.portalPasswordHash)}
-      />
+      {/* Internal production context stays operational and precedes lead/audit surfaces. */}
+      <ClientIntelligencePanel summary={clientIntelligence} />
 
       <OpportunityPanel
         client={{
@@ -216,11 +218,17 @@ export default async function ClientDetailPage({
         commercialValue={commercialValue}
       />
 
-      {custody && <ChainOfCustodyPanel custody={custody} />}
-
-      {/* Internal Client Intelligence (Sunday Systems Round, Phase H) --
-          never rendered on the client-facing Vault or Gateway. */}
-      <ClientIntelligencePanel summary={clientIntelligence} />
+      <GeladeiraControl
+        clientId={client.id}
+        archivalState={client.archivalState}
+        archivedAt={client.archivedAt ? client.archivedAt.toISOString() : null}
+        invitation={
+          workspace.invitation
+            ? { id: workspace.invitation.id, status: workspace.invitation.status }
+            : null
+        }
+        hasPortalPassword={Boolean(client.portalPasswordHash)}
+      />
 
       {/* Client Portal Identity (Sprint 1.2.2) -- operator-side setup for
           the client's persistent /client/dashboard login. */}
@@ -255,6 +263,17 @@ export default async function ClientDetailPage({
         initialProjectCreation={shouldCreateProject}
         projectReturnTo={projectReturnTo}
       />
+
+      {custody && (
+        <details className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/35">
+          <summary className="cursor-pointer px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-zinc-400 hover:text-zinc-200">
+            Evidence &amp; Provenance
+          </summary>
+          <div className="border-t border-zinc-800 p-4">
+            <ChainOfCustodyPanel custody={custody} />
+          </div>
+        </details>
+      )}
     </div>
   );
 }

@@ -1780,7 +1780,7 @@ export const operatingReserveSettings = sqliteTable(
 //
 // FX + Business Operating Cash Patch: a BUSINESS-scope row IS now read
 // alongside `transactions` when deriving Business Cash by currency (see
-// getRmediaCashSummary/computeFinanceSummaryByCurrency in finance/) -- the
+// getEconomicLedgerPlanning/computeFinanceSummaryByCurrency in finance/) -- the
 // conversion moves value between currency positions, it still never
 // creates revenue or expense. A PERSONAL-scope row never touches Business
 // Finance at all.

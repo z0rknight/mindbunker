@@ -19,9 +19,9 @@ const PURPOSE_LABEL: Record<FxPurpose, string> = {
 //
 // FX + Business Operating Cash Patch §2/§3/§6: scope and "which currency
 // did you spend" are both required -- there is no default and no guess.
-// Scope decides whether this conversion is folded into Business Cash at
-// all (see getRmediaCashSummary/getFinanceSummary); From Currency decides
-// which side of Business Cash decreases vs increases (computeFxCashMovements
+// Scope decides whether this conversion is folded into the Economic Ledger at
+// all (see getEconomicLedgerPlanning/getFinanceSummary); From Currency decides
+// which side of the Economic Ledger decreases vs increases (computeFxCashMovements
 // in modules/fx/core.ts). Purpose only ever applies to a BUSINESS
 // conversion and only ever describes intent -- it never creates an expense
 // by itself (the actual subscription charge is what does that).
@@ -108,7 +108,7 @@ export function RecordFxConversionButton() {
             </div>
             <p className="text-zinc-500 text-xs mb-4">
               A real conversion you actually made -- e.g. $100 converted into R$510 to pay a BRL bill.
-              A BUSINESS conversion moves Business Cash between currencies; it never touches revenue or expenses.
+              A BUSINESS conversion moves the Economic Ledger between currencies; it never touches revenue or expenses.
             </p>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -152,8 +152,8 @@ export function RecordFxConversionButton() {
                 </div>
                 <p className="text-zinc-600 text-[11px] mt-1">
                   {scope === "BUSINESS"
-                    ? "Moves Business Cash between USD and BRL. Never affects Personal Finance."
-                    : "Moves Personal Finance between USD and BRL. Never affects Business Cash or Owner Pay."}
+                    ? "Moves the Economic Ledger between USD and BRL. Never affects Personal Finance."
+                    : "Moves Personal Finance between USD and BRL. Never affects the Business Economic Ledger or Owner Pay."}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import {
   getCommercialContractById,
   getBillingEvidenceForContract,
-  getReconciliation,
+  getContractReconciliation,
 } from "@/modules/finance/actions";
 import { formatMinutesAsHours } from "@/modules/finance/core";
 import { formatCurrency, formatDate } from "@/utils/date";
@@ -53,7 +53,7 @@ export default async function ContractDetailPage({
       : evidenceList[0]) ?? null;
 
   const reconciliation = selectedEvidence
-    ? await getReconciliation(contractId, selectedEvidence.periodStart, selectedEvidence.periodEnd)
+    ? await getContractReconciliation(contractId, selectedEvidence.periodStart, selectedEvidence.periodEnd)
     : null;
 
   return (

@@ -74,6 +74,7 @@ export type OpenWorkSession = {
   // fabricated. A session on an unattributed video (e.g. an ADMIN task) is
   // shown honestly as just the video/activity, not guessed into a client.
   clientName: string | null;
+  clientId: number | null;
   projectName: string | null;
   activityType: WorkSessionActivityType;
   startedAt: string;
@@ -213,6 +214,7 @@ export const OPEN_WORK_SESSION_SQL = `
     ws.id,
     ws.video_id,
     COALESCE(v.title, 'Video ' || v.date) AS video_title,
+    v.client_id AS client_id,
     c.name AS client_name,
     p.name AS project_name,
     ws.activity_type,
@@ -672,6 +674,8 @@ function shiftDayKey(dayKey: string, deltaDays: number): string {
 export type ProjectStreak = {
   projectId: number;
   projectName: string;
+  clientId: number | null;
+  clientName: string | null;
   currentStreak: number;
   lastActiveDayKey: string;
   isActiveToday: boolean;
@@ -686,21 +690,26 @@ export type ProjectStreak = {
 // shows no streak rather than a stale one (so it stops meaning something
 // at 00:01, per the brief's own worked example).
 export function computeProjectStreaks(
-  rows: readonly Pick<WorkSessionAttributionRow, "projectId" | "projectName" | "startedAt">[],
+  rows: readonly Pick<WorkSessionAttributionRow, "projectId" | "projectName" | "clientId" | "clientName" | "startedAt">[],
   todayKey: string,
 ): ProjectStreak[] {
-  const byProject = new Map<number, { name: string; days: Set<string> }>();
+  const byProject = new Map<number, { name: string; clientId: number | null; clientName: string | null; days: Set<string> }>();
   for (const row of rows) {
     if (row.projectId === null) continue; // passive/unattributed work never creates a streak
     const dayKey = dayKeyFor(row.startedAt);
-    const entry = byProject.get(row.projectId) ?? { name: row.projectName ?? "", days: new Set<string>() };
+    const entry = byProject.get(row.projectId) ?? {
+      name: row.projectName ?? "",
+      clientId: row.clientId,
+      clientName: row.clientName,
+      days: new Set<string>(),
+    };
     entry.days.add(dayKey);
     byProject.set(row.projectId, entry);
   }
 
   const yesterdayKey = shiftDayKey(todayKey, -1);
   const streaks: ProjectStreak[] = [];
-  for (const [projectId, { name, days }] of byProject) {
+  for (const [projectId, { name, clientId, clientName, days }] of byProject) {
     const lastActiveDayKey = [...days].sort().at(-1)!;
     if (lastActiveDayKey !== todayKey && lastActiveDayKey !== yesterdayKey) continue;
 
@@ -713,6 +722,8 @@ export function computeProjectStreaks(
     streaks.push({
       projectId,
       projectName: name,
+      clientId,
+      clientName,
       currentStreak,
       lastActiveDayKey,
       isActiveToday: lastActiveDayKey === todayKey,

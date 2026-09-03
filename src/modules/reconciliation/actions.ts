@@ -11,7 +11,7 @@ import {
   validateCashBalanceSnapshotInput,
   type CashScope,
 } from "./core";
-import { getRmediaCashSummary } from "@/modules/finance/actions";
+import { getEconomicLedgerPlanning } from "@/modules/finance/actions";
 import { getPersonalBalanceSummary } from "@/modules/personal-finance/actions";
 
 export type CashSnapshotActionResult =
@@ -79,8 +79,8 @@ export async function getReconciliation(scope: CashScope): Promise<Reconciliatio
   const [snapshots, ledgerByCurrency] = await Promise.all([
     getLatestSnapshots(scope),
     scope === "BUSINESS"
-      ? getRmediaCashSummary().then(
-          (rows) => new Map(rows.map((r) => [r.currency, r.businessCash])),
+      ? getEconomicLedgerPlanning().then(
+          (rows) => new Map(rows.map((r) => [r.currency, r.economicLedgerNet])),
         )
       : getPersonalBalanceSummary().then(
           (rows) => new Map(rows.map((r) => [r.currency, r.balance])),

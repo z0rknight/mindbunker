@@ -270,7 +270,7 @@ export async function getPersonalTransactions() {
 
 // Lunch Reality Patch §5: folds PERSONAL-scope fx_conversions into the
 // balance the exact same read-time way Business Cash already folds
-// BUSINESS-scope ones (getRmediaCashSummary in finance/actions.ts) -- one
+// BUSINESS-scope ones (getEconomicLedgerPlanning in finance/actions.ts) -- one
 // pure computeFxCashMovements function, no synthetic transaction row, no
 // separately-maintained balance column. BUSINESS and UNCLASSIFIED rows are
 // filtered out here, before computePersonalBalanceByCurrency ever sees

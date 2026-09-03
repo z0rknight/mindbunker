@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **🧭 Master QA Implementation Wave 1 — local candidate (2026-09-02)**
+  - [x] Unified Finance on one currency-safe Economic Ledger Net and made `NOT WISE CASH` visually prominent while leaving observed Wise custody/reconciliation intact
+  - [x] Renamed contract/work reconciliation to `getContractReconciliation`, preserving the cash/Wise domain name
+  - [x] Made canonical RMEDIA-owned Video creation default to `INTERNAL` while preserving explicit operator overrides and historical rows
+  - [x] Split Dashboard intentional work into Client Production, Internal Operations, and Total Intentional with exact no-double-count invariant; labeled internal Momentum
+  - [x] Moved revision editing from normal Productivity cards into Video Workspace; compacted Project progress/CTA and added 2xl four-column comparison
+  - [x] Added a factual CRM operational dossier and moved Chain of Custody under collapsed Evidence & Provenance without removing it
+  - [x] Added durable Master QA/coverage ledgers; no migration, D1 mutation, upload, or deploy
+
 - [x] **🧭 Tuesday Operator Intelligence patch — code-only candidate (2026-09-02)**
   - [x] Added deterministic Dashboard NOW and ATTENTION projections over existing Work Sessions, Promises, blockers, and video lifecycle facts
   - [x] Made Promise entry and correction explicitly America/Sao_Paulo → UTC, runtime-timezone independent, and rejected due dates before creation; historical invalid rows remain unchanged and surface as DATA ISSUE

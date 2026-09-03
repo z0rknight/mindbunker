@@ -21,7 +21,7 @@ export type FxActionResult = { success: true } | { success: false; error: string
 
 // A real BRL<->USD conversion Emmanuel actually performed. Append-only
 // source fact -- never mutates any other ledger (a BUSINESS-scope row IS
-// read into Business Cash by finance/actions.ts's getRmediaCashSummary/
+// read into the Economic Ledger by finance/actions.ts's getEconomicLedgerPlanning/
 // getFinanceSummary, but that is a read-time fold, not a mutation here).
 // See fx_conversions in src/db/schema.ts.
 export async function recordFxConversion(data: {

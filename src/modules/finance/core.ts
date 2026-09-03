@@ -37,10 +37,13 @@ export type FinanceSummaryTransaction = {
 
 export type FinanceSummaryByCurrency = {
   currency: string;
+  totalIncome: number;
+  totalExpenses: number;
+  totalOwnerPay: number;
   monthlyRevenue: number;
   monthlyExpenses: number;
   monthlyNet: number;
-  currentBalance: number;
+  economicLedgerNet: number;
 };
 
 // A BUSINESS-scope FX conversion's cash effect on one currency position --
@@ -54,8 +57,9 @@ export type FinanceSummaryFxMovement = { currency: string; amount: number };
 // expenses, and monthly net. FX movements (fxMovements) shift cash between
 // currency positions the same way -- they are NEVER folded into income,
 // expenses, monthlyRevenue, or monthlyNet (a conversion is neither revenue
-// nor expense), only into currentBalance, exactly like Owner Pay already
-// affects currentBalance without being revenue or expense.
+// nor expense), only into economicLedgerNet, exactly like Owner Pay already
+// affects that ledger without being revenue or expense. This remains an
+// economic-history projection, never a claim about observed Wise cash.
 export function computeFinanceSummaryByCurrency(
   transactions: FinanceSummaryTransaction[],
   monthStart: string,
@@ -104,10 +108,15 @@ export function computeFinanceSummaryByCurrency(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([currency, bucket]) => ({
       currency,
+      totalIncome: round2(bucket.income),
+      totalExpenses: round2(bucket.expenses),
+      totalOwnerPay: round2(bucket.ownerPay),
       monthlyRevenue: round2(bucket.monthlyRevenue),
       monthlyExpenses: round2(bucket.monthlyExpenses),
       monthlyNet: round2(bucket.monthlyRevenue - bucket.monthlyExpenses),
-      currentBalance: round2(bucket.income - bucket.expenses - bucket.ownerPay + bucket.fxNet),
+      economicLedgerNet: round2(
+        bucket.income - bucket.expenses - bucket.ownerPay + bucket.fxNet,
+      ),
     }));
 }
 
@@ -201,33 +210,19 @@ export function computeReconciliation(input: {
   };
 }
 
-// RMEDIA CASH (Monday Money Lab P0 §7/§9):
-//   EXTERNAL INCOME -> RMEDIA CASH -> { TAX RESERVE, AVAILABLE BUSINESS CASH }
-//   AVAILABLE BUSINESS CASH -> OWNER PAY -> PERSONAL MONEY
-// businessCash is the actual current cash position (income - real
-// operating expense - real owner pay already withdrawn) -- a bank-balance
-// fact, not a profit figure (profit would not subtract owner pay). taxReserve
-// and availableBusinessCash are an experimental planning OVERLAY on top of
-// that real cash position, not a second ledger and not automatically
-// deducted anywhere else.
-export function computeRmediaCashSummary(input: {
+// SEM-001 / FIN-001: tax/reserve planning is a projection over the ONE
+// canonical Economic Ledger Net computed above. It must never reconstruct
+// income - expenses - owner pay +/- FX itself, and it must never be called
+// cash: the ledger is recorded economic history, not an observed Wise pocket.
+export function computeEconomicLedgerPlanning(input: {
   totalIncome: number;
-  totalExpense: number;
-  totalOwnerPay: number;
-  // FX + Business Operating Cash Patch §5/§6: net effect of BUSINESS-scope
-  // FX conversions on THIS currency position (positive = this currency was
-  // received, negative = this currency was spent to obtain the other).
-  // Never folded into taxReserve, which stays income-only -- a conversion
-  // is not revenue, so it must not inflate the tax reserve calculation.
-  fxNet?: number;
+  economicLedgerNet: number;
   taxReservePercent: number;
-}): { businessCash: number; taxReserve: number; availableBusinessCash: number } {
-  const businessCash = round2(
-    input.totalIncome - input.totalExpense - input.totalOwnerPay + (input.fxNet ?? 0),
-  );
+}): { economicLedgerNet: number; taxReserve: number; availableLedgerNet: number } {
   const taxReserve = round2(input.totalIncome * (input.taxReservePercent / 100));
-  const availableBusinessCash = round2(businessCash - taxReserve);
-  return { businessCash, taxReserve, availableBusinessCash };
+  const economicLedgerNet = round2(input.economicLedgerNet);
+  const availableLedgerNet = round2(economicLedgerNet - taxReserve);
+  return { economicLedgerNet, taxReserve, availableLedgerNet };
 }
 
 export function validateContractInput(input: {

@@ -33,6 +33,7 @@ import { CommercialTermsPanel } from "./CommercialTermsPanel";
 import { ProjectReferencesPanel } from "./ProjectReferencesPanel";
 import { CoverUploadField } from "@/components/media/CoverUploadField";
 import { OperationalMemoryPanel } from "./OperationalMemoryPanel";
+import { RevisionControls } from "./RevisionControls";
 
 type VideoEditorProps = {
   video: {
@@ -328,7 +329,10 @@ export function VideoEditor({
                 <section className="grid grid-cols-2 gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Revisions</p>
-                    <p className="mt-1 text-lg font-black text-white">{video.revisionsCount}</p>
+                    <div className="mt-2">
+                      <RevisionControls videoId={video.id} initialCount={video.revisionsCount} />
+                    </div>
+                    <p className="mt-1 text-[10px] text-zinc-600">Manage revisions</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Deadline</p>

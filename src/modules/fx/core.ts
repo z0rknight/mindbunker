@@ -168,7 +168,7 @@ export type FxCashMovement = { currency: FxCurrency; amount: number };
 // to resolve a direction for) -- an unrecorded direction is never guessed.
 // This is the one place cash-movement direction logic lives; callers
 // (finance/core.ts's computeFinanceSummaryByCurrency and
-// finance/actions.ts's getRmediaCashSummary) just fold the result into
+// finance/actions.ts's getEconomicLedgerPlanning) just fold the result into
 // their own per-currency buckets, they never re-derive direction.
 export function computeFxCashMovements(conversion: {
   brlAmount: number;

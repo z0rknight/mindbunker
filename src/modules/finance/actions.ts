@@ -27,7 +27,7 @@ import {
   CLIENT_OPERATIONAL_MINUTES_SQL,
   buildBillingEvidenceIdempotencyKey,
   computeReconciliation,
-  computeRmediaCashSummary,
+  computeEconomicLedgerPlanning,
   computeCashReconciliation,
   validateBillingEvidenceInput,
   validateContractInput,
@@ -394,7 +394,7 @@ export async function correctOwnerPay(
 
 // Business-scope FX conversions with a recorded direction, flattened into
 // per-currency cash movements -- shared by getFinanceSummary and
-// getRmediaCashSummary below so both "business cash" read models fold in
+// the canonical Economic Ledger Net below so every projection folds in
 // exactly the same FX effect and never disagree with each other. Rows with
 // no fromCurrency (legacy, or scope != BUSINESS) contribute nothing, per
 // computeFxCashMovements.
@@ -440,14 +440,14 @@ export async function getRecentIncome(limit = 10) {
 
 // ─── RMEDIA CASH (§7) + TAX RESERVE (§9, experimental) ──────────────────────
 
-export type RmediaCashSummaryByCurrency = {
+export type EconomicLedgerPlanningByCurrency = {
   currency: string;
   totalIncome: number;
-  totalExpense: number;
+  totalExpenses: number;
   totalOwnerPay: number;
-  businessCash: number;
+  economicLedgerNet: number;
   taxReserve: number;
-  availableBusinessCash: number;
+  availableLedgerNet: number;
 };
 
 export async function getTaxReserveSettings() {
@@ -482,57 +482,48 @@ export async function setTaxReservePercent(percent: number) {
 // this round, per the brief). Every currency that has ever appeared on a
 // transaction gets its own row; a business that only ever used USD sees
 // exactly one.
-export async function getRmediaCashSummary(): Promise<
-  RmediaCashSummaryByCurrency[]
+export async function getEconomicLedgerPlanning(): Promise<
+  EconomicLedgerPlanningByCurrency[]
 > {
-  const db = await getAuthenticatedDb();
-  const [allTransactions, settings, fxMovements] = await Promise.all([
-    db.select().from(transactions),
+  const [summary, settings] = await Promise.all([
+    getFinanceSummary(),
     getTaxReserveSettings(),
-    getBusinessFxCashMovements(),
   ]);
+  return projectLedgerPlanning(summary, settings.taxReservePercent);
+}
 
-  const byCurrency = new Map<
-    string,
-    { income: number; expense: number; ownerPay: number; fxNet: number }
-  >();
-  const getBucket = (currency: string) =>
-    byCurrency.get(currency) ?? { income: 0, expense: 0, ownerPay: 0, fxNet: 0 };
-
-  for (const t of allTransactions) {
-    const currency = t.currency || "UNKNOWN";
-    const bucket = getBucket(currency);
-    if (t.type === "income") bucket.income += t.amount;
-    else if (t.type === "expense") bucket.expense += t.amount;
-    else if (t.type === "owner_pay") bucket.ownerPay += t.amount;
-    byCurrency.set(currency, bucket);
-  }
-  // BUSINESS FX conversions move value between currency positions (see
-  // computeFxCashMovements) -- a currency that has only ever appeared in a
-  // conversion (never in a transaction) still needs its own row here, so
-  // this can introduce a new currency key the transactions loop never saw.
-  for (const movement of fxMovements) {
-    const bucket = getBucket(movement.currency);
-    bucket.fxNet += movement.amount;
-    byCurrency.set(movement.currency, bucket);
-  }
-
-  return Array.from(byCurrency.entries()).map(([currency, bucket]) => {
-    const cash = computeRmediaCashSummary({
-      totalIncome: bucket.income,
-      totalExpense: bucket.expense,
-      totalOwnerPay: bucket.ownerPay,
-      fxNet: bucket.fxNet,
-      taxReservePercent: settings.taxReservePercent,
+function projectLedgerPlanning(
+  summary: Awaited<ReturnType<typeof getFinanceSummary>>,
+  taxReservePercent: number,
+): EconomicLedgerPlanningByCurrency[] {
+  return summary.map((row) => {
+    const planning = computeEconomicLedgerPlanning({
+      totalIncome: row.totalIncome,
+      economicLedgerNet: row.economicLedgerNet,
+      taxReservePercent,
     });
     return {
-      currency,
-      totalIncome: bucket.income,
-      totalExpense: bucket.expense,
-      totalOwnerPay: bucket.ownerPay,
-      ...cash,
+      currency: row.currency,
+      totalIncome: row.totalIncome,
+      totalExpenses: row.totalExpenses,
+      totalOwnerPay: row.totalOwnerPay,
+      ...planning,
     };
   });
+}
+
+// Finance page reads the canonical ledger once and derives the planning
+// overlay from those same rows. Other pages can keep projecting
+// getFinanceSummary() without gaining a parallel formula.
+export async function getFinanceOverview() {
+  const [summary, settings] = await Promise.all([
+    getFinanceSummary(),
+    getTaxReserveSettings(),
+  ]);
+  return {
+    summary,
+    ledgerPlanning: projectLedgerPlanning(summary, settings.taxReservePercent),
+  };
 }
 
 // ─── NIGHT SHIFT REALITY PATCH §6: contract rate -> attributable work value ─
@@ -783,7 +774,7 @@ async function getClientOperationalMinutes(
 // comes back UNATTRIBUTED (see computeReconciliation) -- operational
 // minutes are still reported, because that half of the truth already
 // exists regardless of what Upwork has or hasn't said yet.
-export async function getReconciliation(
+export async function getContractReconciliation(
   contractId: number,
   periodStart: string,
   periodEnd: string,
@@ -856,7 +847,7 @@ export async function getReconciliationRequiringAttention(): Promise<
     if (latestEvidence.length === 0) continue;
     const evidence = latestEvidence[0];
 
-    const reconciliation = await getReconciliation(
+    const reconciliation = await getContractReconciliation(
       contract.id,
       evidence.periodStart,
       evidence.periodEnd,

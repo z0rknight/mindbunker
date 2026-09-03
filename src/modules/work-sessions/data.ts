@@ -40,6 +40,7 @@ type RawOpenSessionRow = {
   id: number;
   video_id: number;
   video_title: string;
+  client_id: number | null;
   client_name: string | null;
   project_name: string | null;
   activity_type: string;
@@ -89,6 +90,7 @@ function mapOpenSession(row: RawOpenSessionRow | null): OpenWorkSession | null {
     id: Number(row.id),
     videoId: Number(row.video_id),
     videoTitle: row.video_title,
+    clientId: row.client_id === null ? null : Number(row.client_id),
     clientName: row.client_name,
     projectName: row.project_name,
     activityType: row.activity_type,
@@ -372,6 +374,20 @@ export async function getTodayWorkSessionStats(): Promise<TodayWorkSessionStats>
   if (overview.openSession && dayKeyFor(overview.openSession.startedAt) === todayKey) {
     stats.totalSeconds += overview.openSessionElapsedSeconds;
     stats.sessionCount += 1;
+    if (overview.openSession.clientId !== null) {
+      const existing = stats.byClient.find(
+        (row) => row.clientId === overview.openSession?.clientId,
+      );
+      if (existing) {
+        existing.seconds += overview.openSessionElapsedSeconds;
+      } else {
+        stats.byClient.push({
+          clientId: overview.openSession.clientId,
+          clientName: overview.openSession.clientName ?? "",
+          seconds: overview.openSessionElapsedSeconds,
+        });
+      }
+    }
   }
   return stats;
 }

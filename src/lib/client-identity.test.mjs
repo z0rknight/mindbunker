@@ -5,6 +5,8 @@ import {
   displayClientName,
   getClientAccent,
   isInternalClientName,
+  resolveVideoKindForClient,
+  splitIntentionalWork,
 } from "./client-identity.ts";
 
 test("isInternalClientName matches RMEDIA's canonical record, case/whitespace-insensitive", () => {
@@ -13,6 +15,37 @@ test("isInternalClientName matches RMEDIA's canonical record, case/whitespace-in
   assert.equal(isInternalClientName("  RMedia  "), true);
   assert.equal(isInternalClientName("RMEDIA (INTERNAL)"), true);
   assert.equal(isInternalClientName(" rmedia (internal) "), true);
+});
+
+test("internal RMEDIA video creation defaults to INTERNAL while external work remains CLIENT_WORK", () => {
+  assert.equal(resolveVideoKindForClient("RMEDIA"), "INTERNAL");
+  assert.equal(resolveVideoKindForClient("RMEDIA (INTERNAL)"), "INTERNAL");
+  assert.equal(resolveVideoKindForClient("Taryn Dubreuil"), "CLIENT_WORK");
+  assert.equal(resolveVideoKindForClient(null), "CLIENT_WORK");
+});
+
+test("an explicit valid video classification always wins over the owning-client default", () => {
+  assert.equal(resolveVideoKindForClient("RMEDIA", "SAMPLE"), "SAMPLE");
+  assert.equal(resolveVideoKindForClient("Taryn Dubreuil", "INTERNAL"), "INTERNAL");
+});
+
+test("intentional work splits client and internal seconds without double counting", () => {
+  const result = splitIntentionalWork({
+    totalSeconds: 7200,
+    byClient: [
+      { clientName: "Taryn Dubreuil", seconds: 3600 },
+      { clientName: "RMEDIA", seconds: 1800 },
+    ],
+  });
+  assert.deepEqual(result, {
+    clientProductionSeconds: 3600,
+    internalOperationsSeconds: 3600,
+    totalIntentionalSeconds: 7200,
+  });
+  assert.equal(
+    result.clientProductionSeconds + result.internalOperationsSeconds,
+    result.totalIntentionalSeconds,
+  );
 });
 
 test("isInternalClientName never fuzzy-matches a real external client", () => {

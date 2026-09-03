@@ -5,7 +5,7 @@ import {
   buildBillingEvidenceIdempotencyKey,
   computeReconciliation,
   computeFinanceSummaryByCurrency,
-  computeRmediaCashSummary,
+  computeEconomicLedgerPlanning,
   convertUsdToBrl,
   formatMinutesAsHours,
   validateBillingEvidenceInput,
@@ -124,30 +124,26 @@ test("buildBillingEvidenceIdempotencyKey is deterministic and re-import-safe", (
   assert.equal(key1, key4);
 });
 
-test("computeRmediaCashSummary keeps Business Cash, Tax Reserve, and Owner Pay distinct", () => {
-  const summary = computeRmediaCashSummary({
+test("computeEconomicLedgerPlanning projects planning from the canonical Economic Ledger Net", () => {
+  const summary = computeEconomicLedgerPlanning({
     totalIncome: 1000,
-    totalExpense: 0,
-    totalOwnerPay: 0,
+    economicLedgerNet: 1000,
     taxReservePercent: 10,
   });
-  assert.equal(summary.businessCash, 1000);
+  assert.equal(summary.economicLedgerNet, 1000);
   assert.equal(summary.taxReserve, 100);
-  assert.equal(summary.availableBusinessCash, 900);
+  assert.equal(summary.availableLedgerNet, 900);
 });
 
-test("computeRmediaCashSummary: Owner Pay reduces Business Cash without touching income/Tax Reserve base", () => {
-  const summary = computeRmediaCashSummary({
+test("computeEconomicLedgerPlanning never reconstructs the ledger formula independently", () => {
+  const summary = computeEconomicLedgerPlanning({
     totalIncome: 1000,
-    totalExpense: 50,
-    totalOwnerPay: 300,
+    economicLedgerNet: 650,
     taxReservePercent: 10,
   });
-  // Business Cash = 1000 - 50 - 300 = 650 (owner pay already left the account)
-  assert.equal(summary.businessCash, 650);
-  // Tax Reserve is still derived from income only, not from what's left.
+  assert.equal(summary.economicLedgerNet, 650);
   assert.equal(summary.taxReserve, 100);
-  assert.equal(summary.availableBusinessCash, 550);
+  assert.equal(summary.availableLedgerNet, 550);
 });
 
 test("finance summary never lets a BRL expense alter the USD ledger", () => {
@@ -158,8 +154,8 @@ test("finance summary never lets a BRL expense alter the USD ledger", () => {
   ], "2026-08-01");
 
   assert.deepEqual(result, [
-    { currency: "BRL", monthlyRevenue: 0, monthlyExpenses: 100, monthlyNet: -100, currentBalance: -100 },
-    { currency: "USD", monthlyRevenue: 343.75, monthlyExpenses: 0, monthlyNet: 343.75, currentBalance: 203.75 },
+    { currency: "BRL", totalIncome: 0, totalExpenses: 100, totalOwnerPay: 0, monthlyRevenue: 0, monthlyExpenses: 100, monthlyNet: -100, economicLedgerNet: -100 },
+    { currency: "USD", totalIncome: 343.75, totalExpenses: 0, totalOwnerPay: 140, monthlyRevenue: 343.75, monthlyExpenses: 0, monthlyNet: 343.75, economicLedgerNet: 203.75 },
   ]);
 });
 
@@ -168,8 +164,8 @@ test("equal numeric amounts in different currencies remain separate", () => {
     { type: "income", amount: 100, currency: "USD", date: "2026-08-24" },
     { type: "expense", amount: 100, currency: "BRL", date: "2026-08-24" },
   ], "2026-08-01");
-  assert.equal(result.find((row) => row.currency === "USD")?.currentBalance, 100);
-  assert.equal(result.find((row) => row.currency === "BRL")?.currentBalance, -100);
+  assert.equal(result.find((row) => row.currency === "USD")?.economicLedgerNet, 100);
+  assert.equal(result.find((row) => row.currency === "BRL")?.economicLedgerNet, -100);
 });
 
 test("finance month grouping does not pull a future month across Aug 31 / Sep 1", () => {
@@ -178,7 +174,7 @@ test("finance month grouping does not pull a future month across Aug 31 / Sep 1"
     { type: "income", amount: 200, currency: "USD", date: "2026-09-01" },
   ], "2026-08-01");
   assert.equal(result[0].monthlyRevenue, 100);
-  assert.equal(result[0].currentBalance, 300);
+  assert.equal(result[0].economicLedgerNet, 300);
 });
 
 test("effective FX converts USD to BRL only in an explicit derived view", () => {
@@ -468,17 +464,23 @@ test("business FX moves cash between currencies without touching revenue or expe
   assert.deepEqual(summary, [
     {
       currency: "BRL",
+      totalIncome: 0,
+      totalExpenses: 0,
+      totalOwnerPay: 0,
       monthlyRevenue: 0,
       monthlyExpenses: 0,
       monthlyNet: 0,
-      currentBalance: 510,
+      economicLedgerNet: 510,
     },
     {
       currency: "USD",
+      totalIncome: 203.75,
+      totalExpenses: 0,
+      totalOwnerPay: 0,
       monthlyRevenue: 203.75,
       monthlyExpenses: 0,
       monthlyNet: 203.75,
-      currentBalance: 103.75,
+      economicLedgerNet: 103.75,
     },
   ]);
 });
@@ -496,8 +498,8 @@ test("a BRL subscription charge reduces converted BRL cash and creates a BRL exp
     ],
   );
 
-  assert.equal(summary.find((row) => row.currency === "BRL")?.currentBalance, 260);
+  assert.equal(summary.find((row) => row.currency === "BRL")?.economicLedgerNet, 260);
   assert.equal(summary.find((row) => row.currency === "BRL")?.monthlyExpenses, 250);
-  assert.equal(summary.find((row) => row.currency === "USD")?.currentBalance, 103.75);
+  assert.equal(summary.find((row) => row.currency === "USD")?.economicLedgerNet, 103.75);
   assert.equal(summary.find((row) => row.currency === "USD")?.monthlyExpenses, 0);
 });
