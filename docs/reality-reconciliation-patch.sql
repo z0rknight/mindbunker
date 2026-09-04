@@ -13,110 +13,199 @@
 -- has no wrangler credentials for it. Every number below carries its
 -- provenance in the row itself (source / external_id / note) so you can see
 -- exactly why MindBunker would believe it.
-
+--
 -- ============================================================================
--- SECTION 1 -- PERSONAL CASH POCKETS (Sep 3, 2026, SELF-REPORTED)
+-- EVIDENCE CORRECTION (this revision)
 -- ----------------------------------------------------------------------------
--- These four personal Wise balances came from your own typed numbers in the
--- mission brief, NOT from an attached Wise statement -- no personal statement
--- or screenshot was found anywhere in what you uploaded. They are tagged
--- SELF_REPORTED, not WISE_PDF/FINANCIAL_STATEMENT, specifically so MindBunker
--- (and anyone reading these rows later) can tell the difference. Treat these
--- as provisional until you reconcile them against the real Wise app the way
--- the three company pockets already were on Aug 31.
+-- The prior revision of this file tagged the Sep 3, 2026 balances below as
+-- SELF_REPORTED because no Wise statement for that period had been found in
+-- what was searched at the time. That was wrong -- not because the prior
+-- search was dishonest, but because it was incomplete: the seven real Wise
+-- PDF statements (1-3 Sep 2026) live in two folders on the Desktop --
+-- "biz-statement_2026-09-01_2026-09-03_pdf/" (3 files: BUSINESS USD
+-- operating, BUSINESS BRL operating, BUSINESS USD Savings) and
+-- "persona-statement_2026-09-01_2026-09-03_pdf/" (4 files: PERSONAL BRL
+-- main, PERSONAL USD main, PERSONAL 'Dolarize' USD, PERSONAL 'Dolarize'
+-- BRL) -- not in the Desktop/uploads locations checked previously, and not
+-- named with "wise" anywhere in the filename. Every one of these seven PDFs
+-- is a genuine Wise-issued statement (Wise Payments Ltd / Wise Brasil
+-- letterhead, "Generated on: 3 September 2026", a `ref:` UUID footer, and
+-- real Wise transaction IDs), read in full this round. All seven closing
+-- balances below were copied verbatim from those statements' own
+-- "<currency> on 3 September 2026 [GMT-03:00]: <amount>" lines -- not
+-- retyped from the correction brief. They are tagged WISE_PDF, the same
+-- provenance value already used for the real Aug 31, 2026 business-pocket
+-- reconciliation, per "do not invent a new provenance enum" -- WISE_PDF was
+-- already the established value for this exact evidence tier (see
+-- src/modules/cash-accounts/core.test.mjs), so this file reuses it rather
+-- than adding WISE_CSV/FINANCIAL_STATEMENT/anything new. See
+-- docs/architecture/REALITY_RECONCILIATION_SEP2026.md for the full
+-- per-pocket citation (statement filename, account number, and the exact
+-- line copied).
+--
+-- Because nothing in this file was ever applied to any real database
+-- (no wrangler credentials in this environment, and the prior revision
+-- shipped as review-only), Sections 1 and 2 below simply insert the correct
+-- WISE_PDF snapshots directly. They also include a defensive DELETE of the
+-- old SELF_REPORTED rows/identities by exact external_id/source, in case you
+-- ran the prior revision by hand before this correction reached you --
+-- those DELETEs affect 0 rows (and are a no-op) if you never did.
 -- ============================================================================
 
--- 1a. Ensure the four personal pockets exist (create only if missing).
--- Guarded on (scope, currency, pocket), which is also a real unique index on
--- cash_accounts -- a second insert attempt would fail loudly, not duplicate.
--- external_source is tagged SELF_REPORTED (not the default 'WISE') because
--- these pockets are not actually linked to a Wise API import yet.
+-- ============================================================================
+-- SECTION 1 -- PERSONAL CASH POCKETS (Sep 3, 2026, WISE-STATEMENT VERIFIED)
+-- ----------------------------------------------------------------------------
+-- Source: persona-statement_2026-09-01_2026-09-03_pdf/ (4 files). Each
+-- external_account_id below is Wise's own numeric balance id, taken from the
+-- statement filename and confirmed against the account header inside each
+-- PDF -- the same id Wise used for these four pockets' Aug 2-30 CSV exports,
+-- so it is a stable identity across both evidence sets, not something this
+-- round invented.
+-- ============================================================================
+
+-- 1a. Ensure the four personal pockets exist (create only if missing), with
+-- their real Wise external identity -- not the SELF_REPORTED placeholder ids
+-- the prior revision used.
 INSERT INTO cash_accounts (scope, currency, pocket, label, external_source, external_account_id, opening_balance, opening_as_of, active)
-SELECT 'PERSONAL', 'BRL', 'MAIN', 'Personal BRL', 'SELF_REPORTED', 'self-reported-personal-brl-main', 0, '2026-09-03', 1
+SELECT 'PERSONAL', 'BRL', 'MAIN', 'Personal BRL', 'WISE', '44840079', 0, '2026-09-03', 1
 WHERE NOT EXISTS (
   SELECT 1 FROM cash_accounts WHERE scope = 'PERSONAL' AND currency = 'BRL' AND pocket = 'MAIN'
 );
 
 INSERT INTO cash_accounts (scope, currency, pocket, label, external_source, external_account_id, opening_balance, opening_as_of, active)
-SELECT 'PERSONAL', 'USD', 'MAIN', 'Personal USD', 'SELF_REPORTED', 'self-reported-personal-usd-main', 0, '2026-09-03', 1
+SELECT 'PERSONAL', 'USD', 'MAIN', 'Personal USD', 'WISE', '45837980', 0, '2026-09-03', 1
 WHERE NOT EXISTS (
   SELECT 1 FROM cash_accounts WHERE scope = 'PERSONAL' AND currency = 'USD' AND pocket = 'MAIN'
 );
 
 INSERT INTO cash_accounts (scope, currency, pocket, label, external_source, external_account_id, opening_balance, opening_as_of, active)
-SELECT 'PERSONAL', 'USD', 'RESERVE', 'Personal Dolarize (USD)', 'SELF_REPORTED', 'self-reported-personal-usd-dolarize', 0, '2026-09-03', 1
+SELECT 'PERSONAL', 'USD', 'RESERVE', 'Personal Dolarize (USD)', 'WISE', '95876029', 0, '2026-09-03', 1
 WHERE NOT EXISTS (
   SELECT 1 FROM cash_accounts WHERE scope = 'PERSONAL' AND currency = 'USD' AND pocket = 'RESERVE'
 );
 
 INSERT INTO cash_accounts (scope, currency, pocket, label, external_source, external_account_id, opening_balance, opening_as_of, active)
-SELECT 'PERSONAL', 'BRL', 'RESERVE', 'Personal Dolarize (BRL)', 'SELF_REPORTED', 'self-reported-personal-brl-dolarize', 0, '2026-09-03', 1
+SELECT 'PERSONAL', 'BRL', 'RESERVE', 'Personal Dolarize (BRL)', 'WISE', '171018409', 0, '2026-09-03', 1
 WHERE NOT EXISTS (
   SELECT 1 FROM cash_accounts WHERE scope = 'PERSONAL' AND currency = 'BRL' AND pocket = 'RESERVE'
 );
 
--- 1b. Record the self-reported Sep 3 balances as SELF_REPORTED snapshots.
--- external_id makes this idempotent: re-running never inserts a second copy
--- of the same (pocket, date, source) observation.
+-- 1a-fix. If the prior revision's SELF_REPORTED placeholder identity was
+-- ever actually written (this environment never wrote it, but you may have
+-- applied that revision by hand), correct it to the real Wise identity.
+-- No-op (0 rows) if that never happened.
+UPDATE cash_accounts SET external_source = 'WISE', external_account_id = '44840079'
+WHERE scope = 'PERSONAL' AND currency = 'BRL' AND pocket = 'MAIN' AND external_source = 'SELF_REPORTED';
+
+UPDATE cash_accounts SET external_source = 'WISE', external_account_id = '45837980'
+WHERE scope = 'PERSONAL' AND currency = 'USD' AND pocket = 'MAIN' AND external_source = 'SELF_REPORTED';
+
+UPDATE cash_accounts SET external_source = 'WISE', external_account_id = '95876029'
+WHERE scope = 'PERSONAL' AND currency = 'USD' AND pocket = 'RESERVE' AND external_source = 'SELF_REPORTED';
+
+UPDATE cash_accounts SET external_source = 'WISE', external_account_id = '171018409'
+WHERE scope = 'PERSONAL' AND currency = 'BRL' AND pocket = 'RESERVE' AND external_source = 'SELF_REPORTED';
+
+-- 1b. Remove the prior revision's SELF_REPORTED Sep 3 snapshots by their
+-- exact external_id, if present. 0 rows affected if you never applied that
+-- revision.
+DELETE FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:personal-brl';
+DELETE FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:personal-usd';
+DELETE FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:personal-dolarize-usd';
+DELETE FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:personal-dolarize-brl';
+
+-- 1c. Record the Wise-statement-verified Sep 3 balances as WISE_PDF
+-- snapshots. external_id makes this idempotent: re-running never inserts a
+-- second copy of the same statement observation.
 INSERT INTO cash_account_snapshots (cash_account_id, balance_amount, observed_at, source, external_id, notes)
-SELECT id, 2.60, '2026-09-03', 'SELF_REPORTED', 'self-reported:2026-09-03:personal-brl', 'Typed by operator in Reality Reconciliation brief. No source statement attached -- verify against the real Wise app before trusting this figure.'
+SELECT id, 2.60, '2026-09-03', 'WISE_PDF', 'wise-pdf:2026-09-03:44840079', 'statement_44840079_BRL_2026-09-01_2026-09-03.pdf, closing line "BRL on 3 September 2026 [GMT-03:00]: 2.60 BRL". Account holder Emmanuel da Rosa Dillenburg, account number 3501729.'
 FROM cash_accounts WHERE scope = 'PERSONAL' AND currency = 'BRL' AND pocket = 'MAIN'
-AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:personal-brl');
+AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'wise-pdf:2026-09-03:44840079');
 
 INSERT INTO cash_account_snapshots (cash_account_id, balance_amount, observed_at, source, external_id, notes)
-SELECT id, 2.72, '2026-09-03', 'SELF_REPORTED', 'self-reported:2026-09-03:personal-usd', 'Typed by operator in Reality Reconciliation brief. No source statement attached -- verify against the real Wise app before trusting this figure.'
+SELECT id, 2.72, '2026-09-03', 'WISE_PDF', 'wise-pdf:2026-09-03:45837980', 'statement_45837980_USD_2026-09-01_2026-09-03.pdf, closing line "USD on 3 September 2026 [GMT-03:00]: 2.72 USD". Account number 8312668042, routing 026073150.'
 FROM cash_accounts WHERE scope = 'PERSONAL' AND currency = 'USD' AND pocket = 'MAIN'
-AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:personal-usd');
+AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'wise-pdf:2026-09-03:45837980');
 
 INSERT INTO cash_account_snapshots (cash_account_id, balance_amount, observed_at, source, external_id, notes)
-SELECT id, 50.00, '2026-09-03', 'SELF_REPORTED', 'self-reported:2026-09-03:personal-dolarize-usd', 'Typed by operator in Reality Reconciliation brief. No source statement attached -- verify against the real Wise app before trusting this figure.'
+SELECT id, 50.00, '2026-09-03', 'WISE_PDF', 'wise-pdf:2026-09-03:95876029', 'statement_95876029_USD_2026-09-01_2026-09-03.pdf ("''Dolarize'' USD statement"), closing line "''Dolarize'' USD on 3 September 2026 [GMT-03:00]: 50.00 USD". No transactions in the 1-3 Sep window -- balance carried flat from the opening figure.'
 FROM cash_accounts WHERE scope = 'PERSONAL' AND currency = 'USD' AND pocket = 'RESERVE'
-AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:personal-dolarize-usd');
+AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'wise-pdf:2026-09-03:95876029');
 
 INSERT INTO cash_account_snapshots (cash_account_id, balance_amount, observed_at, source, external_id, notes)
-SELECT id, 33.16, '2026-09-03', 'SELF_REPORTED', 'self-reported:2026-09-03:personal-dolarize-brl', 'Typed by operator in Reality Reconciliation brief. No source statement attached -- verify against the real Wise app before trusting this figure.'
+SELECT id, 33.16, '2026-09-03', 'WISE_PDF', 'wise-pdf:2026-09-03:171018409', 'statement_171018409_BRL_2026-09-01_2026-09-03.pdf ("''Dolarize'' BRL statement"), closing line "''Dolarize'' BRL on 3 September 2026 [GMT-03:00]: 33.16 BRL". No transactions in the 1-3 Sep window -- matches the same flat balance already seen in the Aug 2-30 CSV export for this account (only activity there: 26-08-2026, a 33.16 BRL top-up).'
 FROM cash_accounts WHERE scope = 'PERSONAL' AND currency = 'BRL' AND pocket = 'RESERVE'
-AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:personal-dolarize-brl');
+AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'wise-pdf:2026-09-03:171018409');
 
 -- ============================================================================
--- SECTION 2 -- COMPANY (RMEDIA) CASH POCKETS (Sep 3, 2026, SELF-REPORTED)
+-- SECTION 2 -- COMPANY (RMEDIA) CASH POCKETS (Sep 3, 2026, WISE-STATEMENT VERIFIED)
 -- ----------------------------------------------------------------------------
--- The three company pockets (BRL main, USD main, USD reserve) already exist
--- and were properly Wise-reconciled as of 2026-08-31 (0 difference against
--- the real Wise PDF import). These rows add a NEW self-reported observation
--- three days later -- they do NOT overwrite or delete the Aug 31 WISE_PDF
--- snapshot, so both remain visible and the app's own difference/drift
--- tracking keeps working. This is provisional evidence, same caveat as
--- Section 1: no Sep 3 Wise statement was attached, so this is your own typed
--- figure, not a bank fact. The USD reserve pocket moving 300.00 -> 200.00
--- between Aug 31 and Sep 3 is NOT explained by anything in the two journals
--- reviewed for this round -- flagged in the report as needing your own check
--- before you treat it as correct.
+-- Source: biz-statement_2026-09-01_2026-09-03_pdf/ (3 files). The three
+-- company pockets already exist (created during the Aug 31, 2026
+-- reconciliation) so this section only touches cash_account_snapshots, not
+-- cash_accounts.
 -- ============================================================================
 
+-- 2a. Remove the prior revision's SELF_REPORTED Sep 3 snapshots by their
+-- exact external_id, if present. 0 rows affected if you never applied that
+-- revision.
+DELETE FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:business-brl-main';
+DELETE FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:business-usd-main';
+DELETE FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:business-usd-reserve';
+
+-- 2b. Record the Wise-statement-verified Sep 3 balances as WISE_PDF
+-- snapshots, same idempotency pattern as Section 1c.
 INSERT INTO cash_account_snapshots (cash_account_id, balance_amount, observed_at, source, external_id, notes)
-SELECT id, 83.73, '2026-09-03', 'SELF_REPORTED', 'self-reported:2026-09-03:business-brl-main', 'Typed by operator in Reality Reconciliation brief, 3 days after the last Wise-confirmed observation (R$995.50 on 2026-08-31). No Sep 3 statement attached -- large drop is plausible given tracked spend but not verified against a bank source.'
+SELECT id, 83.73, '2026-09-03', 'WISE_PDF', 'wise-pdf:2026-09-03:168497359', 'statement_168497359_BRL_2026-09-01_2026-09-03.pdf, closing line "BRL on 3 September 2026 [GMT-03:00]: 83.73 BRL". Includes a -140.39 BRL "Sent money to Emmanuel da Rosa Dillenburg" line on 3 Sep matching the Terabyte.com.br boleto (pedido 8354209) described in the Sep 3 journal.'
 FROM cash_accounts WHERE scope = 'BUSINESS' AND currency = 'BRL' AND pocket = 'MAIN'
-AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:business-brl-main');
+AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'wise-pdf:2026-09-03:168497359');
 
 INSERT INTO cash_account_snapshots (cash_account_id, balance_amount, observed_at, source, external_id, notes)
-SELECT id, 21.52, '2026-09-03', 'SELF_REPORTED', 'self-reported:2026-09-03:business-usd-main', 'Typed by operator in Reality Reconciliation brief, 3 days after the last Wise-confirmed observation ($128.85 on 2026-08-31). No Sep 3 statement attached.'
+SELECT id, 21.52, '2026-09-03', 'WISE_PDF', 'wise-pdf:2026-09-03:118287732', 'statement_118287732_USD_2026-09-01_2026-09-03.pdf, closing line "USD on 3 September 2026 [GMT-03:00]: 21.52 USD". Includes the +100.00 USD "Moved 100.00 USD from Savings" line (Transaction: BALANCE-6001326761) -- see Section 2c for the matching Savings-side entry; this is an internal transfer, not income.'
 FROM cash_accounts WHERE scope = 'BUSINESS' AND currency = 'USD' AND pocket = 'MAIN'
-AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:business-usd-main');
+AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'wise-pdf:2026-09-03:118287732');
 
 INSERT INTO cash_account_snapshots (cash_account_id, balance_amount, observed_at, source, external_id, notes)
-SELECT id, 200.00, '2026-09-03', 'SELF_REPORTED', 'self-reported:2026-09-03:business-usd-reserve', 'Typed by operator in Reality Reconciliation brief. UNEXPLAINED $100 drop from the Aug 31 Wise-confirmed $300.00 -- neither journal reviewed this round mentions a reserve withdrawal. Verify before trusting.'
+SELECT id, 200.00, '2026-09-03', 'WISE_PDF', 'wise-pdf:2026-09-03:171067558', 'statement_171067558_USD_2026-09-01_2026-09-03.pdf (''Savings'' USD statement), closing line "''Savings'' USD on 3 September 2026 [GMT-03:00]: 200.00 USD". The only transaction in the window is "Moved 100.00 USD to USD" -100.00 (Transaction: BALANCE-6001326761), i.e. 300.00 opening -> 200.00 closing. This is the SAME transfer as the +100.00 credit on the USD operating statement above (matching Wise transaction id both sides) -- an internal transfer between two company pockets, not a withdrawal, not expense, not a mystery. Previously reported as "unexplained"; that is now resolved.'
 FROM cash_accounts WHERE scope = 'BUSINESS' AND currency = 'USD' AND pocket = 'RESERVE'
-AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'self-reported:2026-09-03:business-usd-reserve');
+AND NOT EXISTS (SELECT 1 FROM cash_account_snapshots WHERE external_id = 'wise-pdf:2026-09-03:171067558');
+
+-- 2c. Record the Savings -> Operating internal transfer itself as two
+-- matched cash_movements rows, using Wise's own transaction id
+-- (BALANCE-6001326761) as the dedupe key on both sides -- the same
+-- INTERNAL_TRANSFER pattern already used by recordInternalPocketTransfer()
+-- and asserted never to touch transactions/personal_transactions in
+-- src/modules/cash-accounts/wise-identity.integration.test.mjs. This is
+-- what keeps the two statement lines ("Moved 100.00 USD from Savings" /
+-- "Moved 100.00 USD to USD") from ever being read as two unrelated $100
+-- events instead of one transfer.
+INSERT INTO cash_movements (cash_account_id, date, occurred_at, amount, state, description, counterparty, external_source, external_id)
+SELECT id, '2026-09-03', '2026-09-03T00:00:00-03:00', 100.00, 'INTERNAL_TRANSFER', 'Moved 100.00 USD from Savings', 'RMEDIA USD Savings/Reserve', 'WISE', 'BALANCE-6001326761'
+FROM cash_accounts WHERE scope = 'BUSINESS' AND currency = 'USD' AND pocket = 'MAIN'
+AND NOT EXISTS (
+  SELECT 1 FROM cash_movements
+  WHERE cash_account_id = (SELECT id FROM cash_accounts WHERE scope = 'BUSINESS' AND currency = 'USD' AND pocket = 'MAIN')
+    AND external_source = 'WISE' AND external_id = 'BALANCE-6001326761'
+);
+
+INSERT INTO cash_movements (cash_account_id, date, occurred_at, amount, state, description, counterparty, external_source, external_id)
+SELECT id, '2026-09-03', '2026-09-03T00:00:00-03:00', -100.00, 'INTERNAL_TRANSFER', 'Moved 100.00 USD to USD (operating)', 'RMEDIA USD operating', 'WISE', 'BALANCE-6001326761'
+FROM cash_accounts WHERE scope = 'BUSINESS' AND currency = 'USD' AND pocket = 'RESERVE'
+AND NOT EXISTS (
+  SELECT 1 FROM cash_movements
+  WHERE cash_account_id = (SELECT id FROM cash_accounts WHERE scope = 'BUSINESS' AND currency = 'USD' AND pocket = 'RESERVE')
+    AND external_source = 'WISE' AND external_id = 'BALANCE-6001326761'
+);
 
 -- ============================================================================
 -- SECTION 3 -- SEP 2 TARYN RECONSTRUCTION (JOURNAL EVIDENCE)
 -- ----------------------------------------------------------------------------
--- PENDING USER VERIFICATION: this environment has no access to your live
--- Work Session Ledger, so it is UNKNOWN whether this interval is already
--- captured by the Sensor or a WEB_TIMER session. Check the Ledger for Sep 2,
--- 02:15-04:36 (America/Sao_Paulo) on the Taryn "MINI SERIES" Video 1 before
--- running this. The overlap guard below is a second line of defense, not a
+-- Unchanged by this correction round. PENDING USER VERIFICATION: this
+-- environment has no access to your live Work Session Ledger, so it is
+-- UNKNOWN whether this interval is already captured by the Sensor or a
+-- WEB_TIMER session. Check the Ledger for Sep 2, 02:15-04:36
+-- (America/Sao_Paulo) on the Taryn "MINI SERIES" Video 1 before running
+-- this. The overlap guard below is a second line of defense, not a
 -- substitute for checking yourself -- it only protects against an EXACT
 -- video-id match; if a differently-named/duplicate video row holds the same
 -- real session it will not be caught.
@@ -168,4 +257,16 @@ LIMIT 1;
 --   Gabinete+PSU+teclado/mouse R$140.39) is inserted as a transaction here.
 --   Ownership (personal/family vs RMEDIA) is genuinely ambiguous from the
 --   journal -- see the NEEDS_REVIEW list in the final report. Classifying
---   these is a judgment call only you can make.
+--   these is a judgment call only you can make. (Note: the Terabyte
+--   R$140.39 boleto DOES appear as a real, dated cash movement on the
+--   company BRL operating Wise statement itself on 3 Sep -- see Section 2b's
+--   note -- confirming it was paid from the RMEDIA pocket. That is a fact
+--   about which account the money left, not a classification of whether the
+--   purchase itself is a legitimate RMEDIA business expense; still your
+--   call.)
+-- - No other line item from the seven Sep 1-3 Wise statements (card
+--   purchases, ordinary transfers, FX conversions other than the one tied to
+--   the Savings/operating transfer above) is imported as a cash_movement or
+--   transaction here. That would be a full ledger-import feature; this round
+--   only corrects the seven closing-balance snapshots and the one internal
+--   transfer the correction brief specifically asked about.
