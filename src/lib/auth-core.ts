@@ -3,6 +3,36 @@ export const CLIENT_AUTH_COOKIE_NAME = "mb_client_session";
 export const APP_BASE_PATH = "/mindbunker";
 export const LOGIN_ROUTE = "/login";
 export const LOGIN_PATH = `${APP_BASE_PATH}${LOGIN_ROUTE}`;
+
+// Release config (Sep 2026 separate-Worker release) -----------------------
+//
+// process.env.MB_DEPLOY_TARGET is a build-time-only literal ("client" or
+// "operator"), inlined by next.config.ts's `env` option -- see the long
+// comment there for why this specific mechanism was chosen over a
+// Cloudflare Worker runtime var. "client" means this build is the
+// dedicated public Client Worker (canonical URL served at bare /client);
+// anything else means the private MindBunker operator Worker, where
+// nothing below changes from before this release.
+const IS_CLIENT_DEPLOY_TARGET = process.env.MB_DEPLOY_TARGET === "client";
+
+// The client session cookie (mb_client_session) must be scoped to
+// whichever path this Worker actually serves the Client Portal at --
+// /client on the public Client Worker, /mindbunker on the private
+// operator Worker (where the legacy token-based /client/[token] Vault
+// still lives). Getting this wrong doesn't fail loudly: the browser
+// silently never sends the cookie back on requests to a path it doesn't
+// match.
+export const CLIENT_COOKIE_PATH = IS_CLIENT_DEPLOY_TARGET ? "/client" : APP_BASE_PATH;
+
+// Static assets under public/ (referenced via next/image `src` or
+// metadata like `manifest`) are NOT automatically basePath-prefixed by
+// Next for local references the way internal navigation (redirect/Link)
+// is -- every existing reference in this app already hardcodes
+// APP_BASE_PATH manually for exactly this reason (see
+// src/app/client/login/page.tsx's logo, src/app/layout.tsx's manifest
+// link). This constant makes that prefix correct for whichever build is
+// currently compiling, instead of assuming /mindbunker always.
+export const STATIC_BASE_PATH = IS_CLIENT_DEPLOY_TARGET ? "" : APP_BASE_PATH;
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export const CLIENT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 

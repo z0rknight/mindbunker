@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { isClientAuthenticated } from "@/lib/client-portal-session";
+import { STATIC_BASE_PATH } from "@/lib/auth-core";
 import { ClientLoginForm } from "./LoginForm";
 
 // Reads the client session cookie to decide whether to redirect an
@@ -33,7 +34,7 @@ export default async function ClientLoginPage() {
       <section className="relative w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-2xl shadow-black/60 backdrop-blur-xl sm:p-8">
         <div className="mb-7 flex items-center justify-between">
           <Image
-            src="/mindbunker/rmedia-client-logo.svg"
+            src={`${STATIC_BASE_PATH}/rmedia-client-logo.svg`}
             alt="RMEDIA"
             width={560}
             height={144}

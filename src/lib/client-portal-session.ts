@@ -4,8 +4,8 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import { clients } from "@/db/schema";
 import {
-  APP_BASE_PATH,
   CLIENT_AUTH_COOKIE_NAME,
+  CLIENT_COOKIE_PATH,
   CLIENT_SESSION_MAX_AGE_SECONDS,
   createClientSessionToken,
   createLoginFingerprint,
@@ -206,7 +206,7 @@ export async function createClientAuthSession(clientId: number) {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
-    path: APP_BASE_PATH,
+    path: CLIENT_COOKIE_PATH,
     maxAge: CLIENT_SESSION_MAX_AGE_SECONDS,
     priority: "high",
   });
@@ -218,7 +218,7 @@ export async function deleteClientAuthSession() {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
-    path: APP_BASE_PATH,
+    path: CLIENT_COOKIE_PATH,
     maxAge: 0,
   });
 }

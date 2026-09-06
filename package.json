@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:client": "DEPLOY_TARGET=client next build",
     "start": "next start",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/modules/**/*.test.mjs src/lib/**/*.test.mjs src/utils/**/*.test.mjs",
     "lint": "eslint",
@@ -14,6 +15,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply mindbunker --remote",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "deploy:client": "DEPLOY_TARGET=client opennextjs-cloudflare build --config wrangler.client.jsonc && DEPLOY_TARGET=client opennextjs-cloudflare deploy --config wrangler.client.jsonc",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "aw:import": "tsx src/modules/activitywatch/import-cli.ts"

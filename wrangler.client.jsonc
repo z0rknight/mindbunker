@@ -1,0 +1,51 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Release config (Sep 2026 separate-Worker release): the dedicated
+  // public Client Portal deployment. Deliberately does NOT declare a
+  // "routes" field -- the emmanueldarosa.com/client* Worker Route was
+  // already created and verified manually and must not be
+  // recreated/broadened by a deploy; this config only manages this
+  // Worker's code and bindings, never its routing.
+  "name": "white-wave-1af9",
+  "main": ".open-next/worker.js",
+  "workers_dev": true,
+  "preview_urls": false,
+  "compatibility_date": "2026-08-19",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // Same canonical production D1 as the private MindBunker Worker --
+  // deliberately no second database. Read/write access is scoped by the
+  // application's own per-client authorization checks, not by having a
+  // separate database.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mindbunker",
+      "database_id": "d6ada5db-1f36-4ee9-9a05-01d131abf219",
+      "preview_database_id": "mindbunker-local",
+      "migrations_dir": "src/db/migrations"
+    }
+  ],
+  // Deliberately no r2_buckets/MEDIA binding: the Client Portal never
+  // uploads covers, and every existing coverUrl value already stored in
+  // D1 is an absolute "/mindbunker/media/..." path that resolves against
+  // the private Worker's own route regardless of which Worker rendered
+  // the page -- this Worker has no reason to touch R2 directly.
+  //
+  // Deliberately no "vars" entry either: which target this build serves
+  // (basePath, route gating, cookie path) is decided once at `next build`
+  // time via the DEPLOY_TARGET shell var (see package.json's
+  // "build:client"/"deploy:client" scripts and next.config.ts), then
+  // baked into the compiled output as process.env.MB_DEPLOY_TARGET --
+  // there is nothing left for this Worker to read from Cloudflare at
+  // request time.
+  "observability": {
+    "enabled": true
+  }
+}
