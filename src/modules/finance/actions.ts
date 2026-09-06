@@ -19,12 +19,14 @@ import {
 } from "@/db/schema";
 import { computeFxCashMovements } from "../fx/core";
 import { getTodayWorkSessionStats } from "../work-sessions/data";
+import { toUnixSeconds } from "../work-sessions/core";
 import { and, eq, desc, sum } from "drizzle-orm";
 import { todayISO, startOfMonthISO } from "@/utils/date";
 import { revalidatePath } from "next/cache";
 import { DEFAULT_CURRENCY, DEFAULT_TAX_RESERVE_PERCENT } from "./config";
 import {
-  CLIENT_OPERATIONAL_MINUTES_SQL,
+  CLIENT_OPERATIONAL_SESSIONS_SQL,
+  computeClientOperationalMinutes,
   buildBillingEvidenceIdempotencyKey,
   computeReconciliation,
   computeEconomicLedgerPlanning,
@@ -775,13 +777,33 @@ async function getClientOperationalMinutes(
   periodEnd: string,
 ): Promise<{ minutes: number; openSessionCount: number }> {
   const db = await getAuthenticatedDb();
-  const row = await db.$client
-    .prepare(CLIENT_OPERATIONAL_MINUTES_SQL)
-    .bind(clientId, periodStart, periodEnd)
-    .first<{ closed_seconds: number; open_session_count: number }>();
-  const closedSeconds = row?.closed_seconds ?? 0;
-  const openSessionCount = row?.open_session_count ?? 0;
-  return { minutes: Math.floor(closedSeconds / 60), openSessionCount };
+  // DR-2 fix: the old query pre-aggregated in SQL using a UTC day boundary
+  // (`date(ws.started_at, 'unixepoch')`) and no video_kind filter, which let
+  // SAMPLE/INTERNAL session time inflate client billing reconciliation and
+  // misattributed sessions near local midnight to the wrong operator day.
+  // Fix follows this codebase's own established pattern (see
+  // WORK_SESSION_ATTRIBUTION_SQL + computeTodayWorkSessionStats): fetch a
+  // generously-bounded set of raw rows via SQL, then filter/aggregate exactly
+  // in JS using the canonical dayKeyFor timezone boundary and the canonical
+  // CLIENT_WORK-only production predicate. Bounds are widened by a day on
+  // each side of the UTC-midnight reading of periodStart/periodEnd so no
+  // session that could fall within the operator-local period is excluded by
+  // the SQL fetch itself -- the exact-day filtering happens in
+  // computeClientOperationalMinutes, not here.
+  const lowerBoundSeconds =
+    toUnixSeconds(new Date(`${periodStart}T00:00:00Z`)) - 24 * 60 * 60;
+  const upperBoundSeconds =
+    toUnixSeconds(new Date(`${periodEnd}T00:00:00Z`)) + 2 * 24 * 60 * 60;
+  const { results } = await db.$client
+    .prepare(CLIENT_OPERATIONAL_SESSIONS_SQL)
+    .bind(clientId, lowerBoundSeconds, upperBoundSeconds)
+    .all<{ started_at: number; ended_at: number | null; video_kind: string }>();
+  const rows = (results ?? []).map((row) => ({
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+    videoKind: row.video_kind,
+  }));
+  return computeClientOperationalMinutes(rows, periodStart, periodEnd);
 }
 
 // Reconciles one contract for one exact period. If billing evidence for

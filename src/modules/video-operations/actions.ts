@@ -14,6 +14,7 @@ import {
   workSessions,
 } from "@/db/schema";
 import { validateDeliveryUrl } from "@/modules/productivity/core";
+import { revalidateProductivityViews } from "@/modules/productivity/actions";
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import type {
@@ -333,6 +334,20 @@ export async function recordDetailedRevision(input: {
       .where(eq(videoLogs.id, input.videoId)),
   ]);
   revalidateVideoOperations(input.videoId);
+  // P1 POST-AUDIT FIX (DR-3): recordDetailedRevision mutates the same
+  // revisions/videoLogs.revisionsCount domain productivity/actions.ts's
+  // changeRevisionCount does, but only revalidated this module's own
+  // narrower revalidateVideoOperations surface (/, /projects,
+  // /productivity, /productivity?video=X) -- War Room, the CRM client
+  // record, and the Client Portal dashboard could show a stale revision
+  // count/history after "Record revision detail" until a hard reload,
+  // even though "+1 revision" (changeRevisionCount) already revalidated
+  // all of those. Fixed by additionally reusing changeRevisionCount's own
+  // shared primitive (revalidateProductivityViews) with this video's
+  // actual clientId -- not a new, third surface list, and not applied to
+  // every other action in this file (blockers, checklist steps, delivery)
+  // that the audit did not flag.
+  revalidateProductivityViews(video.clientId);
   return { success: true, message: "Revision recorded." };
 }
 

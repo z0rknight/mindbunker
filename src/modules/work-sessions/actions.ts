@@ -72,7 +72,7 @@ function activeSessionMessage(state: VideoWorkSessionState) {
 // (Next.js Router Cache) numbers until a hard reload. Mirrors
 // productivity/actions.ts's revalidateProductivityViews, the existing
 // reference pattern for this exact propagation shape.
-function revalidateWorkSessionSurfaces(
+export function revalidateWorkSessionSurfaces(
   attribution?: { clientId: number | null; projectId: number | null } | null,
 ) {
   revalidatePath("/productivity");
@@ -85,7 +85,7 @@ function revalidateWorkSessionSurfaces(
   if (attribution?.projectId) revalidatePath(`/projects/${attribution.projectId}`);
 }
 
-async function getVideoAttribution(videoId: number) {
+export async function getVideoAttribution(videoId: number) {
   const db = await getAuthenticatedDb();
   const rows = await db
     .select({ clientId: videoLogs.clientId, projectId: videoLogs.projectId })

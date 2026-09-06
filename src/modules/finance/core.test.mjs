@@ -14,6 +14,7 @@ import {
   computeRateEquivalent,
   validateOwnerPayCorrectionInput,
   validateTransactionCorrectionInput,
+  computeClientOperationalMinutes,
 } from "./core.ts";
 
 test("transaction corrections require positive amounts, real dates, and explicit currencies", () => {
@@ -502,4 +503,91 @@ test("a BRL subscription charge reduces converted BRL cash and creates a BRL exp
   assert.equal(summary.find((row) => row.currency === "BRL")?.monthlyExpenses, 250);
   assert.equal(summary.find((row) => row.currency === "USD")?.economicLedgerNet, 103.75);
   assert.equal(summary.find((row) => row.currency === "USD")?.monthlyExpenses, 0);
+});
+// P0 POST-AUDIT FIX (DR-2) -- computeClientOperationalMinutes tests.
+// These exercise the actual derivation function directly (not a
+// reimplementation of its logic), per the Post-Audit Root Fix Wave
+// mission's explicit instruction to "prefer testing the actual
+// query/derivation rather than reproducing its logic in the test." Rows
+// mirror exactly what CLIENT_OPERATIONAL_SESSIONS_SQL returns (raw
+// started_at/ended_at unix-seconds + video_kind, no day/kind filtering
+// applied by SQL) so these tests are proving the same JS filtering path
+// production actually runs, not a parallel mock of it.
+//
+// Fixture timestamps and their America/Sao_Paulo local-day resolution
+// (verified independently via Intl.DateTimeFormat before writing these
+// tests, not asserted blind):
+//   2026-08-15T14:00:00Z (1786802400) -> local day 2026-08-15
+//   2026-08-15T01:00:00Z (1786755600) -> local day 2026-08-14 (!)
+//     -- this is the exact UTC-vs-local-day boundary case DR-2 fixes:
+//     the old date(started_at,'unixepoch') UTC comparison would have
+//     placed this session on 2026-08-15; the operator's actual local
+//     day is still 2026-08-14.
+
+test("DR-2 scenario A: a CLIENT_WORK session inside the target local day is counted", () => {
+  const rows = [
+    { startedAt: 1786802400, endedAt: 1786806000, videoKind: "CLIENT_WORK" }, // 60 min
+  ];
+  const result = computeClientOperationalMinutes(rows, "2026-08-15", "2026-08-15");
+  assert.equal(result.minutes, 60);
+  assert.equal(result.openSessionCount, 0);
+});
+
+test("DR-2 scenario B: a SAMPLE session inside the target local day is excluded", () => {
+  const rows = [
+    { startedAt: 1786802400, endedAt: 1786806000, videoKind: "CLIENT_WORK" }, // 60 min, counted
+    { startedAt: 1786809600, endedAt: 1786813200, videoKind: "SAMPLE" }, // 60 min, must be excluded
+  ];
+  const result = computeClientOperationalMinutes(rows, "2026-08-15", "2026-08-15");
+  assert.equal(result.minutes, 60, "SAMPLE session minutes must not inflate the client total");
+});
+
+test("DR-2 scenario C: an INTERNAL session inside the target local day is excluded", () => {
+  const rows = [
+    { startedAt: 1786802400, endedAt: 1786806000, videoKind: "CLIENT_WORK" }, // 60 min, counted
+    { startedAt: 1786816800, endedAt: 1786820400, videoKind: "INTERNAL" }, // 60 min, must be excluded
+  ];
+  const result = computeClientOperationalMinutes(rows, "2026-08-15", "2026-08-15");
+  assert.equal(result.minutes, 60, "INTERNAL session minutes must not inflate the client total");
+});
+
+test("DR-2 scenario D: a session just after UTC midnight lands in the correct operator-local day, not the UTC day", () => {
+  // 2026-08-15T01:00:00Z is UTC day 2026-08-15 but America/Sao_Paulo
+  // (UTC-3) local day 2026-08-14. The old date(started_at,'unixepoch')
+  // SQL comparison would have wrongly counted this inside a
+  // period ending 2026-08-15; the fix must exclude it there and include
+  // it only when the period actually covers the operator's real local
+  // day, 2026-08-14.
+  const rows = [
+    { startedAt: 1786755600, endedAt: 1786757400, videoKind: "CLIENT_WORK" }, // 30 min
+  ];
+  const wrongDayPeriod = computeClientOperationalMinutes(rows, "2026-08-15", "2026-08-15");
+  assert.equal(
+    wrongDayPeriod.minutes,
+    0,
+    "a session whose operator-local day is 2026-08-14 must not be counted in a 2026-08-15-only period",
+  );
+
+  const correctDayPeriod = computeClientOperationalMinutes(rows, "2026-08-14", "2026-08-14");
+  assert.equal(
+    correctDayPeriod.minutes,
+    30,
+    "the same session must be counted when the period covers its real operator-local day",
+  );
+});
+
+test("DR-2 scenario E: existing valid reconciliation behavior is unchanged for an unambiguous mid-period CLIENT_WORK session, and open sessions are still counted separately", () => {
+  const rows = [
+    // Unambiguous mid-period CLIENT_WORK session, 90 minutes, well clear
+    // of any timezone boundary -- must still be counted exactly as
+    // before this fix.
+    { startedAt: 1786543200, endedAt: 1786548600, videoKind: "CLIENT_WORK" },
+    // A still-open (ended_at === null) CLIENT_WORK session -- must be
+    // reported via openSessionCount, not folded into the minutes total,
+    // exactly as the pre-fix function's return shape already required.
+    { startedAt: 1786629600, endedAt: null, videoKind: "CLIENT_WORK" },
+  ];
+  const result = computeClientOperationalMinutes(rows, "2026-08-10", "2026-08-16");
+  assert.equal(result.minutes, 90);
+  assert.equal(result.openSessionCount, 1);
 });

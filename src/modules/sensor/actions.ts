@@ -14,6 +14,7 @@ import {
   SENSOR_SCOPES,
   createSensorCredential,
 } from "./core";
+import { getVideoAttribution, revalidateWorkSessionSurfaces } from "../work-sessions/actions";
 
 function validSensorSessionId(id: number) {
   return Number.isSafeInteger(id) && id > 0;
@@ -80,17 +81,31 @@ export async function approveSensorSession(id: number) {
   ]);
   const row = await db.$client
     .prepare(`
-      SELECT approval_state, approved_work_session_id
+      SELECT approval_state, approved_work_session_id, video_id
       FROM sensor_sessions WHERE id = ?1
     `)
     .bind(id)
-    .first<{ approval_state: string; approved_work_session_id: number | null }>();
+    .first<{ approval_state: string; approved_work_session_id: number | null; video_id: number }>();
   if (!row || row.approval_state !== "APPROVED" || row.approved_work_session_id === null) {
     return { success: false as const, error: "Only a completed pending Sensor session can be approved." };
   }
   revalidatePath("/productivity/sensor");
   revalidatePath(`/productivity/sensor/sessions/${id}`);
   revalidatePath("/productivity/sessions");
+  // P1 POST-AUDIT FIX (DR-1): approveSensorSession writes the exact same
+  // canonical work_sessions fact a manual stopWorkSession/stopWorkSessionAt
+  // write (SENSOR_SESSION_APPROVE_INSERT_SQL inserts one real work_sessions
+  // row), but before this fix only revalidated its own Sensor admin
+  // surfaces above -- Dashboard, War Room, CRM, and Projects could show
+  // stale tracked-time numbers after an approval until a hard reload, the
+  // same propagation gap already fixed for manual stop/correct in the
+  // Sunday Flow Closure round. Reuses that same shared helper (not a new,
+  // parallel surface list) so this stays in lockstep with wherever that
+  // helper's surface set changes in the future. Approval semantics,
+  // Sensor-to-work-session truth semantics, and Sensor-session-shaped data
+  // exposure are unchanged -- only downstream cache invalidation of the
+  // already-written canonical fact is added.
+  revalidateWorkSessionSurfaces(await getVideoAttribution(row.video_id));
   return { success: true as const, workSessionId: Number(row.approved_work_session_id) };
 }
 

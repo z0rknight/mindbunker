@@ -6,6 +6,7 @@ import {
   EFFECTIVE_USD_TO_BRL_RATE,
   isContractBillingType,
 } from "./config.ts";
+import { dayKeyFor } from "../work-sessions/core.ts";
 
 export type Provenance = "SOURCE_FACT" | "DERIVED" | "UNATTRIBUTED";
 
@@ -270,18 +271,81 @@ export function validateIncomeContractAttribution(input: {
 // periodEnd (inclusive, YYYY-MM-DD). Open (still-running) sessions are
 // counted separately and excluded from the minutes total -- an in-progress
 // session has no honest duration yet.
-export const CLIENT_OPERATIONAL_MINUTES_SQL = `
+// P0 POST-AUDIT FIX (DR-2): this used to be a single pre-aggregated SQL
+// SUM with two defects proven in the Post-Flow-Closure Congruence Audit:
+// (1) no video_kind filter, so a SAMPLE/INTERNAL session on a real
+// client's clientId silently inflated their reconciliation minutes; (2)
+// SQLite's date(started_at, 'unixepoch') resolves the UTC calendar day,
+// not the operator's actual (America/Sao_Paulo) day -- work-sessions/
+// core.ts's own comment on computeTodayWorkSessionStats explicitly
+// documents that this exact query was "deliberately not reused" there
+// for that reason, and never got the fix itself. Fixed now by reusing
+// the SAME canonical day-boundary function (dayKeyFor) everywhere else
+// in the app already uses, instead of a second timezone convention.
+//
+// This query now only narrows by clientId and a generously widened
+// Unix-second range (a performance bound, not the correctness boundary)
+// -- the exact video_kind filter and exact local-day inclusion decision
+// are made afterwards by computeClientOperationalMinutes, in JS, using
+// dayKeyFor, mirroring the same raw-rows-then-JS-filter pattern
+// WORK_SESSION_ATTRIBUTION_SQL + computeTodayWorkSessionStats already
+// use for the identical "operator-local day" problem.
+export const CLIENT_OPERATIONAL_SESSIONS_SQL = `
   SELECT
-    COALESCE(SUM(
-      CASE WHEN ws.ended_at IS NOT NULL THEN ws.ended_at - ws.started_at ELSE 0 END
-    ), 0) AS closed_seconds,
-    COALESCE(SUM(CASE WHEN ws.ended_at IS NULL THEN 1 ELSE 0 END), 0) AS open_session_count
+    ws.started_at,
+    ws.ended_at,
+    v.video_kind AS video_kind
   FROM work_sessions ws
   INNER JOIN video_logs v ON v.id = ws.video_id
   WHERE v.client_id = ?1
-    AND date(ws.started_at, 'unixepoch') >= ?2
-    AND date(ws.started_at, 'unixepoch') <= ?3
+    AND ws.started_at >= ?2
+    AND ws.started_at <= ?3
 `;
+
+export type ClientOperationalSessionRow = {
+  startedAt: number;
+  endedAt: number | null;
+  videoKind: string;
+};
+
+export type ClientOperationalMinutes = {
+  minutes: number;
+  openSessionCount: number;
+};
+
+// Only CLIENT_WORK time may participate in client billing reconciliation
+// -- the same eligibility rule productivity/core.ts's countsToward
+// Production already enforces for every other production count in the
+// app (Dashboard/CRM/War Room output figures). Reimplemented here as a
+// literal string check rather than importing countsTowardProduction
+// itself, since that function lives in the productivity module and
+// finance/core.ts is documented as pure-logic-only with no cross-module
+// DB-shaped dependencies beyond this file's own config -- the semantics
+// (exactly "CLIENT_WORK" counts) are identical and this is the one
+// existing cross-import (dayKeyFor) this fix already needed.
+function isClientProductionSession(videoKind: string): boolean {
+  return videoKind === "CLIENT_WORK";
+}
+
+export function computeClientOperationalMinutes(
+  rows: readonly ClientOperationalSessionRow[],
+  periodStart: string,
+  periodEnd: string,
+): ClientOperationalMinutes {
+  let closedSeconds = 0;
+  let openSessionCount = 0;
+  for (const row of rows) {
+    if (!isClientProductionSession(row.videoKind)) continue;
+    const dayKey = dayKeyFor(new Date(row.startedAt * 1_000).toISOString());
+    if (dayKey < periodStart || dayKey > periodEnd) continue;
+    if (row.endedAt === null) {
+      openSessionCount += 1;
+    } else {
+      closedSeconds += Math.max(0, row.endedAt - row.startedAt);
+    }
+  }
+  return { minutes: Math.floor(closedSeconds / 60), openSessionCount };
+}
 
 export function validateBillingEvidenceInput(input: {
   periodStart: string;

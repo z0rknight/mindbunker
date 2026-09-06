@@ -63,7 +63,7 @@ type ProductivityActionResult =
 
 type AuthenticatedDb = Awaited<ReturnType<typeof getAuthenticatedDb>>;
 
-function revalidateProductivityViews(...clientIds: Array<number | null | undefined>) {
+export function revalidateProductivityViews(...clientIds: Array<number | null | undefined>) {
   revalidatePath("/");
   revalidatePath("/projects");
   revalidatePath("/productivity");
