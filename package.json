@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:client": "DEPLOY_TARGET=client next build",
+    "build:client": "DEPLOY_TARGET=client NEXT_PRIVATE_STANDALONE=true next build",
     "start": "next start",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/modules/**/*.test.mjs src/lib/**/*.test.mjs src/utils/**/*.test.mjs",
     "lint": "eslint",
