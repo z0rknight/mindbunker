@@ -39,8 +39,19 @@ export type ClientCredentialMatch = {
 // produces, but derived from no real password -- used only to burn the
 // same CPU cost as a real verification when there's no account to check
 // against, so response time doesn't leak whether an email is registered.
+//
+// P0 ENABLE PORTAL CRASH PATCH (Sep 2026): this was pinned at 310000
+// iterations (matching the old, too-high PASSWORD_HASH_ITERATIONS in
+// auth-core.ts). Cloudflare Workers' crypto.subtle.deriveBits hard-caps
+// PBKDF2 at 100,000 iterations -- verifyPassword(password,
+// DUMMY_PASSWORD_HASH) would have thrown that same NotSupportedError on
+// the live Client Worker on every unknown-email or wrong-password
+// /client/login attempt, the moment AUTH_SESSION_SECRET stopped being
+// empty. Regenerated at 100000 to match the corrected
+// PASSWORD_HASH_ITERATIONS; salt/hash bytes are random and never
+// compared against anything real, only decoded and burned for timing.
 const DUMMY_PASSWORD_HASH =
-  "pbkdf2-sha256$310000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  "pbkdf2-sha256$100000$XsKzlXOxmWt3pFea9-6DtQ$lxZy137yOsEeOESjvoelTrqsVBP3AP19DebIUyHn7uo";
 
 export async function verifyClientCredentials(
   email: string,

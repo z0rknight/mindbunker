@@ -73,7 +73,21 @@ const SESSION_VERSION = "v1";
 // the wrong verifier even if a cookie name were ever confused.
 const CLIENT_SESSION_VERSION = "cs1";
 const PASSWORD_HASH_VERSION = "pbkdf2-sha256";
-const PASSWORD_HASH_ITERATIONS = 310_000;
+// P0 ENABLE PORTAL CRASH PATCH (Sep 2026): this was 310_000 (OWASP's
+// PBKDF2-SHA256 recommendation) until this round. Cloudflare Workers'
+// crypto.subtle.deriveBits hard-caps PBKDF2 at 100,000 iterations --
+// confirmed via workerd's own error text ("NotSupportedError: Pbkdf2
+// failed: iteration counts above 100000 are not supported (requested
+// 310000)"), not guessed. Node's WebCrypto (what every unit test in this
+// repo runs under) enforces no such cap, so createPasswordHash/
+// verifyPassword's own tests passed at 310_000 the whole time -- the
+// throw only ever happened on the real Workers runtime, every single
+// time setClientPortalPassword called createPasswordHash, before any D1
+// write. 100_000 is the practical ceiling on this platform; see also
+// DUMMY_PASSWORD_HASH in modules/client-portal/auth-data.ts, which
+// embeds this same number and had the identical latent bug on the
+// client-login timing-safe-reject path.
+const PASSWORD_HASH_ITERATIONS = 100_000;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 

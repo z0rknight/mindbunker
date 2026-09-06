@@ -124,3 +124,25 @@ test("verifyPassword rejects an empty password against a real hash", async () =>
   const hash = await createPasswordHash("a-genuinely-random-portal-password");
   assert.equal(await verifyPassword("", hash), false);
 });
+
+// P0 ENABLE PORTAL CRASH PATCH (Sep 2026) --------------------------------
+//
+// Regression guard for the actual root cause of the live "Enable portal
+// login" crash: PASSWORD_HASH_ITERATIONS was 310_000 (OWASP's own
+// PBKDF2-SHA256 recommendation), which is entirely valid to Node's
+// WebCrypto -- so every test above passed the whole time -- but
+// Cloudflare Workers' crypto.subtle.deriveBits hard-caps PBKDF2 at
+// 100,000 iterations and throws NotSupportedError above that, confirmed
+// from workerd's own error text, not guessed. This test can't reproduce
+// the Workers-only throw (Node enforces no such cap either), so instead
+// it asserts the one fact that actually prevents the regression: the
+// iteration count createPasswordHash embeds in every hash it produces
+// must never exceed Cloudflare's documented ceiling again.
+test("createPasswordHash never exceeds Cloudflare Workers' 100,000-iteration PBKDF2 cap", async () => {
+  const hash = await createPasswordHash("a-genuinely-random-portal-password");
+  const [, iterations] = hash.split("$");
+  assert.ok(
+    Number(iterations) <= 100_000,
+    `createPasswordHash used ${iterations} iterations, which exceeds Cloudflare Workers' 100,000 PBKDF2 cap and will throw NotSupportedError in production`,
+  );
+});
