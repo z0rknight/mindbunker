@@ -34,13 +34,20 @@ const ALLOWED_EXACT = new Set([
 ]);
 
 function isAllowedOnClientWorker(pathname: string): boolean {
+  // PIPELINE FIX ROUND 2 (live blank-body rescue): cover images now
+  // resolve under /client/media/... (see toClientWorkerCoverUrl in
+  // src/modules/media/core.ts, and STATIC_BASE_PATH in auth-core.ts) --
+  // already covered by the /client/ prefix check below, same as every
+  // other client-portal path and the relocated /client/_next/static/*
+  // build assets (see next.config.ts's assetPrefix and
+  // scripts/prepare-client-assets.mjs). The previous separate bare
+  // "/media/" allowance is removed: it was never reachable in production
+  // (emmanueldarosa.com/client* is the only route forwarded to this
+  // Worker, so a bare /media/... request never arrived here anyway) and
+  // on workers.dev it was needless extra surface now that the real path
+  // shape lives entirely under /client/.
   if (pathname === "/client" || pathname.startsWith("/client/")) return true;
   if (pathname.startsWith("/_next/")) return true;
-  // Read-only R2-backed cover images (see toClientWorkerCoverUrl in
-  // src/modules/media/core.ts) -- the route itself is GET-only and
-  // already gated by isSafeCoverObjectKey, so allowing it here adds no
-  // new capability beyond what an object-key-scoped image fetch needs.
-  if (pathname.startsWith("/media/")) return true;
   return ALLOWED_EXACT.has(pathname);
 }
 

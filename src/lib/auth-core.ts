@@ -13,7 +13,7 @@ export const LOGIN_PATH = `${APP_BASE_PATH}${LOGIN_ROUTE}`;
 // dedicated public Client Worker (canonical URL served at bare /client);
 // anything else means the private MindBunker operator Worker, where
 // nothing below changes from before this release.
-const IS_CLIENT_DEPLOY_TARGET = process.env.MB_DEPLOY_TARGET === "client";
+export const IS_CLIENT_DEPLOY_TARGET = process.env.MB_DEPLOY_TARGET === "client";
 
 // The client session cookie (mb_client_session) must be scoped to
 // whichever path this Worker actually serves the Client Portal at --
@@ -32,7 +32,21 @@ export const CLIENT_COOKIE_PATH = IS_CLIENT_DEPLOY_TARGET ? "/client" : APP_BASE
 // src/app/client/login/page.tsx's logo, src/app/layout.tsx's manifest
 // link). This constant makes that prefix correct for whichever build is
 // currently compiling, instead of assuming /mindbunker always.
-export const STATIC_BASE_PATH = IS_CLIENT_DEPLOY_TARGET ? "" : APP_BASE_PATH;
+//
+// PIPELINE FIX ROUND 2 (live blank-body rescue): this used to be "" for
+// the client target. That was wrong and is the proven root cause of the
+// live blank body -- emmanueldarosa.com/client* is the ONLY Cloudflare
+// route forwarded to this Worker (verified live, must never be
+// broadened), so a request for anything at a bare root path (an asset,
+// a cover image) never reaches this Worker at all; Cloudflare's edge
+// returns its own empty-body 404 before the Worker's code, middleware
+// included, ever runs. Every asset this build references now has to
+// physically resolve under /client/... instead. next.config.ts's
+// assetPrefix handles Next's own _next/static/* output; this constant
+// handles the app's own explicit references (login logo, cover images
+// in media/core.ts). scripts/prepare-client-assets.mjs is the other half
+// -- it physically relocates the built files to match.
+export const STATIC_BASE_PATH = IS_CLIENT_DEPLOY_TARGET ? "/client" : APP_BASE_PATH;
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export const CLIENT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 

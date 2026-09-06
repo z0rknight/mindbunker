@@ -1,4 +1,4 @@
-import { STATIC_BASE_PATH } from "../../lib/auth-core.ts";
+import { IS_CLIENT_DEPLOY_TARGET, STATIC_BASE_PATH } from "../../lib/auth-core.ts";
 
 // Sprint 3 P1 (Project + Video visual covers): a deliberately tiny helper,
 // not an asset pipeline. The three-tier fallback chain is: a Video's own
@@ -129,20 +129,34 @@ export function isInternalCoverRoute(value: string): boolean {
 // puts a literal "/mindbunker" URL in a client's browser -- a leak, not a
 // functional break.
 //
-// On the dedicated public Client Worker (STATIC_BASE_PATH === ""), this
-// rewrites that same object to the equivalent bare "/media/..." path so
-// the identical, unmodified, read-only route (src/app/media/[...path]/route.ts)
-// serves it directly from THIS Worker instead once it has the same MEDIA
-// R2 binding -- same object, same isSafeCoverObjectKey authorization, no
-// new capability, no /mindbunker anywhere in the response.
+// On the dedicated public Client Worker (IS_CLIENT_DEPLOY_TARGET), this
+// rewrites that same object to the equivalent "${STATIC_BASE_PATH}/media/..."
+// path so the identical, unmodified, read-only route
+// (src/app/media/[...path]/route.ts) serves it directly from THIS Worker
+// instead once it has the same MEDIA R2 binding -- same object, same
+// isSafeCoverObjectKey authorization, no new capability, no /mindbunker
+// anywhere in the response.
 //
-// On the private operator Worker (STATIC_BASE_PATH === "/mindbunker",
-// e.g. the legacy token-based /client/[token] Vault, which still lives
-// there) this is a deliberate no-op: only the client build's own /media
-// route resolves at the bare path, so rewriting there would break the
+// PIPELINE FIX ROUND 2 (live blank-body rescue): this used to gate on
+// `STATIC_BASE_PATH !== ""` and emit a hardcoded bare "/media/..." path.
+// Both were wrong. The gate broke the moment STATIC_BASE_PATH stopped
+// being "" for the client target (see auth-core.ts) -- it would have
+// started firing on the operator build too, since "/mindbunker" is also
+// "!== \"\"" . And the bare output path was never actually reachable in
+// production regardless: emmanueldarosa.com/client* is the only route
+// forwarded to this Worker, so a request for bare /media/... never
+// reaches it -- Cloudflare's edge 404s it before any Worker code runs,
+// exactly like the /_next/static/* chunks this same round's other fix
+// addresses. Gating on IS_CLIENT_DEPLOY_TARGET directly and prefixing the
+// output with STATIC_BASE_PATH fixes both.
+//
+// On the private operator Worker (IS_CLIENT_DEPLOY_TARGET === false, e.g.
+// the legacy token-based /client/[token] Vault, which still lives there)
+// this is a deliberate no-op: only the client build's own /media route
+// resolves under STATIC_BASE_PATH, so rewriting there would break the
 // image instead of fixing a leak.
 export function toClientWorkerCoverUrl(value: string | null): string | null {
-  if (!value || STATIC_BASE_PATH !== "") return value;
+  if (!value || !IS_CLIENT_DEPLOY_TARGET) return value;
   const objectKey = coverObjectKeyFromRoute(value);
-  return objectKey === null ? value : `/media/${objectKey}`;
+  return objectKey === null ? value : `${STATIC_BASE_PATH}/media/${objectKey}`;
 }

@@ -29,6 +29,22 @@ const MB_DEPLOY_TARGET = process.env.DEPLOY_TARGET === "client" ? "client" : "op
 
 const nextConfig: NextConfig = {
   basePath: MB_DEPLOY_TARGET === "client" ? "" : "/mindbunker",
+  // PIPELINE FIX ROUND 2 (live blank-body rescue): emmanueldarosa.com/client*
+  // is the ONLY Cloudflare route forwarded to this Worker (verified live,
+  // must never be broadened). basePath stays "" here on purpose -- flipping
+  // it to "/client" would double-prefix every already-literal "/client/..."
+  // route under src/app/client/** and would require restructuring that
+  // folder, which is a much bigger change than this defect calls for.
+  // assetPrefix is the Next-native, narrower knob for exactly this problem:
+  // it only changes the URLs Next bakes into HTML/RSC output for its own
+  // _next/static/* build output, without touching page routing, redirects,
+  // or the session cookie path. scripts/prepare-client-assets.mjs physically
+  // relocates the built files after packaging so a real file exists at the
+  // /client/_next/static/... path this now points at -- OpenNext's own
+  // asset-compilation step has no assetPrefix awareness (confirmed by
+  // reading its source; there is nothing to configure there), so without
+  // that relocation step this alone would just move the 404 target.
+  assetPrefix: MB_DEPLOY_TARGET === "client" ? "/client" : undefined,
   env: {
     MB_DEPLOY_TARGET,
   },

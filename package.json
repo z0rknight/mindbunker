@@ -15,7 +15,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply mindbunker --remote",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "deploy:client": "npm run build:client && opennextjs-cloudflare build --skipNextBuild --config wrangler.client.jsonc && opennextjs-cloudflare deploy --config wrangler.client.jsonc",
+    "deploy:client": "npm run build:client && opennextjs-cloudflare build --skipNextBuild --config wrangler.client.jsonc && node scripts/prepare-client-assets.mjs && opennextjs-cloudflare deploy --config wrangler.client.jsonc",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "aw:import": "tsx src/modules/activitywatch/import-cli.ts"
