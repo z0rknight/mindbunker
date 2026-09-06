@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { CANONICAL_CLIENT_PORTAL_LOGIN_URL } from "@/lib/auth-core";
 import {
   revokeClientPortalPassword,
   setClientPortalPassword,
@@ -88,12 +88,25 @@ export function PortalAccessPanel({
           </p>
         </div>
         <div className="flex gap-2">
-          <Link
-            href="/client/login"
+          {/* CRM CONTROL PLANE MIGRATION (Sep 2026): plain absolute <a>,
+              deliberately not next/link's <Link> -- this page renders on
+              the operator Worker (basePath "/mindbunker"), and Link
+              rewrites every relative href with the CURRENT build's
+              basePath before the browser ever sees it (verified in
+              next/dist/client/link.js), which is exactly how this used to
+              silently open the obsolete /mindbunker/client/login instead
+              of the canonical public portal. target="_blank" matches the
+              "↗" affordance already in the label -- opening the portal
+              was always meant to leave the operator's CRM session alone,
+              not navigate away from it. */}
+          <a
+            href={CANONICAL_CLIENT_PORTAL_LOGIN_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex min-h-10 items-center rounded-xl border border-zinc-700 px-3.5 text-xs font-black text-zinc-300 transition hover:bg-zinc-800"
           >
             Open client login ↗
-          </Link>
+          </a>
           <button
             type="button"
             onClick={issueAccess}

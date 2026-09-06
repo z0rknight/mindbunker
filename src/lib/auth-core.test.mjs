@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  CANONICAL_CLIENT_PORTAL_LOGIN_URL,
   createClientSessionToken,
+  createPasswordHash,
   createSessionToken,
   verifyClientSessionToken,
+  verifyPassword,
   verifySessionToken,
 } from "./auth-core.ts";
 
@@ -87,4 +90,37 @@ test("two client session tokens for the same clientId are never identical (nonce
   const first = await createClientSessionToken(7, SECRET, 1_000_000);
   const second = await createClientSessionToken(7, SECRET, 1_000_000);
   assert.notEqual(first, second);
+});
+
+// CRM CONTROL PLANE MIGRATION (Sep 2026) -----------------------------------
+//
+// The canonical login URL constant itself: must point at the public
+// Client Worker's route, never the legacy /mindbunker/client/[token]
+// Vault path (CLIENT_PORTAL_PATH_PREFIX in modules/gateway/config.ts is a
+// deliberately separate, untouched mechanism -- this only guards against
+// this specific constant regressing back to an operator-scoped URL).
+test("canonical client portal login URL points at the public /client route, not /mindbunker", () => {
+  assert.equal(CANONICAL_CLIENT_PORTAL_LOGIN_URL, "https://emmanueldarosa.com/client/login");
+  assert.equal(CANONICAL_CLIENT_PORTAL_LOGIN_URL.includes("/mindbunker"), false);
+});
+
+// createPasswordHash / verifyPassword is the exact primitive
+// setClientPortalPassword (CRM "Enable portal login") and
+// verifyClientCredentials (public /client/login) share -- this is what
+// makes a password the CRM issues actually usable by the autonomous
+// login, and this codebase had no direct test of the pair itself before
+// this round (only the signed-session-token layer above was covered).
+test("verifyPassword accepts the exact password createPasswordHash was given", async () => {
+  const hash = await createPasswordHash("a-genuinely-random-portal-password");
+  assert.equal(await verifyPassword("a-genuinely-random-portal-password", hash), true);
+});
+
+test("verifyPassword rejects a wrong password against a real hash", async () => {
+  const hash = await createPasswordHash("a-genuinely-random-portal-password");
+  assert.equal(await verifyPassword("not-the-right-password", hash), false);
+});
+
+test("verifyPassword rejects an empty password against a real hash", async () => {
+  const hash = await createPasswordHash("a-genuinely-random-portal-password");
+  assert.equal(await verifyPassword("", hash), false);
 });

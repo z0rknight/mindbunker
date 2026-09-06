@@ -4,6 +4,23 @@ export const APP_BASE_PATH = "/mindbunker";
 export const LOGIN_ROUTE = "/login";
 export const LOGIN_PATH = `${APP_BASE_PATH}${LOGIN_ROUTE}`;
 
+// CRM CONTROL PLANE MIGRATION (Sep 2026): the canonical, publicly reachable
+// Client Portal login -- the dedicated white-wave-1af9 Worker at
+// emmanueldarosa.com/client*, NOT the legacy /mindbunker/client/[token]
+// Vault (see CLIENT_PORTAL_PATH_PREFIX in modules/gateway/config.ts, a
+// deliberately separate mechanism this constant does not touch or
+// replace). A full, absolute, cross-origin URL is required here, not a
+// relative "/client/login" -- next/link's own addBasePath (verified in
+// node_modules/next/dist/client/link.js and add-base-path.js) rewrites
+// EVERY relative Link href using the CURRENT build's basePath before it
+// ever reaches the browser. Any operator-side CRM page (basePath
+// "/mindbunker") that used a relative Link to "/client/login" would
+// silently render as "/mindbunker/client/login" -- the exact obsolete URL
+// this migration exists to stop pointing at. An absolute, fully-qualified
+// URL is untouched by addPathPrefix regardless of which target renders
+// the page it's used from.
+export const CANONICAL_CLIENT_PORTAL_LOGIN_URL = "https://emmanueldarosa.com/client/login";
+
 // Release config (Sep 2026 separate-Worker release) -----------------------
 //
 // process.env.MB_DEPLOY_TARGET is a build-time-only literal ("client" or
