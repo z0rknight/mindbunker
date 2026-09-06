@@ -144,7 +144,7 @@ export default async function ClientDashboardPage() {
                   ))}
                   {view.unclassifiedCompletedCount > 0 && (
                     <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5 font-semibold text-zinc-500">
-                      Unclassified — {view.unclassifiedCompletedCount}
+                      Other — {view.unclassifiedCompletedCount}
                     </span>
                   )}
                 </div>

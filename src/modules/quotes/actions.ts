@@ -128,6 +128,11 @@ export async function updateQuoteStatus(
     description: `Quote ${quoteId} moved from ${currentStatus} to ${nextStatus}`,
   });
 
+  // FLOW CLOSURE (Sunday round): this is the canonical mutation that
+  // creates a "sale" (APPROVED) -- the Dashboard's Sales/Closed-Sales
+  // cards and the celebratory sale banner (src/app/page.tsx) read quotes
+  // too, but this action previously only revalidated the CRM client page.
+  revalidatePath("/");
   revalidatePath(`/crm/${quote.clientId}`);
   return { success: true, message: `Quote marked ${nextStatus.toLowerCase()}.` };
 }

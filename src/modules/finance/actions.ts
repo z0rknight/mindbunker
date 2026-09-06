@@ -199,8 +199,13 @@ export async function addTransaction(data: {
     debtId: data.debtId ?? null,
     subscriptionId: data.subscriptionId ?? null,
   });
+  // FLOW CLOSURE (Sunday round): War Room reads the transactions table
+  // directly for its Revenue Trend/Revenue Streak signals but this action
+  // never told it to refresh, so it could show stale revenue after an
+  // income/expense edit until a hard reload.
   revalidatePath("/");
   revalidatePath("/finance");
+  revalidatePath("/war-room");
   return { success: true };
 }
 
@@ -226,8 +231,13 @@ export async function deleteTransaction(id: number): Promise<AddTransactionResul
       error: "This transaction is linked to other financial evidence and cannot be deleted. Edit it instead.",
     };
   }
+  // FLOW CLOSURE (Sunday round): War Room reads the transactions table
+  // directly for its Revenue Trend/Revenue Streak signals but this action
+  // never told it to refresh, so it could show stale revenue after an
+  // income/expense edit until a hard reload.
   revalidatePath("/");
   revalidatePath("/finance");
+  revalidatePath("/war-room");
   return { success: true };
 }
 
@@ -270,8 +280,13 @@ export async function updateTransaction(
       currency: data.currency.trim().toUpperCase(),
     })
     .where(eq(transactions.id, id));
+  // FLOW CLOSURE (Sunday round): War Room reads the transactions table
+  // directly for its Revenue Trend/Revenue Streak signals but this action
+  // never told it to refresh, so it could show stale revenue after an
+  // income/expense edit until a hard reload.
   revalidatePath("/");
   revalidatePath("/finance");
+  revalidatePath("/war-room");
   return { success: true };
 }
 

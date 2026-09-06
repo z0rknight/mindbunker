@@ -64,9 +64,35 @@ function activeSessionMessage(state: VideoWorkSessionState) {
   return `Work is already running on ${state.openSession.videoTitle}.`;
 }
 
-function revalidateWorkSessionSurfaces() {
+// FLOW CLOSURE (Sunday round): a closed/corrected Work Session is the
+// canonical operational fact every downstream projection (Dashboard,
+// War Room, CRM, Projects) derives tracked time from -- this used to only
+// revalidate /productivity, so a soft client-side navigation to any of
+// those other surfaces right after closing a session could show stale
+// (Next.js Router Cache) numbers until a hard reload. Mirrors
+// productivity/actions.ts's revalidateProductivityViews, the existing
+// reference pattern for this exact propagation shape.
+function revalidateWorkSessionSurfaces(
+  attribution?: { clientId: number | null; projectId: number | null } | null,
+) {
   revalidatePath("/productivity");
   revalidatePath("/productivity/sessions");
+  revalidatePath("/");
+  revalidatePath("/war-room");
+  revalidatePath("/crm");
+  revalidatePath("/projects");
+  if (attribution?.clientId) revalidatePath(`/crm/${attribution.clientId}`);
+  if (attribution?.projectId) revalidatePath(`/projects/${attribution.projectId}`);
+}
+
+async function getVideoAttribution(videoId: number) {
+  const db = await getAuthenticatedDb();
+  const rows = await db
+    .select({ clientId: videoLogs.clientId, projectId: videoLogs.projectId })
+    .from(videoLogs)
+    .where(eq(videoLogs.id, videoId))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 export async function startWorkSession(
@@ -141,7 +167,7 @@ export async function stopWorkSession(
     };
   }
 
-  revalidatePath("/productivity");
+  revalidateWorkSessionSurfaces(await getVideoAttribution(videoId));
   return {
     success: true,
     message: "Work session stopped.",
@@ -195,7 +221,7 @@ export async function stopWorkSessionAt(
     return { success: false, error: "End time cannot be in the future.", state };
   }
 
-  revalidatePath("/productivity");
+  revalidateWorkSessionSurfaces(await getVideoAttribution(videoId));
   return {
     success: true,
     message: "Work session stopped.",
@@ -281,11 +307,17 @@ export async function correctWorkSession(
   }
 
   const newVideo = await db
-    .select({ clientId: videoLogs.clientId, title: videoLogs.title, date: videoLogs.date })
+    .select({
+      clientId: videoLogs.clientId,
+      projectId: videoLogs.projectId,
+      title: videoLogs.title,
+      date: videoLogs.date,
+    })
     .from(videoLogs)
     .where(eq(videoLogs.id, validated.data.videoId))
     .limit(1);
   const newClientId = newVideo[0]?.clientId ?? null;
+  const newProjectId = newVideo[0]?.projectId ?? null;
   const newVideoTitle = newVideo[0]?.title ?? `Video ${newVideo[0]?.date ?? validated.data.videoId}`;
 
   const description = describeSessionCorrection(
@@ -304,6 +336,6 @@ export async function correctWorkSession(
     createdAt: new Date(),
   });
 
-  revalidateWorkSessionSurfaces();
+  revalidateWorkSessionSurfaces({ clientId: newClientId, projectId: newProjectId });
   return { success: true, message: "Session corrected." };
 }

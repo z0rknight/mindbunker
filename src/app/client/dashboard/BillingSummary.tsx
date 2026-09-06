@@ -47,7 +47,7 @@ export function BillingSummary({ billing }: { billing: ClientBillingSummary }) {
               className="flex items-center justify-between text-sm"
             >
               <span className="text-zinc-400">
-                {entry.projectName ?? "Other / not yet assigned to a project"}
+                {entry.projectName ?? "Other"}
               </span>
               <span className="flex items-baseline gap-2 font-semibold text-zinc-200">
                 {entry.minutes !== null && (
