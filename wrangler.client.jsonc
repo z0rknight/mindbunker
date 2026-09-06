@@ -32,12 +32,20 @@
       "migrations_dir": "src/db/migrations"
     }
   ],
-  // Deliberately no r2_buckets/MEDIA binding: the Client Portal never
-  // uploads covers, and every existing coverUrl value already stored in
-  // D1 is an absolute "/mindbunker/media/..." path that resolves against
-  // the private Worker's own route regardless of which Worker rendered
-  // the page -- this Worker has no reason to touch R2 directly.
-  //
+  // Read-only cover-image serving: reuses the existing, unmodified
+  // src/app/media/[...path]/route.ts (GET-only, gated by
+  // isSafeCoverObjectKey -- no upload/write path exists in that route at
+  // all) so a client's browser never has to fetch a "/mindbunker/..." URL
+  // for a video/project cover. See toClientWorkerCoverUrl in
+  // src/modules/media/core.ts for the URL rewrite this binding supports.
+  // The Client Portal itself still never uploads covers -- that stays an
+  // operator-only CRM action, unrelated to this binding.
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "mindbunker-media"
+    }
+  ],
   // Deliberately no "vars" entry either: which target this build serves
   // (basePath, route gating, cookie path) is decided once at `next build`
   // time via the DEPLOY_TARGET shell var (see package.json's

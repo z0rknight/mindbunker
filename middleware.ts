@@ -36,6 +36,11 @@ const ALLOWED_EXACT = new Set([
 function isAllowedOnClientWorker(pathname: string): boolean {
   if (pathname === "/client" || pathname.startsWith("/client/")) return true;
   if (pathname.startsWith("/_next/")) return true;
+  // Read-only R2-backed cover images (see toClientWorkerCoverUrl in
+  // src/modules/media/core.ts) -- the route itself is GET-only and
+  // already gated by isSafeCoverObjectKey, so allowing it here adds no
+  // new capability beyond what an object-key-scoped image fetch needs.
+  if (pathname.startsWith("/media/")) return true;
   return ALLOWED_EXACT.has(pathname);
 }
 

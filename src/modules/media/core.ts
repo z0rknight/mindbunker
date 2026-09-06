@@ -1,3 +1,5 @@
+import { STATIC_BASE_PATH } from "../../lib/auth-core.ts";
+
 // Sprint 3 P1 (Project + Video visual covers): a deliberately tiny helper,
 // not an asset pipeline. The three-tier fallback chain is: a Video's own
 // coverUrl -> its Project's coverUrl -> the Client's avatar
@@ -113,4 +115,34 @@ export function coverObjectKeyFromRoute(value: string | null): string | null {
 
 export function isInternalCoverRoute(value: string): boolean {
   return coverObjectKeyFromRoute(value) !== null;
+}
+
+// Release config (Sep 2026 separate-Worker release) -----------------------
+//
+// Every coverUrl/projectCoverUrl value already stored in D1 was built by
+// buildCoverRoute() at cover-UPLOAD time -- which only ever happens
+// through the operator CRM, so it always bakes in COVER_ROUTE_PREFIX
+// ("/mindbunker/media/...") regardless of which Worker later reads it.
+// That already works cross-Worker today (Cloudflare's route table sends
+// a "/mindbunker/media/..." request to the private operator Worker
+// regardless of which Worker rendered the HTML that contains it), but it
+// puts a literal "/mindbunker" URL in a client's browser -- a leak, not a
+// functional break.
+//
+// On the dedicated public Client Worker (STATIC_BASE_PATH === ""), this
+// rewrites that same object to the equivalent bare "/media/..." path so
+// the identical, unmodified, read-only route (src/app/media/[...path]/route.ts)
+// serves it directly from THIS Worker instead once it has the same MEDIA
+// R2 binding -- same object, same isSafeCoverObjectKey authorization, no
+// new capability, no /mindbunker anywhere in the response.
+//
+// On the private operator Worker (STATIC_BASE_PATH === "/mindbunker",
+// e.g. the legacy token-based /client/[token] Vault, which still lives
+// there) this is a deliberate no-op: only the client build's own /media
+// route resolves at the bare path, so rewriting there would break the
+// image instead of fixing a leak.
+export function toClientWorkerCoverUrl(value: string | null): string | null {
+  if (!value || STATIC_BASE_PATH !== "") return value;
+  const objectKey = coverObjectKeyFromRoute(value);
+  return objectKey === null ? value : `/media/${objectKey}`;
 }

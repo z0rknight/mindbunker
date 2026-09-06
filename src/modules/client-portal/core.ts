@@ -6,7 +6,7 @@ import type {
 import { VIDEO_CONTENT_TYPE_LABELS } from "../productivity/config.ts";
 import { validateDeliveryUrl, validateCoverUrl } from "../productivity/core.ts";
 import type { ProjectStatus } from "../projects/config.ts";
-import { resolveCoverUrl } from "../media/core.ts";
+import { resolveCoverUrl, toClientWorkerCoverUrl } from "../media/core.ts";
 import type { ClientQuoteSummary } from "../quotes/core.ts";
 
 export const CLIENT_VIDEO_STATUS_LABELS: Record<VideoStatus, string> = {
@@ -166,7 +166,7 @@ export function buildClientPortalProjects(
           deliveryUrl: resolvedDeliveryUrl,
           reviewUrl: reviewUrl.success ? reviewUrl.value : null,
           publishedUrl: publishedUrl.success ? publishedUrl.value : null,
-          coverUrl: coverUrl.success ? coverUrl.value : null,
+          coverUrl: coverUrl.success ? toClientWorkerCoverUrl(coverUrl.value) : null,
         };
       }),
   }));
@@ -316,7 +316,7 @@ export function toCard(
       ? VIDEO_CONTENT_TYPE_LABELS[video.contentType]
       : null,
     orientation: video.orientation,
-    coverUrl: coverUrl.success ? coverUrl.value : null,
+    coverUrl: coverUrl.success ? toClientWorkerCoverUrl(coverUrl.value) : null,
     deliveryUrl: resolvedDeliveryUrl,
     reviewUrl: reviewUrl.success ? reviewUrl.value : null,
     publishedUrl: publishedUrl.success ? publishedUrl.value : null,

@@ -18,7 +18,18 @@ import type { Metadata } from "next";
 // -- AppShell already renders /client/* routes bare with no operator
 // Sidebar (see src/lib/route-classification.ts), so this file's only job
 // is metadata.
+//
+// title/description are also set here as a SAFETY-NET DEFAULT, not just an
+// override: src/app/client/page.tsx (the bare /client redirect route) has
+// no metadata of its own, so without this it would inherit root layout's
+// "RMEDIA MindBunker" title and internal "Personal tracking dashboard for
+// life metrics and professional performance" description verbatim. Every
+// other /client/* page already sets its own more specific title (e.g.
+// "Client Login | RMEDIA"), which still wins over this default per
+// Next.js's normal child-overrides-parent metadata resolution.
 export const metadata: Metadata = {
+  title: "RMEDIA Client Portal",
+  description: "Project delivery, video review and recorded spend.",
   applicationName: "RMEDIA",
   manifest: null,
   appleWebApp: {
