@@ -479,6 +479,26 @@ export function filterClientDashboardVideos(
     : videos.filter((video) => video.contentType === contentType);
 }
 
+// Client Portal Gateway round: instant text search over the video library.
+// Deliberately searches only the same client-safe fields already rendered
+// on the card (title, project name) -- never internal notes, which never
+// reach this type in the first place (ClientDashboardVideoCard has no
+// notes field), so there is no separate "don't leak notes" check needed
+// here beyond the type itself. Case-insensitive substring match, not a
+// fuzzy/ranked search -- with realistic per-client volumes (dozens, not
+// tens of thousands) a plain substring filter is instant and predictable.
+export function searchClientDashboardVideos<T extends ClientDashboardVideoCard>(
+  videos: readonly T[],
+  query: string,
+): T[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [...videos];
+  return videos.filter((video) => {
+    const haystack = `${video.title} ${video.projectName ?? ""}`.toLowerCase();
+    return haystack.includes(needle);
+  });
+}
+
 // Client Vault "video must act like a video" fix (25 Aug 2026, brief §9):
 // a client-safe single-video detail, built from the same validated card
 // (toCard) plus an optional approved-quote summary. No internal notes, no
@@ -501,5 +521,157 @@ export function buildClientVideoDetail(
   return {
     ...toCard(video, projectNameById, projectVideoCounts),
     quote,
+  };
+}
+
+// Client Portal Gateway round (Client Billing Transparency): "current
+// recorded spend" -- the client-facing projection of the SAME
+// billing_evidence/billing_allocations chain Finance already treats as
+// the canonical, admin-curated record of billed work (see
+// custody/core.ts's buildCustodyProjection for the admin-side sibling of
+// this aggregation, and finance/actions.ts's getBillingHistoryForContract
+// for the per-contract admin view). Deliberately NOT derived from
+// work_sessions -- work_sessions is operator-private labor/time-tracking
+// data that must never cross this boundary (see the comment on
+// getClientDashboardView's data-selection in data.ts), and
+// billing_evidence is the only table in this codebase that already
+// represents a finalized, snapshotted, client-attributable dollar amount.
+// `hasAnyRecordedWork: false` is a genuine, honest empty state (nothing
+// has been transcribed into billing_evidence yet) -- it is never
+// papered over with a fabricated $0.00 total that would read as "you have
+// spent zero dollars" when the truth is "nothing has been recorded yet."
+// Amounts are grouped by currency and never summed across currencies.
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+export type ClientBillingContractRow = {
+  id: number;
+  clientId: number;
+  currency: string;
+  billingType: "HOURLY" | "FIXED";
+  hourlyRate: number | null;
+};
+
+export type ClientBillingEvidenceRow = {
+  contractId: number;
+  // Defense-in-depth: the row's own join-time clientId, re-checked here
+  // rather than trusted from the SQL WHERE clause alone -- same pattern as
+  // buildClientPortalProjects/buildClientDashboard above.
+  contractClientId: number;
+  currency: string;
+  billableMinutes: number;
+  grossAmount: number;
+};
+
+export type ClientBillingAllocationRow = {
+  contractClientId: number;
+  amount: number;
+  minutes: number | null;
+  currency: string;
+  videoId: number | null;
+  projectId: number | null;
+};
+
+export type ClientBillingCurrencyTotal = {
+  currency: string;
+  totalAmount: number;
+  totalMinutes: number;
+  // Only populated when exactly one HOURLY contract with a rate exists for
+  // this client in this currency -- multiple contracts, or a FIXED
+  // contract, would make a single "$X/hour" line dishonest, so it is
+  // omitted rather than guessed at.
+  hourlyRate: number | null;
+};
+
+export type ClientBillingProjectBreakdown = {
+  projectId: number | null; // null = "Other / not yet assigned to a project"
+  projectName: string | null;
+  currency: string;
+  amount: number;
+  minutes: number | null;
+};
+
+export type ClientBillingSummary = {
+  hasAnyRecordedWork: boolean;
+  byCurrency: ClientBillingCurrencyTotal[];
+  byProject: ClientBillingProjectBreakdown[];
+};
+
+export function buildClientBillingSummary(
+  authenticatedClientId: number,
+  contractRows: readonly ClientBillingContractRow[],
+  evidenceRows: readonly ClientBillingEvidenceRow[],
+  allocationRows: readonly ClientBillingAllocationRow[],
+  projectNameById: ReadonlyMap<number, string>,
+): ClientBillingSummary {
+  const ownedContracts = contractRows.filter(
+    (contract) => contract.clientId === authenticatedClientId,
+  );
+  const ownedContractIds = new Set(ownedContracts.map((contract) => contract.id));
+
+  const ownedEvidence = evidenceRows.filter(
+    (evidence) =>
+      evidence.contractClientId === authenticatedClientId &&
+      ownedContractIds.has(evidence.contractId),
+  );
+
+  const byCurrencyMap = new Map<string, { totalAmount: number; totalMinutes: number }>();
+  for (const evidence of ownedEvidence) {
+    const bucket = byCurrencyMap.get(evidence.currency) ?? { totalAmount: 0, totalMinutes: 0 };
+    bucket.totalAmount += evidence.grossAmount;
+    bucket.totalMinutes += evidence.billableMinutes;
+    byCurrencyMap.set(evidence.currency, bucket);
+  }
+
+  const byCurrency: ClientBillingCurrencyTotal[] = Array.from(byCurrencyMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, totals]) => {
+      const hourlyContractsInCurrency = ownedContracts.filter(
+        (contract) =>
+          contract.currency === currency &&
+          contract.billingType === "HOURLY" &&
+          contract.hourlyRate !== null,
+      );
+      return {
+        currency,
+        totalAmount: round2(totals.totalAmount),
+        totalMinutes: totals.totalMinutes,
+        hourlyRate: hourlyContractsInCurrency.length === 1 ? hourlyContractsInCurrency[0].hourlyRate : null,
+      };
+    });
+
+  const ownedAllocations = allocationRows.filter(
+    (allocation) => allocation.contractClientId === authenticatedClientId,
+  );
+
+  const byProjectMap = new Map<
+    string,
+    { projectId: number | null; currency: string; amount: number; minutes: number }
+  >();
+  for (const allocation of ownedAllocations) {
+    const key = `${allocation.projectId ?? "none"}:${allocation.currency}`;
+    const bucket =
+      byProjectMap.get(key) ??
+      { projectId: allocation.projectId, currency: allocation.currency, amount: 0, minutes: 0 };
+    bucket.amount += allocation.amount;
+    bucket.minutes += allocation.minutes ?? 0;
+    byProjectMap.set(key, bucket);
+  }
+
+  const byProject: ClientBillingProjectBreakdown[] = Array.from(byProjectMap.values())
+    .sort((a, b) => b.amount - a.amount)
+    .map((entry) => ({
+      projectId: entry.projectId,
+      projectName: entry.projectId !== null ? (projectNameById.get(entry.projectId) ?? null) : null,
+      currency: entry.currency,
+      amount: round2(entry.amount),
+      minutes: entry.minutes > 0 ? entry.minutes : null,
+    }));
+
+  return {
+    hasAnyRecordedWork: ownedEvidence.length > 0,
+    byCurrency,
+    byProject,
   };
 }

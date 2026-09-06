@@ -8,6 +8,7 @@ import {
 } from "@/modules/productivity/config";
 import {
   filterClientDashboardVideos,
+  searchClientDashboardVideos,
   type ClientDashboardVideoCard,
 } from "@/modules/client-portal/core";
 import { VideoCard } from "./VideoCard";
@@ -16,19 +17,33 @@ type FilterValue = "all" | VideoContentType;
 
 export function VideoGallery({ videos }: { videos: ClientDashboardVideoCard[] }) {
   const [filter, setFilter] = useState<FilterValue>("all");
+  const [query, setQuery] = useState("");
   const filteredVideos = useMemo(
-    () => filterClientDashboardVideos(videos, filter),
-    [filter, videos],
+    () => searchClientDashboardVideos(filterClientDashboardVideos(videos, filter), query),
+    [filter, query, videos],
   );
 
   return (
     <section aria-labelledby="video-library-title">
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 id="video-library-title" className="text-sm font-black uppercase tracking-widest text-zinc-400">
-            Video library
-          </h2>
-          <p className="mt-1 text-xs text-zinc-600">Browse every video by its canonical content type.</p>
+      <div className="mb-3 flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 id="video-library-title" className="text-sm font-black uppercase tracking-widest text-zinc-400">
+              Video library
+            </h2>
+            <p className="mt-1 text-xs text-zinc-600">Find any video by title or project.</p>
+          </div>
+          <label className="relative block w-full sm:w-72">
+            <span className="sr-only">Search videos</span>
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search videos..."
+              autoComplete="off"
+              className="min-h-11 w-full rounded-full border border-zinc-800 bg-zinc-900 px-4 text-sm text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none"
+            />
+          </label>
         </div>
         <div className="flex max-w-full gap-2 overflow-x-auto pb-1" aria-label="Filter videos by content type">
           <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>All</FilterButton>
@@ -56,7 +71,7 @@ export function VideoGallery({ videos }: { videos: ClientDashboardVideoCard[] })
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/30 px-4 py-7 text-center text-sm text-zinc-600">
-          No videos in this category yet.
+          {query.trim() ? "No videos match your search." : "No videos in this category yet."}
         </div>
       )}
     </section>

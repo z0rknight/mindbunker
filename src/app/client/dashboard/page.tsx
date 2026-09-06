@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { requireClientAuth } from "@/lib/client-portal-session";
-import { getClientDashboardView } from "@/modules/client-portal/data";
+import { getClientBillingSummary, getClientDashboardView } from "@/modules/client-portal/data";
+import { BillingSummary } from "./BillingSummary";
 import { LogoutButton } from "./LogoutButton";
 import { StatTile } from "./StatTile";
 import { VideoCard } from "./VideoCard";
@@ -22,7 +23,10 @@ export const metadata: Metadata = {
 
 export default async function ClientDashboardPage() {
   const clientId = await requireClientAuth("/client/login");
-  const view = await getClientDashboardView(clientId);
+  const [view, billing] = await Promise.all([
+    getClientDashboardView(clientId),
+    getClientBillingSummary(clientId),
+  ]);
 
   if (view.status === "unavailable") {
     // The session verified a clientId that no longer resolves to an active
@@ -52,6 +56,8 @@ export default async function ClientDashboardPage() {
       </header>
 
       <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6">
+        <BillingSummary billing={billing} />
+
         {!hasAnyVideos ? (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-8 text-center">
             <p className="text-2xl" aria-hidden="true">🎬</p>

@@ -1,13 +1,23 @@
 import "server-only";
 
 import { getDb } from "@/db";
-import { clients, crmEvents, projects, videoLogs } from "@/db/schema";
-import { getGatewayContext } from "@/modules/gateway/data";
-import { and, desc, eq } from "drizzle-orm";
 import {
+  billingAllocations,
+  billingEvidence,
+  clients,
+  commercialContracts,
+  crmEvents,
+  projects,
+  videoLogs,
+} from "@/db/schema";
+import { getGatewayContext } from "@/modules/gateway/data";
+import { and, eq, desc } from "drizzle-orm";
+import {
+  buildClientBillingSummary,
   buildClientDashboard,
   buildClientPortalProjects,
   buildClientVideoDetail,
+  type ClientBillingSummary,
   type ClientDashboard,
   type ClientVideoDetail,
 } from "./core";
@@ -273,4 +283,90 @@ export async function getClientVideoDetailView(
     clientName: clientRow[0].name,
     video: buildClientVideoDetail(video, projectNameById, quote, projectVideoCount),
   };
+}
+
+// Client Portal Gateway round (Client Billing Transparency): "current
+// recorded spend." Deliberately a standalone function, not merged into
+// getClientDashboardView -- that function and buildClientDashboard have
+// extensive existing test coverage keyed to their current shape, and this
+// data has nothing to do with video/project state. Called separately
+// (Promise.all alongside getClientDashboardView) from the dashboard page.
+//
+// Every query below is scoped by an INNER JOIN back to commercial_contracts
+// on the authenticated clientId -- never by contractId/evidenceId ranges
+// alone -- and buildClientBillingSummary re-checks ownership again in pure
+// code, matching the double-check pattern used throughout this module.
+export async function getClientBillingSummary(
+  authenticatedClientId: number,
+): Promise<ClientBillingSummary> {
+  const db = await getDb();
+
+  const [contractRows, evidenceRows, allocationRows, projectRows] = await Promise.all([
+    db
+      .select({
+        id: commercialContracts.id,
+        clientId: commercialContracts.clientId,
+        currency: commercialContracts.currency,
+        billingType: commercialContracts.billingType,
+        hourlyRate: commercialContracts.hourlyRate,
+      })
+      .from(commercialContracts)
+      .where(eq(commercialContracts.clientId, authenticatedClientId)),
+    db
+      .select({
+        contractId: billingEvidence.contractId,
+        contractClientId: commercialContracts.clientId,
+        currency: billingEvidence.currency,
+        billableMinutes: billingEvidence.billableMinutes,
+        grossAmount: billingEvidence.grossAmount,
+      })
+      .from(billingEvidence)
+      .innerJoin(commercialContracts, eq(billingEvidence.contractId, commercialContracts.id))
+      .where(eq(commercialContracts.clientId, authenticatedClientId)),
+    db
+      .select({
+        contractClientId: commercialContracts.clientId,
+        amount: billingAllocations.amount,
+        minutes: billingAllocations.minutes,
+        currency: billingAllocations.currency,
+        videoId: billingAllocations.videoId,
+        // Re-verified below: a videoId is only trusted for project
+        // attribution if that video also belongs to this same client --
+        // otherwise it's treated as unattributed rather than risking
+        // exposing another client's project name.
+        videoClientId: videoLogs.clientId,
+        videoProjectId: videoLogs.projectId,
+      })
+      .from(billingAllocations)
+      .innerJoin(billingEvidence, eq(billingAllocations.billingEvidenceId, billingEvidence.id))
+      .innerJoin(commercialContracts, eq(billingEvidence.contractId, commercialContracts.id))
+      .leftJoin(videoLogs, eq(billingAllocations.videoId, videoLogs.id))
+      .where(eq(commercialContracts.clientId, authenticatedClientId)),
+    db
+      .select({ id: projects.id, name: projects.name })
+      .from(projects)
+      .where(eq(projects.clientId, authenticatedClientId)),
+  ]);
+
+  const projectNameById = new Map(projectRows.map((project) => [project.id, project.name]));
+
+  const safeAllocationRows = allocationRows.map((row) => ({
+    contractClientId: row.contractClientId,
+    amount: row.amount,
+    minutes: row.minutes,
+    currency: row.currency,
+    videoId: row.videoId,
+    projectId:
+      row.videoId !== null && row.videoClientId === authenticatedClientId
+        ? row.videoProjectId
+        : null,
+  }));
+
+  return buildClientBillingSummary(
+    authenticatedClientId,
+    contractRows,
+    evidenceRows,
+    safeAllocationRows,
+    projectNameById,
+  );
 }
