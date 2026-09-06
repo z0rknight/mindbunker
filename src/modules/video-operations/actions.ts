@@ -14,7 +14,7 @@ import {
   workSessions,
 } from "@/db/schema";
 import { validateDeliveryUrl } from "@/modules/productivity/core";
-import { revalidateProductivityViews } from "@/modules/productivity/actions";
+import { revalidateProductivityViews } from "@/modules/productivity/revalidation";
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import type {

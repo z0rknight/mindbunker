@@ -49,6 +49,7 @@ import {
   videoOperationalMemoryBlocksDeletion,
 } from "@/modules/video-memory/core";
 import { resolveVideoKindForClient } from "@/lib/client-identity";
+import { revalidateProductivityViews } from "./revalidation";
 
 type ProductivityActionResult =
   | {
@@ -63,16 +64,13 @@ type ProductivityActionResult =
 
 type AuthenticatedDb = Awaited<ReturnType<typeof getAuthenticatedDb>>;
 
-export function revalidateProductivityViews(...clientIds: Array<number | null | undefined>) {
-  revalidatePath("/");
-  revalidatePath("/projects");
-  revalidatePath("/productivity");
-  revalidatePath("/war-room");
-  revalidatePath("/client/dashboard");
-  for (const clientId of new Set(clientIds.filter(Boolean))) {
-    revalidatePath(`/crm/${clientId}`);
-  }
-}
+// BUILD GATE FIX: revalidateProductivityViews moved to ./revalidation (a
+// plain server-only module, not "use server") -- see that file's header
+// comment. Next.js 16 rejects a synchronous export of a "use server"
+// module as an invalid Server Action, and this was never meant to be a
+// remotely-invocable action; it is an internal helper reused throughout
+// this file and by video-operations/actions.ts's recordDetailedRevision
+// (DR-3).
 
 async function resolveVideoAssignment(
   db: AuthenticatedDb,

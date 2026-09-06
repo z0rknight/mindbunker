@@ -21,6 +21,7 @@ import {
   type WorkSessionActivityType,
 } from "./core";
 import { getVideoWorkSessionState, getWorkSessionById } from "./data";
+import { getVideoAttribution, revalidateWorkSessionSurfaces } from "./revalidation";
 
 type RawMutationRow = {
   id: number;
@@ -64,36 +65,14 @@ function activeSessionMessage(state: VideoWorkSessionState) {
   return `Work is already running on ${state.openSession.videoTitle}.`;
 }
 
-// FLOW CLOSURE (Sunday round): a closed/corrected Work Session is the
-// canonical operational fact every downstream projection (Dashboard,
-// War Room, CRM, Projects) derives tracked time from -- this used to only
-// revalidate /productivity, so a soft client-side navigation to any of
-// those other surfaces right after closing a session could show stale
-// (Next.js Router Cache) numbers until a hard reload. Mirrors
-// productivity/actions.ts's revalidateProductivityViews, the existing
-// reference pattern for this exact propagation shape.
-export function revalidateWorkSessionSurfaces(
-  attribution?: { clientId: number | null; projectId: number | null } | null,
-) {
-  revalidatePath("/productivity");
-  revalidatePath("/productivity/sessions");
-  revalidatePath("/");
-  revalidatePath("/war-room");
-  revalidatePath("/crm");
-  revalidatePath("/projects");
-  if (attribution?.clientId) revalidatePath(`/crm/${attribution.clientId}`);
-  if (attribution?.projectId) revalidatePath(`/projects/${attribution.projectId}`);
-}
-
-export async function getVideoAttribution(videoId: number) {
-  const db = await getAuthenticatedDb();
-  const rows = await db
-    .select({ clientId: videoLogs.clientId, projectId: videoLogs.projectId })
-    .from(videoLogs)
-    .where(eq(videoLogs.id, videoId))
-    .limit(1);
-  return rows[0] ?? null;
-}
+// BUILD GATE FIX: revalidateWorkSessionSurfaces and getVideoAttribution
+// moved to ./revalidation (a plain server-only module, not "use server")
+// -- see that file's header comment. Next.js 16 rejects a synchronous
+// export of a "use server" module as an invalid Server Action, and
+// neither of these was ever meant to be a remotely-invocable action in
+// the first place; they are internal helpers reused by
+// sensor/actions.ts's approveSensorSession (DR-1) and by this file's own
+// stopWorkSession/stopWorkSessionAt/correctWorkSession below.
 
 export async function startWorkSession(
   videoId: number,

@@ -58,8 +58,12 @@ test("stopWorkSessionAt revalidates the full downstream surface, not just /produ
 });
 
 test("revalidateWorkSessionSurfaces covers Dashboard, War Room, CRM and Projects", () => {
-  const source = readSource("actions.ts");
-  const fn = sliceFunction(source, "function revalidateWorkSessionSurfaces(");
+  // BUILD GATE FIX: this helper now lives in revalidation.ts (a plain
+  // server-only module), not actions.ts -- see that file's header
+  // comment for why (Next.js 16 rejects a synchronous export of a
+  // "use server" module as an invalid Server Action).
+  const source = readSource("revalidation.ts");
+  const fn = sliceFunction(source, "export function revalidateWorkSessionSurfaces(");
   for (const expectedPath of ['"/productivity"', '"/"', '"/war-room"', '"/crm"', '"/projects"']) {
     assert.ok(
       fn.includes(`revalidatePath(${expectedPath})`),

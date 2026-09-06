@@ -14,7 +14,7 @@ import {
   SENSOR_SCOPES,
   createSensorCredential,
 } from "./core";
-import { getVideoAttribution, revalidateWorkSessionSurfaces } from "../work-sessions/actions";
+import { getVideoAttribution, revalidateWorkSessionSurfaces } from "../work-sessions/revalidation";
 
 function validSensorSessionId(id: number) {
   return Number.isSafeInteger(id) && id > 0;

@@ -52,11 +52,11 @@ test("recordDetailedRevision reuses the shared revalidateProductivityViews primi
   assert.match(fn, /revalidateVideoOperations\(input\.videoId\)/u);
 });
 
-test("video-operations/actions.ts imports revalidateProductivityViews from productivity/actions, not a local reimplementation", () => {
+test("video-operations/actions.ts imports revalidateProductivityViews from productivity/revalidation, not a local reimplementation", () => {
   const source = readSource("actions.ts");
   assert.match(
     source,
-    /import \{ revalidateProductivityViews \} from "@\/modules\/productivity\/actions"/u,
+    /import \{ revalidateProductivityViews \} from "@\/modules\/productivity\/revalidation"/u,
   );
 });
 

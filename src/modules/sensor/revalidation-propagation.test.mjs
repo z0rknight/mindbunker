@@ -51,10 +51,10 @@ test("approveSensorSession reuses the shared revalidateWorkSessionSurfaces helpe
   assert.match(fn, /revalidatePath\(`\/productivity\/sensor\/sessions\/\$\{id\}`\)/u);
 });
 
-test("actions.ts imports revalidateWorkSessionSurfaces and getVideoAttribution from the work-sessions module, not a local reimplementation", () => {
+test("actions.ts imports revalidateWorkSessionSurfaces and getVideoAttribution from the work-sessions revalidation module, not a local reimplementation", () => {
   const source = readSource("actions.ts");
   assert.match(
     source,
-    /import \{ getVideoAttribution, revalidateWorkSessionSurfaces \} from "\.\.\/work-sessions\/actions"/u,
+    /import \{ getVideoAttribution, revalidateWorkSessionSurfaces \} from "\.\.\/work-sessions\/revalidation"/u,
   );
 });
