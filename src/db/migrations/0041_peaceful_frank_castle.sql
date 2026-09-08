@@ -1,0 +1,1 @@
+ALTER TABLE `video_logs` ADD `is_operational_container` integer DEFAULT false NOT NULL;
