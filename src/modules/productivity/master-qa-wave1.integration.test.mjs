@@ -46,13 +46,24 @@ test("revision count is read-only everywhere in Productivity except Register Cor
   assert.match(operationalMemory, /Register Correction/u);
 });
 
-test("Projects keeps lifecycle counts but renders one compact accessible summary and a 2xl tier", () => {
+// Tuesday Patch Priority 2: the homogeneous 4-column card grid ("parece um
+// pouco poluído e sem hierarquia" in the original QA) was replaced with
+// client-grouped compact rows -- exception -> client -> project ->
+// metadata. Lifecycle counts (done/in-flight/planned) are no longer
+// spelled out per-card; they're collapsed into one derived next-action
+// line by modules/projects/core.ts's getProjectNextAction, and real
+// project-level exceptions surface via getProjectException. This test
+// asserts the NEW invariants and that the old per-card grid is gone,
+// rather than the old grid's own implementation details.
+test("Projects groups by client with derived exceptions instead of a homogeneous card grid", () => {
   const projects = source("../../app/projects/page.tsx");
+  assert.match(projects, /groupProjectsByClient/u);
+  assert.match(projects, /getProjectException/u);
+  assert.match(projects, /getProjectNextAction/u);
   assert.match(projects, /project\.doneVideos/u);
-  assert.match(projects, /project\.inFlightVideos/u);
-  assert.match(projects, /project\.plannedVideos/u);
-  assert.match(projects, /aria-label=\{`\$\{project\.doneVideos\} done/u);
-  assert.match(projects, /2xl:grid-cols-4/u);
+  assert.doesNotMatch(projects, /2xl:grid-cols-4/u);
+  assert.doesNotMatch(projects, /xl:grid-cols-3/u);
+  assert.doesNotMatch(projects, /PROJECT #/u);
   assert.doesNotMatch(projects, /min-h-12 w-full items-center justify-center rounded-xl bg-cyan-700/u);
 });
 

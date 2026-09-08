@@ -3,7 +3,7 @@
 import "server-only";
 
 import { getAuthenticatedDb } from "@/db";
-import { clients, crmEvents, projects, videoLogs } from "@/db/schema";
+import { blockers, clients, crmEvents, projects, videoLogs } from "@/db/schema";
 import { desc, eq, ne, sql } from "drizzle-orm";
 import { getLastActiveByProject } from "../work-sessions/data";
 import { revalidatePath } from "next/cache";
@@ -149,6 +149,17 @@ export async function getProjectsOverview() {
       doneVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'DONE' and ${videoLogs.videoKind} = 'CLIENT_WORK' then 1 else 0 end), 0)`,
       inFlightVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} in ('IN_PROGRESS', 'READY_FOR_REVIEW', 'CHANGES_REQUESTED') then 1 else 0 end), 0)`,
       plannedVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'PLANNED' then 1 else 0 end), 0)`,
+      // Tuesday Patch Priority 2: a project-level exception the redesigned
+      // Projects page can actually show (BLOCKED badge, Needs Attention)
+      // without inventing a project-level blockers concept -- a project is
+      // "blocked" exactly when one of its videos has an open blocker.
+      // Correlated subquery, not a join, so it can't multiply the
+      // video_logs rows already being summed above.
+      openBlockerCount: sql<number>`(
+        select count(*) from ${blockers}
+        inner join ${videoLogs} as blocked_video on blocked_video.id = ${blockers.videoId}
+        where blocked_video.project_id = ${projects.id} and ${blockers.resolvedAt} is null
+      )`,
     })
     .from(projects)
     .innerJoin(clients, eq(projects.clientId, clients.id))
@@ -169,6 +180,7 @@ export async function getProjectsOverview() {
     doneVideos: Number(row.doneVideos),
     inFlightVideos: Number(row.inFlightVideos),
     plannedVideos: Number(row.plannedVideos),
+    openBlockerCount: Number(row.openBlockerCount),
     // MICRO PATCH §2: derived from explicit attributable Work Sessions
     // only, unbounded lookback (a project touched 40+ days ago must still
     // report its real date) -- never a persisted counter.

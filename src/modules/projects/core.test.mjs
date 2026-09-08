@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  filterProjectsBySearch,
+  getProjectException,
   getProjectGroup,
+  getProjectNextAction,
   getProjectProgress,
+  groupProjectsByClient,
   groupProjectsForOverview,
   isPositiveId,
   isProjectOverdue,
@@ -85,6 +89,7 @@ function project(overrides = {}) {
     id: 1,
     clientId: 1,
     clientName: "Fictitious Client",
+    clientAvatarUrl: null,
     name: "Fictitious Project",
     status: "active",
     deadline: null,
@@ -94,6 +99,7 @@ function project(overrides = {}) {
     doneVideos: 1,
     inFlightVideos: 3,
     plannedVideos: 1,
+    openBlockerCount: 0,
     ...overrides,
   };
 }
@@ -216,4 +222,105 @@ test("resolveCurrentWorkVideo returns null rather than fabricating current work"
 
 test("resolveCurrentWorkVideo returns null for an empty project", () => {
   assert.equal(resolveCurrentWorkVideo([]), null);
+});
+
+// ─── Tuesday Patch Priority 2: Projects structural redesign ────────────────
+
+test("getProjectNextAction: videos remaining to plan/shoot always wins first", () => {
+  assert.equal(
+    getProjectNextAction(project({ totalVideos: 10, doneVideos: 0, plannedVideos: 10 })),
+    "Produce 10 planned videos",
+  );
+});
+
+test("getProjectNextAction: in-flight videos surface when nothing is left planned", () => {
+  assert.equal(
+    getProjectNextAction(project({ totalVideos: 2, doneVideos: 0, inFlightVideos: 2, plannedVideos: 0 })),
+    "Finish 2 videos in flight",
+  );
+});
+
+test("getProjectNextAction: all videos done but status still active answers 'why' -- Move to review", () => {
+  // This is the exact inconsistency the brief calls out: a project that
+  // reads 2/2 complete yet remains ACTIVE. The UI must say why.
+  assert.equal(
+    getProjectNextAction(project({ status: "active", totalVideos: 2, doneVideos: 2, inFlightVideos: 0, plannedVideos: 0 })),
+    "Move to review",
+  );
+});
+
+test("getProjectNextAction: review status names the real next step, not a guess", () => {
+  assert.equal(
+    getProjectNextAction(project({ status: "review", totalVideos: 2, doneVideos: 2, inFlightVideos: 0, plannedVideos: 0 })),
+    "Client review",
+  );
+});
+
+test("getProjectNextAction: delivered/archived projects have no next action -- never fabricated", () => {
+  assert.equal(getProjectNextAction(project({ status: "delivered", totalVideos: 2, doneVideos: 2, inFlightVideos: 0, plannedVideos: 0 })), null);
+  assert.equal(getProjectNextAction(project({ status: "archived", totalVideos: 2, doneVideos: 2, inFlightVideos: 0, plannedVideos: 0 })), null);
+});
+
+test("getProjectNextAction: zero videos means plan the first one", () => {
+  assert.equal(getProjectNextAction(project({ totalVideos: 0 })), "Plan the first video");
+});
+
+test("getProjectException: overdue outranks blocked outranks planned; normal active/review gets no badge", () => {
+  const today = "2026-09-08";
+  assert.equal(getProjectException(project({ deadline: "2026-09-01", status: "active" }), today), "OVERDUE");
+  assert.equal(getProjectException(project({ openBlockerCount: 1 }), today), "BLOCKED");
+  assert.equal(getProjectException(project({ status: "planned" }), today), "PLANNED");
+  assert.equal(getProjectException(project({ status: "active" }), today), null);
+  assert.equal(getProjectException(project({ status: "review" }), today), null);
+  assert.equal(
+    getProjectException(project({ deadline: "2026-09-01", openBlockerCount: 1, status: "active" }), today),
+    "OVERDUE",
+  );
+});
+
+test("groupProjectsByClient: client groups with a real exception sort before groups without one", () => {
+  const groups = groupProjectsByClient(
+    [
+      project({ id: 1, clientId: 1, clientName: "Alice", status: "active" }),
+      project({ id: 2, clientId: 2, clientName: "Zeke", deadline: "2026-01-01", status: "active" }),
+    ],
+    "2026-09-08",
+  );
+  assert.deepEqual(groups.map((g) => g.clientName), ["Zeke", "Alice"]);
+  assert.equal(groups[0].hasException, true);
+  assert.equal(groups[1].hasException, false);
+});
+
+test("groupProjectsByClient: within a client, overdue projects sort to the top in attention mode", () => {
+  const groups = groupProjectsByClient(
+    [
+      project({ id: 1, clientId: 1, name: "On time", status: "active" }),
+      project({ id: 2, clientId: 1, name: "Late", deadline: "2026-01-01", status: "active" }),
+    ],
+    "2026-09-08",
+    "attention",
+  );
+  assert.deepEqual(groups[0].projects.map((p) => p.name), ["Late", "On time"]);
+});
+
+test("groupProjectsByClient: no project is duplicated or dropped across groups", () => {
+  const input = [
+    project({ id: 1, clientId: 1 }),
+    project({ id: 2, clientId: 1 }),
+    project({ id: 3, clientId: 2 }),
+  ];
+  const groups = groupProjectsByClient(input, "2026-09-08");
+  const total = groups.reduce((sum, g) => sum + g.projects.length, 0);
+  assert.equal(total, input.length);
+});
+
+test("filterProjectsBySearch matches project name or client name, case-insensitively", () => {
+  const input = [
+    project({ id: 1, name: "Meta Ads", clientName: "Dave" }),
+    project({ id: 2, name: "Mini Series", clientName: "Taryn" }),
+  ];
+  assert.deepEqual(filterProjectsBySearch(input, "meta").map((p) => p.id), [1]);
+  assert.deepEqual(filterProjectsBySearch(input, "TARYN").map((p) => p.id), [2]);
+  assert.deepEqual(filterProjectsBySearch(input, "").map((p) => p.id), [1, 2]);
+  assert.deepEqual(filterProjectsBySearch(input, "nonexistent"), []);
 });

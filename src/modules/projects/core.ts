@@ -27,6 +27,11 @@ export type ProjectOverviewItem = {
   // attributed Work Session for this project, unbounded lookback. null
   // when the project has never had one -- never fabricated as "now".
   lastActiveAt: string | null;
+  // Tuesday Patch Priority 2: count of open blockers on this project's
+  // videos -- a real, derived project-level exception (not a new
+  // project-level primitive; blockers stay video-scoped, this just rolls
+  // them up for display).
+  openBlockerCount: number;
 };
 
 export type ProjectOverviewGroups = Record<
@@ -77,6 +82,133 @@ export function getProjectProgress(project: Pick<
 >) {
   if (project.totalVideos === 0) return 0;
   return Math.round((project.doneVideos / project.totalVideos) * 100);
+}
+
+// ─── Tuesday Patch Priority 2 (Projects structural redesign) ───────────────
+//
+// Critical semantic rule from the brief: video completion != project
+// completion. "2/2 done" cannot be the only signal, or the UI implies a
+// conclusion the domain doesn't support. project.status already IS the
+// real "project stage" concept (planned/active/review/delivered/archived,
+// see config.ts's PROJECT_STATUS_LABELS) -- no new field needed there.
+// "Next" below is the one genuinely new piece, and it is derived only
+// from data that already exists (video counts + status), never invented:
+// a project with videos left to shoot says so; a project whose videos are
+// ALL done but still "active" (exactly the "why is 2/2 still Active"
+// inconsistency the brief calls out) says "Move to review" -- which
+// answers the operator's own question instead of hiding it.
+export function getProjectNextAction(
+  project: Pick<ProjectOverviewItem, "status" | "totalVideos" | "doneVideos" | "inFlightVideos" | "plannedVideos">,
+): string | null {
+  if (project.status === "delivered" || project.status === "archived") return null;
+  if (project.totalVideos === 0) return "Plan the first video";
+  if (project.plannedVideos > 0) {
+    return `Produce ${project.plannedVideos} planned video${project.plannedVideos === 1 ? "" : "s"}`;
+  }
+  if (project.inFlightVideos > 0) {
+    return `Finish ${project.inFlightVideos} video${project.inFlightVideos === 1 ? "" : "s"} in flight`;
+  }
+  if (project.doneVideos === project.totalVideos && project.status === "active") {
+    return "Move to review";
+  }
+  if (project.status === "review") return "Client review";
+  return null;
+}
+
+export type ProjectExceptionKind = "OVERDUE" | "BLOCKED" | "PLANNED";
+
+// The badge vocabulary the brief asks for is deliberately small: normal
+// active/in-review state gets no badge at all (you're already inside
+// "active projects" -- repeating that is exactly the redundant ACTIVE
+// badge the brief rejected). Only genuine exceptions and the PLANNED
+// lifecycle state get one, and only one -- overdue outranks blocked.
+export function getProjectException(
+  project: Pick<ProjectOverviewItem, "status" | "deadline" | "openBlockerCount">,
+  today: string,
+): ProjectExceptionKind | null {
+  if (isProjectOverdue(project, today)) return "OVERDUE";
+  if (project.openBlockerCount > 0) return "BLOCKED";
+  if (project.status === "planned") return "PLANNED";
+  return null;
+}
+
+export type ClientProjectGroup = {
+  clientId: number;
+  clientName: string;
+  clientAvatarUrl: string | null;
+  hasException: boolean;
+  projects: ProjectOverviewItem[];
+};
+
+const EXCEPTION_RANK: Record<ProjectExceptionKind | "NONE", number> = {
+  OVERDUE: 0,
+  BLOCKED: 1,
+  PLANNED: 2,
+  NONE: 3,
+};
+
+export type ProjectSortMode = "attention" | "recent";
+
+// Groups an already-filtered project list by client, sorts projects
+// within each client group, and sorts the client groups themselves --
+// groups containing a real exception come first (matching the brief's
+// own worked example: Dave, who has an overdue project, listed before
+// Taryn, who doesn't). This is the ONE place either sort happens; the
+// page component must not re-derive it.
+export function groupProjectsByClient(
+  projectList: readonly ProjectOverviewItem[],
+  today: string,
+  sortMode: ProjectSortMode = "attention",
+): ClientProjectGroup[] {
+  const byClient = new Map<number, ClientProjectGroup>();
+  for (const project of projectList) {
+    const existing = byClient.get(project.clientId);
+    if (existing) {
+      existing.projects.push(project);
+    } else {
+      byClient.set(project.clientId, {
+        clientId: project.clientId,
+        clientName: project.clientName,
+        clientAvatarUrl: project.clientAvatarUrl,
+        hasException: false,
+        projects: [project],
+      });
+    }
+  }
+
+  const groups = [...byClient.values()];
+  for (const group of groups) {
+    group.projects.sort((a, b) => {
+      if (sortMode === "attention") {
+        const rankA = EXCEPTION_RANK[getProjectException(a, today) ?? "NONE"];
+        const rankB = EXCEPTION_RANK[getProjectException(b, today) ?? "NONE"];
+        if (rankA !== rankB) return rankA - rankB;
+      }
+      const updatedOrder = (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0);
+      return updatedOrder || b.id - a.id;
+    });
+    group.hasException = group.projects.some((project) => getProjectException(project, today) !== null);
+  }
+
+  groups.sort((a, b) => {
+    if (a.hasException !== b.hasException) return a.hasException ? -1 : 1;
+    return a.clientName.localeCompare(b.clientName);
+  });
+
+  return groups;
+}
+
+export function filterProjectsBySearch(
+  projectList: readonly ProjectOverviewItem[],
+  query: string,
+): ProjectOverviewItem[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [...projectList];
+  return projectList.filter(
+    (project) =>
+      project.name.toLowerCase().includes(needle) ||
+      project.clientName.toLowerCase().includes(needle),
+  );
 }
 
 function compareNullableDates(a: string | null, b: string | null) {
