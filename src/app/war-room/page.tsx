@@ -595,6 +595,11 @@ function ActiveSignalsSection({ signals }: { signals: Signal[] }) {
   return (
     <section className="mb-8">
       <SectionHeader label="ACTIVE SIGNALS" icon="📡" />
+      <p className="mb-3 text-xs text-zinc-600">
+        Patterns MindBunker noticed on its own -- overdue, blocked, or repeating. &ldquo;Record decision&rdquo;
+        writes down what you decided to do about one, with an optional date to check back -- it doesn&apos;t take
+        any action itself, and skipping it changes nothing.
+      </p>
       {signals.length === 0 ? (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5 text-sm text-zinc-500">
           No active signals. Nothing overdue, blocked, or repeating right now.
@@ -644,6 +649,10 @@ function DecisionsSection({ decisions }: { decisions: OpenDecisionRow[] }) {
   return (
     <section className="mb-8">
       <SectionHeader label="OPEN DECISIONS" icon="🧭" />
+      <p className="mb-3 text-xs text-zinc-600">
+        Decisions you recorded from a signal, still waiting on a result. &ldquo;Record result&rdquo; closes one
+        out with what actually happened; &ldquo;Cancel&rdquo; drops it without a result if it turned out moot.
+      </p>
       <div className="space-y-2">
         {decisions.map((decision) => (
           <OpenDecisionCard key={decision.id} decision={decision} />
