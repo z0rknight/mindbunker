@@ -2,6 +2,14 @@ import Link from "next/link";
 import { formatCurrency } from "@/utils/date";
 import type { FinanceHealthSentence } from "@/modules/finance/health";
 import type { CurrencyAmount } from "@/modules/finance/core";
+import type { UnattributedTransaction } from "@/modules/finance/actions";
+import type { AmbiguousCashMovement } from "@/modules/cash-accounts/actions";
+import {
+  AmbiguousTransferResolveList,
+  AttributionResolveList,
+  ReconciliationAcknowledgeList,
+  type ReconciliationAttentionRow,
+} from "./NeedsYouResolvers";
 
 // Tuesday Patch Priority 4 (brief §Finance): "Your money, without the
 // accounting." The whole point of this panel is restraint -- at most
@@ -25,6 +33,10 @@ export function FinanceOverviewPanel({
   upcomingByCurrency,
   monthByCurrency,
   needsYou,
+  unattributedTransactions,
+  clientOptions,
+  ambiguousMovements,
+  reconciliationRows,
   currentMonthLabel,
 }: {
   health: FinanceHealthSentence;
@@ -33,8 +45,17 @@ export function FinanceOverviewPanel({
   upcomingByCurrency: CurrencyAmount[];
   monthByCurrency: Array<{ currency: string; received: number; spent: number; net: number }>;
   needsYou: NeedsYouItem[];
+  // Completion Round §A: these three render as real inline resolution
+  // instead of navigation links -- see NeedsYouResolvers.tsx for the
+  // canonical mutation each one calls.
+  unattributedTransactions: UnattributedTransaction[];
+  clientOptions: Array<{ id: number; name: string }>;
+  ambiguousMovements: AmbiguousCashMovement[];
+  reconciliationRows: ReconciliationAttentionRow[];
   currentMonthLabel: string;
 }) {
+  const totalNeedsYou =
+    needsYou.length + unattributedTransactions.length + ambiguousMovements.length + reconciliationRows.length;
   const currencies = Array.from(
     new Set([
       ...availableByCurrency.map((r) => r.currency),
@@ -59,9 +80,9 @@ export function FinanceOverviewPanel({
         <p className="text-base font-bold text-white">
           {health.emoji} {health.text}
         </p>
-        {needsYou.length > 0 && (
+        {totalNeedsYou > 0 && (
           <a href="#needs-you" className="text-xs font-black uppercase tracking-wide text-zinc-300 hover:text-white">
-            Review {needsYou.length} item{needsYou.length === 1 ? "" : "s"} →
+            Review {totalNeedsYou} item{totalNeedsYou === 1 ? "" : "s"} →
           </a>
         )}
       </div>
@@ -128,12 +149,15 @@ export function FinanceOverviewPanel({
 
       <div id="needs-you">
         <h2 className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">
-          Needs You {needsYou.length > 0 && `— ${needsYou.length}`}
+          Needs You {totalNeedsYou > 0 && `— ${totalNeedsYou}`}
         </h2>
-        {needsYou.length === 0 ? (
+        {totalNeedsYou === 0 ? (
           <p className="text-sm text-zinc-600">Nothing needs your attention right now.</p>
         ) : (
           <div className="space-y-2">
+            <AttributionResolveList transactions={unattributedTransactions} clients={clientOptions} />
+            <AmbiguousTransferResolveList movements={ambiguousMovements} />
+            <ReconciliationAcknowledgeList rows={reconciliationRows} />
             {needsYou.map((item) => (
               <Link
                 key={item.key}

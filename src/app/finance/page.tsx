@@ -11,7 +11,9 @@ import {
   getSubscriptionSummary,
   getFinanceHealth,
   getCommercialContracts,
+  getUnattributedIncomeTransactions,
 } from "@/modules/finance/actions";
+import { getAmbiguousCashMovements } from "@/modules/cash-accounts/actions";
 import { formatCurrency, formatDate, currentMonthKey, currentMonthName, todayISO } from "@/utils/date";
 import {
   computeReservedByCurrency,
@@ -52,6 +54,8 @@ export default async function FinancePage() {
     businessFx,
     financeHealth,
     commercialContracts,
+    unattributedTransactions,
+    ambiguousMovements,
   ] = await Promise.all([
     getFinanceOverview(),
     getAllTransactions(),
@@ -66,6 +70,8 @@ export default async function FinancePage() {
     getFxRateForMonth(currentMonthKey(), "BUSINESS"),
     getFinanceHealth(),
     getCommercialContracts(),
+    getUnattributedIncomeTransactions(),
+    getAmbiguousCashMovements(),
   ]);
   const { summary, ledgerPlanning: rmediaCash } = financeOverview;
   const activeDebts = debts.filter((d) => d.status === "ACTIVE");
@@ -100,25 +106,31 @@ export default async function FinancePage() {
     net: row.monthlyNet,
   }));
 
-  const needsYou: NeedsYouItem[] = [
-    ...getFinanceHealthActionItems(financeHealth).map((item) => ({
+  // Completion Round §A/§B: "attribution" and "ambiguous-evidence" used to
+  // render here as plain navigation links; they now resolve inline via
+  // AttributionResolveList / AmbiguousTransferResolveList below (real
+  // mutations on transactions.clientId / cash_movements.state), so they're
+  // excluded from this generic link-based list to avoid showing the same
+  // item twice. business/personal pocket issues, malformed FX, and
+  // duplicate identities have no safe single-click resolution -- they stay
+  // as links into Accounting details.
+  const needsYou: NeedsYouItem[] = getFinanceHealthActionItems(financeHealth)
+    .filter((item) => item.key !== "attribution" && item.key !== "ambiguous-evidence")
+    .map((item) => ({
       key: item.key,
       label: item.label,
       href: item.href,
       actionLabel: "Fix",
-    })),
-    ...reconciliationAttention.map((r) => ({
-      key: `reconcile-${r.contractId}-${r.periodStart}-${r.periodEnd}`,
-      label: `${r.clientName} billing ${
-        r.differenceMinutes.value !== null
-          ? `differs by ${formatMinutesAsHours(Math.abs(r.differenceMinutes.value))}`
-          : "needs review"
-      }`,
-      detail: `${r.platform} · ${formatDate(r.periodStart)} – ${formatDate(r.periodEnd)}`,
-      href: `/finance/contracts/${r.contractId}`,
-      actionLabel: "Review",
-    })),
-  ];
+    }));
+
+  const reconciliationRows = reconciliationAttention.map((r) => ({
+    contractId: r.contractId,
+    clientName: r.clientName,
+    platform: r.platform,
+    periodStart: r.periodStart,
+    periodEnd: r.periodEnd,
+    differenceMinutesValue: r.differenceMinutes.value,
+  }));
 
   // Client Portal Reality round §I: real FK links already present on every
   // transaction row (never inferred from category/name strings) -- just
@@ -547,6 +559,10 @@ export default async function FinancePage() {
             upcomingByCurrency={upcomingByCurrency}
             monthByCurrency={monthByCurrency}
             needsYou={needsYou}
+            unattributedTransactions={unattributedTransactions}
+            clientOptions={clientOptions}
+            ambiguousMovements={ambiguousMovements}
+            reconciliationRows={reconciliationRows}
             currentMonthLabel={currentMonthName()}
           />
         }

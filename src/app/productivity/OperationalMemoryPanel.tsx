@@ -180,6 +180,23 @@ export function OperationalMemoryPanel({ videoId }: { videoId: number }) {
           <p className="mt-1 text-xs leading-5 text-zinc-500">Facts inherit this video’s client and project. Lifecycle stays separate.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Tuesday Patch Completion Round §C: "enviar um email para um
+              lead ou cliente" was explicitly asked for in the Productivity
+              workbench, not just CRM. Reuses the exact same mailto:
+              behavior as CRM's ClientWorkbench -- no email subsystem,
+              just the entity context this panel already has loaded. */}
+          {snapshot?.video.clientEmail && (
+            <a
+              href={`mailto:${snapshot.video.clientEmail}?subject=${encodeURIComponent(
+                [snapshot.video.projectName, snapshot.video.title ?? `Video ${snapshot.video.date}`]
+                  .filter(Boolean)
+                  .join(" — "),
+              )}`}
+              className={smallButton}
+            >
+              Email
+            </a>
+          )}
           {snapshot?.video.clientId && <FollowUpControl clientId={snapshot.video.clientId} />}
           <button type="button" onClick={() => void copyContext()} disabled={!snapshot} className={smallButton}>
             Copy context
@@ -263,6 +280,18 @@ export function OperationalMemoryPanel({ videoId }: { videoId: number }) {
                 </div>
               ))}
               <div className="space-y-2">
+                {/* Tuesday Patch Completion Round §D: "Schedule call about
+                    a specific video" -- a call is just a promise
+                    (commitments.videoId is always this video, never a
+                    client-level fact that could clobber another video's
+                    follow-up). This quick-start prefills the same form
+                    Add Promise already uses instead of adding a second
+                    write path. */}
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={pending} onClick={() => setCommitmentTitle("Call — ")} className={smallButton}>
+                    📞 Schedule call
+                  </button>
+                </div>
                 <input value={commitmentTitle} onChange={(event) => setCommitmentTitle(event.target.value)} placeholder="Promise made…" maxLength={300} className={inputClass} />
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Quick deadline</span>

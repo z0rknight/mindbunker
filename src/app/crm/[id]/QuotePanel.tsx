@@ -8,6 +8,8 @@ import {
   updateQuoteStatus,
 } from "@/modules/quotes/actions";
 import { QuoteCreateForm } from "@/components/crm/QuoteCreateForm";
+import { QuickFollowUpForm } from "@/components/crm/QuickFollowUpForm";
+import { createVideoCommitment } from "@/modules/video-operations/actions";
 
 // Client Service Reality Patch (25 Aug 2026) -- Quote Approval (brief §6).
 // V1 is manual: Emmanuel logs a quote from a Pricing Lab calculation he
@@ -100,11 +102,124 @@ function ProductionForm({ quoteId, onDone }: { quoteId: number; onDone: () => vo
   );
 }
 
-function QuoteRow({ quote }: { quote: QuotePanelRow }) {
+// Tuesday Patch Completion Round §E: "schedule a call with a lead about a
+// quote" -- the resulting action must preserve enough context that it
+// isn't just "Call Shelley." If the quote already has production (a
+// video), the call is scoped to that video via the existing commitments
+// primitive (same as §D) -- it then shows up on that video's own Promise
+// & delivery list and the cross-surface commitment card for free. Before
+// production exists there is no video to attach a commitment to, so this
+// falls back to the client-level next-action fact (QuickFollowUpForm),
+// with the quote's own content type + amount baked into the prefilled
+// text so the context survives even in that single-value field.
+function ScheduleQuoteCall({
+  quote,
+  clientId,
+  clientName,
+  currentStage,
+  currentServiceInterest,
+  currentQualificationNotes,
+  onDone,
+}: {
+  quote: QuotePanelRow;
+  clientId: number;
+  clientName: string;
+  currentStage: string;
+  currentServiceInterest: string | null;
+  currentQualificationNotes: string | null;
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [dueAt, setDueAt] = useState("");
+  const [error, setError] = useState("");
+  const quoteContext = `${quote.contentTypeLabel} (${formatAmount(quote.amountCents, quote.currency)})`;
+
+  if (quote.videoId !== null) {
+    return (
+      <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/60 p-3">
+        <p className="text-xs text-zinc-400">Call about: {clientName} — {quoteContext}</p>
+        <input
+          aria-label="Call due date"
+          type="datetime-local"
+          value={dueAt}
+          onChange={(event) => setDueAt(event.target.value)}
+          className="min-h-10 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-xs text-white outline-none focus:border-violet-500"
+        />
+        {error && <p className="text-xs text-red-300">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={isPending || !dueAt}
+            onClick={() => {
+              setError("");
+              const parsed = new Date(dueAt);
+              if (Number.isNaN(parsed.getTime())) {
+                setError("Choose a valid date and time.");
+                return;
+              }
+              startTransition(async () => {
+                const result = await createVideoCommitment({
+                  videoId: quote.videoId!,
+                  title: `Call ${clientName} — ${quoteContext}`,
+                  dueAt: parsed.toISOString(),
+                });
+                if (!result.success) {
+                  setError(result.error);
+                  return;
+                }
+                router.refresh();
+                onDone();
+              });
+            }}
+            className="flex-1 rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white hover:bg-violet-500 disabled:opacity-50"
+          >
+            {isPending ? "Saving…" : "Schedule call"}
+          </button>
+          <button type="button" disabled={isPending} onClick={onDone} className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-800 disabled:opacity-50">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <QuickFollowUpForm
+      clientId={clientId}
+      currentStage={currentStage}
+      currentServiceInterest={currentServiceInterest}
+      currentQualificationNotes={currentQualificationNotes}
+      initialNextAction={`Call about quote — ${quoteContext}`}
+      onDone={() => {
+        router.refresh();
+        onDone();
+      }}
+      onCancel={onDone}
+    />
+  );
+}
+
+function QuoteRow({
+  quote,
+  clientId,
+  clientName,
+  currentStage,
+  currentServiceInterest,
+  currentQualificationNotes,
+}: {
+  quote: QuotePanelRow;
+  clientId: number;
+  clientName: string;
+  currentStage: string;
+  currentServiceInterest: string | null;
+  currentQualificationNotes: string | null;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [showProductionForm, setShowProductionForm] = useState(false);
+  const [showScheduleCall, setShowScheduleCall] = useState(false);
 
   const transition = (nextStatus: string) => {
     setError("");
@@ -176,8 +291,31 @@ function QuoteRow({ quote }: { quote: QuotePanelRow }) {
               </button>
             </>
           )}
+          {quote.status !== "DECLINED" && (
+            <button
+              type="button"
+              onClick={() => setShowScheduleCall((prev) => !prev)}
+              className="rounded-lg border border-zinc-700 px-2.5 py-1 text-[11px] font-bold text-zinc-300 hover:bg-zinc-800"
+            >
+              📞 Schedule call
+            </button>
+          )}
         </div>
       </div>
+
+      {showScheduleCall && (
+        <div className="mt-2">
+          <ScheduleQuoteCall
+            quote={quote}
+            clientId={clientId}
+            clientName={clientName}
+            currentStage={currentStage}
+            currentServiceInterest={currentServiceInterest}
+            currentQualificationNotes={currentQualificationNotes}
+            onDone={() => setShowScheduleCall(false)}
+          />
+        </div>
+      )}
 
       {quote.status === "APPROVED" && !hasProduction && (
         <div className="mt-2">
@@ -209,7 +347,21 @@ function QuoteRow({ quote }: { quote: QuotePanelRow }) {
   );
 }
 
-export function QuotePanel({ clientId, quotes }: { clientId: number; quotes: QuotePanelRow[] }) {
+export function QuotePanel({
+  clientId,
+  clientName,
+  currentStage,
+  currentServiceInterest,
+  currentQualificationNotes,
+  quotes,
+}: {
+  clientId: number;
+  clientName: string;
+  currentStage: string;
+  currentServiceInterest: string | null;
+  currentQualificationNotes: string | null;
+  quotes: QuotePanelRow[];
+}) {
   const router = useRouter();
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -243,7 +395,15 @@ export function QuotePanel({ clientId, quotes }: { clientId: number; quotes: Quo
       ) : (
         <ul className="mt-3 space-y-2">
           {quotes.map((quote) => (
-            <QuoteRow key={quote.id} quote={quote} />
+            <QuoteRow
+              key={quote.id}
+              quote={quote}
+              clientId={clientId}
+              clientName={clientName}
+              currentStage={currentStage}
+              currentServiceInterest={currentServiceInterest}
+              currentQualificationNotes={currentQualificationNotes}
+            />
           ))}
         </ul>
       )}

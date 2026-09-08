@@ -161,6 +161,75 @@ export async function recordInternalPocketTransfer(input: {
   return { success: true };
 }
 
+// ─── AMBIGUOUS MOVEMENT CLASSIFICATION (Completion Round §A) ───────────────
+// FACT: whether an imported cash movement has been classified.
+// CANONICAL OWNER: cash_movements.state (already a real enum column:
+// RECONCILED / AMBIGUOUS / EXTERNAL_TRANSFER / INTERNAL_TRANSFER / FX /
+// IGNORE) -- it had a read side (getFinanceHealth's ambiguousEvidence
+// count) but no UPDATE mutation anywhere in the codebase; every row was
+// insert-only. This adds the missing write path to the same column,
+// not a new parallel flag.
+// OTHER SURFACES THAT READ IT: getFinanceHealth's ambiguousEvidence
+// count already reads state === "AMBIGUOUS" directly, so it reflects
+// this mutation with no further change needed.
+export type AmbiguousCashMovement = {
+  id: number;
+  accountLabel: string;
+  currency: "USD" | "BRL";
+  date: string;
+  amount: number;
+  description: string;
+  counterparty: string | null;
+};
+
+export async function getAmbiguousCashMovements(): Promise<AmbiguousCashMovement[]> {
+  const db = await getAuthenticatedDb();
+  return db
+    .select({
+      id: cashMovements.id,
+      accountLabel: cashAccounts.label,
+      currency: cashAccounts.currency,
+      date: cashMovements.date,
+      amount: cashMovements.amount,
+      description: cashMovements.description,
+      counterparty: cashMovements.counterparty,
+    })
+    .from(cashMovements)
+    .innerJoin(cashAccounts, eq(cashAccounts.id, cashMovements.cashAccountId))
+    .where(eq(cashMovements.state, "AMBIGUOUS"))
+    .orderBy(desc(cashMovements.date));
+}
+
+const MOVEMENT_RESOLUTION_STATES = ["INTERNAL_TRANSFER", "EXTERNAL_TRANSFER", "IGNORE"] as const;
+type MovementResolutionState = (typeof MOVEMENT_RESOLUTION_STATES)[number];
+
+function isMovementResolutionState(value: unknown): value is MovementResolutionState {
+  return typeof value === "string" && (MOVEMENT_RESOLUTION_STATES as readonly string[]).includes(value);
+}
+
+export async function classifyCashMovement(
+  movementId: number,
+  newState: unknown,
+): Promise<{ success: true } | { success: false; error: string }> {
+  if (!Number.isSafeInteger(movementId) || movementId <= 0) {
+    return { success: false, error: "Invalid movement." };
+  }
+  if (!isMovementResolutionState(newState)) {
+    return { success: false, error: "Choose a valid classification." };
+  }
+  const db = await getAuthenticatedDb();
+  const updated = await db
+    .update(cashMovements)
+    .set({ state: newState })
+    .where(and(eq(cashMovements.id, movementId), eq(cashMovements.state, "AMBIGUOUS")))
+    .returning({ id: cashMovements.id });
+  if (!updated[0]) return { success: false, error: "Movement not found or already classified." };
+
+  revalidatePath("/finance");
+  revalidatePath("/finance/personal");
+  return { success: true };
+}
+
 export async function recordCashAccountSnapshot(input: {
   scope: string;
   cashAccountId: number;

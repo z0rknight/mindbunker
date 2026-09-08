@@ -5,10 +5,12 @@ import "server-only";
 import { getAuthenticatedDb } from "@/db";
 import {
   blockers,
+  clients,
   commitments,
   deliveries,
   frictionEvents,
   productionChecklistItems,
+  projects,
   revisions,
   videoLogs,
   workSessions,
@@ -53,6 +55,11 @@ function revalidateVideoOperations(videoId: number) {
   revalidatePath(`/productivity?video=${videoId}`);
 }
 
+// Tuesday Patch Completion Round: extended with clientName/clientEmail/
+// projectName/date so the video's own workspace can offer context-carrying
+// actions (Email, Schedule Call) without a second query -- this is the one
+// place `getVideoOperationalSnapshot` already resolves a video's identity,
+// so callers get the full entity context for free instead of re-deriving it.
 async function getVideoContext(videoId: number) {
   if (!isPositiveId(videoId)) return null;
   const db = await getAuthenticatedDb();
@@ -60,12 +67,18 @@ async function getVideoContext(videoId: number) {
     .select({
       id: videoLogs.id,
       title: videoLogs.title,
+      date: videoLogs.date,
       status: videoLogs.status,
       clientId: videoLogs.clientId,
+      clientName: clients.name,
+      clientEmail: clients.email,
       projectId: videoLogs.projectId,
+      projectName: projects.name,
       deliveryUrl: videoLogs.deliveryUrl,
     })
     .from(videoLogs)
+    .leftJoin(clients, eq(videoLogs.clientId, clients.id))
+    .leftJoin(projects, eq(videoLogs.projectId, projects.id))
     .where(eq(videoLogs.id, videoId))
     .limit(1);
   return rows[0] ?? null;

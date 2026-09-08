@@ -29,6 +29,8 @@ import { getDashboardOperatorIntelligence } from "@/modules/operator-intelligenc
 import { selectDashboardNow, type AttentionReason } from "@/modules/operator-intelligence/core";
 import { EconomicLedgerCard } from "@/components/finance/EconomicLedgerCard";
 import { isInternalClientName, splitIntentionalWork } from "@/lib/client-identity";
+import { getOpenCommitmentsWithContext, rankOpenCommitments } from "@/modules/signals";
+import { ActiveCommitmentCard } from "@/components/commitments/ActiveCommitmentCard";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +51,7 @@ export default async function DashboardPage() {
     mostRecentSale,
     closedSales,
     operatorIntelligence,
+    openCommitments,
   ] = await Promise.all([
     getFinanceSummary(),
     getVideoStats(),
@@ -65,9 +68,16 @@ export default async function DashboardPage() {
     getMostRecentSaleThisMonth(),
     getClosedSales(),
     getDashboardOperatorIntelligence(),
+    getOpenCommitmentsWithContext(),
   ]);
 
   const now = new Date();
+  // Tuesday Patch Completion Round §F: "Dashboard should remain an
+  // overview: do not dump every deadline there... show only the most
+  // relevant/current commitment(s)." One card, the single most urgent
+  // (overdue first, else soonest) -- same commitments row Productivity
+  // and War Room read, never a second deadline record.
+  const mostUrgentCommitment = rankOpenCommitments(openCommitments, now)[0] ?? null;
   const greeting =
     now.getHours() < 12 ? "Good morning" : now.getHours() < 18 ? "Good afternoon" : "Good evening";
   const dashboardNow = selectDashboardNow(
@@ -97,6 +107,15 @@ export default async function DashboardPage() {
         openSession={workSessionOverview.openSession}
         openSessionElapsedSeconds={workSessionOverview.openSessionElapsedSeconds}
       />
+
+      {mostUrgentCommitment && (
+        <div className="mb-6" data-testid="dashboard-commitment">
+          <ActiveCommitmentCard
+            commitment={{ ...mostUrgentCommitment, dueAt: mostUrgentCommitment.dueAt.toISOString() }}
+            nowIso={now.toISOString()}
+          />
+        </div>
+      )}
 
       {dashboardNow.mode === "RECENT" && dashboardNow.targets.length > 0 && (
         <section className="mb-6" data-testid="dashboard-now">

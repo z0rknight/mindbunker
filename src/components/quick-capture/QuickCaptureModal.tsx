@@ -22,15 +22,20 @@ import {
 } from "@/modules/video-operations/core";
 import { addVideoOperationalNote } from "@/modules/video-memory/actions";
 import { VIDEO_OPERATIONAL_NOTE_MAX_LENGTH } from "@/modules/video-memory/core";
-import { startWorkSession } from "@/modules/work-sessions/actions";
-import { DEFAULT_WORK_SESSION_ACTIVITY } from "@/modules/work-sessions/core";
+import { logManualWorkSession, startWorkSession } from "@/modules/work-sessions/actions";
+import {
+  DEFAULT_WORK_SESSION_ACTIVITY,
+  WORK_SESSION_ACTIVITY_LABELS,
+  WORK_SESSION_ACTIVITY_TYPES,
+  type WorkSessionActivityType,
+} from "@/modules/work-sessions/core";
 import { getClientById } from "@/modules/crm/actions";
 import { updateOpportunity } from "@/modules/gateway/actions";
 import type { QuickCaptureTarget } from "./QuickCaptureProvider";
 
 type QuickOptions = Awaited<ReturnType<typeof getProductivityQuickOptions>>;
 
-type ActionId = "commitment" | "correction" | "blocker" | "followup" | "note" | "start" | "queue-top";
+type ActionId = "commitment" | "correction" | "blocker" | "followup" | "note" | "start" | "queue-top" | "backfill";
 
 const ACTIONS: Array<{ id: ActionId; label: string; hint: string; needsClientOnly?: boolean }> = [
   { id: "start", label: "Start Work", hint: "Begin tracking time on a video" },
@@ -39,6 +44,7 @@ const ACTIONS: Array<{ id: ActionId; label: string; hint: string; needsClientOnl
   { id: "correction", label: "Register Correction", hint: "Log a revision event" },
   { id: "followup", label: "Client Follow-up", hint: "Set the next step with a client", needsClientOnly: true },
   { id: "note", label: "Quick Note", hint: "Add an operational note to a video" },
+  { id: "backfill", label: "Backfill Work Time", hint: "Log time for a day you forgot to track" },
   { id: "queue-top", label: "Move to top of queue", hint: "Bring an existing item to the front" },
 ];
 
@@ -239,6 +245,10 @@ function VideoScopedAction({
   const [revisionCategory, setRevisionCategory] = useState<RevisionCategory | "">("");
   const [revisionNote, setRevisionNote] = useState("");
   const [noteBody, setNoteBody] = useState("");
+  const [backfillActivityType, setBackfillActivityType] = useState<WorkSessionActivityType>("EDITING");
+  const [backfillStart, setBackfillStart] = useState("");
+  const [backfillEnd, setBackfillEnd] = useState("");
+  const [backfillNote, setBackfillNote] = useState("");
 
   const videoId = Number(videoState.videoId);
   const hasVideo = Number.isSafeInteger(videoId) && videoId > 0;
@@ -371,6 +381,50 @@ function VideoScopedAction({
             className={primaryButtonClass}
           >
             {isPending ? "Saving…" : "Add note"}
+          </button>
+        </>
+      )}
+
+      {action === "backfill" && (
+        <>
+          {/* Tuesday Patch Completion Round §I: "não logasse no dia 7...
+              estranho não ter a opção de preencher essa informação" --
+              the same logManualWorkSession OperationalMemoryPanel uses,
+              reachable here without first navigating into a specific
+              video's workspace. Health/capacity facts for a past day are
+              backfilled separately via Log Today's own date picker
+              (already supports any past date); friction/revisions/
+              deliveries stay now-only -- their canonical timestamps
+              don't honestly support backdating. */}
+          <select value={backfillActivityType} onChange={(event) => setBackfillActivityType(event.target.value as WorkSessionActivityType)} className={inputClass}>
+            {WORK_SESSION_ACTIVITY_TYPES.map((value) => <option key={value} value={value}>{WORK_SESSION_ACTIVITY_LABELS[value]}</option>)}
+          </select>
+          <input value={backfillNote} onChange={(event) => setBackfillNote(event.target.value)} placeholder="Note (optional)" maxLength={1_000} className={inputClass} />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="text-xs text-zinc-500">
+              Start
+              <input aria-label="Start" type="datetime-local" value={backfillStart} onChange={(event) => setBackfillStart(event.target.value)} className={`${inputClass} mt-1`} />
+            </label>
+            <label className="text-xs text-zinc-500">
+              End
+              <input aria-label="End" type="datetime-local" value={backfillEnd} onChange={(event) => setBackfillEnd(event.target.value)} className={`${inputClass} mt-1`} />
+            </label>
+          </div>
+          <button
+            type="button"
+            disabled={isPending || !hasVideo || !backfillStart || !backfillEnd}
+            onClick={() => {
+              const startedAt = operatorLocalDateTimeToIso(backfillStart);
+              const endedAt = operatorLocalDateTimeToIso(backfillEnd);
+              if (!startedAt || !endedAt) {
+                setError("Choose valid start and end times.");
+                return;
+              }
+              run(() => logManualWorkSession({ videoId, startedAt, endedAt, activityType: backfillActivityType, note: backfillNote || null }));
+            }}
+            className={primaryButtonClass}
+          >
+            {isPending ? "Saving…" : "Log time"}
           </button>
         </>
       )}

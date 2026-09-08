@@ -1,31 +1,51 @@
 import { getWarRoomData } from "@/modules/analytics/service";
-import { getActiveSignals, type Signal, type SignalConfidence, type SignalSeverity } from "@/modules/signals";
+import {
+  getActiveSignals,
+  getOpenCommitmentsWithContext,
+  rankOpenCommitments,
+  type Signal,
+  type SignalConfidence,
+  type SignalSeverity,
+} from "@/modules/signals";
 import { getDailyLedger, type DailyLedgerRow } from "@/modules/daily-ledger";
 import { listOpenDecisions, type OpenDecisionRow } from "@/modules/decisions/actions";
 import { getClientHoursForPeriod, getRateEquivalentsForPeriod } from "@/modules/finance/actions";
 import { getCRMSummary } from "@/modules/crm/actions";
 import { mondayOfWeek } from "@/modules/work-sessions/core";
+import { ActiveCommitmentCard } from "@/components/commitments/ActiveCommitmentCard";
 import { OpenDecisionCard, RecordDecisionButton } from "./DecisionControls";
 import { formatCurrency, startOfMonthISO, todayISO } from "@/utils/date";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
+const WAR_ROOM_COMMITMENT_LIMIT = 5;
+
 export default async function WarRoomPage() {
   const today = todayISO();
-  const [data, signals, dailyLedger, openDecisions, weekEstimates, monthHours, crmSummary] = await Promise.all([
-    getWarRoomData(),
-    getActiveSignals(),
-    getDailyLedger(7),
-    listOpenDecisions(),
-    getRateEquivalentsForPeriod(mondayOfWeek(today), today),
-    getClientHoursForPeriod(startOfMonthISO(), today),
-    getCRMSummary(),
-  ]);
+  const now = new Date();
+  const [data, signals, dailyLedger, openDecisions, weekEstimates, monthHours, crmSummary, openCommitments] =
+    await Promise.all([
+      getWarRoomData(),
+      getActiveSignals(),
+      getDailyLedger(7),
+      listOpenDecisions(),
+      getRateEquivalentsForPeriod(mondayOfWeek(today), today),
+      getClientHoursForPeriod(startOfMonthISO(), today),
+      getCRMSummary(),
+      getOpenCommitmentsWithContext(),
+    ]);
   const { income, efficiency, biological, momentum } = data;
+  // Only overdue + due-soon (next 48h) commitments belong here -- War
+  // Room is "exceções / visão situacional" (brief's own surface
+  // language), not a full deadline browser.
+  const relevantCommitments = rankOpenCommitments(openCommitments, now)
+    .filter((c) => c.dueAt.getTime() < now.getTime() + 48 * 60 * 60 * 1_000)
+    .slice(0, WAR_ROOM_COMMITMENT_LIMIT);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-5 sm:p-6">
+      <ActiveCommitmentsSection commitments={relevantCommitments} nowIso={now.toISOString()} />
       <ActiveSignalsSection signals={signals} />
       <DecisionsSection decisions={openDecisions} />
       <DailyLedgerSection rows={dailyLedger} />
@@ -599,6 +619,46 @@ function confidenceLabel(confidence: SignalConfidence) {
   if (confidence === "HIGH") return "HIGH CONFIDENCE";
   if (confidence === "MEDIUM") return "MEDIUM CONFIDENCE";
   return "INSUFFICIENT DATA";
+}
+
+// Tuesday Patch Completion Round §F: the actual overdue/due-soon
+// commitment objects, not just an aggregate count -- same commitments
+// row Productivity already manages, rendered via the one shared card
+// (ActiveCommitmentCard) so a +2h/Tomorrow/Complete/Cancel here is the
+// same mutation as doing it from the video's own workspace.
+function ActiveCommitmentsSection({
+  commitments,
+  nowIso,
+}: {
+  commitments: Array<{
+    id: number;
+    title: string;
+    dueAt: Date;
+    videoId: number;
+    videoTitle: string | null;
+    clientName: string | null;
+    projectName: string | null;
+  }>;
+  nowIso: string;
+}) {
+  if (commitments.length === 0) return null;
+  return (
+    <section className="mb-8">
+      <SectionHeader label="ACTIVE COMMITMENTS" icon="⏰" />
+      <p className="mb-3 text-xs text-zinc-600">
+        Overdue or due within 48h. Same commitment record Productivity uses -- act here or there, both update the same row.
+      </p>
+      <div className="space-y-2">
+        {commitments.map((commitment) => (
+          <ActiveCommitmentCard
+            key={commitment.id}
+            commitment={{ ...commitment, dueAt: commitment.dueAt.toISOString() }}
+            nowIso={nowIso}
+          />
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function ActiveSignalsSection({ signals }: { signals: Signal[] }) {

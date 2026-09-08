@@ -18,6 +18,9 @@ import { computeClientCommercialValue } from "@/modules/quotes/core";
 import { ClientCommercialValuePanel } from "./ClientCommercialValuePanel";
 import { getClientCustody } from "@/modules/custody/data";
 import { ChainOfCustodyPanel } from "@/components/custody/ChainOfCustodyPanel";
+import { getRateEquivalentsForPeriod } from "@/modules/finance/actions";
+import { mondayOfWeek } from "@/modules/work-sessions/core";
+import { todayISO } from "@/utils/date";
 import { ClientOperationalDossier } from "./ClientOperationalDossier";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +53,8 @@ export default async function ClientDetailPage({
   if (!client) {
     notFound();
   }
-  const [workspace, bookingConfiguration, projects, instagramStatus, clientIntelligence, quotes, custody] =
+  const today = todayISO();
+  const [workspace, bookingConfiguration, projects, instagramStatus, clientIntelligence, quotes, custody, weekEstimates] =
     await Promise.all([
       getAdminGatewayWorkspace(clientId),
       getAdminBookingConfiguration(),
@@ -59,7 +63,14 @@ export default async function ClientDetailPage({
       getClientIntelligence(clientId),
       getQuotesForClient(clientId),
       getClientCustody(clientId),
+      // Tuesday Patch Completion Round §H: "put the weekly value where the
+      // complaint actually was" -- the original complaint about Dave's
+      // $300/week was made looking at this exact page. Reuses the same
+      // War Room calculation (getRateEquivalentsForPeriod), never a
+      // second monetary computation; Finance stays the canonical owner.
+      getRateEquivalentsForPeriod(mondayOfWeek(today), today),
     ]);
+  const weekEstimateForClient = weekEstimates.find((row) => row.clientId === clientId) ?? null;
   // Client Service Reality Patch §6/§8 -- Quote rows carry Date | null
   // fields (createdAt) from the DB layer; serialize to string | null
   // before crossing into the "use client" QuotePanel, same pattern as
@@ -179,7 +190,7 @@ export default async function ClientDetailPage({
       })()}
 
       {/* Internal production context stays operational and precedes lead/audit surfaces. */}
-      <ClientIntelligencePanel summary={clientIntelligence} />
+      <ClientIntelligencePanel summary={clientIntelligence} weekEstimate={weekEstimateForClient} />
 
       <OpportunityPanel
         client={{
@@ -247,7 +258,14 @@ export default async function ClientDetailPage({
           APPROVED/DECLINED, then create the linked Project/Video once
           approved via the canonical creation path. */}
       <div className="mb-6">
-        <QuotePanel clientId={client.id} quotes={serializedQuotes} />
+        <QuotePanel
+          clientId={client.id}
+          clientName={client.name}
+          currentStage={client.opportunityStage}
+          currentServiceInterest={client.serviceInterest}
+          currentQualificationNotes={client.qualificationNotes}
+          quotes={serializedQuotes}
+        />
       </div>
 
       {/* Client Tabs */}

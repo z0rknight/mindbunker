@@ -66,6 +66,28 @@ function formatOverdueBy(ms: number): string {
   return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`;
 }
 
+// Tuesday Patch Completion Round §F: ranks OPEN commitments for the
+// cross-surface commitment card -- overdue first (most overdue first, same
+// ordering the Active Signals list already uses), then upcoming (soonest
+// first). Dashboard slices this to 1 ("do not dump every deadline
+// there"); War Room shows a few real ones instead of only an aggregate
+// count.
+export function rankOpenCommitments(
+  rows: readonly CommitmentRow[],
+  now: Date,
+): CommitmentRow[] {
+  return [...rows].sort((a, b) => {
+    const aOverdue = a.dueAt.getTime() < now.getTime();
+    const bOverdue = b.dueAt.getTime() < now.getTime();
+    if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+    // Both overdue or both upcoming: ascending due date puts the most
+    // overdue (earliest) first within the overdue group, and the soonest
+    // upcoming first within the upcoming group -- same comparator serves
+    // both, since "most urgent" is always "earliest dueAt" either way.
+    return a.dueAt.getTime() - b.dueAt.getTime();
+  });
+}
+
 export function computeOverduePromiseSignals(
   rows: readonly CommitmentRow[],
   now: Date,

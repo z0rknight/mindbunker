@@ -22,6 +22,7 @@ import {
   computeRevisionDragSignal,
   computeUnattributedRevenueSignals,
   rankSignals,
+  type CommitmentRow,
   type Signal,
 } from "./core";
 
@@ -30,6 +31,32 @@ import {
 // query here reuses an existing table/canonical read model -- no new
 // tables, no parallel Finance calculation (Cash Reconciliation reuses
 // getReconciliation exactly, never recomputes cash).
+// Tuesday Patch Completion Round §F: "one deadline object, visible in
+// multiple surfaces, without duplication... use the existing commitments
+// row." Extracted from getActiveSignals's own Promise.all (that query
+// already fetched every OPEN commitment with full title/dueAt/video/
+// client/project context -- computeOverduePromiseSignals just filtered
+// it down to the overdue subset afterward). Dashboard and War Room read
+// this same function directly instead of a second, parallel query.
+export async function getOpenCommitmentsWithContext(): Promise<CommitmentRow[]> {
+  const db = await getAuthenticatedDb();
+  return db
+    .select({
+      id: commitments.id,
+      title: commitments.title,
+      dueAt: commitments.dueAt,
+      videoId: commitments.videoId,
+      videoTitle: videoLogs.title,
+      clientName: clients.name,
+      projectName: projects.name,
+    })
+    .from(commitments)
+    .innerJoin(videoLogs, eq(videoLogs.id, commitments.videoId))
+    .leftJoin(projects, eq(projects.id, videoLogs.projectId))
+    .leftJoin(clients, eq(clients.id, videoLogs.clientId))
+    .where(eq(commitments.status, "OPEN"));
+}
+
 export async function getActiveSignals(): Promise<Signal[]> {
   const db = await getAuthenticatedDb();
   const now = new Date();
@@ -43,21 +70,7 @@ export async function getActiveSignals(): Promise<Signal[]> {
     reconciliation,
     unattributedRevenueRows,
   ] = await Promise.all([
-    db
-      .select({
-        id: commitments.id,
-        title: commitments.title,
-        dueAt: commitments.dueAt,
-        videoId: commitments.videoId,
-        videoTitle: videoLogs.title,
-        clientName: clients.name,
-        projectName: projects.name,
-      })
-      .from(commitments)
-      .innerJoin(videoLogs, eq(videoLogs.id, commitments.videoId))
-      .leftJoin(projects, eq(projects.id, videoLogs.projectId))
-      .leftJoin(clients, eq(clients.id, videoLogs.clientId))
-      .where(eq(commitments.status, "OPEN")),
+    getOpenCommitmentsWithContext(),
     db
       .select({
         id: blockers.id,

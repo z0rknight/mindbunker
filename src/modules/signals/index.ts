@@ -1,2 +1,3 @@
-export type { Signal, SignalSeverity, SignalConfidence, SignalAction } from "./core";
-export { getActiveSignals } from "./data";
+export type { Signal, SignalSeverity, SignalConfidence, SignalAction, CommitmentRow } from "./core";
+export { rankOpenCommitments } from "./core";
+export { getActiveSignals, getOpenCommitmentsWithContext } from "./data";

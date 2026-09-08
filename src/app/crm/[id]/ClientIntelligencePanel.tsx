@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { formatClosedDuration } from "@/modules/work-sessions/core";
+import { formatCurrency } from "@/utils/date";
 import type { ClientIntelligenceSummary } from "@/modules/crm/actions";
+import type { RateEquivalent } from "@/modules/finance/core";
 
 function formatTimestamp(value: string) {
   return new Intl.DateTimeFormat("en", {
@@ -19,8 +21,16 @@ function formatTimestamp(value: string) {
 // in docs/architecture/SUNDAY_SYSTEMS_ROUND.md.
 export function ClientIntelligencePanel({
   summary,
+  weekEstimate,
 }: {
   summary: ClientIntelligenceSummary;
+  // Tuesday Patch Completion Round §H: "the weekly contract-rate estimate
+  // exists in War Room. The original complaint was made while looking at
+  // CRM/client context." Same RateEquivalent shape War Room's Section V
+  // renders -- CRM is a read-only projection of it, never a second
+  // monetary calculation. Null when this client has no active hourly
+  // contract or no tracked time this week.
+  weekEstimate: RateEquivalent | null;
 }) {
   return (
     <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
@@ -71,6 +81,23 @@ export function ClientIntelligencePanel({
           </p>
         </div>
       </div>
+
+      {weekEstimate && (
+        <div className="mt-3 rounded-xl bg-zinc-950/50 p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-600">This week</p>
+          <p className="mt-1 text-sm text-zinc-300">
+            Tracked: <span className="font-black text-white">{(weekEstimate.attributableSeconds / 3600).toFixed(1)}h</span>
+            <span className="mx-1.5 text-zinc-700">·</span>
+            Estimated value:{" "}
+            <span className="font-black text-emerald-300">
+              {formatCurrency(weekEstimate.rateEquivalent, weekEstimate.currency)}
+            </span>
+          </p>
+          <p className="mt-1 text-[10px] text-zinc-600">
+            Active hourly contract rate × tracked hours -- not billed, not income. Finance is the financial authority.
+          </p>
+        </div>
+      )}
 
       {summary.recentMemoryNotes.length > 0 && (
         <div className="mt-4">

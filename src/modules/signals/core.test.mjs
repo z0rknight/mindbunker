@@ -7,6 +7,7 @@ import {
   computeRevisionDragSignal,
   computeCashReconciliationSignals,
   computeUnattributedRevenueSignals,
+  rankOpenCommitments,
 } from "./core.ts";
 
 test("an overdue commitment produces an ACTION/HIGH signal; a not-yet-due one does not", () => {
@@ -20,6 +21,22 @@ test("an overdue commitment produces an ACTION/HIGH signal; a not-yet-due one do
   assert.equal(signals[0].severity, "ACTION");
   assert.equal(signals[0].confidence, "HIGH");
   assert.match(signals[0].statement, /overdue by/);
+});
+
+test("rankOpenCommitments puts every overdue item before every upcoming item, most-overdue first", () => {
+  const now = new Date("2026-09-08T12:00:00Z");
+  const rows = [
+    { id: 1, title: "Upcoming soon", dueAt: new Date("2026-09-09T12:00:00Z"), videoId: 1, videoTitle: null, clientName: null, projectName: null },
+    { id: 2, title: "Overdue by 1 day", dueAt: new Date("2026-09-07T12:00:00Z"), videoId: 2, videoTitle: null, clientName: null, projectName: null },
+    { id: 3, title: "Upcoming later", dueAt: new Date("2026-09-12T12:00:00Z"), videoId: 3, videoTitle: null, clientName: null, projectName: null },
+    { id: 4, title: "Overdue by 3 days", dueAt: new Date("2026-09-05T12:00:00Z"), videoId: 4, videoTitle: null, clientName: null, projectName: null },
+  ];
+  const ranked = rankOpenCommitments(rows, now);
+  assert.deepEqual(ranked.map((r) => r.id), [4, 2, 1, 3]);
+});
+
+test("rankOpenCommitments with no rows returns an empty array", () => {
+  assert.deepEqual(rankOpenCommitments([], new Date()), []);
 });
 
 test("no open blockers means no blocker signals -- healthy facts produce no false signal", () => {

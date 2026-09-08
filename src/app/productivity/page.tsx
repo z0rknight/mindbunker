@@ -2,6 +2,7 @@ import {
   FinishedVideoButton,
   PlanVideoButton,
 } from "@/components/ui/QuickActions";
+import { BackfillDayButton } from "./BackfillDayButton";
 import { StatCard } from "@/components/ui/StatCard";
 import {
   getAllVideoLogs,
@@ -29,6 +30,7 @@ import Link from "next/link";
 import { VideoOperationsCard } from "./VideoOperationsCard";
 import { isSafeInternalPath } from "@/utils/navigation";
 import { NowFocusPanel, type RecommendedNextItem } from "@/components/work-sessions/NowFocusPanel";
+import { QuickBlock, QuickNote } from "@/components/work-sessions/QuickVideoActions";
 import { NeedsAttentionSection } from "./NeedsAttentionSection";
 import { selectProductivityAttention } from "@/modules/productivity/attention";
 import { getActiveSignals } from "@/modules/signals/data";
@@ -241,7 +243,14 @@ export default async function ProductivityPage({
         openSessionElapsedSeconds={openSessionElapsedSeconds}
         recommended={recommended}
         variant="dominant"
-      />
+      >
+        {workSessionOverview.openSession && (
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+            <QuickNote videoId={workSessionOverview.openSession.videoId} />
+            <QuickBlock videoId={workSessionOverview.openSession.videoId} />
+          </div>
+        )}
+      </NowFocusPanel>
 
       <ExecutionQueueSection
         queue={executionQueue}
@@ -255,15 +264,16 @@ export default async function ProductivityPage({
             <h2 className="mt-1 text-base font-black text-white">Quick actions</h2>
             <p className="mt-1 text-xs text-zinc-500">
               Plan work first. Finished Video remains available as a utility — register a correction from inside a video&apos;s own workspace instead.
-              Press <kbd className="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">⌘K</kbd> anywhere to capture a deadline, blocker, correction, follow-up, or note without leaving this page.
+              Press <kbd className="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">⌘K</kbd> anywhere to capture a deadline, blocker, correction, follow-up, note, or backfilled work time without leaving this page.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3 lg:w-[380px]">
+          <div className="grid grid-cols-2 gap-3 lg:w-[560px] lg:grid-cols-3">
             <PlanVideoButton
               initialProjectId={initialProjectId}
               initiallyOpen={query.planVideo === "1"}
             />
             <FinishedVideoButton />
+            <BackfillDayButton />
           </div>
         </div>
       </section>

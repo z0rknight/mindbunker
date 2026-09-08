@@ -22,7 +22,7 @@ import {
 import { computeFxCashMovements } from "../fx/core";
 import { getTodayWorkSessionStats } from "../work-sessions/data";
 import { toUnixSeconds } from "../work-sessions/core";
-import { and, eq, desc, gte, lte, sum } from "drizzle-orm";
+import { and, eq, desc, gte, isNull, lte, sum } from "drizzle-orm";
 import { todayISO, startOfMonthISO } from "@/utils/date";
 import { revalidatePath } from "next/cache";
 import { DEFAULT_CURRENCY, DEFAULT_TAX_RESERVE_PERCENT } from "./config";
@@ -85,11 +85,14 @@ export async function getFinanceHealth(): Promise<FinanceHealth> {
       !["BUSINESS", "PERSONAL", "UNCLASSIFIED"].includes(row.scope) ||
       !row.fromCurrency,
   ).length;
+  // Completion Round §B: the notes-substring marker this used to check
+  // was never actually clearable in-app -- a one-off historical backfill
+  // script wrote it, but nothing removed it once a transaction had been
+  // attributed, so a resolved item could never leave this count. The
+  // canonical fact is transactions.clientId itself (nullable exactly for
+  // this reason); assignTransactionAttribution below writes it directly.
   const unresolvedAttribution = businessRows.filter(
-    (row) =>
-      row.type === "income" &&
-      row.externalSource === "WISE" &&
-      row.notes?.includes("commercial client/contract/earning period unresolved"),
+    (row) => row.type === "income" && row.externalSource === "WISE" && row.clientId === null,
   ).length;
 
   return computeFinanceHealth({
@@ -290,6 +293,75 @@ export async function updateTransaction(
   // income/expense edit until a hard reload.
   revalidatePath("/");
   revalidatePath("/finance");
+  revalidatePath("/war-room");
+  return { success: true };
+}
+
+// ─── ATTRIBUTION RESOLUTION (Completion Round §A/§B) ───────────────────────
+// FACT: which client (if any) an income transaction belongs to.
+// CANONICAL OWNER: transactions.clientId (nullable FK, already existed).
+// MUTATION: assignTransactionAttribution, below -- the write path this
+// column never had.
+// OTHER SURFACES THAT READ IT: getFinanceHealth's unresolvedAttribution
+// count (above), CRM/War Room revenue-by-client rollups, Finance's own
+// transactions table.
+
+export type UnattributedTransaction = {
+  id: number;
+  date: string;
+  amount: number;
+  currency: string;
+  category: string;
+  notes: string | null;
+};
+
+export async function getUnattributedIncomeTransactions(): Promise<UnattributedTransaction[]> {
+  const db = await getAuthenticatedDb();
+  const rows = await db
+    .select({
+      id: transactions.id,
+      date: transactions.date,
+      amount: transactions.amount,
+      currency: transactions.currency,
+      category: transactions.category,
+      notes: transactions.notes,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.type, "income"),
+        eq(transactions.externalSource, "WISE"),
+        isNull(transactions.clientId),
+      ),
+    )
+    .orderBy(desc(transactions.date));
+  return rows;
+}
+
+export async function assignTransactionAttribution(
+  transactionId: number,
+  clientId: number,
+): Promise<AddTransactionResult> {
+  if (!Number.isSafeInteger(transactionId) || transactionId <= 0) {
+    return { success: false, error: "Invalid transaction." };
+  }
+  if (!Number.isSafeInteger(clientId) || clientId <= 0) {
+    return { success: false, error: "Choose a client." };
+  }
+  const db = await getAuthenticatedDb();
+  const clientRows = await db.select({ id: clients.id }).from(clients).where(eq(clients.id, clientId)).limit(1);
+  if (!clientRows[0]) return { success: false, error: "Client not found." };
+
+  const updated = await db
+    .update(transactions)
+    .set({ clientId })
+    .where(and(eq(transactions.id, transactionId), isNull(transactions.clientId)))
+    .returning({ id: transactions.id });
+  if (!updated[0]) return { success: false, error: "Transaction not found or already attributed." };
+
+  revalidatePath("/");
+  revalidatePath("/finance");
+  revalidatePath("/crm");
   revalidatePath("/war-room");
   return { success: true };
 }
@@ -991,6 +1063,27 @@ export async function getReconciliationRequiringAttention(): Promise<
 
     const diff = reconciliation.differenceMinutes.value;
     if (diff !== null && Math.abs(diff) >= RECONCILIATION_ATTENTION_THRESHOLD_MINUTES) {
+      // Completion Round §A (priority case 3): "reconciliation mismatch
+      // where a simple operator confirmation is sufficient." The
+      // canonical acknowledgment fact is a reconciliation_notes row for
+      // this exact period -- reuses recordReconciliationNote (already
+      // existed) rather than inventing a resolved/dismissed flag. A
+      // period with a note is no longer "requiring attention," even
+      // though the underlying minute difference is unchanged (that stays
+      // visible in Accounting details).
+      const existingNote = await db
+        .select({ id: reconciliationNotes.id })
+        .from(reconciliationNotes)
+        .where(
+          and(
+            eq(reconciliationNotes.contractId, contract.id),
+            gte(reconciliationNotes.date, evidence.periodStart),
+            lte(reconciliationNotes.date, evidence.periodEnd),
+          ),
+        )
+        .limit(1);
+      if (existingNote.length > 0) continue;
+
       results.push({
         ...reconciliation,
         clientName: contract.clientName,
