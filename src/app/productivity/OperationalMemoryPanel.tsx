@@ -33,6 +33,7 @@ import {
 } from "@/modules/video-operations/core";
 import { formatClosedDuration } from "@/modules/work-sessions/core";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { FollowUpControl } from "./FollowUpControl";
 
 type Snapshot = Extract<VideoOperationalSnapshot, { success: true }>["data"];
 
@@ -40,6 +41,58 @@ const inputClass =
   "min-h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-white outline-none focus:border-violet-500";
 const smallButton =
   "min-h-10 rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-xs font-black text-zinc-200 hover:border-violet-500/60 disabled:opacity-40";
+
+// P0.3 Quick Deadline presets: every preset resolves to the exact same
+// canonical commitments.dueAt commitment CRUD (createVideoCommitment) the
+// existing raw datetime-local input already submits to -- these buttons
+// only fill that field, they never bypass it or write anywhere new.
+// instantToOperatorDateTimeLocal (already imported/used elsewhere in this
+// file) keeps every preset in the same America/Sao_Paulo wall-clock
+// discipline the rest of the app uses, so "Tonight"/"Tomorrow" mean the
+// same thing here as everywhere else that formats a due date.
+function operatorNowParts() {
+  const [datePart, timePart] = (instantToOperatorDateTimeLocal(new Date()) ?? "1970-01-01T00:00").split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+  return { year, month, day, hour, minute };
+}
+
+function operatorDatePlusDays(parts: { year: number; month: number; day: number }, deltaDays: number) {
+  // Pure calendar-day counter, not a real instant -- UTC here only avoids
+  // DST edge cases in the arithmetic itself, never used as a timezone claim.
+  const d = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+}
+
+function operatorLocalString(year: number, month: number, day: number, hour: number, minute: number) {
+  const pad = (value: number) => value.toString().padStart(2, "0");
+  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}`;
+}
+
+const QUICK_DEADLINE_PRESETS: Array<{ label: string; resolve: () => string }> = [
+  { label: "+2h", resolve: () => instantToOperatorDateTimeLocal(new Date(Date.now() + 2 * 60 * 60 * 1_000)) ?? "" },
+  {
+    label: "Tonight",
+    resolve: () => {
+      const now = operatorNowParts();
+      // Already past 20:00 operator time -- "tonight" rolls to tomorrow
+      // rather than resolving to a due date already in the past (which
+      // createVideoCommitment's chronology check would reject anyway).
+      const target = now.hour >= 20 ? operatorDatePlusDays(now, 1) : now;
+      return operatorLocalString(target.year, target.month, target.day, 20, 0);
+    },
+  },
+  {
+    label: "Tomorrow",
+    resolve: () => {
+      const tomorrow = operatorDatePlusDays(operatorNowParts(), 1);
+      return operatorLocalString(tomorrow.year, tomorrow.month, tomorrow.day, 18, 0);
+    },
+  },
+  { label: "24h", resolve: () => instantToOperatorDateTimeLocal(new Date(Date.now() + 24 * 60 * 60 * 1_000)) ?? "" },
+  { label: "48h", resolve: () => instantToOperatorDateTimeLocal(new Date(Date.now() + 48 * 60 * 60 * 1_000)) ?? "" },
+];
 
 function formatWhen(value: Date | string | null) {
   if (!value) return "No due date";
@@ -167,9 +220,12 @@ export function OperationalMemoryPanel({ videoId }: { videoId: number }) {
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Operational memory</p>
           <p className="mt-1 text-xs leading-5 text-zinc-500">Facts inherit this video’s client and project. Lifecycle stays separate.</p>
         </div>
-        <button type="button" onClick={() => void copyContext()} disabled={!snapshot} className={smallButton}>
-          Copy context
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {snapshot?.video.clientId && <FollowUpControl clientId={snapshot.video.clientId} />}
+          <button type="button" onClick={() => void copyContext()} disabled={!snapshot} className={smallButton}>
+            Copy context
+          </button>
+        </div>
       </div>
 
       {loading && !snapshot && <p className="mt-4 text-sm text-zinc-500">Loading operational facts…</p>}
@@ -247,23 +303,39 @@ export function OperationalMemoryPanel({ videoId }: { videoId: number }) {
                   )}
                 </div>
               ))}
-              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_190px_auto]">
+              <div className="space-y-2">
                 <input value={commitmentTitle} onChange={(event) => setCommitmentTitle(event.target.value)} placeholder="Promise made…" maxLength={300} className={inputClass} />
-                <input aria-label="Promise due date" type="datetime-local" value={commitmentDue} onChange={(event) => setCommitmentDue(event.target.value)} className={inputClass} />
-                <button
-                  disabled={pending || !commitmentTitle.trim() || !commitmentDue}
-                  onClick={() => {
-                    const dueAt = canonicalDue(commitmentDue);
-                    if (!dueAt) return;
-                    run(
-                      () => createVideoCommitment({ videoId, title: commitmentTitle, dueAt }),
-                      () => { setCommitmentTitle(""); setCommitmentDue(""); },
-                    );
-                  }}
-                  className={smallButton}
-                >
-                  Add promise
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Quick deadline</span>
+                  {QUICK_DEADLINE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      disabled={pending}
+                      onClick={() => setCommitmentDue(preset.resolve())}
+                      className={smallButton}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,220px)_auto]">
+                  <input aria-label="Promise due date (custom)" type="datetime-local" value={commitmentDue} onChange={(event) => setCommitmentDue(event.target.value)} className={inputClass} />
+                  <button
+                    disabled={pending || !commitmentTitle.trim() || !commitmentDue}
+                    onClick={() => {
+                      const dueAt = canonicalDue(commitmentDue);
+                      if (!dueAt) return;
+                      run(
+                        () => createVideoCommitment({ videoId, title: commitmentTitle, dueAt }),
+                        () => { setCommitmentTitle(""); setCommitmentDue(""); },
+                      );
+                    }}
+                    className={smallButton}
+                  >
+                    Add promise
+                  </button>
+                </div>
               </div>
 
               <div className="border-t border-zinc-800 pt-3">
@@ -341,7 +413,7 @@ export function OperationalMemoryPanel({ videoId }: { videoId: number }) {
               <select value={revisionCategory} onChange={(event) => setRevisionCategory(event.target.value as RevisionCategory | "")} className={inputClass}><option value="">No category</option>{REVISION_CATEGORIES.map((value) => <option key={value} value={value}>{value}</option>)}</select>
               <input type="number" min="0" max="10080" value={revisionMinutes} onChange={(event) => setRevisionMinutes(event.target.value)} placeholder="Rework minutes (optional)" className={inputClass} />
               <input value={revisionNote} onChange={(event) => setRevisionNote(event.target.value)} placeholder="What changed?" maxLength={1_000} className={inputClass} />
-              <button disabled={pending} onClick={() => run(() => recordDetailedRevision({ videoId, causedBy: revisionCause, category: revisionCategory, minutesRework: revisionMinutes, note: revisionNote }), () => { setRevisionMinutes(""); setRevisionNote(""); })} className={`${smallButton} sm:col-span-2`}>Record revision detail</button>
+              <button disabled={pending} onClick={() => run(() => recordDetailedRevision({ videoId, causedBy: revisionCause, category: revisionCategory, minutesRework: revisionMinutes, note: revisionNote }), () => { setRevisionMinutes(""); setRevisionNote(""); })} className={`${smallButton} sm:col-span-2`}>Register Correction</button>
             </div>
           </details>
         </div>
