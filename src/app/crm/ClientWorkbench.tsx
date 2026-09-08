@@ -25,6 +25,7 @@ export type WorkbenchClientData = {
   qualificationNotes: string | null;
   nextAction: string | null;
   nextActionDate: string | null;
+  currentProjectName: string | null;
 };
 
 type Panel = "quote" | "followup" | "call" | "note" | "project" | null;
@@ -79,7 +80,12 @@ export function ClientWorkbench({ client }: { client: WorkbenchClientData }) {
     <div className="w-full rounded-xl border border-zinc-800 bg-zinc-950/40 p-2.5">
       <div className="flex flex-wrap items-center gap-1.5">
         {client.email ? (
-          <a href={`mailto:${client.email}`} className={chip}>
+          <a
+            href={`mailto:${client.email}${
+              client.currentProjectName ? `?subject=${encodeURIComponent(client.currentProjectName)}` : ""
+            }`}
+            className={chip}
+          >
             Email
           </a>
         ) : (
