@@ -39,20 +39,21 @@ export function FollowUpControl({ clientId }: { clientId: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [client, setClient] = useState<Client | null>(null);
-  const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
   const [nextAction, setNextAction] = useState("");
   const [nextActionDate, setNextActionDate] = useState("");
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
 
+  // loading is deliberately not its own state: it's always exactly
+  // `open && !client` (open, still waiting on the fetch below). Modeling
+  // it as separate state would need a setState call synchronously inside
+  // this effect body just to flip it true before the fetch starts.
   useEffect(() => {
     if (!open || client) return;
-    setLoading(true);
     let cancelled = false;
     getClientById(clientId).then((result) => {
       if (cancelled) return;
-      setLoading(false);
       setClient(result);
       setNextAction(result?.nextAction ?? "");
       setNextActionDate(result?.nextActionDate ?? "");
@@ -95,7 +96,7 @@ export function FollowUpControl({ clientId }: { clientId: number }) {
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-950/35 p-3">
       <p className="text-[10px] font-black uppercase tracking-wider text-zinc-300">Client follow-up</p>
-      {loading && <p className="mt-2 text-xs text-zinc-500">Loading…</p>}
+      {!client && <p className="mt-2 text-xs text-zinc-500">Loading…</p>}
       {client && (
         <div className="mt-2 space-y-2">
           <input
