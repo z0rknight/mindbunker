@@ -13,20 +13,11 @@ import {
   WORK_SESSION_ACTIVITY_LABELS,
   WORK_SESSION_ACTIVITY_TYPES,
   formatClosedDuration,
+  formatElapsedClock,
   isSessionStale,
   type VideoWorkSessionState,
   type WorkSessionActivityType,
 } from "@/modules/work-sessions/core";
-
-function formatElapsedClock(totalSeconds: number) {
-  const seconds = Math.max(0, Math.floor(totalSeconds));
-  const hours = Math.floor(seconds / 3_600);
-  const minutes = Math.floor((seconds % 3_600) / 60);
-  const remainder = seconds % 60;
-  return [hours, minutes, remainder]
-    .map((value) => value.toString().padStart(2, "0"))
-    .join(":");
-}
 
 // datetime-local wants "YYYY-MM-DDTHH:mm" in local time, not an ISO string.
 function toDatetimeLocalValue(date: Date) {

@@ -15,7 +15,6 @@ import {
 } from "@/modules/productivity/core";
 import { getWorkSessionHistory, getWorkSessionOverview } from "@/modules/work-sessions/data";
 import {
-  WORK_SESSION_ACTIVITY_LABELS,
   formatClosedDuration,
   groupWorkSessionDaysByWeek,
   groupWorkSessionsByDay,
@@ -25,6 +24,7 @@ import { currentMonthName, todayISO } from "@/utils/date";
 import Link from "next/link";
 import { VideoOperationsCard } from "./VideoOperationsCard";
 import { isSafeInternalPath } from "@/utils/navigation";
+import { NowFocusPanel, type RecommendedNextItem } from "@/components/work-sessions/NowFocusPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -108,7 +108,30 @@ export default async function ProductivityPage({
   const sessionSummaryByVideo = new Map(
     workSessionOverview.summaries.map((summary) => [summary.videoId, summary]),
   );
-  const { openSessionElapsedSeconds, openSessionStale } = workSessionOverview;
+  const { openSessionElapsedSeconds } = workSessionOverview;
+  // P0.1 NOW/FOCUS "recommended next": reuses the exact groups this page
+  // already computes and displays -- no new ranking model. Restricted to
+  // states the operator can actually act on solo: resume in-progress work
+  // first, then a video with changes requested (real work to do), then the
+  // next planned video. READY_FOR_REVIEW is deliberately excluded even
+  // though it sits in the "attention" bucket -- it is awaiting the client,
+  // not something starting a work session would accomplish. Each group is
+  // already sorted (active session, then overdue, then most-recently-
+  // touched) by groupOperationalVideos, so picking [0] is deterministic.
+  const recommendedCandidate =
+    groups.current[0] ??
+    groups.attention.find((video) => video.status === "CHANGES_REQUESTED") ??
+    groups.planned[0] ??
+    null;
+  const recommended: RecommendedNextItem | null = recommendedCandidate
+    ? {
+        id: recommendedCandidate.id,
+        title: recommendedCandidate.title ?? `Video ${recommendedCandidate.date}`,
+        clientName: recommendedCandidate.clientName,
+        projectName: recommendedCandidate.projectName,
+        nextAction: recommendedCandidate.nextAction,
+      }
+    : null;
   const sessionDays = groupWorkSessionsByDay(sessionHistory);
   const sessionWeeks = groupWorkSessionDaysByWeek(sessionDays);
   const today = todayISO();
@@ -195,51 +218,12 @@ export default async function ProductivityPage({
         </nav>
       </header>
 
-      {workSessionOverview.openSession && (
-        <section
-          className={`mb-7 rounded-2xl border p-4 sm:p-5 ${
-            openSessionStale
-              ? "border-amber-500/40 bg-amber-500/[0.08]"
-              : "border-emerald-500/35 bg-emerald-500/[0.07]"
-          }`}
-        >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p
-                className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] ${
-                  openSessionStale ? "text-amber-300" : "text-emerald-300"
-                }`}
-              >
-                <span
-                  className={`h-2 w-2 animate-pulse rounded-full ${
-                    openSessionStale ? "bg-amber-400" : "bg-emerald-400"
-                  }`}
-                />
-                {openSessionStale
-                  ? "Work session still running — still working?"
-                  : "Work session active"}
-              </p>
-              <h2 className="mt-2 truncate text-lg font-black text-white">
-                {workSessionOverview.openSession.videoTitle}
-              </h2>
-              <p className="mt-1 text-xs text-zinc-400">
-                {WORK_SESSION_ACTIVITY_LABELS[workSessionOverview.openSession.activityType]} · running for{" "}
-                {formatClosedDuration(openSessionElapsedSeconds)} · recoverable after refresh
-              </p>
-            </div>
-            <Link
-              href={`/productivity?video=${workSessionOverview.openSession.videoId}`}
-              className={`min-h-11 rounded-xl px-4 py-3 text-center text-sm font-black text-zinc-950 ${
-                openSessionStale
-                  ? "bg-amber-500 hover:bg-amber-400"
-                  : "bg-emerald-500 hover:bg-emerald-400"
-              }`}
-            >
-              {openSessionStale ? "Review this session" : "Open active workspace"}
-            </Link>
-          </div>
-        </section>
-      )}
+      <NowFocusPanel
+        openSession={workSessionOverview.openSession}
+        openSessionElapsedSeconds={openSessionElapsedSeconds}
+        recommended={recommended}
+        variant="dominant"
+      />
 
       <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-5">
         <StatCard label="Today" value={stats.today} accent="violet" icon="🎬" />

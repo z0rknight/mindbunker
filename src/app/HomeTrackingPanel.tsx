@@ -1,18 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
   FinishedVideoButton,
   NewWorkButton,
   StartWorkButton,
 } from "@/components/ui/ProductivityQuickActions";
-import {
-  OPERATOR_NAME,
-  WORK_SESSION_ACTIVITY_LABELS,
-  formatClosedDuration,
-  type OpenWorkSession,
-} from "@/modules/work-sessions/core";
+import { NowFocusPanel } from "@/components/work-sessions/NowFocusPanel";
+import type { OpenWorkSession } from "@/modules/work-sessions/core";
 import { addVideoOperationalNote } from "@/modules/video-memory/actions";
 import { VIDEO_OPERATIONAL_NOTE_MAX_LENGTH } from "@/modules/video-memory/core";
 
@@ -43,41 +38,14 @@ export function HomeTrackingPanel({
   openSessionElapsedSeconds: number;
 }) {
   if (openSession) {
-    const contextParts = [
-      OPERATOR_NAME,
-      openSession.deviceName,
-      openSession.clientName,
-      openSession.projectName,
-    ].filter((part): part is string => Boolean(part));
-
     return (
-      <section className="mb-8 rounded-2xl border border-emerald-500/35 bg-emerald-500/[0.07] p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-              Tracking now
-            </p>
-            {contextParts.length > 0 && (
-              <p className="mt-1.5 truncate text-[11px] font-bold uppercase tracking-wide text-emerald-200/70">
-                {contextParts.join(" / ")}
-              </p>
-            )}
-            <h2 className="mt-2 truncate text-lg font-black text-white">{openSession.videoTitle}</h2>
-            <p className="mt-1 text-xs text-zinc-400">
-              {WORK_SESSION_ACTIVITY_LABELS[openSession.activityType]} · {formatClosedDuration(openSessionElapsedSeconds)} elapsed
-            </p>
-          </div>
-          <Link
-            href={`/productivity?video=${openSession.videoId}`}
-            className="min-h-12 rounded-xl bg-emerald-500 px-4 py-3 text-center text-sm font-black text-zinc-950 hover:bg-emerald-400"
-          >
-            Open active workspace
-          </Link>
-        </div>
-
+      <NowFocusPanel
+        openSession={openSession}
+        openSessionElapsedSeconds={openSessionElapsedSeconds}
+        variant="compact"
+      >
         <QuickNote videoId={openSession.videoId} />
-      </section>
+      </NowFocusPanel>
     );
   }
 

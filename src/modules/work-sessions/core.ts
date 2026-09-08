@@ -127,6 +127,19 @@ export function formatClosedDuration(totalSeconds: number) {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
+// HH:MM:SS live-clock rendering for an actively-ticking open session (NOW/
+// FOCUS, WorkSessionPanel). Distinct from formatClosedDuration above, which
+// is the compact "2h 14m" form used for closed/historical totals.
+export function formatElapsedClock(totalSeconds: number) {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(seconds / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+  const remainder = seconds % 60;
+  return [hours, minutes, remainder]
+    .map((value) => value.toString().padStart(2, "0"))
+    .join(":");
+}
+
 // This must remain one SQL statement. D1 processes a database's statements
 // one at a time, so the global open-session check and insert cannot interleave.
 export const START_WORK_SESSION_SQL = `
