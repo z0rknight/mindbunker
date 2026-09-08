@@ -700,17 +700,24 @@ export async function getRateEquivalentsForPeriod(
       ),
     );
 
+  // Incident fix (2026-09-08): this used to await getClientOperationalMinutes
+  // sequentially, one round trip per contract. Each contract's minutes are
+  // independent of every other's, so fetching them concurrently removes the
+  // N+1 chain without changing which rows come back.
+  const billable = hourlyContracts.filter((contract) => contract.hourlyRate !== null);
+  const minutesByContract = await Promise.all(
+    billable.map((contract) => getClientOperationalMinutes(contract.clientId, periodStart, periodEnd)),
+  );
   const rows: TodayRateEquivalentRow[] = [];
-  for (const contract of hourlyContracts) {
-    if (contract.hourlyRate === null) continue;
-    const { minutes } = await getClientOperationalMinutes(contract.clientId, periodStart, periodEnd);
-    if (minutes <= 0) continue;
+  billable.forEach((contract, i) => {
+    const { minutes } = minutesByContract[i];
+    if (minutes <= 0) return;
     rows.push({
       clientId: contract.clientId,
       clientName: contract.clientName,
-      ...computeRateEquivalent(minutes * 60, contract.hourlyRate, contract.currency),
+      ...computeRateEquivalent(minutes * 60, contract.hourlyRate!, contract.currency),
     });
-  }
+  });
   return rows;
 }
 

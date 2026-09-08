@@ -24,16 +24,22 @@ const WAR_ROOM_COMMITMENT_LIMIT = 5;
 export default async function WarRoomPage() {
   const today = todayISO();
   const now = new Date();
+  // Incident fix (2026-09-08): getOpenCommitmentsWithContext() used to be
+  // requested twice per War Room render -- once here for
+  // ActiveCommitmentsSection, once again inside getActiveSignals's own
+  // Promise.all. Fetching it once and handing the same resolved rows to
+  // both removes the duplicate query without changing either result.
+  const openCommitmentsPromise = getOpenCommitmentsWithContext();
   const [data, signals, dailyLedger, openDecisions, weekEstimates, monthHours, crmSummary, openCommitments] =
     await Promise.all([
       getWarRoomData(),
-      getActiveSignals(),
+      openCommitmentsPromise.then((rows) => getActiveSignals(rows)),
       getDailyLedger(7),
       listOpenDecisions(),
       getRateEquivalentsForPeriod(mondayOfWeek(today), today),
       getClientHoursForPeriod(startOfMonthISO(), today),
       getCRMSummary(),
-      getOpenCommitmentsWithContext(),
+      openCommitmentsPromise,
     ]);
   const { income, efficiency, biological, momentum } = data;
   // Only overdue + due-soon (next 48h) commitments belong here -- War

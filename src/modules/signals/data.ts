@@ -57,7 +57,15 @@ export async function getOpenCommitmentsWithContext(): Promise<CommitmentRow[]> 
     .where(eq(commitments.status, "OPEN"));
 }
 
-export async function getActiveSignals(): Promise<Signal[]> {
+// Incident fix (2026-09-08, resource-limit regression): War Room calls
+// getOpenCommitmentsWithContext() itself for ActiveCommitmentsSection AND
+// called getActiveSignals(), which used to fetch the identical OPEN-
+// commitments row set a second time -- the exact same query running
+// twice in one request. prefetchedCommitments lets a caller that already
+// has the row set (War Room) hand it in instead of paying for it again;
+// every other caller (Productivity) omits it and gets the prior
+// single-query behavior unchanged.
+export async function getActiveSignals(prefetchedCommitments?: CommitmentRow[]): Promise<Signal[]> {
   const db = await getAuthenticatedDb();
   const now = new Date();
   const monthStart = startOfMonthISO(now);
@@ -70,7 +78,7 @@ export async function getActiveSignals(): Promise<Signal[]> {
     reconciliation,
     unattributedRevenueRows,
   ] = await Promise.all([
-    getOpenCommitmentsWithContext(),
+    prefetchedCommitments ? Promise.resolve(prefetchedCommitments) : getOpenCommitmentsWithContext(),
     db
       .select({
         id: blockers.id,
