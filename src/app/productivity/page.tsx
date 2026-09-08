@@ -25,6 +25,9 @@ import Link from "next/link";
 import { VideoOperationsCard } from "./VideoOperationsCard";
 import { isSafeInternalPath } from "@/utils/navigation";
 import { NowFocusPanel, type RecommendedNextItem } from "@/components/work-sessions/NowFocusPanel";
+import { NeedsAttentionSection } from "./NeedsAttentionSection";
+import { selectProductivityAttention } from "@/modules/productivity/attention";
+import { getActiveSignals } from "@/modules/signals/data";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +91,7 @@ export default async function ProductivityPage({
     typeof rawReturnTo === "string" && isSafeInternalPath(rawReturnTo)
       ? rawReturnTo
       : undefined;
-  const [stats, logs, options, workSessionOverview, sessionHistory] = await Promise.all([
+  const [stats, logs, options, workSessionOverview, sessionHistory, activeSignals] = await Promise.all([
     getVideoStats(),
     getAllVideoLogs(),
     getProductivityQuickOptions(),
@@ -99,7 +102,13 @@ export default async function ProductivityPage({
     // This is INPUT evidence (time spent), never a score, and is never
     // compared against video output counts on this page.
     getWorkSessionHistory(),
+    // P0.2 Needs Attention: the exact same canonical read model War Room's
+    // Active Signals uses (modules/signals) — see
+    // modules/productivity/attention.ts for the execution-relevant subset
+    // this page actually shows.
+    getActiveSignals(),
   ]);
+  const attentionGroups = selectProductivityAttention(activeSignals);
   const recentLogs = logs.slice(0, 50);
   const groups = groupOperationalVideos(recentLogs, {
     today: todayISO(),
@@ -217,6 +226,8 @@ export default async function ProductivityPage({
           </Link>
         </nav>
       </header>
+
+      <NeedsAttentionSection groups={attentionGroups} />
 
       <NowFocusPanel
         openSession={workSessionOverview.openSession}
