@@ -3,6 +3,7 @@ import { getActiveSignals, type Signal, type SignalConfidence, type SignalSeveri
 import { getDailyLedger, type DailyLedgerRow } from "@/modules/daily-ledger";
 import { listOpenDecisions, type OpenDecisionRow } from "@/modules/decisions/actions";
 import { getClientHoursForPeriod, getRateEquivalentsForPeriod } from "@/modules/finance/actions";
+import { getCRMSummary } from "@/modules/crm/actions";
 import { mondayOfWeek } from "@/modules/work-sessions/core";
 import { OpenDecisionCard, RecordDecisionButton } from "./DecisionControls";
 import { formatCurrency, startOfMonthISO, todayISO } from "@/utils/date";
@@ -12,13 +13,14 @@ export const dynamic = "force-dynamic";
 
 export default async function WarRoomPage() {
   const today = todayISO();
-  const [data, signals, dailyLedger, openDecisions, weekEstimates, monthHours] = await Promise.all([
+  const [data, signals, dailyLedger, openDecisions, weekEstimates, monthHours, crmSummary] = await Promise.all([
     getWarRoomData(),
     getActiveSignals(),
     getDailyLedger(7),
     listOpenDecisions(),
     getRateEquivalentsForPeriod(mondayOfWeek(today), today),
     getClientHoursForPeriod(startOfMonthISO(), today),
+    getCRMSummary(),
   ]);
   const { income, efficiency, biological, momentum } = data;
 
@@ -422,7 +424,7 @@ export default async function WarRoomPage() {
           window, not income. */}
       <section className="mb-8">
         <SectionHeader label="V. THIS WEEK / THIS MONTH" icon="🗓️" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
             <p className="text-zinc-400 text-xs uppercase tracking-widest font-semibold mb-1">
               Estimated value this week
@@ -471,6 +473,14 @@ export default async function WarRoomPage() {
               </div>
             )}
           </div>
+
+          <MetricCard
+            label="Leads This Month"
+            value={crmSummary.leadsThisMonth}
+            sublabel="New leads created -- lead-generation activity, not current pipeline standing"
+            accent="zinc"
+            icon="🎯"
+          />
         </div>
       </section>
 
