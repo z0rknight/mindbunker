@@ -47,6 +47,11 @@ export interface IncomeIntelligence {
   onTrack: boolean | null;
   /** Revenue per video this month (flat-rate leverage metric) */
   effectiveFlatRateYield: number | null;
+  /** Currency the three per-video yield metrics (effectiveFlatRateYield,
+   * revenuePerVideoAllTime, efficiency.revenuePerVideo) are denominated
+   * in -- DEFAULT_CURRENCY (USD), deliberately independent of
+   * revenueCurrency (BRL), which only scopes the goal-progress figures. */
+  perVideoCurrency: string;
   /** Top 5 (client, currency) entries by revenue -- never summed across
    * currencies for one client; see getWarRoomAnalytics for the note. */
   topClientsByRevenue: Array<{
@@ -310,19 +315,31 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   const onTrack = goalProgress.onTrack;
   const revenueGoalPct = goalProgress.pct;
 
+  // Tuesday Patch Priority 5 ("Revenue por video é ótimo porque não
+  // aparece?"): the three per-video yield metrics below used to derive
+  // from `monthlyRevenue`/`allTimeRevenue`, which are deliberately
+  // scoped to REVENUE_CURRENCY (BRL) alone -- the right scope for "progress
+  // toward the R$20k goal," but silently zero for an operator whose real
+  // income is USD (Dave/Taryn's Upwork contracts). These three read in
+  // DEFAULT_CURRENCY (USD, the app's actual primary operating currency)
+  // instead -- never summed across currencies, just a different single
+  // currency than the goal tracker uses.
+  const PER_VIDEO_CURRENCY = DEFAULT_CURRENCY;
+  const monthlyRevenuePerVideoCurrency = amountForCurrency(monthlyRevenueByCurrency, PER_VIDEO_CURRENCY);
+
   const thisMonthVideoCount = thisMonthVideos.length;
   const effectiveFlatRateYield =
-    thisMonthVideoCount > 0 && monthlyRevenue !== null
-      ? Math.round(monthlyRevenue / thisMonthVideoCount)
+    thisMonthVideoCount > 0 && monthlyRevenuePerVideoCurrency > 0
+      ? Math.round(monthlyRevenuePerVideoCurrency / thisMonthVideoCount)
       : null;
 
   // All-time revenue per video
   const allTimeRevenue = amountForCurrency(
     sumIncomeByCurrency(allTransactions),
-    REVENUE_CURRENCY,
+    PER_VIDEO_CURRENCY,
   );
   const revenuePerVideoAllTime =
-    allCompletedVideos.length > 0
+    allCompletedVideos.length > 0 && allTimeRevenue > 0
       ? Math.round(allTimeRevenue / allCompletedVideos.length)
       : null;
 
@@ -352,10 +369,10 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       ? "normal"
       : "friction";
 
-  const revenuePerVideo =
-    thisMonthVideoCount > 0 && monthlyRevenue !== null
-      ? Math.round(monthlyRevenue / thisMonthVideoCount)
-      : null;
+  // Same figure as income.effectiveFlatRateYield -- both are "this
+  // month's PER_VIDEO_CURRENCY revenue / videos this month," just
+  // exposed under two different metric groupings.
+  const revenuePerVideo = effectiveFlatRateYield;
 
   const videosPerActiveClient =
     activeClients.length > 0
@@ -541,6 +558,7 @@ export async function getWarRoomData(): Promise<WarRoomData> {
       revenueGoalPct,
       onTrack,
       effectiveFlatRateYield,
+      perVideoCurrency: PER_VIDEO_CURRENCY,
       topClientsByRevenue,
       revenuePerVideoAllTime,
     },

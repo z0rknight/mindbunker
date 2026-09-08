@@ -101,7 +101,7 @@ export default async function WarRoomPage() {
               sublabel="Current month · context only"
               value={
                 income.effectiveFlatRateYield
-                  ? formatCurrency(income.effectiveFlatRateYield, income.revenueCurrency) + "/video"
+                  ? formatCurrency(income.effectiveFlatRateYield, income.perVideoCurrency) + "/video"
                   : "—"
               }
               accent="cyan"
@@ -112,7 +112,7 @@ export default async function WarRoomPage() {
               sublabel="Not per-video attribution"
               value={
                 income.revenuePerVideoAllTime
-                  ? formatCurrency(income.revenuePerVideoAllTime, income.revenueCurrency)
+                  ? formatCurrency(income.revenuePerVideoAllTime, income.perVideoCurrency)
                   : "—"
               }
               accent="zinc"
@@ -204,7 +204,7 @@ export default async function WarRoomPage() {
             label="Revenue / Video"
             value={
               efficiency.revenuePerVideo
-                ? formatCurrency(efficiency.revenuePerVideo, income.revenueCurrency)
+                ? formatCurrency(efficiency.revenuePerVideo, income.perVideoCurrency)
                 : "—"
             }
             accent="cyan"
