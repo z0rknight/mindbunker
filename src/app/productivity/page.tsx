@@ -1,5 +1,4 @@
 import {
-  AddRevisionButton,
   FinishedVideoButton,
   PlanVideoButton,
 } from "@/components/ui/QuickActions";
@@ -254,16 +253,15 @@ export default async function ProductivityPage({
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">Capture</p>
               <h2 className="mt-1 text-base font-black text-white">Quick actions</h2>
               <p className="mt-1 text-xs text-zinc-500">
-                Plan work first. Finished Video and revision corrections remain available as utilities.
+                Plan work first. Finished Video remains available as a utility — register a correction from inside a video's own workspace instead.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:w-[560px]">
+            <div className="grid grid-cols-2 gap-3 lg:w-[380px]">
               <PlanVideoButton
                 initialProjectId={initialProjectId}
                 initiallyOpen={query.planVideo === "1"}
               />
               <FinishedVideoButton />
-              <AddRevisionButton />
             </div>
           </div>
         </section>

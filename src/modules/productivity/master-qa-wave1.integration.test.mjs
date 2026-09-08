@@ -23,13 +23,27 @@ test("both canonical video creation paths derive the default kind from the ownin
   assert.match(actions, /assignment\.clientName/u);
 });
 
-test("normal production cards show revision information but only the workspace edits revisions", () => {
+// P0.3.1 (Tuesday Reality & Usability Patch): the direct +/- revision
+// counter (RevisionControls, changeRevisionCount) was removed from
+// Productivity -- it mutated video_logs.revisionsCount with no revisions
+// event row, a non-canonical write path sitting right next to the correct
+// one (Register Correction -> recordDetailedRevision, which inserts a
+// revisions row AND increments the compat cache atomically). Both the
+// card and the workspace now only ever DISPLAY revisionsCount; the one
+// place Productivity can change it is Register Correction inside
+// OperationalMemoryPanel.
+test("revision count is read-only everywhere in Productivity except Register Correction", () => {
   const card = source("../../app/productivity/VideoOperationsCard.tsx");
   const editor = source("../../app/productivity/VideoEditor.tsx");
+  const operationalMemory = source("../../app/productivity/OperationalMemoryPanel.tsx");
+  const page = source("../../app/productivity/page.tsx");
   assert.doesNotMatch(card, /<RevisionControls/u);
+  assert.doesNotMatch(editor, /<RevisionControls/u);
+  assert.doesNotMatch(page, /AddRevisionButton/u);
   assert.match(card, /revisionCount|revisionsCount/u);
-  assert.match(editor, /<RevisionControls/u);
-  assert.match(editor, /Manage revisions/u);
+  assert.match(editor, /revisionsCount/u);
+  assert.match(operationalMemory, /recordDetailedRevision/u);
+  assert.match(operationalMemory, /Register Correction/u);
 });
 
 test("Projects keeps lifecycle counts but renders one compact accessible summary and a 2xl tier", () => {
