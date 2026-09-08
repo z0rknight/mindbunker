@@ -217,3 +217,66 @@ export function computeChecklistProgress(
     complete: items.length > 0 && applicable.every((item) => item.status === "DONE"),
   };
 }
+
+// ─── Quick Deadline presets (P0.3 / P0.5) ───────────────────────────────────
+//
+// Shared between OperationalMemoryPanel (per-video Quick Deadline) and
+// QuickCapture (global Cmd/Ctrl+K) so both compute due dates identically.
+// Every preset resolves to an operator-local datetime-local string
+// (instantToOperatorDateTimeLocal, above) which operatorLocalDateTimeToIso
+// then converts into the exact same explicit-instant createVideoCommitment
+// already expects -- presets never bypass that canonical action.
+export function operatorNowParts() {
+  const [datePart, timePart] = (instantToOperatorDateTimeLocal(new Date()) ?? "1970-01-01T00:00").split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+  return { year, month, day, hour, minute };
+}
+
+export function operatorDatePlusDays(
+  parts: { year: number; month: number; day: number },
+  deltaDays: number,
+) {
+  // Pure calendar-day counter, not a real instant -- UTC here only avoids
+  // DST edge cases in the arithmetic itself, never used as a timezone claim.
+  const d = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+}
+
+export function operatorLocalString(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+) {
+  const pad = (value: number) => value.toString().padStart(2, "0");
+  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}`;
+}
+
+export type QuickDeadlinePreset = { label: string; resolve: () => string };
+
+export const QUICK_DEADLINE_PRESETS: QuickDeadlinePreset[] = [
+  { label: "+2h", resolve: () => instantToOperatorDateTimeLocal(new Date(Date.now() + 2 * 60 * 60 * 1_000)) ?? "" },
+  {
+    label: "Tonight",
+    resolve: () => {
+      const now = operatorNowParts();
+      // Already past 20:00 operator time -- "tonight" rolls to tomorrow
+      // rather than resolving to a due date already in the past (which
+      // createVideoCommitment's chronology check would reject anyway).
+      const target = now.hour >= 20 ? operatorDatePlusDays(now, 1) : now;
+      return operatorLocalString(target.year, target.month, target.day, 20, 0);
+    },
+  },
+  {
+    label: "Tomorrow",
+    resolve: () => {
+      const tomorrow = operatorDatePlusDays(operatorNowParts(), 1);
+      return operatorLocalString(tomorrow.year, tomorrow.month, tomorrow.day, 18, 0);
+    },
+  },
+  { label: "24h", resolve: () => instantToOperatorDateTimeLocal(new Date(Date.now() + 24 * 60 * 60 * 1_000)) ?? "" },
+  { label: "48h", resolve: () => instantToOperatorDateTimeLocal(new Date(Date.now() + 48 * 60 * 60 * 1_000)) ?? "" },
+];

@@ -9,6 +9,7 @@ import { DEFAULT_WORK_SESSION_ACTIVITY } from "@/modules/work-sessions/core";
 import { reorderExecutionQueueItem } from "@/modules/productivity/actions";
 import type { QueueEntry, QueueEligibleVideo, QueueMoveDirection } from "@/modules/productivity/queue";
 import { formatDate } from "@/utils/date";
+import { useQuickCapture } from "@/components/quick-capture/QuickCaptureProvider";
 
 // P0.4: "restaurant tickets" execution queue. One row per canonical
 // video_logs item -- no duplicated task records, no separate model. The
@@ -85,6 +86,7 @@ function QueueRowView({
   isLast: boolean;
 }) {
   const router = useRouter();
+  const quickCapture = useQuickCapture();
   const [isPending, startTransition] = useTransition();
   const title = item.title ?? `Video ${formatDate(item.date)}`;
   const commitmentDue = formatCommitmentDue(item.soonestCommitmentDueAt);
@@ -146,6 +148,24 @@ function QueueRowView({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() =>
+            quickCapture.open({
+              clientId: item.clientId ?? undefined,
+              clientName: item.clientName ?? undefined,
+              projectId: item.projectId ?? undefined,
+              projectName: item.projectName ?? undefined,
+              videoId: item.id,
+              videoTitle: title,
+            })
+          }
+          title="Quick Capture for this item"
+          aria-label={`Quick Capture for ${title}`}
+          className="min-h-9 min-w-9 rounded-lg border border-zinc-700 bg-zinc-950/60 text-xs font-black text-zinc-300 hover:border-violet-500/60"
+        >
+          ⌘K
+        </button>
         <div className="flex items-center gap-1" role="group" aria-label={`Reorder ${title}`}>
           <button
             type="button"

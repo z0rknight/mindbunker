@@ -27,6 +27,7 @@ import {
   type RevisionCause,
 } from "@/modules/video-operations/config";
 import {
+  QUICK_DEADLINE_PRESETS,
   commitmentChronologyIssue,
   instantToOperatorDateTimeLocal,
   operatorLocalDateTimeToIso,
@@ -41,58 +42,6 @@ const inputClass =
   "min-h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-white outline-none focus:border-violet-500";
 const smallButton =
   "min-h-10 rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-xs font-black text-zinc-200 hover:border-violet-500/60 disabled:opacity-40";
-
-// P0.3 Quick Deadline presets: every preset resolves to the exact same
-// canonical commitments.dueAt commitment CRUD (createVideoCommitment) the
-// existing raw datetime-local input already submits to -- these buttons
-// only fill that field, they never bypass it or write anywhere new.
-// instantToOperatorDateTimeLocal (already imported/used elsewhere in this
-// file) keeps every preset in the same America/Sao_Paulo wall-clock
-// discipline the rest of the app uses, so "Tonight"/"Tomorrow" mean the
-// same thing here as everywhere else that formats a due date.
-function operatorNowParts() {
-  const [datePart, timePart] = (instantToOperatorDateTimeLocal(new Date()) ?? "1970-01-01T00:00").split("T");
-  const [year, month, day] = datePart.split("-").map(Number);
-  const [hour, minute] = timePart.split(":").map(Number);
-  return { year, month, day, hour, minute };
-}
-
-function operatorDatePlusDays(parts: { year: number; month: number; day: number }, deltaDays: number) {
-  // Pure calendar-day counter, not a real instant -- UTC here only avoids
-  // DST edge cases in the arithmetic itself, never used as a timezone claim.
-  const d = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
-  d.setUTCDate(d.getUTCDate() + deltaDays);
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
-}
-
-function operatorLocalString(year: number, month: number, day: number, hour: number, minute: number) {
-  const pad = (value: number) => value.toString().padStart(2, "0");
-  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}`;
-}
-
-const QUICK_DEADLINE_PRESETS: Array<{ label: string; resolve: () => string }> = [
-  { label: "+2h", resolve: () => instantToOperatorDateTimeLocal(new Date(Date.now() + 2 * 60 * 60 * 1_000)) ?? "" },
-  {
-    label: "Tonight",
-    resolve: () => {
-      const now = operatorNowParts();
-      // Already past 20:00 operator time -- "tonight" rolls to tomorrow
-      // rather than resolving to a due date already in the past (which
-      // createVideoCommitment's chronology check would reject anyway).
-      const target = now.hour >= 20 ? operatorDatePlusDays(now, 1) : now;
-      return operatorLocalString(target.year, target.month, target.day, 20, 0);
-    },
-  },
-  {
-    label: "Tomorrow",
-    resolve: () => {
-      const tomorrow = operatorDatePlusDays(operatorNowParts(), 1);
-      return operatorLocalString(tomorrow.year, tomorrow.month, tomorrow.day, 18, 0);
-    },
-  },
-  { label: "24h", resolve: () => instantToOperatorDateTimeLocal(new Date(Date.now() + 24 * 60 * 60 * 1_000)) ?? "" },
-  { label: "48h", resolve: () => instantToOperatorDateTimeLocal(new Date(Date.now() + 48 * 60 * 60 * 1_000)) ?? "" },
-];
 
 function formatWhen(value: Date | string | null) {
   if (!value) return "No due date";
