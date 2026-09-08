@@ -16,11 +16,13 @@ import {
   fxConversions,
   personalTransactions,
   cashMovements,
+  videoLogs,
+  workSessions,
 } from "@/db/schema";
 import { computeFxCashMovements } from "../fx/core";
 import { getTodayWorkSessionStats } from "../work-sessions/data";
 import { toUnixSeconds } from "../work-sessions/core";
-import { and, eq, desc, sum } from "drizzle-orm";
+import { and, eq, desc, gte, lte, sum } from "drizzle-orm";
 import { todayISO, startOfMonthISO } from "@/utils/date";
 import { revalidatePath } from "next/cache";
 import { DEFAULT_CURRENCY, DEFAULT_TAX_RESERVE_PERCENT } from "./config";
@@ -595,6 +597,102 @@ export async function getTodayRateEquivalents(): Promise<TodayRateEquivalentRow[
   return rows;
 }
 
+// Tuesday Patch Priority 5 ("O quanto foi gerado nessa semana baseando-se
+// em quanto operei em contratos ativos? O que as sessions do Dave
+// renderam nessa semana?"): the same rate-equivalent estimate as
+// getTodayRateEquivalents, generalized to an arbitrary [periodStart,
+// periodEnd] window via the already-canonical, DR-E-safe
+// getClientOperationalMinutes (merged distinct coverage, CLIENT_WORK
+// only) instead of getTodayWorkSessionStats. Deliberately a separate
+// function rather than a refactor of getTodayRateEquivalents -- that one
+// stays exactly as tested; this one shares only the primitives
+// (computeRateEquivalent, the same HOURLY+ACTIVE contract query).
+export async function getRateEquivalentsForPeriod(
+  periodStart: string,
+  periodEnd: string,
+): Promise<TodayRateEquivalentRow[]> {
+  const db = await getAuthenticatedDb();
+  const hourlyContracts = await db
+    .select({
+      clientId: commercialContracts.clientId,
+      clientName: clients.name,
+      hourlyRate: commercialContracts.hourlyRate,
+      currency: commercialContracts.currency,
+    })
+    .from(commercialContracts)
+    .innerJoin(clients, eq(commercialContracts.clientId, clients.id))
+    .where(
+      and(
+        eq(commercialContracts.billingType, "HOURLY"),
+        eq(commercialContracts.status, "ACTIVE"),
+      ),
+    );
+
+  const rows: TodayRateEquivalentRow[] = [];
+  for (const contract of hourlyContracts) {
+    if (contract.hourlyRate === null) continue;
+    const { minutes } = await getClientOperationalMinutes(contract.clientId, periodStart, periodEnd);
+    if (minutes <= 0) continue;
+    rows.push({
+      clientId: contract.clientId,
+      clientName: contract.clientName,
+      ...computeRateEquivalent(minutes * 60, contract.hourlyRate, contract.currency),
+    });
+  }
+  return rows;
+}
+
+// Tuesday Patch Priority 5 ("Quantas horas operei para a Taryn no mes?"):
+// tracked hours per client for an arbitrary period, independent of
+// contract type -- unlike the rate-equivalent functions above, this
+// answers a plain "how much time" question for every client with any
+// eligible time in the window, not just ones on an hourly contract.
+export type ClientHoursForPeriod = { clientId: number; clientName: string; minutes: number };
+
+export async function getClientHoursForPeriod(
+  periodStart: string,
+  periodEnd: string,
+): Promise<ClientHoursForPeriod[]> {
+  const db = await getAuthenticatedDb();
+  const lowerBound = new Date(toUnixSeconds(new Date(`${periodStart}T00:00:00Z`)) * 1_000 - 24 * 60 * 60 * 1_000);
+  const upperBound = new Date(toUnixSeconds(new Date(`${periodEnd}T00:00:00Z`)) * 1_000 + 2 * 24 * 60 * 60 * 1_000);
+
+  const [sessionRows, clientRows] = await Promise.all([
+    db
+      .select({
+        clientId: videoLogs.clientId,
+        startedAt: workSessions.startedAt,
+        endedAt: workSessions.endedAt,
+        videoKind: videoLogs.videoKind,
+      })
+      .from(workSessions)
+      .innerJoin(videoLogs, eq(workSessions.videoId, videoLogs.id))
+      .where(and(gte(workSessions.startedAt, lowerBound), lte(workSessions.startedAt, upperBound))),
+    db.select({ id: clients.id, name: clients.name }).from(clients),
+  ]);
+
+  const nameById = new Map(clientRows.map((row) => [row.id, row.name]));
+  const byClient = new Map<number, Array<{ startedAt: number; endedAt: number | null; videoKind: string }>>();
+  for (const row of sessionRows) {
+    if (row.clientId === null) continue;
+    const list = byClient.get(row.clientId) ?? [];
+    list.push({
+      startedAt: toUnixSeconds(row.startedAt),
+      endedAt: row.endedAt ? toUnixSeconds(row.endedAt) : null,
+      videoKind: row.videoKind,
+    });
+    byClient.set(row.clientId, list);
+  }
+
+  const results: ClientHoursForPeriod[] = [];
+  for (const [clientId, rows] of byClient) {
+    const { minutes } = computeClientOperationalMinutes(rows, periodStart, periodEnd);
+    if (minutes <= 0) continue;
+    results.push({ clientId, clientName: nameById.get(clientId) ?? `Client #${clientId}`, minutes });
+  }
+  return results.sort((a, b) => b.minutes - a.minutes);
+}
+
 // ─── BILLING TRUTH: commercial contracts + billing evidence ────────────────
 
 export type CommercialContractRow = {
@@ -771,7 +869,7 @@ export type ContractReconciliation = ReconciliationResult & {
   openSessionCount: number;
 };
 
-async function getClientOperationalMinutes(
+export async function getClientOperationalMinutes(
   clientId: number,
   periodStart: string,
   periodEnd: string,

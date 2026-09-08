@@ -2,18 +2,23 @@ import { getWarRoomData } from "@/modules/analytics/service";
 import { getActiveSignals, type Signal, type SignalConfidence, type SignalSeverity } from "@/modules/signals";
 import { getDailyLedger, type DailyLedgerRow } from "@/modules/daily-ledger";
 import { listOpenDecisions, type OpenDecisionRow } from "@/modules/decisions/actions";
+import { getClientHoursForPeriod, getRateEquivalentsForPeriod } from "@/modules/finance/actions";
+import { mondayOfWeek } from "@/modules/work-sessions/core";
 import { OpenDecisionCard, RecordDecisionButton } from "./DecisionControls";
-import { formatCurrency } from "@/utils/date";
+import { formatCurrency, startOfMonthISO, todayISO } from "@/utils/date";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function WarRoomPage() {
-  const [data, signals, dailyLedger, openDecisions] = await Promise.all([
+  const today = todayISO();
+  const [data, signals, dailyLedger, openDecisions, weekEstimates, monthHours] = await Promise.all([
     getWarRoomData(),
     getActiveSignals(),
     getDailyLedger(7),
     listOpenDecisions(),
+    getRateEquivalentsForPeriod(mondayOfWeek(today), today),
+    getClientHoursForPeriod(startOfMonthISO(), today),
   ]);
   const { income, efficiency, biological, momentum } = data;
 
@@ -404,6 +409,68 @@ export default async function WarRoomPage() {
             accent="violet"
             icon="📅"
           />
+        </div>
+      </section>
+
+      {/* ── LAYER 5: ACTIVE-WINDOW ESTIMATES (Tuesday Patch Priority 5) ─────
+          Brief's own worked examples: "O quanto foi gerado nessa semana
+          baseando-se em quanto operei em contratos ativos?" / "O que as
+          sessions do Dave renderam nessa semana?" / "Quantas horas operei
+          para a Taryn no mes?" -- both derived from already-tracked Work
+          Sessions, neither ever written to transactions (see
+          computeRateEquivalent's invariant): estimates for the still-open
+          window, not income. */}
+      <section className="mb-8">
+        <SectionHeader label="V. THIS WEEK / THIS MONTH" icon="🗓️" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+            <p className="text-zinc-400 text-xs uppercase tracking-widest font-semibold mb-1">
+              Estimated value this week
+            </p>
+            <p className="text-zinc-600 text-xs mb-3">
+              Tracked hours this week × active hourly contract rate. Not billed, not income.
+            </p>
+            {weekEstimates.length === 0 ? (
+              <p className="text-zinc-600 text-sm">No tracked time yet against an active hourly contract this week.</p>
+            ) : (
+              <div className="space-y-2">
+                {weekEstimates.map((row) => (
+                  <div key={row.clientId} className="flex items-center justify-between">
+                    <span className="text-white text-sm font-medium">{row.clientName}</span>
+                    <span className="text-cyan-400 text-sm font-bold">
+                      {formatCurrency(row.rateEquivalent, row.currency)}
+                      <span className="ml-1 text-zinc-500 text-xs font-normal">
+                        · {(row.attributableSeconds / 3600).toFixed(1)}h
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+            <p className="text-zinc-400 text-xs uppercase tracking-widest font-semibold mb-1">
+              Hours by client this month
+            </p>
+            <p className="text-zinc-600 text-xs mb-3">
+              Distinct tracked coverage, merged across overlapping sessions. Any client, any billing type.
+            </p>
+            {monthHours.length === 0 ? (
+              <p className="text-zinc-600 text-sm">No tracked time recorded this month yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {monthHours.map((row) => (
+                  <div key={row.clientId} className="flex items-center justify-between">
+                    <span className="text-white text-sm font-medium">{row.clientName}</span>
+                    <span className="text-violet-300 text-sm font-bold">
+                      {(row.minutes / 60).toFixed(1)}h
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
