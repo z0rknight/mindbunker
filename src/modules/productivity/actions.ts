@@ -50,6 +50,7 @@ import {
 } from "@/modules/video-memory/core";
 import { resolveVideoKindForClient } from "@/lib/client-identity";
 import { revalidateProductivityViews } from "./revalidation";
+import { isQueueEligible, moveInOrder, resequencePositions, type QueueMoveDirection } from "./queue";
 
 type ProductivityActionResult =
   | {
@@ -583,6 +584,7 @@ export async function getAllVideoLogs() {
       videoKind: videoLogs.videoKind,
       createdAt: videoLogs.createdAt,
       updatedAt: videoLogs.updatedAt,
+      queuePosition: videoLogs.queuePosition,
     })
     .from(videoLogs)
     .leftJoin(clients, eq(videoLogs.clientId, clients.id))
@@ -594,6 +596,105 @@ export async function getAllVideoLogs() {
     // only changes what getAllVideoLogs() returns for the grouped overview.
     .where(or(isNull(videoLogs.clientId), ne(clients.archivalState, "GELADEIRA")))
     .orderBy(desc(videoLogs.createdAt), desc(videoLogs.id));
+}
+
+// P0.4 execution queue context: which eligible videos are currently
+// blocked, and what their soonest open commitment is due. Two small
+// aggregate reads (not a join into getAllVideoLogs) so the common path
+// that doesn't need queue context stays exactly as cheap as before.
+export async function getOpenBlockersByVideo(): Promise<Map<number, string>> {
+  const db = await getAuthenticatedDb();
+  const rows = await db
+    .select({ videoId: blockers.videoId, category: blockers.category })
+    .from(blockers)
+    .where(isNull(blockers.resolvedAt))
+    .orderBy(blockers.startedAt);
+  const byVideo = new Map<number, string>();
+  for (const row of rows) {
+    // First (oldest) open blocker per video wins the summary category --
+    // a video is either blocked or not; the queue row links to the full
+    // list inside the video's own workspace.
+    if (!byVideo.has(row.videoId)) byVideo.set(row.videoId, row.category);
+  }
+  return byVideo;
+}
+
+export async function getSoonestOpenCommitmentByVideo(): Promise<Map<number, Date>> {
+  const db = await getAuthenticatedDb();
+  const rows = await db
+    .select({ videoId: commitments.videoId, dueAt: commitments.dueAt })
+    .from(commitments)
+    .where(eq(commitments.status, "OPEN"))
+    .orderBy(commitments.dueAt);
+  const byVideo = new Map<number, Date>();
+  for (const row of rows) {
+    if (!byVideo.has(row.videoId)) byVideo.set(row.videoId, row.dueAt);
+  }
+  return byVideo;
+}
+
+type QueueActionResult =
+  | { success: true; message: string }
+  | { success: false; error: string };
+
+// P0.4 reorder: resequences the WHOLE eligible queue in one transaction
+// rather than hunting for a numeric gap between two neighbors -- see
+// modules/productivity/queue.ts's header comment for why that is the
+// deliberate, simpler-and-more-correct choice at this scale. Always reads
+// the current order fresh from the DB immediately before writing, so a
+// stale client-side order can never overwrite a concurrent change.
+export async function reorderExecutionQueueItem(
+  videoId: number,
+  direction: QueueMoveDirection,
+): Promise<QueueActionResult> {
+  if (!isPositiveId(videoId)) return { success: false, error: "Invalid video." };
+
+  const db = await getAuthenticatedDb();
+  const rows = await db
+    .select({
+      id: videoLogs.id,
+      status: videoLogs.status,
+      videoKind: videoLogs.videoKind,
+      queuePosition: videoLogs.queuePosition,
+      createdAt: videoLogs.createdAt,
+      updatedAt: videoLogs.updatedAt,
+    })
+    .from(videoLogs);
+
+  const eligible = rows.filter(isQueueEligible);
+  const positioned = eligible
+    .filter((row) => row.queuePosition !== null)
+    .sort((a, b) => (a.queuePosition as number) - (b.queuePosition as number));
+  const unpositioned = eligible
+    .filter((row) => row.queuePosition === null)
+    .sort((a, b) => {
+      const timeOf = (row: (typeof eligible)[number]) => {
+        const value = row.updatedAt ?? row.createdAt;
+        if (!value) return 0;
+        const ts = value instanceof Date ? value.getTime() : Date.parse(value as unknown as string);
+        return Number.isFinite(ts) ? ts : 0;
+      };
+      return timeOf(b) - timeOf(a);
+    });
+  const orderedIds = [...positioned, ...unpositioned].map((row) => row.id);
+
+  if (!orderedIds.includes(videoId)) {
+    return { success: false, error: "Video is not in the active execution queue." };
+  }
+
+  const newOrder = moveInOrder(orderedIds, videoId, direction);
+  const positions = resequencePositions(newOrder);
+  const statements = orderedIds.map((id) =>
+    db.update(videoLogs).set({ queuePosition: positions.get(id) }).where(eq(videoLogs.id, id)),
+  );
+  // orderedIds always contains at least videoId itself (checked above), so
+  // statements is never empty -- db.batch requires a non-empty tuple type,
+  // not just a non-empty array at runtime.
+  await db.batch(statements as unknown as [(typeof statements)[number], ...(typeof statements)[number][]]);
+
+  revalidatePath("/");
+  revalidatePath("/productivity");
+  return { success: true, message: "Queue updated." };
 }
 
 export async function getProductivityQuickOptions() {

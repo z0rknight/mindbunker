@@ -5,13 +5,18 @@ import {
 import { StatCard } from "@/components/ui/StatCard";
 import {
   getAllVideoLogs,
+  getOpenBlockersByVideo,
   getProductivityQuickOptions,
+  getSoonestOpenCommitmentByVideo,
   getVideoStats,
 } from "@/modules/productivity/actions";
 import {
+  getVideoNextAction,
   groupOperationalVideos,
   type ProductivityGroup,
 } from "@/modules/productivity/core";
+import { selectExecutionQueue, selectNextExecutable } from "@/modules/productivity/queue";
+import { ExecutionQueueSection } from "./ExecutionQueueSection";
 import { getWorkSessionHistory, getWorkSessionOverview } from "@/modules/work-sessions/data";
 import {
   formatClosedDuration,
@@ -90,23 +95,27 @@ export default async function ProductivityPage({
     typeof rawReturnTo === "string" && isSafeInternalPath(rawReturnTo)
       ? rawReturnTo
       : undefined;
-  const [stats, logs, options, workSessionOverview, sessionHistory, activeSignals] = await Promise.all([
-    getVideoStats(),
-    getAllVideoLogs(),
-    getProductivityQuickOptions(),
-    getWorkSessionOverview(),
-    // Local dogfooding consolidation (§6): read-only Today/This Week
-    // tracked-time visibility, reusing the exact same grouping the Session
-    // Ledger already uses — no new aggregation logic, no schema change.
-    // This is INPUT evidence (time spent), never a score, and is never
-    // compared against video output counts on this page.
-    getWorkSessionHistory(),
-    // P0.2 Needs Attention: the exact same canonical read model War Room's
-    // Active Signals uses (modules/signals) — see
-    // modules/productivity/attention.ts for the execution-relevant subset
-    // this page actually shows.
-    getActiveSignals(),
-  ]);
+  const [stats, logs, options, workSessionOverview, sessionHistory, activeSignals, openBlockersByVideo, soonestCommitmentByVideo] =
+    await Promise.all([
+      getVideoStats(),
+      getAllVideoLogs(),
+      getProductivityQuickOptions(),
+      getWorkSessionOverview(),
+      // Local dogfooding consolidation (§6): read-only Today/This Week
+      // tracked-time visibility, reusing the exact same grouping the Session
+      // Ledger already uses — no new aggregation logic, no schema change.
+      // This is INPUT evidence (time spent), never a score, and is never
+      // compared against video output counts on this page.
+      getWorkSessionHistory(),
+      // P0.2 Needs Attention: the exact same canonical read model War Room's
+      // Active Signals uses (modules/signals) — see
+      // modules/productivity/attention.ts for the execution-relevant subset
+      // this page actually shows.
+      getActiveSignals(),
+      // P0.4 execution queue context.
+      getOpenBlockersByVideo(),
+      getSoonestOpenCommitmentByVideo(),
+    ]);
   const attentionGroups = selectProductivityAttention(activeSignals);
   const recentLogs = logs.slice(0, 50);
   const groups = groupOperationalVideos(recentLogs, {
@@ -117,27 +126,26 @@ export default async function ProductivityPage({
     workSessionOverview.summaries.map((summary) => [summary.videoId, summary]),
   );
   const { openSessionElapsedSeconds } = workSessionOverview;
-  // P0.1 NOW/FOCUS "recommended next": reuses the exact groups this page
-  // already computes and displays -- no new ranking model. Restricted to
-  // states the operator can actually act on solo: resume in-progress work
-  // first, then a video with changes requested (real work to do), then the
-  // next planned video. READY_FOR_REVIEW is deliberately excluded even
-  // though it sits in the "attention" bucket -- it is awaiting the client,
-  // not something starting a work session would accomplish. Each group is
-  // already sorted (active session, then overdue, then most-recently-
-  // touched) by groupOperationalVideos, so picking [0] is deterministic.
-  const recommendedCandidate =
-    groups.current[0] ??
-    groups.attention.find((video) => video.status === "CHANGES_REQUESTED") ??
-    groups.planned[0] ??
-    null;
-  const recommended: RecommendedNextItem | null = recommendedCandidate
+  // P0.4: the execution queue is built from the FULL video list (not the
+  // 50-row recentLogs slice the grouped sections below use), so an older
+  // eligible video is never silently dropped from the queue projection.
+  const executionQueue = selectExecutionQueue(logs, {
+    blockedVideoIds: new Set(openBlockersByVideo.keys()),
+    blockerCategoryByVideoId: openBlockersByVideo,
+    soonestCommitmentDueAtByVideoId: soonestCommitmentByVideo,
+  });
+  // ONE SOURCE FOR NEXT (Tuesday Patch instruction): NOW/FOCUS's
+  // recommendation, when no session is open, is exactly the execution
+  // queue's first non-blocked, non-awaiting-review item -- no separate
+  // ranking is maintained after the queue exists.
+  const nextExecutable = selectNextExecutable(executionQueue);
+  const recommended: RecommendedNextItem | null = nextExecutable
     ? {
-        id: recommendedCandidate.id,
-        title: recommendedCandidate.title ?? `Video ${recommendedCandidate.date}`,
-        clientName: recommendedCandidate.clientName,
-        projectName: recommendedCandidate.projectName,
-        nextAction: recommendedCandidate.nextAction,
+        id: nextExecutable.id,
+        title: nextExecutable.title ?? `Video ${nextExecutable.date}`,
+        clientName: nextExecutable.clientName,
+        projectName: nextExecutable.projectName,
+        nextAction: getVideoNextAction(nextExecutable.status),
       }
     : null;
   const sessionDays = groupWorkSessionsByDay(sessionHistory);
@@ -235,6 +243,30 @@ export default async function ProductivityPage({
         variant="dominant"
       />
 
+      <ExecutionQueueSection
+        queue={executionQueue}
+        activeVideoId={workSessionOverview.openSession?.videoId ?? null}
+      />
+
+      <section className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-900/45 p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">Capture</p>
+            <h2 className="mt-1 text-base font-black text-white">Quick actions</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Plan work first. Finished Video remains available as a utility — register a correction from inside a video&apos;s own workspace instead.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:w-[380px]">
+            <PlanVideoButton
+              initialProjectId={initialProjectId}
+              initiallyOpen={query.planVideo === "1"}
+            />
+            <FinishedVideoButton />
+          </div>
+        </div>
+      </section>
+
       <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-5">
         <StatCard label="Today" value={stats.today} accent="violet" icon="🎬" />
         <StatCard label="This Week" value={stats.week} accent="violet" icon="📅" />
@@ -246,26 +278,6 @@ export default async function ProductivityPage({
       <div className="space-y-10">
         {renderSection("current")}
         {renderSection("attention")}
-
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/45 p-4 sm:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">Capture</p>
-              <h2 className="mt-1 text-base font-black text-white">Quick actions</h2>
-              <p className="mt-1 text-xs text-zinc-500">
-                Plan work first. Finished Video remains available as a utility — register a correction from inside a video's own workspace instead.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 lg:w-[380px]">
-              <PlanVideoButton
-                initialProjectId={initialProjectId}
-                initiallyOpen={query.planVideo === "1"}
-              />
-              <FinishedVideoButton />
-            </div>
-          </div>
-        </section>
-
         {renderSection("planned")}
         {renderSection("completed", true)}
       </div>

@@ -582,6 +582,18 @@ export const videoLogs = sqliteTable(
     updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
       () => new Date(),
     ),
+    // P0.4 (Tuesday Reality & Usability Patch): the solo-operator global
+    // execution queue's one storage primitive. NULL = unpositioned (a new
+    // or never-reordered item; the read model falls back to an existing
+    // deterministic sort for these -- see
+    // modules/productivity/queue.ts#selectExecutionQueue). Populated
+    // values are sparse (1000, 2000, ...) so a reorder is a normal-sized
+    // batch of single-row updates, not a fractional-indexing scheme --
+    // see queue.ts for why that's the deliberate choice at this scale.
+    // Deliberately NOT a new table: video_logs is already the canonical
+    // executable work item (Gate 3 of the Tuesday Patch), so ordering it
+    // is one column, not a queue/workflow subsystem.
+    queuePosition: integer("queue_position"),
   },
   (table) => [
     index("video_logs_project_created_idx").on(
@@ -593,6 +605,7 @@ export const videoLogs = sqliteTable(
       table.projectId,
       table.isPriority,
     ),
+    index("video_logs_queue_position_idx").on(table.queuePosition),
     check(
       "video_logs_orientation_check",
       sql`${table.orientation} is null or ${table.orientation} in ('LANDSCAPE', 'VERTICAL', 'SQUARE')`,
