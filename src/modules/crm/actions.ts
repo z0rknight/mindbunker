@@ -9,6 +9,7 @@ import {
   gatewayInvitations,
   intakeSubmissions,
   projects,
+  quotes,
   transactions,
   videoLogs,
   workSessions,
@@ -520,6 +521,73 @@ export async function getClientListStats(): Promise<ClientListStats> {
   }
 
   return { projectCounts, revenueByCurrency, lastActiveByClient };
+}
+
+// Tuesday Patch Priority 3: everything the CRM workbench needs in one
+// flat query set (matches getClientListStats' own O(1)-queries-regardless
+// -of-roster-size discipline) -- the current/most-recent non-archived
+// project per client (for the new "Current project/offer" column) and
+// every quote (for Needs Attention + the new commercial KPIs). No new
+// tables: quotes and projects are both already-canonical.
+export type CRMCurrentProject = { id: number; name: string; status: string };
+
+export async function getCRMWorkbenchData(): Promise<{
+  currentProjectByClient: Map<number, CRMCurrentProject>;
+  quotes: Array<{
+    id: number;
+    clientId: number;
+    status: "DRAFT" | "SENT" | "APPROVED" | "DECLINED";
+    sentAt: string | null;
+    amountCents: number;
+    currency: string;
+  }>;
+}> {
+  const db = await getAuthenticatedDb();
+  const [projectRows, quoteRows] = await Promise.all([
+    db
+      .select({
+        id: projects.id,
+        clientId: projects.clientId,
+        name: projects.name,
+        status: projects.status,
+        updatedAt: projects.updatedAt,
+      })
+      .from(projects)
+      .where(notInArray(projects.status, ["delivered", "archived"]))
+      .orderBy(desc(projects.updatedAt)),
+    db
+      .select({
+        id: quotes.id,
+        clientId: quotes.clientId,
+        status: quotes.status,
+        sentAt: quotes.sentAt,
+        amountCents: quotes.amountCents,
+        currency: quotes.currency,
+      })
+      .from(quotes)
+      .orderBy(desc(quotes.createdAt)),
+  ]);
+
+  // First row per client wins -- rows are already ordered newest-first,
+  // so this picks each client's single most recently touched open
+  // project, exactly like the identical pattern used for lastActiveAt.
+  const currentProjectByClient = new Map<number, CRMCurrentProject>();
+  for (const row of projectRows) {
+    if (currentProjectByClient.has(row.clientId)) continue;
+    currentProjectByClient.set(row.clientId, { id: row.id, name: row.name, status: row.status });
+  }
+
+  return {
+    currentProjectByClient,
+    quotes: quoteRows.map((row) => ({
+      id: row.id,
+      clientId: row.clientId,
+      status: row.status,
+      sentAt: row.sentAt ? row.sentAt.toISOString() : null,
+      amountCents: row.amountCents,
+      currency: row.currency,
+    })),
+  };
 }
 
 export async function getClientById(id: number) {

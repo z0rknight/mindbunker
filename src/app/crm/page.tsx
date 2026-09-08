@@ -1,41 +1,63 @@
 import Link from "next/link";
 import { StatCard } from "@/components/ui/StatCard";
 import { displayClientName, isInternalClientName } from "@/lib/client-identity";
-import { getCRMSummary, getAllClients, getClientListStats } from "@/modules/crm/actions";
-import { formatDate, formatCurrency, currentMonthName } from "@/utils/date";
-import { formatLastActive } from "@/modules/work-sessions/core";
+import {
+  getAllClients,
+  getClientListStats,
+  getCRMWorkbenchData,
+} from "@/modules/crm/actions";
+import {
+  RELATIONSHIP_STATUS_LABELS,
+  computeCRMActionableKPIs,
+  getCRMNeedsAttention,
+  type CRMAttentionItem,
+  type WorkbenchClient,
+  type WorkbenchQuote,
+} from "@/modules/crm/core";
+import { formatDate, formatCurrency, todayISO } from "@/utils/date";
 import { AddClientButton } from "./AddClientButton";
 import { ClientActions } from "./ClientActions";
+import { ClientWorkbench } from "./ClientWorkbench";
 
 export const dynamic = "force-dynamic";
 
 export default async function CRMPage() {
-  const [summary, rawClients, listStats] = await Promise.all([
-    getCRMSummary(),
+  const [rawClients, listStats, workbenchData] = await Promise.all([
     getAllClients(),
     getClientListStats(),
+    getCRMWorkbenchData(),
   ]);
 
-  // Sprint 3 P1: replace the stale clients.totalProjects /
-  // clients.totalRevenue cached columns with the live figures computed
-  // in getClientListStats -- see that function for the root-cause note.
-  const nowIso = new Date().toISOString();
-  const clients = rawClients.map((client) => ({
-    ...client,
-    liveProjectCount: listStats.projectCounts.get(client.id) ?? 0,
-    liveRevenueByCurrency: listStats.revenueByCurrency.get(client.id) ?? [],
-    lastActiveAt: listStats.lastActiveByClient.get(client.id) ?? null,
-  }));
+  const today = todayISO();
+  const clients = rawClients.map((client) => {
+    const currentProject = workbenchData.currentProjectByClient.get(client.id) ?? null;
+    return {
+      ...client,
+      createdAt: client.createdAt ? client.createdAt.toISOString() : null,
+      lastInteractionAt: client.lastInteractionAt ? client.lastInteractionAt.toISOString() : null,
+      liveProjectCount: listStats.projectCounts.get(client.id) ?? 0,
+      liveRevenueByCurrency: listStats.revenueByCurrency.get(client.id) ?? [],
+      currentProjectName: currentProject?.name ?? null,
+    };
+  });
 
-  // Geladeira (Sprint 1.2 P0): the CRM main list is a P0 visibility
-  // surface — Geladeira clients are excluded from the three operational
-  // groups below by default and shown only in their own collapsed section.
+  // Tuesday Patch Priority 3 (brief §CRM.1): "Needs attention -> Leads ->
+  // Active Clients -> Dormant" -- the mixed "contact vs commercial state"
+  // hierarchy is replaced with this explicit order. Geladeira clients
+  // never enter Needs Attention or the KPI denominators (see
+  // isActiveSurface / getCRMNeedsAttention).
+  const needsAttention = getCRMNeedsAttention(
+    clients as WorkbenchClient[],
+    workbenchData.quotes as WorkbenchQuote[],
+    today,
+  );
+  const kpis = computeCRMActionableKPIs(
+    clients as WorkbenchClient[],
+    workbenchData.quotes as WorkbenchQuote[],
+    today,
+  );
+
   const visibleClients = clients.filter((c) => c.archivalState !== "GELADEIRA");
-  // Quick Morning Reality Patch §6: RMEDIA's own internal record is a real
-  // clients row (used to log internal work against) but is not a real
-  // client relationship -- pulled out of the ordinary status buckets so
-  // it never inflates "Active Clients," and given its own small line
-  // below instead of disappearing.
   const internalClient = visibleClients.find((c) => isInternalClientName(c.name)) ?? null;
   const externalVisibleClients = visibleClients.filter((c) => c !== internalClient);
   const activeClients = externalVisibleClients.filter((c) => c.status === "active");
@@ -45,10 +67,10 @@ export default async function CRMPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">👥 CRM</h1>
-          <p className="text-zinc-500 text-sm mt-1">Clients & leads management</p>
+          <p className="text-zinc-500 text-sm mt-1">Who needs contact, and how the relationship is advancing</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Link
@@ -66,15 +88,24 @@ export default async function CRMPage() {
         </div>
       </div>
 
-      {/* Add Client */}
-      <div className="mb-8">
+      <div className="mb-6">
         <AddClientButton />
       </div>
 
-      {/* Local dogfooding round: CRM visual order now leads with Leads
-          (top of funnel, the thing most likely to need action), then the
-          rest of the active roster, then summary Metrics, with Geladeira
-          pushed intentionally to the very bottom -- "it is the fridge." */}
+      {/* Needs Attention (brief §CRM.5): the only place this surface
+          spends strong color. Everything below reads quiet by comparison. */}
+      {needsAttention.length > 0 && (
+        <div className="mb-8">
+          <h2 className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-red-300">
+            Needs attention
+          </h2>
+          <div className="space-y-1.5">
+            {needsAttention.map((item) => (
+              <NeedsAttentionRow key={`${item.kind}-${item.clientId}`} item={item} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Leads */}
       {leads.length > 0 && (
@@ -82,14 +113,10 @@ export default async function CRMPage() {
           <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
             Leads ({leads.length})
           </h2>
-          <ClientTable clients={leads} showConvert nowIso={nowIso} />
+          <ClientList clients={leads} showConvert />
         </div>
       )}
 
-      {/* RMEDIA — internal record, not a client relationship. Kept out of
-          Active Clients/Leads/Inactive so it never reads as one, but still
-          one click away for logging internal Operations/Marketing/
-          Administration/Product work against it. */}
       {internalClient && (
         <div className="mb-6">
           <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
@@ -116,59 +143,69 @@ export default async function CRMPage() {
           <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
             Active Clients ({activeClients.length})
           </h2>
-          <ClientTable clients={activeClients} nowIso={nowIso} />
+          <ClientList clients={activeClients} />
         </div>
       )}
 
-      {/* Inactive */}
+      {/* Dormant / Inactive */}
       {inactiveClients.length > 0 && (
         <div className="mb-6">
           <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
-            Inactive ({inactiveClients.length})
+            Dormant ({inactiveClients.length})
           </h2>
-          <ClientTable clients={inactiveClients} nowIso={nowIso} />
+          <ClientList clients={inactiveClients} />
         </div>
       )}
 
-      {/* Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+      {/* Actionable commercial KPIs (brief §CRM.4): replaces the old
+          Total Contacts / Leads This Month generic pair -- these five all
+          answer "what needs me to act," not just "how many rows exist." */}
+      <div className="grid grid-cols-2 gap-3 mb-8 sm:grid-cols-3 md:grid-cols-5">
         <StatCard
-          label="Active Clients"
-          value={summary.activeClientsCount}
-          accent="blue"
-          icon="✅"
+          label="Follow-ups Due"
+          value={kpis.followUpsDue}
+          accent={kpis.followUpsDue > 0 ? "amber" : "zinc"}
+          icon="📅"
         />
         <StatCard
-          label="Leads This Month"
-          value={summary.leadsThisMonth}
-          sub={currentMonthName()}
-          accent="blue"
-          icon="🎯"
-        />
-        <StatCard
-          label="Total Contacts"
-          value={summary.totalClients}
+          label="Leads Awaiting Reply"
+          value={kpis.leadsAwaitingReply}
           accent="zinc"
-          icon="📋"
+          icon="⏳"
         />
         <StatCard
-          label="Geladeira"
-          value={summary.geladeiraCount}
+          label="Open Quotes"
+          value={kpis.openQuotes}
           accent="zinc"
-          icon="🧊"
+          icon="📝"
+        />
+        <StatCard
+          label="Pipeline Value"
+          value={
+            kpis.pipelineValueByCurrency.length === 0
+              ? "—"
+              : kpis.pipelineValueByCurrency
+                  .map((row) => formatCurrency(row.amount, row.currency))
+                  .join(" · ")
+          }
+          accent="zinc"
+          icon="💼"
+        />
+        <StatCard
+          label="Clients at Risk"
+          value={kpis.clientsAtRisk}
+          accent={kpis.clientsAtRisk > 0 ? "red" : "zinc"}
+          icon="⚠️"
         />
       </div>
 
-      {/* Geladeira — collapsed by default. Preserved history, hidden from
-          the default operational view. Reactivate on the client's own
-          detail page. */}
       {geladeiraClients.length > 0 && (
         <details className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/40">
           <summary className="cursor-pointer select-none px-4 py-3 text-zinc-400 text-xs font-semibold uppercase tracking-widest">
             🧊 Geladeira ({geladeiraClients.length}) — archived, not deleted
           </summary>
           <div className="px-4 pb-4">
-            <ClientTable clients={geladeiraClients} nowIso={nowIso} />
+            <ClientList clients={geladeiraClients} />
           </div>
         </details>
       )}
@@ -182,134 +219,104 @@ export default async function CRMPage() {
   );
 }
 
-function ClientTable({
-  clients,
-  showConvert = false,
-  nowIso,
-}: {
-  clients: Array<{
-    id: number;
-    name: string;
-    status: string;
-    email: string | null;
-    instagramUsername: string | null;
-    instagramProfilePictureUrl: string | null;
-    source: string | null;
-    liveProjectCount: number;
-    liveRevenueByCurrency: Array<{ currency: string; amount: number }>;
-    contacted: boolean;
-    createdAt: Date | null;
-    lastActiveAt: string | null;
-  }>;
-  showConvert?: boolean;
-  nowIso: string;
-}) {
+function NeedsAttentionRow({ item }: { item: CRMAttentionItem }) {
+  const icon = item.kind === "FOLLOW_UP_OVERDUE" ? "⏰" : item.kind === "QUOTE_AWAITING_RESPONSE" ? "📝" : "💤";
   return (
-    <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
-      <div className="divide-y divide-zinc-800 md:hidden">
-        {clients.map((client) => (
-          <article key={client.id} className="p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-3">
-                  <LeadAvatar name={client.name} photoUrl={client.instagramProfilePictureUrl} />
-                  <div className="min-w-0">
-                    <Link href={`/crm/${client.id}`} className="block truncate font-bold text-white active:text-cyan-400">
-                      {client.name}
-                    </Link>
-                    {client.source === "book" && (
-                      <span className="mt-0.5 inline-block rounded border border-violet-800/60 px-1 py-0.5 text-[9px] font-black uppercase tracking-wide text-violet-400">
-                        via /book
-                      </span>
-                    )}
-                    <p className="mt-1 truncate text-xs text-zinc-500">
-                      {client.instagramUsername ? `@${client.instagramUsername}` : client.email ?? client.source ?? "No contact detail yet"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <ClientActions id={client.id} showConvert={showConvert} />
+    <Link
+      href={`/crm/${item.clientId}`}
+      className="flex items-center gap-2 rounded-xl border border-red-900/50 bg-red-950/10 px-4 py-2.5 text-sm hover:border-red-700/60"
+    >
+      <span className="text-red-300">{icon}</span>
+      <span className="font-black text-white">{item.clientName}</span>
+      <span className="text-zinc-500">—</span>
+      <span className="font-bold text-red-300">{item.detail}</span>
+    </Link>
+  );
+}
+
+type ListClient = {
+  id: number;
+  name: string;
+  status: string;
+  email: string | null;
+  instagramUsername: string | null;
+  instagramProfilePictureUrl: string | null;
+  source: string | null;
+  notes: string | null;
+  opportunityStage: string;
+  serviceInterest: string | null;
+  qualificationNotes: string | null;
+  nextAction: string | null;
+  nextActionDate: string | null;
+  currentProjectName: string | null;
+  liveRevenueByCurrency: Array<{ currency: string; amount: number }>;
+};
+
+function ClientList({ clients, showConvert = false }: { clients: ListClient[]; showConvert?: boolean }) {
+  return (
+    <div className="space-y-1.5">
+      {clients.map((client) => (
+        <ClientRow key={client.id} client={client} showConvert={showConvert} />
+      ))}
+    </div>
+  );
+}
+
+function ClientRow({ client, showConvert }: { client: ListClient; showConvert: boolean }) {
+  const relationshipLabel =
+    RELATIONSHIP_STATUS_LABELS[client.status as keyof typeof RELATIONSHIP_STATUS_LABELS] ?? client.status;
+  const offer = client.currentProjectName ?? "No active project";
+  const nextAction = client.nextAction ?? "No next action set";
+  const followUpDate = client.nextActionDate ? `Due ${formatDate(client.nextActionDate)}` : "No follow-up set";
+  const value =
+    client.liveRevenueByCurrency.length === 0
+      ? null
+      : client.liveRevenueByCurrency
+          .map((row) => formatCurrency(row.amount, row.currency))
+          .join(" · ");
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <LeadAvatar name={client.name} photoUrl={client.instagramProfilePictureUrl} />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Link href={`/crm/${client.id}`} className="truncate font-bold text-white hover:text-cyan-400">
+                {client.name}
+              </Link>
+              {client.source === "book" && (
+                <span className="rounded border border-violet-800/60 px-1 py-0.5 text-[9px] font-black uppercase tracking-wide text-violet-400">
+                  via /book
+                </span>
+              )}
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-lg bg-zinc-800/60 p-2.5">
-                <p className="text-zinc-500">Projects</p>
-                <p className="mt-0.5 font-bold text-zinc-200">{client.liveProjectCount}</p>
-              </div>
-              <div className="rounded-lg bg-zinc-800/60 p-2.5">
-                <p className="text-zinc-500">Revenue</p>
-                <p className="mt-0.5 font-mono font-bold text-emerald-400 space-x-1.5">
-                  {client.liveRevenueByCurrency.length === 0
-                    ? formatCurrency(0)
-                    : client.liveRevenueByCurrency.map((row) => (
-                        <span key={row.currency}>{formatCurrency(row.amount, row.currency)}</span>
-                      ))}
-                </p>
-              </div>
-            </div>
-            {client.lastActiveAt && (
-              <p className="mt-2 text-[11px] text-zinc-600">
-                Last active: {formatLastActive(client.lastActiveAt, nowIso)}
-              </p>
-            )}
-          </article>
-        ))}
+            <p className="mt-0.5 truncate text-xs text-zinc-500">
+              {client.instagramUsername ? `@${client.instagramUsername}` : client.email ?? "No contact detail yet"}
+            </p>
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 text-xs text-zinc-400">
+              <span className="font-bold text-zinc-300">{relationshipLabel}</span>
+              <span className="text-zinc-700">·</span>
+              <span>{offer}</span>
+              <span className="text-zinc-700">·</span>
+              <span>{nextAction}</span>
+              <span className="text-zinc-700">·</span>
+              <span className="text-zinc-500">{followUpDate}</span>
+              {value && (
+                <>
+                  <span className="text-zinc-700">·</span>
+                  <span className="font-mono text-emerald-400">{value}</span>
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <ClientActions id={client.id} showConvert={showConvert} />
+        </div>
       </div>
-      <div className="hidden overflow-x-auto md:block">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-zinc-800">
-            <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Name</th>
-            <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Email</th>
-            <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Projects</th>
-            <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Revenue</th>
-            <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Last active</th>
-            <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Added</th>
-            <th className="px-4 py-3"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {clients.map((client, i) => (
-            <tr key={client.id} className={`border-b border-zinc-800/50 ${i % 2 === 0 ? "" : "bg-zinc-800/20"}`}>
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <LeadAvatar name={client.name} photoUrl={client.instagramProfilePictureUrl} />
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <Link href={`/crm/${client.id}`} className="text-white font-medium hover:text-cyan-400 transition-colors">
-                        {client.name}
-                      </Link>
-                      {client.source === "book" && (
-                        <span className="rounded border border-violet-800/60 px-1 py-0.5 text-[9px] font-black uppercase tracking-wide text-violet-400">
-                          via /book
-                        </span>
-                      )}
-                    </div>
-                    {client.instagramUsername && <p className="mt-0.5 text-[11px] text-fuchsia-400">@{client.instagramUsername}</p>}
-                  </div>
-                </div>
-              </td>
-              <td className="px-4 py-3 text-zinc-400 text-xs">{client.email ?? "—"}</td>
-              <td className="px-4 py-3 text-zinc-300">{client.liveProjectCount}</td>
-              <td className="px-4 py-3 text-emerald-400 font-mono space-x-1.5">
-                {client.liveRevenueByCurrency.length === 0
-                  ? formatCurrency(0)
-                  : client.liveRevenueByCurrency.map((row) => (
-                      <span key={row.currency}>{formatCurrency(row.amount, row.currency)}</span>
-                    ))}
-              </td>
-              <td className="px-4 py-3 text-zinc-500 text-xs">
-                {client.lastActiveAt ? formatLastActive(client.lastActiveAt, nowIso) : "—"}
-              </td>
-              <td className="px-4 py-3 text-zinc-500 text-xs">
-                {client.createdAt ? formatDate(client.createdAt.toISOString().split("T")[0]) : "—"}
-              </td>
-              <td className="px-4 py-3">
-                <ClientActions id={client.id} showConvert={showConvert} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="mt-2">
+        <ClientWorkbench client={client} />
       </div>
     </div>
   );

@@ -167,3 +167,177 @@ export function validateLogCrmActivityInput(values: {
   const type = isCrmActivityType(values.type) ? values.type : "note";
   return { success: true, data: { type, description } };
 }
+
+// Tuesday Patch Priority 3: "CRM = relacionamentos" -- the list must read
+// as relationship/commercial-advance state, not a passive contact book.
+// These pure functions all work off facts the schema already owns
+// (status, archivalState, opportunityStage, nextAction/nextActionDate,
+// lastInteractionAt, quotes.status/sentAt) -- no new tracking table.
+
+export type ClientRelationshipStatus = "lead" | "active" | "inactive";
+
+export const RELATIONSHIP_STATUS_LABELS: Record<ClientRelationshipStatus, string> = {
+  lead: "Lead",
+  active: "Active client",
+  inactive: "Inactive",
+};
+
+export type WorkbenchClient = {
+  id: number;
+  name: string;
+  status: ClientRelationshipStatus;
+  archivalState: ArchivalState;
+  opportunityStage: string;
+  nextAction: string | null;
+  nextActionDate: string | null;
+  lastInteractionAt: string | null;
+  createdAt: string | null;
+};
+
+export type WorkbenchQuote = {
+  id: number;
+  clientId: number;
+  status: "DRAFT" | "SENT" | "APPROVED" | "DECLINED";
+  sentAt: string | null;
+  amountCents: number;
+  currency: string;
+};
+
+export type CRMAttentionKind =
+  | "FOLLOW_UP_OVERDUE"
+  | "QUOTE_AWAITING_RESPONSE"
+  | "DORMANT";
+
+export type CRMAttentionItem = {
+  kind: CRMAttentionKind;
+  clientId: number;
+  clientName: string;
+  detail: string;
+};
+
+// Both thresholds match the brief's own worked examples verbatim ("1
+// quote without response for 5 days", "Shelley -- no activity for 18
+// days" as an instance of a stale-relationship bucket).
+export const STALE_QUOTE_DAYS = 5;
+export const DORMANT_CLIENT_DAYS = 14;
+
+function daysBetween(fromISO: string, toISO: string): number {
+  return Math.max(
+    0,
+    Math.floor((Date.parse(toISO) - Date.parse(fromISO)) / (24 * 60 * 60 * 1000)),
+  );
+}
+
+/**
+ * "Needs Attention" (brief §Priority 3.5): overdue follow-ups, quotes gone
+ * quiet, and relationships that have gone dark -- the only things this
+ * surface should spend strong color on. Everything else renders as a
+ * quiet table underneath.
+ */
+export function getCRMNeedsAttention(
+  clients: readonly WorkbenchClient[],
+  quotes: readonly WorkbenchQuote[],
+  todayISO: string,
+): CRMAttentionItem[] {
+  const activeClients = clients.filter((c) => isActiveSurface(c.archivalState));
+  const activeById = new Map(activeClients.map((c) => [c.id, c]));
+  const items: CRMAttentionItem[] = [];
+
+  for (const client of activeClients) {
+    if (!client.nextActionDate || client.nextActionDate >= todayISO) continue;
+    const days = daysBetween(client.nextActionDate, todayISO);
+    items.push({
+      kind: "FOLLOW_UP_OVERDUE",
+      clientId: client.id,
+      clientName: client.name,
+      detail: `Follow-up overdue by ${days} day${days === 1 ? "" : "s"}`,
+    });
+  }
+
+  for (const quote of quotes) {
+    if (quote.status !== "SENT" || !quote.sentAt) continue;
+    const client = activeById.get(quote.clientId);
+    if (!client) continue;
+    const days = daysBetween(quote.sentAt, todayISO);
+    if (days < STALE_QUOTE_DAYS) continue;
+    items.push({
+      kind: "QUOTE_AWAITING_RESPONSE",
+      clientId: quote.clientId,
+      clientName: client.name,
+      detail: `Quote without response for ${days} days`,
+    });
+  }
+
+  for (const client of activeClients) {
+    if (client.status !== "active") continue;
+    const lastSignal = client.lastInteractionAt ?? client.createdAt;
+    if (!lastSignal) continue;
+    const days = daysBetween(lastSignal, todayISO);
+    if (days < DORMANT_CLIENT_DAYS) continue;
+    items.push({
+      kind: "DORMANT",
+      clientId: client.id,
+      clientName: client.name,
+      detail: `No activity for ${days} days`,
+    });
+  }
+
+  return items;
+}
+
+export type CRMActionableKPIs = {
+  followUpsDue: number;
+  leadsAwaitingReply: number;
+  openQuotes: number;
+  pipelineValueByCurrency: Array<{ currency: string; amount: number }>;
+  clientsAtRisk: number;
+};
+
+/**
+ * Replaces the old generic KPI row (brief §Priority 3.4): "Total
+ * Contacts: 4" barely changes behavior. These five all answer "what
+ * needs me to act."
+ */
+export function computeCRMActionableKPIs(
+  clients: readonly WorkbenchClient[],
+  quotes: readonly WorkbenchQuote[],
+  todayISO: string,
+): CRMActionableKPIs {
+  const activeClients = clients.filter((c) => isActiveSurface(c.archivalState));
+  const activeIds = new Set(activeClients.map((c) => c.id));
+
+  const followUpsDue = activeClients.filter(
+    (c) => c.nextActionDate !== null && c.nextActionDate <= todayISO,
+  ).length;
+
+  // A lead whose opportunityStage has moved past "new" but hasn't
+  // reached a terminal state has been engaged by us and the ball is in
+  // their court -- that's the "awaiting reply" moment, distinct from a
+  // fresh, never-contacted lead.
+  const leadsAwaitingReply = activeClients.filter(
+    (c) => c.status === "lead" && c.opportunityStage !== "new" && c.opportunityStage !== "lost",
+  ).length;
+
+  const openQuotes = quotes.filter(
+    (q) => q.status === "SENT" && activeIds.has(q.clientId),
+  ).length;
+
+  const pipelineTotals = new Map<string, number>();
+  for (const quote of quotes) {
+    if (quote.status !== "DRAFT" && quote.status !== "SENT") continue;
+    if (!activeIds.has(quote.clientId)) continue;
+    pipelineTotals.set(
+      quote.currency,
+      (pipelineTotals.get(quote.currency) ?? 0) + quote.amountCents,
+    );
+  }
+  const pipelineValueByCurrency = Array.from(pipelineTotals.entries()).map(
+    ([currency, amountCents]) => ({ currency, amount: amountCents / 100 }),
+  );
+
+  const clientsAtRisk = getCRMNeedsAttention(clients, quotes, todayISO).filter(
+    (item) => item.kind === "DORMANT",
+  ).length;
+
+  return { followUpsDue, leadsAwaitingReply, openQuotes, pipelineValueByCurrency, clientsAtRisk };
+}

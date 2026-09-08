@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   createProductionFromQuote,
-  createQuote,
   updateQuoteStatus,
 } from "@/modules/quotes/actions";
+import { QuoteCreateForm } from "@/components/crm/QuoteCreateForm";
 
 // Client Service Reality Patch (25 Aug 2026) -- Quote Approval (brief §6).
 // V1 is manual: Emmanuel logs a quote from a Pricing Lab calculation he
@@ -211,48 +211,7 @@ function QuoteRow({ quote }: { quote: QuotePanelRow }) {
 
 export function QuotePanel({ clientId, quotes }: { clientId: number; quotes: QuotePanelRow[] }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [amountDollars, setAmountDollars] = useState("");
-  const [currency, setCurrency] = useState("USD");
-  const [contentTypeLabel, setContentTypeLabel] = useState("");
-  const [turnaroundLabel, setTurnaroundLabel] = useState("");
-  const [revisionsIncluded, setRevisionsIncluded] = useState("2");
-  const [summary, setSummary] = useState("");
-  const [scopeText, setScopeText] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [error, setError] = useState("");
-
-  const submit = () => {
-    setError("");
-    setErrors({});
-    const amountCents = Math.round((Number(amountDollars) || 0) * 100);
-    startTransition(async () => {
-      const result = await createQuote({
-        clientId,
-        amountCents,
-        currency,
-        contentTypeLabel,
-        turnaroundLabel,
-        revisionsIncluded: Number(revisionsIncluded) || 0,
-        summary,
-        scopeText,
-      });
-      if (!result.success) {
-        setError(result.error);
-        setErrors(result.errors ?? {});
-        return;
-      }
-      setShowCreateForm(false);
-      setAmountDollars("");
-      setContentTypeLabel("");
-      setTurnaroundLabel("");
-      setRevisionsIncluded("2");
-      setSummary("");
-      setScopeText("");
-      router.refresh();
-    });
-  };
 
   return (
     <section className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
@@ -268,80 +227,14 @@ export function QuotePanel({ clientId, quotes }: { clientId: number; quotes: Quo
       </div>
 
       {showCreateForm && (
-        <div className="mt-3 space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/60 p-3">
-          <p className="text-[10px] text-zinc-500">
-            Log a quote you already calculated in Pricing Lab -- this doesn&apos;t compute a
-            price, it just records one.
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <input
-              type="text"
-              value={contentTypeLabel}
-              onChange={(e) => setContentTypeLabel(e.target.value)}
-              placeholder="Content type (e.g. Short-form video for landing page)"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none sm:col-span-2"
-            />
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={amountDollars}
-              onChange={(e) => setAmountDollars(e.target.value)}
-              placeholder="Amount ($)"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none"
-            />
-            <input
-              type="text"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-              placeholder="Currency (USD)"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none"
-            />
-            <input
-              type="text"
-              value={turnaroundLabel}
-              onChange={(e) => setTurnaroundLabel(e.target.value)}
-              placeholder="ETA (e.g. 24h)"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none"
-            />
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={revisionsIncluded}
-              onChange={(e) => setRevisionsIncluded(e.target.value)}
-              placeholder="Revisions included"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none"
-            />
-          </div>
-          <textarea
-            value={scopeText}
-            onChange={(e) => setScopeText(e.target.value)}
-            placeholder={"What I will do (one line per deliverable)\ne.g.\nColor correction\nAudio adjustment\nCaptions"}
-            rows={3}
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none"
+        <div className="mt-3">
+          <QuoteCreateForm
+            clientId={clientId}
+            onDone={() => {
+              setShowCreateForm(false);
+              router.refresh();
+            }}
           />
-          <input
-            type="text"
-            value={summary}
-            onChange={(e) => setSummary(e.target.value)}
-            placeholder="Summary (optional)"
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none"
-          />
-          {Object.values(errors).map((message, index) => (
-            <p key={index} className="text-xs text-red-300">
-              {message}
-            </p>
-          ))}
-          {error && <p className="text-xs text-red-300">{error}</p>}
-          <button
-            type="button"
-            onClick={submit}
-            disabled={isPending}
-            className="w-full rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white hover:bg-violet-500 disabled:opacity-50"
-          >
-            {isPending ? "Logging…" : "Log quote (DRAFT)"}
-          </button>
         </div>
       )}
 
