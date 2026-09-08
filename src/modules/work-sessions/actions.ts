@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   CORRECT_WORK_SESSION_SQL,
+  LOG_MANUAL_WORK_SESSION_SQL,
   START_WORK_SESSION_SQL,
   STOP_WORK_SESSION_AT_SQL,
   STOP_WORK_SESSION_SQL,
@@ -317,4 +318,64 @@ export async function correctWorkSession(
 
   revalidateWorkSessionSurfaces({ clientId: newClientId, projectId: newProjectId });
   return { success: true, message: "Session corrected." };
+}
+
+// Tuesday Patch Priority 6: "Log Manual Time" -- reuses the exact same
+// validation as correctWorkSession (identical shape: video, start, end,
+// activity, note) since the constraints are identical (end after start,
+// not in the future, capped duration). The only difference is INSERT vs
+// UPDATE -- this creates a new, already-closed row rather than touching
+// an existing one, source-tagged MANUAL so it stays distinguishable from
+// anything a live timer or the sensor ever produced.
+export async function logManualWorkSession(input: {
+  videoId: number;
+  startedAt: string;
+  endedAt: string;
+  activityType: WorkSessionActivityType;
+  note: string | null;
+}): Promise<CorrectionActionResult> {
+  const validated = validateSessionCorrection({
+    videoId: input.videoId,
+    startedAt: new Date(input.startedAt),
+    endedAt: new Date(input.endedAt),
+    activityType: input.activityType,
+    note: input.note,
+  });
+  if (!validated.success) return validated;
+
+  if (!(await videoExists(validated.data.videoId))) {
+    return { success: false, error: "Chosen video not found." };
+  }
+
+  const db = await getAuthenticatedDb();
+  const inserted = await db.$client
+    .prepare(LOG_MANUAL_WORK_SESSION_SQL)
+    .bind(
+      validated.data.videoId,
+      toUnixSeconds(validated.data.startedAt),
+      toUnixSeconds(validated.data.endedAt),
+      validated.data.activityType,
+      validated.data.note,
+    )
+    .first<RawMutationRow>();
+
+  if (!inserted) {
+    return {
+      success: false,
+      error: "Could not save this session. Refresh and try again.",
+    };
+  }
+
+  const attribution = await getVideoAttribution(validated.data.videoId);
+  await db.insert(crmEvents).values({
+    clientId: attribution?.clientId ?? null,
+    videoId: validated.data.videoId,
+    type: "work_session.manual_logged",
+    actor: "admin",
+    description: `Manually logged ${validated.data.activityType} time`,
+    createdAt: new Date(),
+  });
+
+  revalidateWorkSessionSurfaces({ clientId: attribution?.clientId ?? null, projectId: attribution?.projectId ?? null });
+  return { success: true, message: "Time logged." };
 }

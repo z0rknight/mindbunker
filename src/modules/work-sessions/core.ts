@@ -39,11 +39,16 @@ export const WORK_SESSION_ACTIVITY_LABELS: Record<
 // see the comment on work_sessions.source in schema.ts for why this column
 // carries no CHECK constraint. WEB_TIMER remains the browser capture path;
 // MAC_SENSOR identifies the native macOS bridge without changing correction
-// semantics. Future MANUAL/IMPORTED values remain deliberately deferred.
+// semantics. MANUAL (Tuesday Patch Priority 6, brief's "Log Manual Time --
+// caso você esqueça de iniciar sessão") identifies a session that was
+// never live-tracked at all -- entered directly as a closed start/end
+// window, e.g. to backfill a day the operator forgot to log. Future
+// IMPORTED values remain deliberately deferred.
 export const WORK_SESSION_SOURCES = [
   "WEB_TIMER",
   "MAC_SENSOR",
   "MAC_SENSOR_APPROVED",
+  "MANUAL",
 ] as const;
 export type WorkSessionSource = (typeof WORK_SESSION_SOURCES)[number];
 export const DEFAULT_WORK_SESSION_SOURCE: WorkSessionSource = "WEB_TIMER";
@@ -332,6 +337,21 @@ export const CORRECT_WORK_SESSION_SQL = `
     AND ?4 > ?3
     AND EXISTS (SELECT 1 FROM video_logs WHERE id = ?2)
   RETURNING id, video_id, started_at, ended_at, activity_type, note, updated_at
+`;
+
+// Tuesday Patch Priority 6 (brief's "Log Manual Time" + the "não logasse
+// no dia 7" backfill complaint -- the same underlying gap: no way to
+// record a work window that was never live-tracked). Deliberately an
+// INSERT of an already-closed row, never touching the
+// work_sessions_one_open_idx partial unique index (that index only
+// applies where ended_at IS NULL) -- a manual entry can be logged
+// regardless of whatever else is or isn't currently running.
+export const LOG_MANUAL_WORK_SESSION_SQL = `
+  INSERT INTO work_sessions (video_id, started_at, ended_at, activity_type, note, source)
+  SELECT ?1, ?2, ?3, ?4, ?5, 'MANUAL'
+  WHERE EXISTS (SELECT 1 FROM video_logs WHERE id = ?1)
+    AND ?3 > ?2
+  RETURNING id, video_id, started_at, ended_at, activity_type, note, source
 `;
 
 export type SessionCorrectionInput = {

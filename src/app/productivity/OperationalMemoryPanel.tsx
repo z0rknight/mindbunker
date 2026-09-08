@@ -32,7 +32,13 @@ import {
   instantToOperatorDateTimeLocal,
   operatorLocalDateTimeToIso,
 } from "@/modules/video-operations/core";
-import { formatClosedDuration } from "@/modules/work-sessions/core";
+import {
+  WORK_SESSION_ACTIVITY_LABELS,
+  WORK_SESSION_ACTIVITY_TYPES,
+  formatClosedDuration,
+  type WorkSessionActivityType,
+} from "@/modules/work-sessions/core";
+import { logManualWorkSession } from "@/modules/work-sessions/actions";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { FollowUpControl } from "./FollowUpControl";
 
@@ -77,6 +83,10 @@ export function OperationalMemoryPanel({ videoId }: { videoId: number }) {
   const [deliveryUrl, setDeliveryUrl] = useState("");
   const [deliveryNote, setDeliveryNote] = useState("");
   const [deliveryCommitmentId, setDeliveryCommitmentId] = useState("");
+  const [manualActivityType, setManualActivityType] = useState<WorkSessionActivityType>("EDITING");
+  const [manualStart, setManualStart] = useState("");
+  const [manualEnd, setManualEnd] = useState("");
+  const [manualNote, setManualNote] = useState("");
 
   const load = useCallback(async () => {
     const result = await getVideoOperationalSnapshot(videoId);
@@ -363,6 +373,43 @@ export function OperationalMemoryPanel({ videoId }: { videoId: number }) {
               <input type="number" min="0" max="10080" value={revisionMinutes} onChange={(event) => setRevisionMinutes(event.target.value)} placeholder="Rework minutes (optional)" className={inputClass} />
               <input value={revisionNote} onChange={(event) => setRevisionNote(event.target.value)} placeholder="What changed?" maxLength={1_000} className={inputClass} />
               <button disabled={pending} onClick={() => run(() => recordDetailedRevision({ videoId, causedBy: revisionCause, category: revisionCategory, minutesRework: revisionMinutes, note: revisionNote }), () => { setRevisionMinutes(""); setRevisionNote(""); })} className={`${smallButton} sm:col-span-2`}>Register Correction</button>
+            </div>
+          </details>
+
+          <details className="rounded-xl border border-zinc-800 bg-zinc-950/35 p-3">
+            <summary className="cursor-pointer text-xs font-black uppercase tracking-wider text-zinc-300">
+              Log manual time
+            </summary>
+            <p className="mt-2 text-[11px] text-zinc-600">For a day you forgot to start the timer -- records a closed session directly, tagged MANUAL.</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <select value={manualActivityType} onChange={(event) => setManualActivityType(event.target.value as WorkSessionActivityType)} className={inputClass}>
+                {WORK_SESSION_ACTIVITY_TYPES.map((value) => <option key={value} value={value}>{WORK_SESSION_ACTIVITY_LABELS[value]}</option>)}
+              </select>
+              <input value={manualNote} onChange={(event) => setManualNote(event.target.value)} placeholder="Note (optional)" maxLength={1_000} className={inputClass} />
+              <label className="text-xs text-zinc-500">
+                Start
+                <input type="datetime-local" value={manualStart} onChange={(event) => setManualStart(event.target.value)} className={`${inputClass} mt-1`} />
+              </label>
+              <label className="text-xs text-zinc-500">
+                End
+                <input type="datetime-local" value={manualEnd} onChange={(event) => setManualEnd(event.target.value)} className={`${inputClass} mt-1`} />
+              </label>
+              <button
+                disabled={pending}
+                onClick={() => {
+                  const startedAt = canonicalDue(manualStart);
+                  if (!startedAt) return;
+                  const endedAt = canonicalDue(manualEnd);
+                  if (!endedAt) return;
+                  run(
+                    () => logManualWorkSession({ videoId, startedAt, endedAt, activityType: manualActivityType, note: manualNote || null }),
+                    () => { setManualStart(""); setManualEnd(""); setManualNote(""); },
+                  );
+                }}
+                className={`${smallButton} sm:col-span-2`}
+              >
+                Log time
+              </button>
             </div>
           </details>
         </div>

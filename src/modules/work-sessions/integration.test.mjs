@@ -8,6 +8,7 @@ import { Worker } from "node:worker_threads";
 
 import {
   CORRECT_WORK_SESSION_SQL,
+  LOG_MANUAL_WORK_SESSION_SQL,
   OPEN_WORK_SESSION_SQL,
   START_WORK_SESSION_SQL,
   STOP_WORK_SESSION_AT_SQL,
@@ -559,6 +560,42 @@ test("correction is idempotent-safe: correcting to the same values twice succeed
   const second = correct(db, 1, 100, 1_000, 1_600, "REVIEW", "fixed activity", 6_000);
   assert.ok(second);
   assert.equal(second.updated_at, 6_000);
+  db.close();
+});
+
+function logManual(db, videoId, startedAt, endedAt, activityType, note) {
+  return plain(
+    db.prepare(LOG_MANUAL_WORK_SESSION_SQL).get(videoId, startedAt, endedAt, activityType, note),
+  );
+}
+
+test("a manual log inserts a new closed row source-tagged MANUAL, independent of any open session", () => {
+  const db = createFixtureDatabase();
+  // A live session is open on a different video -- the manual entry must
+  // not be blocked by it (unlike START_WORK_SESSION_SQL's one-open-session
+  // guard, which this INSERT never touches).
+  assert.ok(start(db, 200, 500, "EDITING"));
+
+  const logged = logManual(db, 100, 1_000, 4_600, "REVIEW", "backfilled Sep 7");
+  assert.deepEqual(logged, {
+    id: 2,
+    video_id: 100,
+    started_at: 1_000,
+    ended_at: 4_600,
+    activity_type: "REVIEW",
+    note: "backfilled Sep 7",
+    source: "MANUAL",
+  });
+  const row = plain(db.prepare("SELECT source FROM work_sessions WHERE id = 2").get());
+  assert.deepEqual(row, { source: "MANUAL" });
+  db.close();
+});
+
+test("a manual log rejects an inverted/zero duration and a nonexistent video", () => {
+  const db = createFixtureDatabase();
+  assert.equal(logManual(db, 100, 4_600, 1_000, "EDITING", null), undefined, "end before start must be rejected");
+  assert.equal(logManual(db, 100, 1_000, 1_000, "EDITING", null), undefined, "zero-length duration must be rejected");
+  assert.equal(logManual(db, 999, 1_000, 4_600, "EDITING", null), undefined, "a nonexistent video must be rejected");
   db.close();
 });
 
