@@ -177,12 +177,19 @@ export async function updateHealthLog(
 }
 
 export async function getTodayHealthLog() {
+  return getHealthLogForDate(todayISO());
+}
+
+// Backfill Day (Tuesday Patch Completion Round §I): getTodayHealthLog's
+// own query, generalized to an arbitrary past date -- healthLogs is
+// already one row per date (unique constraint), so "existing facts for
+// that date" is just this same read with a different key.
+export async function getHealthLogForDate(date: string) {
   const db = await getAuthenticatedDb();
-  const today = todayISO();
   const logs = await db
     .select()
     .from(healthLogs)
-    .where(eq(healthLogs.date, today));
+    .where(eq(healthLogs.date, date));
   return logs[0] ?? null;
 }
 

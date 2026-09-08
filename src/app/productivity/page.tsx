@@ -2,7 +2,6 @@ import {
   FinishedVideoButton,
   PlanVideoButton,
 } from "@/components/ui/QuickActions";
-import { BackfillDayButton } from "./BackfillDayButton";
 import { StatCard } from "@/components/ui/StatCard";
 import {
   getAllVideoLogs,
@@ -273,7 +272,12 @@ export default async function ProductivityPage({
               initiallyOpen={query.planVideo === "1"}
             />
             <FinishedVideoButton />
-            <BackfillDayButton />
+            <Link
+              href="/productivity/backfill"
+              className="flex min-h-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-black text-zinc-300 transition hover:border-violet-500/60 hover:text-white"
+            >
+              Backfill a day →
+            </Link>
           </div>
         </div>
       </section>
