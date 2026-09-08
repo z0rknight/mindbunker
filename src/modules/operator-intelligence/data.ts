@@ -3,7 +3,7 @@ import "server-only";
 import { getAuthenticatedDb } from "@/db";
 import { blockers, clients, commitments, projects, videoLogs, workSessions } from "@/db/schema";
 import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
-import { rankDashboardAttention, type AttentionCandidate } from "./core";
+import { groupDashboardAttention, rankDashboardAttention, type AttentionCandidate } from "./core";
 
 export type RecentCurrentTarget = {
   videoId: number;
@@ -137,8 +137,16 @@ export async function getDashboardOperatorIntelligence() {
     if (recentCurrentTargets.length === 2) break;
   }
 
+  // Tuesday Patch Priority 1: rank a wider raw pool (was capped at 5 raw
+  // items, which is exactly what produced 5 near-identical READY_FOR_REVIEW
+  // cards) and let groupDashboardAttention -- not this cap -- decide what's
+  // actually shown. rankDashboardAttention's own default limit (5) stays
+  // unchanged for its existing callers/tests; this call site alone asks for
+  // more raw material to group from.
+  const rankedAttention = rankDashboardAttention(candidates, new Date(), 200);
   return {
-    attention: rankDashboardAttention(candidates),
+    attention: rankedAttention,
+    attentionGroups: groupDashboardAttention(rankedAttention),
     recentCurrentTargets,
   };
 }

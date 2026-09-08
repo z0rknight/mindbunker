@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { rankDashboardAttention, selectDashboardNow } from "./core.ts";
+import { groupDashboardAttention, rankDashboardAttention, selectDashboardNow } from "./core.ts";
 import { buildDailyHealthLedger, computeHealthWindowSummary } from "../health/core.ts";
 import { previousMonthComparableRangeISO } from "../../utils/date.ts";
 
@@ -158,4 +158,86 @@ test("local operator dogfood keeps attention, health, and trend facts truthful",
     start: "2026-08-01",
     end: "2026-08-10",
   });
+});
+
+// ─── Tuesday Patch Priority 1: Dashboard attention grouping ────────────────
+
+test("groupDashboardAttention collapses same reason/client/project into one group with a count", () => {
+  const items = rankDashboardAttention(
+    [
+      { videoId: 1, videoTitle: "VSF__2", clientName: "Dave", projectName: "Short Form", source: "VIDEO", sourceId: 1, title: "Ready for review", createdAt: "2026-09-01T10:00:00Z", videoStatus: "READY_FOR_REVIEW" },
+      { videoId: 2, videoTitle: "VSF__3", clientName: "Dave", projectName: "Short Form", source: "VIDEO", sourceId: 2, title: "Ready for review", createdAt: "2026-09-01T10:00:00Z", videoStatus: "READY_FOR_REVIEW" },
+      { videoId: 3, videoTitle: "VSF__4", clientName: "Dave", projectName: "Short Form", source: "VIDEO", sourceId: 3, title: "Ready for review", createdAt: "2026-09-01T10:00:00Z", videoStatus: "READY_FOR_REVIEW" },
+      { videoId: 4, videoTitle: "VSF__5", clientName: "Dave", projectName: "Short Form", source: "VIDEO", sourceId: 4, title: "Ready for review", createdAt: "2026-09-01T10:00:00Z", videoStatus: "READY_FOR_REVIEW" },
+      { videoId: 5, videoTitle: "Video 1", clientName: "Taryn", projectName: "Mini Series", source: "VIDEO", sourceId: 5, title: "Ready for review", createdAt: "2026-09-01T10:00:00Z", videoStatus: "READY_FOR_REVIEW" },
+    ],
+    new Date("2026-09-02T00:00:00Z"),
+    200,
+  );
+  const groups = groupDashboardAttention(items);
+  assert.equal(groups.length, 2);
+  const dave = groups.find((group) => group.clientName === "Dave");
+  const taryn = groups.find((group) => group.clientName === "Taryn");
+  assert.equal(dave.items.length, 4);
+  assert.equal(taryn.items.length, 1);
+  assert.equal(dave.reasonLabel, "Ready for review");
+});
+
+test("groupDashboardAttention never produces more raw rows than the underlying items -- no duplicate alert objects", () => {
+  const items = rankDashboardAttention(
+    [
+      { videoId: 1, videoTitle: "A", clientName: "Dave", projectName: "P", source: "VIDEO", sourceId: 1, title: "x", createdAt: "2026-09-01T10:00:00Z", videoStatus: "READY_FOR_REVIEW" },
+      { videoId: 2, videoTitle: "B", clientName: "Dave", projectName: "P", source: "VIDEO", sourceId: 2, title: "x", createdAt: "2026-09-01T10:00:00Z", videoStatus: "READY_FOR_REVIEW" },
+    ],
+    new Date("2026-09-02T00:00:00Z"),
+    200,
+  );
+  const groups = groupDashboardAttention(items);
+  const totalGroupedItems = groups.reduce((sum, group) => sum + group.items.length, 0);
+  assert.equal(totalGroupedItems, items.length);
+});
+
+test("groupDashboardAttention keeps a lone item's own video title visible, not hidden behind a count", () => {
+  const items = rankDashboardAttention(
+    [{ videoId: 5, videoTitle: "Episode 01", clientName: "Taryn", projectName: "Mini Series", source: "VIDEO", sourceId: 5, title: "x", createdAt: "2026-09-01T10:00:00Z", videoStatus: "READY_FOR_REVIEW" }],
+    new Date("2026-09-02T00:00:00Z"),
+    200,
+  );
+  const [group] = groupDashboardAttention(items);
+  assert.equal(group.items.length, 1);
+  assert.equal(group.items[0].videoTitle, "Episode 01");
+});
+
+test("groupDashboardAttention orders groups by the same reason severity as ranking (data issue/overdue before lifecycle)", () => {
+  const items = rankDashboardAttention(
+    [
+      { videoId: 1, videoTitle: "A", clientName: "Dave", projectName: "P1", source: "VIDEO", sourceId: 1, title: "x", createdAt: "2026-09-01T10:00:00Z", videoStatus: "READY_FOR_REVIEW" },
+      { videoId: 2, videoTitle: "B", clientName: "Shelley", projectName: "P2", source: "BLOCKER", sourceId: 2, title: "Missing files", createdAt: "2026-09-01T10:00:00Z" },
+    ],
+    new Date("2026-09-02T00:00:00Z"),
+    200,
+  );
+  const groups = groupDashboardAttention(items);
+  assert.equal(groups[0].reason, "BLOCKED");
+  assert.equal(groups[1].reason, "READY_FOR_REVIEW");
+});
+
+test("groupDashboardAttention respects groupLimit on the number of GROUPS, not raw items", () => {
+  const items = rankDashboardAttention(
+    Array.from({ length: 10 }, (_, index) => ({
+      videoId: index,
+      videoTitle: `V${index}`,
+      clientName: `Client${index}`,
+      projectName: `P${index}`,
+      source: "VIDEO",
+      sourceId: index,
+      title: "x",
+      createdAt: "2026-09-01T10:00:00Z",
+      videoStatus: "READY_FOR_REVIEW",
+    })),
+    new Date("2026-09-02T00:00:00Z"),
+    200,
+  );
+  const groups = groupDashboardAttention(items, 3);
+  assert.equal(groups.length, 3);
 });

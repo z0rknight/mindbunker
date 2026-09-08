@@ -124,34 +124,45 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      {operatorIntelligence.attention.length > 0 && (
+      {operatorIntelligence.attentionGroups.length > 0 && (
         <section className="mb-8" data-testid="dashboard-attention">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-400">Attention</h2>
             <span className="text-[11px] text-zinc-600">Highest-priority operational facts</span>
           </div>
           <div className="space-y-2">
-            {operatorIntelligence.attention.map((item) => (
-              <Link
-                key={`${item.source}-${item.sourceId}`}
-                href={`/productivity?video=${item.videoId}`}
-                className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-3 transition ${attentionClass(item.reason)}`}
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-black uppercase tracking-wider">{attentionLabel(item.reason)}</span>
-                    <p className="truncate text-sm font-bold text-white">{item.title}</p>
+            {operatorIntelligence.attentionGroups.map((group) => {
+              const first = group.items[0];
+              const isSingle = group.items.length === 1;
+              return (
+                <Link
+                  key={group.key}
+                  href={`/productivity?video=${first.videoId}`}
+                  className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-3 transition ${attentionClass(group.reason)}`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-wider">{group.reasonLabel}</span>
+                      {!isSingle && (
+                        <span className="rounded-full bg-black/25 px-1.5 py-0.5 font-mono text-[10px] text-inherit">
+                          {group.items.length}
+                        </span>
+                      )}
+                      <p className="truncate text-sm font-bold text-white">
+                        {isSingle ? first.videoTitle : `${group.items.length} videos`}
+                      </p>
+                    </div>
+                    <p className="mt-1 truncate text-[11px] text-zinc-500">
+                      {[group.clientName, group.projectName].filter(Boolean).join(" / ")}
+                    </p>
+                    {group.reason === "DATA_ISSUE" && (
+                      <p className="mt-1 text-[11px] text-red-300">Deadline precedes promise creation · edit the deadline in Video Workspace</p>
+                    )}
                   </div>
-                  <p className="mt-1 truncate text-[11px] text-zinc-500">
-                    {[item.clientName, item.projectName, item.videoTitle].filter(Boolean).join(" / ")}
-                  </p>
-                  {item.reason === "DATA_ISSUE" && (
-                    <p className="mt-1 text-[11px] text-red-300">Deadline precedes promise creation · edit the deadline in Video Workspace</p>
-                  )}
-                </div>
-                <span className="shrink-0 text-xs font-black">Open →</span>
-              </Link>
-            ))}
+                  <span className="shrink-0 text-xs font-black">Open →</span>
+                </Link>
+              );
+            })}
           </div>
         </section>
       )}
@@ -312,8 +323,18 @@ export default async function DashboardPage() {
       </div>
 
       {/* ── INSIGHTS & CORRELATIONS ───────────────────────────────────────── */}
-      <div className="mb-8">
-        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">Operational context</h2>
+      {/* Tuesday Patch Priority 1 (below-the-fold noise): these six cards
+          read the exact same getWarRoomData() call War Room's own Layer
+          II/III/IV cards do -- same numbers, different chrome. Nothing
+          here is deleted (per instruction); it's collapsed by default so
+          Dashboard's own scroll doesn't repeat War Room's job, while the
+          data stays one click away for whoever wants it right here. */}
+      <details className="group mb-8">
+        <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-zinc-400 text-xs font-semibold uppercase tracking-widest">
+          <span className="transition group-open:rotate-90">▸</span>
+          Operational context
+          <span className="normal-case text-zinc-600">— also on War Room</span>
+        </summary>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Revenue Trend */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
@@ -445,11 +466,18 @@ export default async function DashboardPage() {
             </p>
           </div>
         </div>
-      </div>
+      </details>
 
       {/* ── DETAILED STATISTICS ─────────────────────────────────────────────── */}
-      <div className="mb-6">
-        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">📊 Detailed Statistics</h2>
+      {/* Same demotion rationale: Finance/Productivity/CRM/Health stat
+          grids here largely restate what their own surfaces already show
+          (and, for Finance, what Priority 4's new Overview leads with).
+          Collapsed by default, not deleted. */}
+      <details className="group mb-6">
+        <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-zinc-400 text-xs font-semibold uppercase tracking-widest">
+          <span className="transition group-open:rotate-90">▸</span>
+          📊 Detailed Statistics
+        </summary>
 
         {/* Finance Section */}
         <div className="mb-6">
@@ -674,23 +702,10 @@ export default async function DashboardPage() {
             />
           </div>
         </div>
-      </div>
+      </details>
 
     </div>
   );
-}
-
-function attentionLabel(reason: AttentionReason) {
-  const labels: Record<AttentionReason, string> = {
-    DATA_ISSUE: "Data issue",
-    OVERDUE: "Overdue",
-    BLOCKED: "Blocked",
-    CHANGES_REQUESTED: "Changes requested",
-    READY_FOR_REVIEW: "Ready for review",
-    DUE_TODAY: "Due today",
-    DUE_NEXT_7_DAYS: "Due soon",
-  };
-  return labels[reason];
 }
 
 function attentionClass(reason: AttentionReason) {
