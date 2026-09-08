@@ -632,4 +632,3 @@ test("computeUpcomingObligations sums renewals within the window and excludes pa
     { currency: "BRL", amount: 15 },
   ]);
 });
->>>>>>> 6d28b67 (Give Finance an Overview layer: your money, without the accounting)
