@@ -372,6 +372,31 @@ test("session history video filter (local dogfooding consolidation) narrows to o
   db.close();
 });
 
+test("session history project filter narrows to every video in that project", () => {
+  // Fixture: video 100 -> project 10 (Client A), video 200 -> project 20
+  // (Client B), video 300 -> also project 10, zero sessions.
+  const db = createFixtureDatabase();
+  assert.ok(start(db, 100, 1_000, "EDITING"));
+  assert.ok(stop(db, 100, 1_600));
+  assert.ok(start(db, 200, 2_000, "COLOR"));
+  assert.ok(stop(db, 200, 2_600));
+
+  const filtered = db.prepare(WORK_SESSION_HISTORY_SQL).all(10, null, 10).map(plain);
+  assert.deepEqual(filtered.map((row) => row.video_id), [100]);
+  assert.equal(filtered[0].project_name, "Project A");
+
+  const otherProject = db.prepare(WORK_SESSION_HISTORY_SQL).all(10, null, 20).map(plain);
+  assert.deepEqual(otherProject.map((row) => row.video_id), [200]);
+
+  // The video filter and project filter can combine (both non-null) --
+  // narrows to the intersection, not either alone.
+  const both = db.prepare(WORK_SESSION_HISTORY_SQL).all(10, 100, 10).map(plain);
+  assert.deepEqual(both.map((row) => row.video_id), [100]);
+  const mismatched = db.prepare(WORK_SESSION_HISTORY_SQL).all(10, 100, 20).map(plain);
+  assert.deepEqual(mismatched, []);
+  db.close();
+});
+
 test("competing Start requests cannot create two open sessions", async () => {
   const directory = mkdtempSync(join(tmpdir(), "mindbunker-work-session-race-"));
   const path = join(directory, "race.sqlite");

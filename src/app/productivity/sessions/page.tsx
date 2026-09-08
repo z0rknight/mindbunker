@@ -16,15 +16,18 @@ export const dynamic = "force-dynamic";
 export default async function WorkSessionHistoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ video?: string | string[] }>;
+  searchParams: Promise<{ video?: string | string[]; project?: string | string[] }>;
 }) {
   const query = await searchParams;
   const rawVideo = query.video;
   const filterVideoId =
     typeof rawVideo === "string" && /^\d+$/u.test(rawVideo) ? Number(rawVideo) : null;
+  const rawProject = query.project;
+  const filterProjectId =
+    typeof rawProject === "string" && /^\d+$/u.test(rawProject) ? Number(rawProject) : null;
 
   const [sessions, videoOptions] = await Promise.all([
-    getWorkSessionHistory(undefined, filterVideoId),
+    getWorkSessionHistory(undefined, filterVideoId, filterProjectId),
     getVideoOptionsForCorrection(),
   ]);
   // Session Narrative (Sunday Systems Round, Phase B/C/D): must run after
@@ -44,6 +47,8 @@ export default async function WorkSessionHistoryPage({
       : (sessions[0]?.videoTitle ??
         videoOptions.find((option) => option.id === filterVideoId)?.title ??
         `Video #${filterVideoId}`);
+  const filterProjectTitle =
+    filterProjectId === null ? null : (sessions[0]?.projectName ?? "this project");
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 md:p-8">
@@ -71,11 +76,11 @@ export default async function WorkSessionHistoryPage({
         )}
       </div>
 
-      {filterVideoId !== null && (
+      {(filterVideoId !== null || filterProjectId !== null) && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-800/50 bg-cyan-950/20 p-4">
           <p className="text-xs leading-5 text-cyan-200">
             <span className="font-bold uppercase tracking-wide">Filtered to —</span>{" "}
-            {filterVideoTitle}
+            {filterVideoId !== null ? filterVideoTitle : `every video in ${filterProjectTitle}`}
           </p>
           <Link
             href="/productivity/sessions"
@@ -100,7 +105,9 @@ export default async function WorkSessionHistoryPage({
         <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/35 px-4 py-8 text-center text-sm text-zinc-600">
           {filterVideoId !== null
             ? "No work sessions recorded for this video yet."
-            : "No work sessions recorded yet."}
+            : filterProjectId !== null
+              ? "No work sessions recorded for this project yet."
+              : "No work sessions recorded yet."}
         </div>
       ) : (
         <WorkSessionHistoryTable weeks={weeks} videoOptions={videoOptions} narratives={narratives} />

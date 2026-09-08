@@ -206,11 +206,12 @@ function mapHistoryEntry(row: RawHistoryRow): WorkSessionHistoryEntry | null {
 export async function getWorkSessionHistory(
   limit: number = DEFAULT_HISTORY_LIMIT,
   videoId: number | null = null,
+  projectId: number | null = null,
 ): Promise<WorkSessionHistoryEntry[]> {
   const db = await getAuthenticatedDb();
   const result = await db.$client
     .prepare(WORK_SESSION_HISTORY_SQL)
-    .bind(limit, videoId)
+    .bind(limit, videoId, projectId)
     .all<RawHistoryRow>();
   return result.results
     .map(mapHistoryEntry)

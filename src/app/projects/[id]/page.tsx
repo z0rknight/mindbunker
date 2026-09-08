@@ -111,6 +111,18 @@ export default async function ProjectWorkspacePage({
         </div>
       </section>
 
+      {/* Tuesday Patch Priority 6: "um painel similar a esse dentro de
+          cada projeto dos clientes... já temos as log sessions por video."
+          Reuses the existing Work Session Ledger, scoped to every video in
+          this project, instead of a second, smaller panel. */}
+      <Link
+        href={`/productivity/sessions?project=${project.id}`}
+        className="mb-7 flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm transition hover:border-zinc-600"
+      >
+        <span className="font-bold text-zinc-300">🗂️ Session log for this project</span>
+        <span className="text-xs font-black text-cyan-400">Every tracked session, day by day →</span>
+      </Link>
+
       {currentWorkVideo && (
         <section className="mb-7 rounded-2xl border border-cyan-900/50 bg-gradient-to-br from-zinc-900 to-zinc-950 p-4 sm:p-5">
           <p className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Current work</p>

@@ -252,6 +252,13 @@ export const OPEN_WORK_SESSION_SQL = `
 // null to see the unfiltered ledger, exactly as before). Kept as one query
 // rather than a second SQL constant so the filtered and unfiltered views
 // can never silently drift from each other in shape.
+// Tuesday Patch Priority 6 ("um painel similar a esse dentro de cada
+// projeto dos clientes... já temos as log sessions por video em um certo
+// sentido"): ?3 generalizes the existing video filter to a Project, so
+// the same ledger page can scope to "every session across every video in
+// this project" -- one dedicated, isolated evidence source per project,
+// reusing the full existing table/correction/narrative UI rather than a
+// second, smaller panel.
 export const WORK_SESSION_HISTORY_SQL = `
   SELECT
     ws.id,
@@ -272,6 +279,7 @@ export const WORK_SESSION_HISTORY_SQL = `
   LEFT JOIN clients c ON c.id = v.client_id
   LEFT JOIN sensor_sessions ss ON ss.approved_work_session_id = ws.id
   WHERE (?2 IS NULL OR ws.video_id = ?2)
+    AND (?3 IS NULL OR v.project_id = ?3)
   ORDER BY ws.started_at DESC
   LIMIT ?1
 `;
