@@ -1,4 +1,4 @@
-import type { FinanceHealth } from "@/modules/finance/health";
+import { getFinanceHealthActionItems, type FinanceHealth } from "@/modules/finance/health";
 import Link from "next/link";
 
 const STYLE = {
@@ -8,6 +8,7 @@ const STYLE = {
 } as const;
 
 export function FinanceHealthPanel({ health }: { health: FinanceHealth }) {
+  const actionItems = getFinanceHealthActionItems(health);
   return (
     <section className={`rounded-2xl border p-4 sm:p-5 ${STYLE[health.status]}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -29,36 +30,11 @@ export function FinanceHealthPanel({ health }: { health: FinanceHealth }) {
             Action queue · {health.actionableItems}
           </p>
           <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
-            {health.businessPocketIssues > 0 && (
-              <Link href="/finance#business-wise" className="rounded-lg border border-current/20 px-3 py-2 hover:bg-white/5">
-                {health.businessPocketIssues} business pocket(s) need reconciliation →
+            {actionItems.map((item) => (
+              <Link key={item.key} href={item.href} className="rounded-lg border border-current/20 px-3 py-2 hover:bg-white/5">
+                {item.label} →
               </Link>
-            )}
-            {health.personalPocketIssues > 0 && (
-              <Link href="/finance/personal#personal-wise" className="rounded-lg border border-current/20 px-3 py-2 hover:bg-white/5">
-                {health.personalPocketIssues} personal pocket(s) need reconciliation →
-              </Link>
-            )}
-            {health.unresolvedAttribution > 0 && (
-              <Link href="/finance#transactions" className="rounded-lg border border-current/20 px-3 py-2 hover:bg-white/5">
-                {health.unresolvedAttribution} income receipt(s) need attribution →
-              </Link>
-            )}
-            {health.ambiguousEvidence > 0 && (
-              <Link href="/finance#business-wise" className="rounded-lg border border-current/20 px-3 py-2 hover:bg-white/5">
-                {health.ambiguousEvidence} custody movement(s) remain evidence-only →
-              </Link>
-            )}
-            {health.malformedFx > 0 && (
-              <Link href="/finance/fx" className="rounded-lg border border-current/20 px-3 py-2 hover:bg-white/5">
-                {health.malformedFx} FX row(s) need review →
-              </Link>
-            )}
-            {health.duplicateExternalIdentities > 0 && (
-              <span className="rounded-lg border border-current/20 px-3 py-2">
-                {health.duplicateExternalIdentities} duplicate external identity issue(s)
-              </span>
-            )}
+            ))}
           </div>
         </div>
       )}

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { computeFinanceHealth } from "./health.ts";
+import { computeFinanceHealth, financeHealthSentence } from "./health.ts";
 
 const sevenZero = [0, 0, 0, 0, 0, 0, 0];
 
@@ -48,4 +48,51 @@ test("Finance Health is RED for a pocket difference or structural duplication", 
     duplicateExternalIdentities: 1,
     malformedFx: 0,
   }).status, "RED");
+});
+
+test("financeHealthSentence renders one plain sentence per status, not a report", () => {
+  const green = computeFinanceHealth({
+    pocketDifferences: sevenZero,
+    unresolvedAttribution: 0,
+    ambiguousEvidence: 0,
+    duplicateExternalIdentities: 0,
+    malformedFx: 0,
+  });
+  assert.deepEqual(financeHealthSentence(green), { emoji: "🟢", text: "Everything looks good." });
+
+  const yellowOne = computeFinanceHealth({
+    pocketDifferences: sevenZero,
+    unresolvedAttribution: 1,
+    ambiguousEvidence: 0,
+    duplicateExternalIdentities: 0,
+    malformedFx: 0,
+  });
+  assert.deepEqual(financeHealthSentence(yellowOne), {
+    emoji: "🟡",
+    text: "Everything is accounted for, but 1 item needs organizing.",
+  });
+
+  const yellowMany = computeFinanceHealth({
+    pocketDifferences: sevenZero,
+    unresolvedAttribution: 3,
+    ambiguousEvidence: 0,
+    duplicateExternalIdentities: 0,
+    malformedFx: 0,
+  });
+  assert.deepEqual(financeHealthSentence(yellowMany), {
+    emoji: "🟡",
+    text: "Everything is accounted for, but 3 items need organizing.",
+  });
+
+  const red = computeFinanceHealth({
+    pocketDifferences: sevenZero,
+    unresolvedAttribution: 0,
+    ambiguousEvidence: 0,
+    duplicateExternalIdentities: 1,
+    malformedFx: 0,
+  });
+  assert.deepEqual(financeHealthSentence(red), {
+    emoji: "🔴",
+    text: "Something doesn't match your records.",
+  });
 });

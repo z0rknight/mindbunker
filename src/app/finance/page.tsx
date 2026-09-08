@@ -12,8 +12,13 @@ import {
   getFinanceHealth,
   getCommercialContracts,
 } from "@/modules/finance/actions";
-import { formatCurrency, formatDate, currentMonthKey, currentMonthName } from "@/utils/date";
-import { formatMinutesAsHours } from "@/modules/finance/core";
+import { formatCurrency, formatDate, currentMonthKey, currentMonthName, todayISO } from "@/utils/date";
+import {
+  computeReservedByCurrency,
+  computeUpcomingObligations,
+  formatMinutesAsHours,
+} from "@/modules/finance/core";
+import { financeHealthSentence, getFinanceHealthActionItems } from "@/modules/finance/health";
 import { DeleteTransactionButton } from "./DeleteTransactionButton";
 import { EditTransactionButton } from "./EditTransactionButton";
 import { CorrectOwnerPayButton } from "./CorrectOwnerPayButton";
@@ -27,6 +32,8 @@ import { getFxRateForMonth } from "@/modules/fx/actions";
 import { ReconcileWithWisePanel } from "@/components/finance/ReconcileWithWisePanel";
 import { FinanceHealthPanel } from "@/components/finance/FinanceHealthPanel";
 import { EconomicLedgerCard } from "@/components/finance/EconomicLedgerCard";
+import { FinanceOverviewPanel, type NeedsYouItem } from "@/components/finance/FinanceOverviewPanel";
+import { FinanceTabs } from "./FinanceTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +83,43 @@ export default async function FinancePage() {
 
   const recentTransactions = [...transactions].reverse().slice(0, 100);
 
+  // Tuesday Patch Priority 4: Overview's three headline numbers, all
+  // derived from facts already computed elsewhere on this page -- no new
+  // arithmetic beyond the two small sums in modules/finance/core.ts.
+  const today = todayISO();
+  const availableByCurrency = rmediaCash.map((row) => ({ currency: row.currency, amount: row.availableLedgerNet }));
+  const reservedByCurrency = computeReservedByCurrency(
+    rmediaCash.map((row) => ({ currency: row.currency, amount: row.taxReserve })),
+    operatingReserve,
+  );
+  const upcomingByCurrency = computeUpcomingObligations(subscriptionSummary.upcomingRenewals, today, 30);
+  const monthByCurrency = summary.map((row) => ({
+    currency: row.currency,
+    received: row.monthlyRevenue,
+    spent: row.monthlyExpenses,
+    net: row.monthlyNet,
+  }));
+
+  const needsYou: NeedsYouItem[] = [
+    ...getFinanceHealthActionItems(financeHealth).map((item) => ({
+      key: item.key,
+      label: item.label,
+      href: item.href,
+      actionLabel: "Fix",
+    })),
+    ...reconciliationAttention.map((r) => ({
+      key: `reconcile-${r.contractId}-${r.periodStart}-${r.periodEnd}`,
+      label: `${r.clientName} billing ${
+        r.differenceMinutes.value !== null
+          ? `differs by ${formatMinutesAsHours(Math.abs(r.differenceMinutes.value))}`
+          : "needs review"
+      }`,
+      detail: `${r.platform} · ${formatDate(r.periodStart)} – ${formatDate(r.periodEnd)}`,
+      href: `/finance/contracts/${r.contractId}`,
+      actionLabel: "Review",
+    })),
+  ];
+
   // Client Portal Reality round §I: real FK links already present on every
   // transaction row (never inferred from category/name strings) -- just
   // rendered as dead text/not shown at all until now.
@@ -119,47 +163,127 @@ export default async function FinancePage() {
     return null;
   }
 
-  return (
-    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
-      <div className="mb-8 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">💰 Finance</h1>
-          <p className="text-zinc-500 text-sm mt-1">Income & expense tracker</p>
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <Link
-            href="/finance/contracts"
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
-          >
-            🧾 Contracts & Billing Evidence
-          </Link>
-          <Link
-            href="/finance/debts"
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
-          >
-            💳 Debts
-          </Link>
-          <Link
-            href="/finance/subscriptions"
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
-          >
-            🔁 Subscriptions
-          </Link>
-          <Link
-            href="/finance/fx"
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
-          >
-            💱 FX Ledger
-          </Link>
-          <Link
-            href="/finance/personal"
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
-          >
-            👤 Personal
-          </Link>
+  const transactionsPanel = (
+    <>
+      {/* Quick Actions */}
+      <div className="mb-8">
+        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">Add Transaction</h2>
+        <div className="grid max-w-2xl grid-cols-2 sm:grid-cols-3 gap-3">
+          <AddIncomeButton clients={clientOptions} contracts={contractOptions} />
+          <AddExpenseButton />
+          <RecordOwnerPayButton />
         </div>
       </div>
 
+      {/* Recent Income */}
+      <div className="mb-8">
+        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
+          Recent Income
+        </h2>
+        {recentIncome.length === 0 ? (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
+            <p className="text-zinc-500 text-sm">No income recorded yet.</p>
+          </div>
+        ) : (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs uppercase tracking-wider">Date</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs uppercase tracking-wider">Category</th>
+                  <th className="text-right text-zinc-500 font-medium px-4 py-2.5 text-xs uppercase tracking-wider">Amount</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs uppercase tracking-wider">Linked Evidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentIncome.map((t, i) => (
+                  <tr key={t.id} className={`border-b border-zinc-800/50 ${i % 2 === 0 ? "" : "bg-zinc-800/20"}`}>
+                    <td className="px-4 py-2.5 text-white">{formatDate(t.date)}</td>
+                    <td className="px-4 py-2.5 text-zinc-300">{t.category}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-medium text-emerald-400">
+                      +{formatCurrency(t.amount, t.currency)}
+                    </td>
+                    <td className="px-4 py-2.5 text-zinc-500 text-xs">
+                      {t.billingEvidenceId ? `#${t.billingEvidenceId}` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Transactions Table */}
+      <div id="transactions">
+        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
+          Transactions ({transactions.length} total)
+        </h2>
+        {recentTransactions.length === 0 ? (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center">
+            <p className="text-zinc-500 text-sm">No transactions yet. Add your first income or expense!</p>
+          </div>
+        ) : (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden overflow-x-auto">
+            <table className="w-full min-w-[680px] text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Date</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Type</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Category</th>
+                  <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Amount</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Notes</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Related</th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentTransactions.map((t, i) => (
+                  <tr id={`tx-${t.id}`} key={t.id} className={`border-b border-zinc-800/50 ${i % 2 === 0 ? "" : "bg-zinc-800/20"}`}>
+                    <td className="px-4 py-3 text-white">{formatDate(t.date)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        t.type === "income"
+                          ? "bg-emerald-900/50 text-emerald-400"
+                          : t.type === "owner_pay"
+                          ? "bg-indigo-900/50 text-indigo-400"
+                          : "bg-red-900/50 text-red-400"
+                      }`}>
+                        {t.type === "income" ? "Income" : t.type === "owner_pay" ? "Owner Pay" : "Expense"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-zinc-300">{t.category}</td>
+                    <td className={`px-4 py-3 text-right font-mono font-medium ${
+                      t.type === "income" ? "text-emerald-400" : t.type === "owner_pay" ? "text-indigo-400" : "text-red-400"
+                    }`}>
+                      {t.type === "income" ? "+" : "-"}{formatCurrency(t.amount, t.currency)}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-500 text-xs">{t.notes ?? "—"}</td>
+                    <td className="px-4 py-3 text-xs">{relatedLink(t) ?? <span className="text-zinc-700">—</span>}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-3">
+                        {t.type === "owner_pay" ? (
+                          <CorrectOwnerPayButton transaction={t} />
+                        ) : (
+                          <>
+                            <EditTransactionButton transaction={t} />
+                            <DeleteTransactionButton id={t.id} />
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  const accountingPanel = (
+    <>
       <div className="mb-6">
         <FinanceHealthPanel health={financeHealth} />
       </div>
@@ -370,121 +494,65 @@ export default async function FinancePage() {
           </div>
         ))}
       </div>
+    </>
+  );
 
-      {/* Quick Actions */}
-      <div className="mb-8">
-        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">Add Transaction</h2>
-        <div className="grid max-w-2xl grid-cols-2 sm:grid-cols-3 gap-3">
-          <AddIncomeButton clients={clientOptions} contracts={contractOptions} />
-          <AddExpenseButton />
-          <RecordOwnerPayButton />
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
+      <div className="mb-8 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white">💰 Finance</h1>
+          <p className="text-zinc-500 text-sm mt-1">Your money, without the accounting.</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Link
+            href="/finance/contracts"
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            🧾 Contracts & Billing Evidence
+          </Link>
+          <Link
+            href="/finance/debts"
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            💳 Debts
+          </Link>
+          <Link
+            href="/finance/subscriptions"
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            🔁 Subscriptions
+          </Link>
+          <Link
+            href="/finance/fx"
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            💱 FX Ledger
+          </Link>
+          <Link
+            href="/finance/personal"
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            👤 Personal
+          </Link>
         </div>
       </div>
 
-      {/* Recent Income */}
-      <div className="mb-8">
-        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
-          Recent Income
-        </h2>
-        {recentIncome.length === 0 ? (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center">
-            <p className="text-zinc-500 text-sm">No income recorded yet.</p>
-          </div>
-        ) : (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden overflow-x-auto">
-            <table className="w-full min-w-[520px] text-sm">
-              <thead>
-                <tr className="border-b border-zinc-800">
-                  <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs uppercase tracking-wider">Date</th>
-                  <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs uppercase tracking-wider">Category</th>
-                  <th className="text-right text-zinc-500 font-medium px-4 py-2.5 text-xs uppercase tracking-wider">Amount</th>
-                  <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs uppercase tracking-wider">Linked Evidence</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentIncome.map((t, i) => (
-                  <tr key={t.id} className={`border-b border-zinc-800/50 ${i % 2 === 0 ? "" : "bg-zinc-800/20"}`}>
-                    <td className="px-4 py-2.5 text-white">{formatDate(t.date)}</td>
-                    <td className="px-4 py-2.5 text-zinc-300">{t.category}</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-medium text-emerald-400">
-                      +{formatCurrency(t.amount, t.currency)}
-                    </td>
-                    <td className="px-4 py-2.5 text-zinc-500 text-xs">
-                      {t.billingEvidenceId ? `#${t.billingEvidenceId}` : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Transactions Table */}
-      <div id="transactions">
-        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
-          Transactions ({transactions.length} total)
-        </h2>
-        {recentTransactions.length === 0 ? (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center">
-            <p className="text-zinc-500 text-sm">No transactions yet. Add your first income or expense!</p>
-          </div>
-        ) : (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden overflow-x-auto">
-            <table className="w-full min-w-[680px] text-sm">
-              <thead>
-                <tr className="border-b border-zinc-800">
-                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Date</th>
-                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Type</th>
-                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Category</th>
-                  <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Amount</th>
-                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Notes</th>
-                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs uppercase tracking-wider">Related</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentTransactions.map((t, i) => (
-                  <tr id={`tx-${t.id}`} key={t.id} className={`border-b border-zinc-800/50 ${i % 2 === 0 ? "" : "bg-zinc-800/20"}`}>
-                    <td className="px-4 py-3 text-white">{formatDate(t.date)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        t.type === "income"
-                          ? "bg-emerald-900/50 text-emerald-400"
-                          : t.type === "owner_pay"
-                          ? "bg-indigo-900/50 text-indigo-400"
-                          : "bg-red-900/50 text-red-400"
-                      }`}>
-                        {t.type === "income" ? "Income" : t.type === "owner_pay" ? "Owner Pay" : "Expense"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-zinc-300">{t.category}</td>
-                    <td className={`px-4 py-3 text-right font-mono font-medium ${
-                      t.type === "income" ? "text-emerald-400" : t.type === "owner_pay" ? "text-indigo-400" : "text-red-400"
-                    }`}>
-                      {t.type === "income" ? "+" : "-"}{formatCurrency(t.amount, t.currency)}
-                    </td>
-                    <td className="px-4 py-3 text-zinc-500 text-xs">{t.notes ?? "—"}</td>
-                    <td className="px-4 py-3 text-xs">{relatedLink(t) ?? <span className="text-zinc-700">—</span>}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-3">
-                        {t.type === "owner_pay" ? (
-                          <CorrectOwnerPayButton transaction={t} />
-                        ) : (
-                          <>
-                            <EditTransactionButton transaction={t} />
-                            <DeleteTransactionButton id={t.id} />
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <FinanceTabs
+        overview={
+          <FinanceOverviewPanel
+            health={financeHealthSentence(financeHealth)}
+            availableByCurrency={availableByCurrency}
+            reservedByCurrency={reservedByCurrency}
+            upcomingByCurrency={upcomingByCurrency}
+            monthByCurrency={monthByCurrency}
+            needsYou={needsYou}
+            currentMonthLabel={currentMonthName()}
+          />
+        }
+        transactions={transactionsPanel}
+        accounting={accountingPanel}
+      />
     </div>
   );
 }

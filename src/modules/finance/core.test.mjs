@@ -591,3 +591,45 @@ test("DR-2 scenario E: existing valid reconciliation behavior is unchanged for a
   assert.equal(result.minutes, 90);
   assert.equal(result.openSessionCount, 1);
 });
+
+// ─── Tuesday Patch Priority 4 (Finance Overview) ───────────────────────────
+
+import { computeReservedByCurrency, computeUpcomingObligations } from "./core.ts";
+
+test("computeReservedByCurrency sums tax reserve and operating reserve per currency", () => {
+  const result = computeReservedByCurrency(
+    [{ currency: "USD", amount: 100 }, { currency: "BRL", amount: 50 }],
+    { currency: "USD", reservedSoFar: 47.25 },
+  );
+  assert.deepEqual(result, [
+    { currency: "USD", amount: 147.25 },
+    { currency: "BRL", amount: 50 },
+  ]);
+});
+
+test("computeReservedByCurrency omits a currency that nets to zero", () => {
+  const result = computeReservedByCurrency([], { currency: "USD", reservedSoFar: 0 });
+  assert.deepEqual(result, []);
+});
+
+test("computeReservedByCurrency introduces the operating reserve's own currency even with no tax reserve rows", () => {
+  const result = computeReservedByCurrency([], { currency: "BRL", reservedSoFar: 200 });
+  assert.deepEqual(result, [{ currency: "BRL", amount: 200 }]);
+});
+
+test("computeUpcomingObligations sums renewals within the window and excludes past-due or far-out ones", () => {
+  const today = "2026-09-08";
+  const renewals = [
+    { renewalDate: "2026-09-15", amount: 20, currency: "USD" }, // 7 days out, included
+    { renewalDate: "2026-10-20", amount: 999, currency: "USD" }, // 42 days out, excluded
+    { renewalDate: "2026-09-01", amount: 999, currency: "USD" }, // already past, excluded
+    { renewalDate: null, amount: 999, currency: "USD" }, // no date, excluded
+    { renewalDate: "2026-09-08", amount: 15, currency: "BRL" }, // due today, included
+  ];
+  const result = computeUpcomingObligations(renewals, today, 30);
+  assert.deepEqual(result, [
+    { currency: "USD", amount: 20 },
+    { currency: "BRL", amount: 15 },
+  ]);
+});
+>>>>>>> 6d28b67 (Give Finance an Overview layer: your money, without the accounting)

@@ -619,3 +619,62 @@ export function computeRateEquivalent(
     rateEquivalent: round2(hours * hourlyRate),
   };
 }
+
+// ─── Tuesday Patch Priority 4: "Your money, without the accounting" ────────
+// The Overview layer collapses the whole page to at most three numbers
+// (brief §Finance.2) -- Available (already computed elsewhere as
+// availableLedgerNet), Reserved, and Upcoming. These two are the only new
+// arithmetic Overview needs; both sum already-canonical facts, they don't
+// invent new ones.
+
+export type CurrencyAmount = { currency: string; amount: number };
+
+/**
+ * "Reserved -- dinheiro que decidi não tocar" (brief): tax reserve plus
+ * the operating cost reserve, summed per currency. Both are already
+ * displayed separately further down the page; this just adds them for
+ * the top-of-page number.
+ */
+export function computeReservedByCurrency(
+  taxReserveByCurrency: readonly CurrencyAmount[],
+  operatingReserve: { currency: string; reservedSoFar: number },
+): CurrencyAmount[] {
+  const totals = new Map<string, number>();
+  for (const row of taxReserveByCurrency) {
+    totals.set(row.currency, (totals.get(row.currency) ?? 0) + row.amount);
+  }
+  if (operatingReserve.reservedSoFar !== 0 || totals.has(operatingReserve.currency)) {
+    totals.set(
+      operatingReserve.currency,
+      (totals.get(operatingReserve.currency) ?? 0) + operatingReserve.reservedSoFar,
+    );
+  }
+  return Array.from(totals.entries())
+    .filter(([, amount]) => amount !== 0)
+    .map(([currency, amount]) => ({ currency, amount: round2(amount) }));
+}
+
+function daysUntil(todayISO: string, targetISO: string): number {
+  return Math.floor((Date.parse(targetISO) - Date.parse(todayISO)) / (24 * 60 * 60 * 1000));
+}
+
+/**
+ * "Upcoming -- coisas que vou precisar pagar" (brief): subscription
+ * renewals due within the next `windowDays`. Debts have no fixed due
+ * date in this schema (paid whenever, not a scheduled obligation), so
+ * they're deliberately not part of this number -- this is a "what's
+ * coming due" figure, not a general cash-flow forecast.
+ */
+export function computeUpcomingObligations(
+  renewals: readonly { renewalDate: string | null; amount: number; currency: string }[],
+  todayISO: string,
+  windowDays = 30,
+): CurrencyAmount[] {
+  const totals = new Map<string, number>();
+  for (const renewal of renewals) {
+    if (!renewal.renewalDate || renewal.renewalDate < todayISO) continue;
+    if (daysUntil(todayISO, renewal.renewalDate) > windowDays) continue;
+    totals.set(renewal.currency, (totals.get(renewal.currency) ?? 0) + renewal.amount);
+  }
+  return Array.from(totals.entries()).map(([currency, amount]) => ({ currency, amount: round2(amount) }));
+}
