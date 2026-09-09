@@ -17,6 +17,7 @@ import {
   isWorkSessionActivityType,
   isWorkSessionSource,
   isWorkSessionVideoId,
+  mondayOfWeek,
   sortProjectStreaks,
   toUnixSeconds,
   type CorrelatedMemoryNote,
@@ -26,9 +27,16 @@ import {
   type TodayWorkSessionStats,
   type VideoWorkSessionState,
   type VideoWorkSessionSummary,
+  type WorkSessionActivityType,
   type WorkSessionAttributionRow,
   type WorkSessionHistoryEntry,
+  type WorkSessionSource,
 } from "./core";
+import {
+  SESSION_TIMELINE_SQL,
+  type SessionTimelineItem,
+  type VideoKind,
+} from "./timeline";
 
 type RawSummaryRow = {
   video_id: number;
@@ -440,4 +448,106 @@ export async function getLastActiveByProject(): Promise<Map<number, string>> {
 // Keyed by client_id, same semantics.
 export async function getLastActiveByClient(): Promise<Map<number, string>> {
   return fetchLastActiveMap(LAST_ACTIVE_BY_CLIENT_SQL);
+}
+
+// ─── Session Timeline / Week Calendar (Wave 1) ─────────────────────────
+//
+// "Fetch broad in UTC, bucket exact in JS with dayKeyFor" -- the same
+// pattern computeTodayWorkSessionStats/computeProjectStreaks already use
+// and already trust, reused here rather than inventing a second
+// "local midnight as a UTC instant" primitive (see the exercise report
+// §9). A 2-calendar-day pad on each side comfortably covers any
+// reasonable timezone offset around the requested local day/week.
+
+export type SessionTimelineRange =
+  | { kind: "day"; dayKey: string }
+  | { kind: "week"; mondayKey: string };
+
+type RawTimelineRow = {
+  id: number;
+  video_id: number;
+  started_at: number;
+  ended_at: number | null;
+  activity_type: string;
+  note: string | null;
+  source: string;
+  updated_at: number | null;
+  video_title: string;
+  video_kind: string;
+  client_id: number | null;
+  client_name: string | null;
+  project_id: number | null;
+  project_name: string | null;
+  sensor_session_id: number | null;
+};
+
+function utcBoundForDateKey(dateKey: string, offsetDays: number): number {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  return toUnixSeconds(date);
+}
+
+function mapTimelineRow(row: RawTimelineRow, nowMs: number): SessionTimelineItem | null {
+  if (!isWorkSessionActivityType(row.activity_type)) return null;
+  if (!isVideoKind(row.video_kind)) return null;
+  const startedAtMs = Number(row.started_at) * 1_000;
+  const endedAtMs = row.ended_at === null ? null : Number(row.ended_at) * 1_000;
+  const source: WorkSessionSource = isWorkSessionSource(row.source) ? row.source : "WEB_TIMER";
+  const activityType: WorkSessionActivityType = row.activity_type;
+  const durationSeconds = Math.max(
+    0,
+    Math.floor(((endedAtMs ?? nowMs) - startedAtMs) / 1_000),
+  );
+  return {
+    id: Number(row.id),
+    startedAt: new Date(startedAtMs).toISOString(),
+    endedAt: endedAtMs === null ? null : new Date(endedAtMs).toISOString(),
+    durationSeconds,
+    clientId: row.client_id === null ? null : Number(row.client_id),
+    clientName: row.client_name,
+    projectId: row.project_id === null ? null : Number(row.project_id),
+    projectName: row.project_name,
+    videoId: Number(row.video_id),
+    videoTitle: row.video_title,
+    videoKind: row.video_kind as VideoKind,
+    activityType,
+    source,
+    note: row.note,
+    status: endedAtMs === null ? "OPEN" : "CLOSED",
+    updatedAt: row.updated_at === null ? null : new Date(Number(row.updated_at) * 1_000).toISOString(),
+    sensorSessionId: row.sensor_session_id === null ? null : Number(row.sensor_session_id),
+  };
+}
+
+// Local, tiny validator -- avoids a cross-module import of productivity's
+// own isVideoKind purely to check three literal strings this file already
+// declares as VideoKind.
+function isVideoKind(value: unknown): value is VideoKind {
+  return value === "CLIENT_WORK" || value === "SAMPLE" || value === "INTERNAL";
+}
+
+export async function getSessionTimelineItems(
+  range: SessionTimelineRange,
+  now: Date = new Date(),
+): Promise<SessionTimelineItem[]> {
+  const anchorKey = range.kind === "day" ? range.dayKey : range.mondayKey;
+  const padStart = utcBoundForDateKey(anchorKey, -2);
+  const padEnd = utcBoundForDateKey(anchorKey, range.kind === "day" ? 3 : 9);
+
+  const db = await getAuthenticatedDb();
+  const result = await db.$client
+    .prepare(SESSION_TIMELINE_SQL)
+    .bind(padStart, padEnd)
+    .all<RawTimelineRow>();
+
+  const nowMs = now.getTime();
+  const items = result.results
+    .map((row) => mapTimelineRow(row, nowMs))
+    .filter((item): item is SessionTimelineItem => item !== null);
+
+  if (range.kind === "day") {
+    return items.filter((item) => dayKeyFor(item.startedAt) === range.dayKey);
+  }
+  return items.filter((item) => mondayOfWeek(dayKeyFor(item.startedAt)) === range.mondayKey);
 }
