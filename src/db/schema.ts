@@ -2478,10 +2478,26 @@ export const captures = sqliteTable(
       onDelete: "set null",
     }),
     localCaptureId: text("local_capture_id"),
-    // Promotion/linkage -- set once, by promoteCapture, never cleared.
-    // The Capture row itself is never rewritten to pretend these existed
-    // at capture time (Wave 1.5 Decision C / mission §5 provenance
-    // invariant).
+    // Wave 2.1 (Promotion Custody release gate): promoteCapture claims
+    // this Capture atomically (conditional UPDATE, WHERE this column is
+    // NULL or older than the staleness window) before doing any external
+    // mutation, so two near-simultaneous promotion requests for the same
+    // Capture cannot both proceed. A crashed attempt's claim goes stale
+    // after the window and a retry may reclaim it -- this is a lease, not
+    // a permanent lock. Cleared back to NULL on a clean (non-crash)
+    // failure so an immediate retry doesn't have to wait out the window;
+    // left as-is on success, since the completed-promotion early-return
+    // check never reaches the claim step at all.
+    promotionClaimedAt: integer("promotion_claimed_at", { mode: "timestamp" }),
+    // Promotion/linkage -- persisted incrementally, one field at a time,
+    // immediately after each corresponding canonical entity is actually
+    // created (Wave 2.1: this is what makes a crash between two of
+    // promoteCapture's independent writes retry-safe instead of
+    // duplicating already-created entities -- see promoteCapture's own
+    // comments). Never rewritten to a different id once set, and the
+    // Capture row itself is never rewritten to pretend these existed at
+    // capture time (Wave 1.5 Decision C / mission §5 provenance
+    // invariant) -- only gains linkage, incrementally.
     promotedClientId: integer("promoted_client_id").references(() => clients.id, {
       onDelete: "set null",
     }),

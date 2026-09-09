@@ -86,3 +86,11 @@ export const CAPTURE_UNRESOLVED_SIGNAL_DAYS = 7;
 
 export const CAPTURE_SOURCES = ["WEB_QUICK_CAPTURE", "MAC_SENSOR", "MANUAL"] as const;
 export type CaptureSource = (typeof CAPTURE_SOURCES)[number];
+
+// Wave 2.1 (Promotion Custody release gate): how long a promotion claim
+// (captures.promotionClaimedAt) is honored before a retry may steal it.
+// A real promoteCapture run is a handful of sequential DB writes and
+// should complete in well under a second; 60s is a generous margin for
+// a slow cold start while still bounding how long a genuine crash can
+// lock a Capture out of retry.
+export const PROMOTION_CLAIM_STALE_MS = 60_000;

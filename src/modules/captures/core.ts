@@ -135,28 +135,50 @@ export function captureDurationMinutes(
 
 export type CaptureResolutionInput = {
   outcome: CaptureOutcome;
-  promotedClientId: number | null;
-  promotedProjectId: number | null;
-  promotedVideoId: number | null;
-  promotedWorkSessionId: number | null;
   dismissedAt: Date | null;
 };
 
-// Mission §9: "resolved" = outcome is terminal, OR the Capture has been
-// promoted/linked, OR it was explicitly dismissed. `dismissedAt` is a
-// distinct disposition from the three outcome values -- "I'm choosing
-// not to make a commercial call on this, just get it out of the Inbox"
-// (e.g. a duplicate/mistaken Capture) -- so it is checked here alongside
-// outcome/promotion rather than folded into REJECTED, which would make
-// Dismiss and Reject the same action under different names (mission
-// §8: "do not create redundant actions that mean the same thing").
+// Mission §9: "resolved" = outcome is terminal, OR it was explicitly
+// dismissed. `dismissedAt` is a distinct disposition from the three
+// terminal outcome values -- "I'm choosing not to make a commercial call
+// on this, just get it out of the Inbox" (e.g. a duplicate/mistaken
+// Capture) -- so it is checked here alongside outcome rather than folded
+// into REJECTED, which would make Dismiss and Reject the same action
+// under different names (mission §8: "do not create redundant actions
+// that mean the same thing").
+//
+// Wave 2.1 (Promotion Custody release gate): deliberately does NOT treat
+// a non-null promoted*Id as resolved on its own. promoteCapture now
+// checkpoints each promoted*Id incrementally as soon as the
+// corresponding canonical entity is created (so a crash between two of
+// its independent writes is retry-safe -- see actions.ts), which means a
+// Capture can be genuinely mid-promotion (e.g. Client linked, Project
+// not yet) while still needing operator attention if that promotion
+// stalled or failed. `outcome` only flips to CONVERTED once the full
+// requested promotion scope actually completes (mission §7: "the Inbox
+// must remain honest... do not label it fully CONVERTED until the
+// required promotion scope finishes") -- so outcome, not the presence of
+// a linkage id, is the one true resolved/unresolved signal.
 export function isCaptureResolved(row: CaptureResolutionInput): boolean {
-  return (
-    isTerminalOutcome(row.outcome) ||
-    row.promotedClientId !== null ||
-    row.promotedProjectId !== null ||
-    row.promotedVideoId !== null ||
-    row.promotedWorkSessionId !== null ||
-    row.dismissedAt !== null
-  );
+  return isTerminalOutcome(row.outcome) || row.dismissedAt !== null;
+}
+
+// Wave 2.1 (Promotion Custody release gate). "Fully promoted" depends on
+// what was actually REQUESTED, not just on client+project being linked.
+// A retry that also asks for a video/work session must not be
+// short-circuited away just because an earlier attempt already got as
+// far as checkpointing client+project -- that bug was caught by the
+// integration test for boundary B ("crash after Project, before Video")
+// before this function existed: the naive `promotedClientId &&
+// promotedProjectId` check treated the capture as done and silently
+// skipped video creation entirely on retry. Client+project are always
+// the minimum scope (every promotion needs them); video is additional
+// scope only when `wantsVideo` is true for THIS call.
+export function isPromotionScopeComplete(
+  capture: { promotedClientId: number | null; promotedProjectId: number | null; promotedVideoId: number | null },
+  wantsVideo: boolean,
+): boolean {
+  const coreDone = capture.promotedClientId !== null && capture.promotedProjectId !== null;
+  const videoDone = !wantsVideo || capture.promotedVideoId !== null;
+  return coreDone && videoDone;
 }

@@ -4,6 +4,7 @@ import {
   captureDurationMinutes,
   defaultOutcomeForContext,
   isCaptureResolved,
+  isPromotionScopeComplete,
   isTerminalOutcome,
   validateCaptureInput,
   GHOSTING_IS_MANUAL_ONLY,
@@ -156,44 +157,66 @@ test("isTerminalOutcome: UNRESOLVED is the only non-terminal value", () => {
   assert.equal(isTerminalOutcome("NOT_APPLICABLE"), true);
 });
 
-test("isCaptureResolved: a fresh LEAD capture with no links and no dismissal is unresolved", () => {
+test("isCaptureResolved: a fresh LEAD capture with no dismissal is unresolved", () => {
+  assert.equal(isCaptureResolved({ outcome: "UNRESOLVED", dismissedAt: null }), false);
+});
+
+test("isCaptureResolved: dismissal resolves a capture without changing outcome semantics", () => {
+  assert.equal(isCaptureResolved({ outcome: "UNRESOLVED", dismissedAt: new Date() }), true);
+});
+
+// Wave 2.1 (Promotion Custody release gate): promoteCapture now
+// checkpoints promoted*Id incrementally, mid-flight, before the
+// promotion actually completes (see actions.ts). isCaptureResolved must
+// therefore NOT treat a checkpointed-but-incomplete promotion as
+// resolved -- a Capture with a Client linked but no Project yet is a
+// stalled/crashed promotion that still needs operator attention, and
+// must stay visible in the Unresolved Inbox. Only `outcome` flipping to
+// CONVERTED (written once the full requested scope actually finishes)
+// means resolved. isCaptureResolved's own input type no longer even
+// accepts promoted*Id fields, precisely so this can't regress silently.
+test("isCaptureResolved: outcome alone decides resolution -- checkpointed linkage is not itself a signal", () => {
+  assert.equal(isCaptureResolved({ outcome: "UNRESOLVED", dismissedAt: null }), false);
+  assert.equal(isCaptureResolved({ outcome: "CONVERTED", dismissedAt: null }), true);
+});
+
+// ─── Wave 2.1: promotion scope completeness ────────────────────────────────
+//
+// This is the exact function whose absence caused a real bug during this
+// release gate's own implementation: a retry that requested a video
+// (wantsVideo=true) was being told "already fully promoted" as soon as
+// client+project were checkpointed, even though the video step -- the
+// thing this specific retry actually wanted -- had never run. Caught by
+// integration.test.mjs's boundary-B test before this function existed.
+
+test("isPromotionScopeComplete: client+project alone is complete when no video was requested", () => {
   assert.equal(
-    isCaptureResolved({
-      outcome: "UNRESOLVED",
-      promotedClientId: null,
-      promotedProjectId: null,
-      promotedVideoId: null,
-      promotedWorkSessionId: null,
-      dismissedAt: null,
-    }),
+    isPromotionScopeComplete({ promotedClientId: 1, promotedProjectId: 2, promotedVideoId: null }, false),
+    true,
+  );
+});
+
+test("isPromotionScopeComplete: client+project alone is NOT complete when a video WAS requested", () => {
+  assert.equal(
+    isPromotionScopeComplete({ promotedClientId: 1, promotedProjectId: 2, promotedVideoId: null }, true),
     false,
   );
 });
 
-test("isCaptureResolved: dismissal resolves a capture without changing outcome semantics", () => {
+test("isPromotionScopeComplete: client+project+video is complete when a video was requested", () => {
   assert.equal(
-    isCaptureResolved({
-      outcome: "UNRESOLVED",
-      promotedClientId: null,
-      promotedProjectId: null,
-      promotedVideoId: null,
-      promotedWorkSessionId: null,
-      dismissedAt: new Date(),
-    }),
+    isPromotionScopeComplete({ promotedClientId: 1, promotedProjectId: 2, promotedVideoId: 3 }, true),
     true,
   );
 });
 
-test("isCaptureResolved: a promoted capture is resolved even before outcome catches up", () => {
+test("isPromotionScopeComplete: client alone (no project yet) is never complete, video requested or not", () => {
   assert.equal(
-    isCaptureResolved({
-      outcome: "UNRESOLVED",
-      promotedClientId: 42,
-      promotedProjectId: null,
-      promotedVideoId: null,
-      promotedWorkSessionId: null,
-      dismissedAt: null,
-    }),
-    true,
+    isPromotionScopeComplete({ promotedClientId: 1, promotedProjectId: null, promotedVideoId: null }, false),
+    false,
+  );
+  assert.equal(
+    isPromotionScopeComplete({ promotedClientId: 1, promotedProjectId: null, promotedVideoId: null }, true),
+    false,
   );
 });

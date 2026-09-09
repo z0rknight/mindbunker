@@ -1,0 +1,1 @@
+ALTER TABLE `captures` ADD `promotion_claimed_at` integer;
