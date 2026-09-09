@@ -35,7 +35,8 @@ export type Signal = {
     | "REPEATED_FRICTION"
     | "REVISION_DRAG"
     | "CASH_RECONCILIATION"
-    | "UNATTRIBUTED_REVENUE";
+    | "UNATTRIBUTED_REVENUE"
+    | "UNRESOLVED_CAPTURES";
   severity: SignalSeverity;
   confidence: SignalConfidence;
   statement: string;
@@ -277,6 +278,30 @@ export function computeUnattributedRevenueSignals(
       action: { label: "Open Finance", href: "/finance" },
       context: null,
     }));
+}
+
+// ─── G. UNRESOLVED CAPTURES (RMEDIA Engine Operational Capture, Wave 2) ─────
+//
+// Wave 1.5 Decision D: purely informational aging visibility for the
+// Capture Inbox (src/app/productivity/captures). It must NEVER mutate
+// Capture outcome -- the count is computed on read here, exactly like
+// every other signal in this file, and this function has no write
+// access to the captures table at all.
+
+export function computeUnresolvedCapturesSignal(staleCount: number): Signal[] {
+  if (staleCount <= 0) return [];
+  return [
+    {
+      id: "unresolved-captures",
+      kind: "UNRESOLVED_CAPTURES" as const,
+      severity: "WATCH" as const,
+      confidence: "HIGH" as const,
+      statement: `${staleCount} Capture${staleCount === 1 ? "" : "s"} unresolved for over a week`,
+      evidence: "Leads, samples, and internal work waiting on a Promote/Ghosted/Rejected/Dismiss decision",
+      action: { label: "Open Capture Inbox", href: "/productivity/captures" },
+      context: null,
+    },
+  ];
 }
 
 // ─── ordering ───────────────────────────────────────────────────────────────

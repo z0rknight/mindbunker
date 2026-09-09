@@ -48,7 +48,11 @@ type WorkSessionActionResult =
     };
 
 type CorrectionActionResult =
-  | { success: true; message: string }
+  // workSessionId is optional and only populated by logManualWorkSession
+  // (Wave 2, Operational Capture promotion needs the created row's id;
+  // every other existing caller already discards this field, so adding
+  // it is purely additive).
+  | { success: true; message: string; workSessionId?: number }
   | { success: false; error: string };
 
 async function videoExists(videoId: number) {
@@ -377,5 +381,5 @@ export async function logManualWorkSession(input: {
   });
 
   revalidateWorkSessionSurfaces({ clientId: attribution?.clientId ?? null, projectId: attribution?.projectId ?? null });
-  return { success: true, message: "Time logged." };
+  return { success: true, message: "Time logged.", workSessionId: inserted.id };
 }

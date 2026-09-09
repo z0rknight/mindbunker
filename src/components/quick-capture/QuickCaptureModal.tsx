@@ -31,13 +31,29 @@ import {
 } from "@/modules/work-sessions/core";
 import { getClientById } from "@/modules/crm/actions";
 import { updateOpportunity } from "@/modules/gateway/actions";
+import { createCapture } from "@/modules/captures/actions";
+import { defaultOutcomeForContext } from "@/modules/captures/core";
+import {
+  CAPTURE_CONTEXTS,
+  CAPTURE_CONTEXT_LABELS,
+  CAPTURE_EVENT_TYPES,
+  CAPTURE_EVENT_TYPE_LABELS,
+  CAPTURE_OUTCOME_LABELS,
+  type CaptureContext,
+  type CaptureEventType,
+} from "@/modules/captures/config";
 import type { QuickCaptureTarget } from "./QuickCaptureProvider";
 
 type QuickOptions = Awaited<ReturnType<typeof getProductivityQuickOptions>>;
 
-type ActionId = "commitment" | "correction" | "blocker" | "followup" | "note" | "start" | "queue-top" | "backfill";
+type ActionId = "commitment" | "correction" | "blocker" | "followup" | "note" | "start" | "queue-top" | "backfill" | "capture";
 
 const ACTIONS: Array<{ id: ActionId; label: string; hint: string; needsClientOnly?: boolean }> = [
+  {
+    id: "capture",
+    label: "+ Capture",
+    hint: "A lead, sample, internal work, or admin task — no Client/Project/Video required",
+  },
   { id: "start", label: "Start Work", hint: "Begin tracking time on a video" },
   { id: "commitment", label: "Quick Deadline", hint: "Record a promise with a due date" },
   { id: "blocker", label: "Block Work", hint: "Mark a video blocked" },
@@ -132,6 +148,8 @@ export function QuickCaptureModal({
             </button>
             {action === "followup" ? (
               <FollowUpAction target={target} options={options} onDone={afterSuccess} />
+            ) : action === "capture" ? (
+              <CaptureAction onDone={afterSuccess} />
             ) : (
               <VideoScopedAction action={action} target={target} options={options} onDone={afterSuccess} />
             )}
@@ -520,6 +538,121 @@ function FollowUpAction({
       {feedback && <p className="text-xs text-emerald-300" aria-live="polite">{feedback}</p>}
       <button type="button" disabled={isPending} onClick={save} className={primaryButtonClass}>
         {isPending ? "Saving…" : "Save follow-up"}
+      </button>
+    </div>
+  );
+}
+
+// ─── Capture (Wave 2, RMEDIA Engine Operational Capture MVP) ───────────────
+//
+// Deliberately does NOT reuse useVideoTarget/VideoTargetPicker: the whole
+// point of Capture is that no Client/Project/Video selection is required
+// (mission Wave 2 §6). "WHO" is a free-text label, matching exactly the
+// local-label fallback the Sensor app already uses when its catalog
+// hasn't hydrated.
+function CaptureAction({ onDone }: { onDone: () => void }) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState("");
+
+  const [context, setContext] = useState<CaptureContext>("LEAD");
+  const [counterpartyLabel, setCounterpartyLabel] = useState("");
+  const [eventType, setEventType] = useState<CaptureEventType>("SAMPLE");
+  const [channel, setChannel] = useState("");
+  const [minutes, setMinutes] = useState("");
+  const [note, setNote] = useState("");
+
+  const defaultOutcome = defaultOutcomeForContext(context);
+
+  function save() {
+    setError("");
+    setFeedback("");
+    const parsedMinutes = minutes.trim() ? Number(minutes) : null;
+    if (parsedMinutes !== null && (!Number.isFinite(parsedMinutes) || parsedMinutes < 0)) {
+      setError("Minutes must be zero or a positive number.");
+      return;
+    }
+    // Least-friction time interaction (Wave 2 §6): one "how long, about"
+    // field rather than two datetime pickers. Honest because this is
+    // recorded shortly after the fact -- endedAt is "now", startedAt is
+    // "now minus the stated duration". A point-in-time Capture (no
+    // duration at all) is equally valid -- see core.ts's
+    // captureDurationMinutes, which stays null when either is absent.
+    const now = new Date();
+    const endedAt = parsedMinutes !== null ? now : null;
+    const startedAt = parsedMinutes !== null ? new Date(now.getTime() - parsedMinutes * 60_000) : null;
+
+    startTransition(async () => {
+      const result = await createCapture({
+        context,
+        counterpartyLabel: counterpartyLabel || null,
+        channel: channel || null,
+        eventType,
+        note: note || null,
+        startedAt: startedAt ? startedAt.toISOString() : null,
+        endedAt: endedAt ? endedAt.toISOString() : null,
+      });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      setFeedback("Captured.");
+      window.setTimeout(onDone, 500);
+    });
+  }
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-xs text-zinc-500">
+        Who / label
+        <input
+          value={counterpartyLabel}
+          onChange={(event) => setCounterpartyLabel(event.target.value)}
+          placeholder="e.g. Moritz-Alexander Germann, RMEDIA Engine"
+          maxLength={200}
+          className={`${inputClass} mt-1`}
+        />
+      </label>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <select value={context} onChange={(event) => setContext(event.target.value as CaptureContext)} className={inputClass}>
+          {CAPTURE_CONTEXTS.map((value) => (
+            <option key={value} value={value}>{CAPTURE_CONTEXT_LABELS[value]}</option>
+          ))}
+        </select>
+        <select value={eventType} onChange={(event) => setEventType(event.target.value as CaptureEventType)} className={inputClass}>
+          {CAPTURE_EVENT_TYPES.map((value) => (
+            <option key={value} value={value}>{CAPTURE_EVENT_TYPE_LABELS[value]}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <input value={channel} onChange={(event) => setChannel(event.target.value)} placeholder="Channel (e.g. Upwork)" maxLength={120} className={inputClass} />
+        <label className="text-xs text-zinc-500">
+          Minutes (optional)
+          <input
+            type="number"
+            inputMode="numeric"
+            min="0"
+            value={minutes}
+            onChange={(event) => setMinutes(event.target.value)}
+            placeholder="15"
+            className={`${inputClass} mt-1`}
+          />
+        </label>
+      </div>
+
+      <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Note (optional) — e.g. Proof of work sent" maxLength={2_000} className={inputClass} />
+
+      <p className="text-[11px] text-zinc-600">
+        Outcome will be <span className="font-bold text-zinc-400">{CAPTURE_OUTCOME_LABELS[defaultOutcome]}</span> — resolve it later from the Capture Inbox.
+      </p>
+
+      {error && <p className="text-xs text-red-300" aria-live="assertive">{error}</p>}
+      {feedback && <p className="text-xs text-emerald-300" aria-live="polite">{feedback}</p>}
+      <button type="button" disabled={isPending} onClick={save} className={primaryButtonClass}>
+        {isPending ? "Saving…" : "Save capture"}
       </button>
     </div>
   );

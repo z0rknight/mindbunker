@@ -288,6 +288,20 @@
       "when": 1788855427489,
       "tag": "0040_gorgeous_overlord",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1788857184508,
+      "tag": "0041_peaceful_frank_castle",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1788946210076,
+      "tag": "0042_careless_sebastian_shaw",
+      "breakpoints": true
     }
   ]
 }

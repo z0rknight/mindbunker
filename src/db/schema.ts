@@ -11,6 +11,11 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import { OPPORTUNITY_STAGES } from "../modules/gateway/config";
+import {
+  CAPTURE_CONTEXTS,
+  CAPTURE_EVENT_TYPES,
+  CAPTURE_OUTCOMES,
+} from "../modules/captures/config";
 import { QUOTE_STATUSES, DEFAULT_QUOTE_CURRENCY } from "../modules/quotes/config";
 import {
   BOOKING_STATUSES,
@@ -2406,6 +2411,110 @@ export const equipmentAcquisitions = sqliteTable(
     check(
       "equipment_acquisitions_estimated_cost_check",
       sql`${table.estimatedCost} IS NULL OR ${table.estimatedCost} >= 0`,
+    ),
+  ],
+);
+
+// RMEDIA Engine — Operational Capture MVP (Wave 2, "CAPTURE FIRST.
+// STRUCTURE LATER."). A canonical pre-attribution fact: real operational
+// work/events (a lead's sample, internal development, an admin task)
+// that happened before -- or without ever needing -- a `clients` /
+// `projects` / `video_logs` row to exist. Sits strictly BEFORE the
+// existing chain (clients -> projects -> video_logs -> work_sessions ->
+// billingEvidence -> transactions), never inside or instead of it.
+//
+// Modeled on the already-shipped `sensor_sessions` (Sensor Inbox)
+// lifecycle -- same PENDING-then-terminal shape, same "evidence survives
+// promotion" discipline -- but with the two hard requirements that make
+// sensor_sessions unusable here (sensorDeviceId, videoId, both NOT NULL)
+// made fully optional, since a Capture may have neither a device nor a
+// video at the moment it's recorded.
+//
+// Hard invariant (Wave 1 §1 / Wave 2 §1): CAPTURE != WORK SESSION,
+// CAPTURE != BILLING EVIDENCE, CAPTURE != REVENUE, CAPTURE != PAYMENT.
+// No column on this table is ever read by any Finance/billing
+// computation. A Capture becomes real time/revenue only through
+// `promoteCapture`, which writes a genuinely new work_sessions row (and,
+// separately, whatever real commercial facts already require) -- it
+// never backdates or fabricates one.
+export const captures = sqliteTable(
+  "captures",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    // LEVEL 1 attribution (Wave 1 §12) -- the only field that is always
+    // required. TS-level enum only, no CHECK: adding a 5th context later
+    // is a one-line change to CAPTURE_CONTEXTS, not a migration, exactly
+    // matching crm_events.actor's existing precedent below.
+    context: text("context", { enum: CAPTURE_CONTEXTS }).notNull(),
+    // Free-text counterparty/domain label (e.g. "Moritz-Alexander
+    // Germann", "RMEDIA Engine") -- the honest fact before any clients
+    // row exists. Mirrors the exact local-label fallback the Sensor app
+    // already uses when its catalog hasn't hydrated
+    // (mindbunker-sensor Views.swift, client_label/project_label).
+    counterpartyLabel: text("counterparty_label"),
+    channel: text("channel"),
+    // "WHAT HAPPENED" -- deliberately separate from `outcome` ("WHAT WAS
+    // THE RESULT"), per Wave 1.5 Decision E. Same no-CHECK, TS-only
+    // pattern as `context`.
+    eventType: text("event_type", { enum: CAPTURE_EVENT_TYPES }).notNull().default("OTHER"),
+    note: text("note"),
+    startedAt: integer("started_at", { mode: "timestamp" }),
+    endedAt: integer("ended_at", { mode: "timestamp" }),
+    // "WHAT WAS THE RESULT." UNRESOLVED is the only non-terminal value
+    // and is what the Capture Inbox filters on. Same no-CHECK, TS-only
+    // pattern as `context`/`eventType` -- see CAPTURE_OUTCOMES.
+    outcome: text("outcome", { enum: CAPTURE_OUTCOMES }).notNull().default("UNRESOLVED"),
+    // No CHECK, no default enum restriction here either -- same
+    // deliberately-open vocabulary as work_sessions.source, since a
+    // Capture's origin surface is expected to grow (Sensor in Wave 3,
+    // possibly others later) without a migration each time.
+    source: text("source").notNull().default("WEB_QUICK_CAPTURE"),
+    // Forward-compatible for Wave 3 (Sensor-originated Captures) --
+    // unused, always NULL, in Wave 2. Mirrors sensor_sessions' own
+    // (sensorDeviceId, localSessionId) idempotency pair exactly, so a
+    // future Sensor sync path can reuse the identical uniqueness
+    // strategy without a further migration.
+    sensorDeviceId: integer("sensor_device_id").references(() => sensorDevices.id, {
+      onDelete: "set null",
+    }),
+    localCaptureId: text("local_capture_id"),
+    // Promotion/linkage -- set once, by promoteCapture, never cleared.
+    // The Capture row itself is never rewritten to pretend these existed
+    // at capture time (Wave 1.5 Decision C / mission §5 provenance
+    // invariant).
+    promotedClientId: integer("promoted_client_id").references(() => clients.id, {
+      onDelete: "set null",
+    }),
+    promotedProjectId: integer("promoted_project_id").references(() => projects.id, {
+      onDelete: "set null",
+    }),
+    promotedVideoId: integer("promoted_video_id").references(() => videoLogs.id, {
+      onDelete: "set null",
+    }),
+    promotedWorkSessionId: integer("promoted_work_session_id").references(
+      () => workSessions.id,
+      { onDelete: "set null" },
+    ),
+    dismissedAt: integer("dismissed_at", { mode: "timestamp" }),
+    archivedAt: integer("archived_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("captures_outcome_created_idx").on(table.outcome, table.createdAt),
+    index("captures_context_idx").on(table.context),
+    uniqueIndex("captures_sensor_device_local_unique").on(
+      table.sensorDeviceId,
+      table.localCaptureId,
+    ),
+    uniqueIndex("captures_promoted_work_session_unique").on(
+      table.promotedWorkSessionId,
+    ),
+    check(
+      "captures_ended_after_started_check",
+      sql`${table.endedAt} is null or ${table.startedAt} is null or ${table.endedAt} >= ${table.startedAt}`,
     ),
   ],
 );

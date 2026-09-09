@@ -266,7 +266,7 @@ export default async function ProductivityPage({
               Press <kbd className="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">⌘K</kbd> anywhere to capture a deadline, blocker, correction, follow-up, note, or backfilled work time without leaving this page.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3 lg:w-[560px] lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 lg:w-[720px] lg:grid-cols-4">
             <PlanVideoButton
               initialProjectId={initialProjectId}
               initiallyOpen={query.planVideo === "1"}
@@ -277,6 +277,12 @@ export default async function ProductivityPage({
               className="flex min-h-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-black text-zinc-300 transition hover:border-violet-500/60 hover:text-white"
             >
               Backfill a day →
+            </Link>
+            <Link
+              href="/productivity/captures"
+              className="flex min-h-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-black text-zinc-300 transition hover:border-violet-500/60 hover:text-white"
+            >
+              Capture Inbox →
             </Link>
           </div>
         </div>

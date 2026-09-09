@@ -14,6 +14,7 @@ import {
 import { and, eq, gte, isNull } from "drizzle-orm";
 import { startOfMonthISO } from "@/utils/date";
 import { getReconciliation } from "@/modules/reconciliation/actions";
+import { countStaleUnresolvedCaptures } from "@/modules/captures/data";
 import {
   computeCashReconciliationSignals,
   computeOpenBlockerSignals,
@@ -21,6 +22,7 @@ import {
   computeRepeatedFrictionSignals,
   computeRevisionDragSignal,
   computeUnattributedRevenueSignals,
+  computeUnresolvedCapturesSignal,
   rankSignals,
   type CommitmentRow,
   type Signal,
@@ -77,6 +79,7 @@ export async function getActiveSignals(prefetchedCommitments?: CommitmentRow[]):
     revisionRows,
     reconciliation,
     unattributedRevenueRows,
+    staleUnresolvedCaptureCount,
   ] = await Promise.all([
     prefetchedCommitments ? Promise.resolve(prefetchedCommitments) : getOpenCommitmentsWithContext(),
     db
@@ -113,6 +116,7 @@ export async function getActiveSignals(prefetchedCommitments?: CommitmentRow[]):
           gte(transactions.date, monthStart),
         ),
       ),
+    countStaleUnresolvedCaptures(now),
   ]);
 
   // Unattributed revenue is summed per currency in JS (not SQL GROUP BY)
@@ -135,6 +139,7 @@ export async function getActiveSignals(prefetchedCommitments?: CommitmentRow[]):
     ...computeUnattributedRevenueSignals(
       Array.from(unattributedByCurrency, ([currency, amount]) => ({ currency, amount })),
     ),
+    ...computeUnresolvedCapturesSignal(staleUnresolvedCaptureCount),
   ];
 
   return rankSignals(signals);

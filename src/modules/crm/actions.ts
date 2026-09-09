@@ -91,6 +91,12 @@ export async function addClient(data: {
   }
   revalidatePath("/");
   revalidatePath("/crm");
+  // Widened return (Wave 2, Operational Capture promotion): every prior
+  // caller already discarded this function's return value, so adding
+  // the new client's id here is purely additive -- see promoteCapture
+  // in modules/captures/actions.ts, the first caller that actually
+  // needs it.
+  return { id: inserted[0]?.id ?? null };
 }
 
 const CLIENT_STATUSES = ["lead", "active", "inactive"] as const;
