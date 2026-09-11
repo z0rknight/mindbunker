@@ -23,6 +23,7 @@ import { startOfMonthISO, todayISO } from "@/utils/date";
 import { mondayOfWeek } from "../work-sessions/core";
 import {
   completedVideoLogs,
+  isDeliverableVideo,
   PRODUCTION_COUNT_KINDS,
   getVideoMetadataChanges,
   isPositiveId,
@@ -512,6 +513,13 @@ export async function getVideoStats() {
           eq(videoLogs.date, today),
           eq(videoLogs.status, "DONE"),
           inArray(videoLogs.videoKind, PRODUCTION_COUNT_KINDS),
+          // Solo-Operator Health round: a cancelled item can be left
+          // status=DONE from before it was cancelled -- it stays real
+          // history but must not still count as "finished today/this
+          // month." A container never reaches DONE (its status is frozen
+          // at PLANNED by design), so this mirrors isDeliverableVideo
+          // without needing the join that helper implies.
+          isNull(videoLogs.cancelledAt),
         ),
       ),
     db
@@ -522,6 +530,7 @@ export async function getVideoStats() {
           gte(videoLogs.date, monthStart),
           eq(videoLogs.status, "DONE"),
           inArray(videoLogs.videoKind, PRODUCTION_COUNT_KINDS),
+          isNull(videoLogs.cancelledAt),
         ),
       ),
     db.select().from(videoLogs).orderBy(videoLogs.createdAt),
@@ -542,14 +551,17 @@ export async function getVideoStats() {
   // datetime and would misinterpret a bare date-only string as UTC
   // midnight, shifting the boundary by 3 hours.
   const weekStart = mondayOfWeek(today);
-  const completedLogs = completedVideoLogs(allLogs);
+  // Solo-Operator Health round: a LET'S COOK operational container or a
+  // cancelled item is never a real deliverable -- see isDeliverableVideo.
+  const deliverableLogs = allLogs.filter(isDeliverableVideo);
+  const completedLogs = completedVideoLogs(deliverableLogs);
   const weekLogs = completedLogs.filter((log) => log.date >= weekStart);
 
   return {
     today: Number(todayCount[0]?.count ?? 0),
     week: weekLogs.length,
     month: Number(monthCount[0]?.count ?? 0),
-    total: allLogs.length,
+    total: deliverableLogs.length,
     totalRevisions: completedLogs.reduce(
       (sum, log) => sum + log.revisionsCount,
       0,

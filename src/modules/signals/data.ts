@@ -15,12 +15,14 @@ import { and, eq, gte, isNull } from "drizzle-orm";
 import { startOfMonthISO } from "@/utils/date";
 import { getReconciliation } from "@/modules/reconciliation/actions";
 import { countStaleUnresolvedCaptures } from "@/modules/captures/data";
+import { getOpenProductionOrdersForSignals } from "@/modules/production-orders/data";
 import {
   computeCashReconciliationSignals,
   computeOpenBlockerSignals,
   computeOverduePromiseSignals,
   computeRepeatedFrictionSignals,
   computeRevisionDragSignal,
+  computeStaleProductionOrdersSignals,
   computeUnattributedRevenueSignals,
   computeUnresolvedCapturesSignal,
   rankSignals,
@@ -80,6 +82,7 @@ export async function getActiveSignals(prefetchedCommitments?: CommitmentRow[]):
     reconciliation,
     unattributedRevenueRows,
     staleUnresolvedCaptureCount,
+    openProductionOrders,
   ] = await Promise.all([
     prefetchedCommitments ? Promise.resolve(prefetchedCommitments) : getOpenCommitmentsWithContext(),
     db
@@ -117,6 +120,11 @@ export async function getActiveSignals(prefetchedCommitments?: CommitmentRow[]):
         ),
       ),
     countStaleUnresolvedCaptures(now),
+    // RMEDIA LET'S COOK Wave 1: every OPEN order, unfiltered -- the age
+    // threshold itself is applied inside computeStaleProductionOrdersSignals
+    // (a pure function in ./core.ts), not here, so it stays testable
+    // without a DB and consistent with every other signal in this file.
+    getOpenProductionOrdersForSignals(),
   ]);
 
   // Unattributed revenue is summed per currency in JS (not SQL GROUP BY)
@@ -139,6 +147,7 @@ export async function getActiveSignals(prefetchedCommitments?: CommitmentRow[]):
     ...computeUnattributedRevenueSignals(
       Array.from(unattributedByCurrency, ([currency, amount]) => ({ currency, amount })),
     ),
+    ...computeStaleProductionOrdersSignals(openProductionOrders, now),
     ...computeUnresolvedCapturesSignal(staleUnresolvedCaptureCount),
   ];
 

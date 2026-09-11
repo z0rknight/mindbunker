@@ -64,6 +64,11 @@ export async function getProjectWorkspace(projectId: number) {
       orientation: videoLogs.orientation,
       videoKind: videoLogs.videoKind,
       batchLabel: videoLogs.batchLabel,
+      // Solo-Operator Health round: needed so the page-level counts (and
+      // any future caller) can filter through isDeliverableVideo --
+      // see modules/productivity/core.ts.
+      isOperationalContainer: videoLogs.isOperationalContainer,
+      cancelledAt: videoLogs.cancelledAt,
       // Quick Morning Reality Patch §4/§7: read-only here (priority is
       // client-settable, see PriorityToggle) -- the operator command-card
       // view just needs to display the same canonical state the client
@@ -145,10 +150,17 @@ export async function getProjectsOverview() {
       notes: projects.notes,
       coverUrl: projects.coverUrl,
       updatedAt: projects.updatedAt,
-      totalVideos: sql<number>`count(${videoLogs.id})`,
-      doneVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'DONE' and ${videoLogs.videoKind} = 'CLIENT_WORK' then 1 else 0 end), 0)`,
-      inFlightVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} in ('IN_PROGRESS', 'READY_FOR_REVIEW', 'CHANGES_REQUESTED') then 1 else 0 end), 0)`,
-      plannedVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'PLANNED' then 1 else 0 end), 0)`,
+      // Solo-Operator Health round: every count below excludes a LET'S
+      // COOK operational container (never a deliverable) and a cancelled
+      // Production Order item (kept as history, not active work) -- same
+      // rule as isDeliverableVideo in modules/productivity/core.ts, applied
+      // here in raw SQL since this is an aggregate query. NOT a WHERE
+      // clause: videoLogs is LEFT JOINed so a project with zero real
+      // videos must still return 0, not disappear from the result set.
+      totalVideos: sql<number>`coalesce(sum(case when ${videoLogs.id} is not null and ${videoLogs.isOperationalContainer} = 0 and ${videoLogs.cancelledAt} is null then 1 else 0 end), 0)`,
+      doneVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'DONE' and ${videoLogs.videoKind} = 'CLIENT_WORK' and ${videoLogs.isOperationalContainer} = 0 and ${videoLogs.cancelledAt} is null then 1 else 0 end), 0)`,
+      inFlightVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} in ('IN_PROGRESS', 'READY_FOR_REVIEW', 'CHANGES_REQUESTED') and ${videoLogs.isOperationalContainer} = 0 and ${videoLogs.cancelledAt} is null then 1 else 0 end), 0)`,
+      plannedVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'PLANNED' and ${videoLogs.isOperationalContainer} = 0 and ${videoLogs.cancelledAt} is null then 1 else 0 end), 0)`,
       // Tuesday Patch Priority 2: a project-level exception the redesigned
       // Projects page can actually show (BLOCKED badge, Needs Attention)
       // without inventing a project-level blockers concept -- a project is

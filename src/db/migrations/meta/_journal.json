@@ -309,6 +309,13 @@
       "when": 1788947715813,
       "tag": "0043_little_supreme_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1789109833563,
+      "tag": "0044_lets_cook_wave1_production_orders",
+      "breakpoints": true
     }
   ]
 }

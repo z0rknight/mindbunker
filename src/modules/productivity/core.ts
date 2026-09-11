@@ -521,6 +521,26 @@ export function completedVideoLogs<
   );
 }
 
+// RMEDIA MINDBUNKER Solo-Operator Health round: the sibling eligibility
+// predicate for "does this video_logs row represent a real deliverable a
+// human (operator or client) should ever see or count" -- as opposed to
+// countsTowardProduction above, which answers "is this CLIENT_WORK." A row
+// can be countsTowardProduction=true and still not be a deliverable: a
+// LET'S COOK operational container (isOperationalContainer=true, real
+// CLIENT_WORK time, but a batch tracking receptacle, not an output) or a
+// cancelled Production Order item (cancelledAt set, kept as real history,
+// never re-shown as active). Every video list/count a client or the
+// operator reads as "my videos" -- Client Portal, Project Workspace,
+// Productivity hub, CRM, Dashboard/War Room video tallies -- must filter
+// through this, the same way countsTowardProduction is already required
+// to be the one production-eligibility gate.
+export function isDeliverableVideo(video: {
+  isOperationalContainer: boolean;
+  cancelledAt: Date | string | null;
+}): boolean {
+  return !video.isOperationalContainer && video.cancelledAt === null;
+}
+
 export type ProductivityGroup =
   | "current"
   | "attention"

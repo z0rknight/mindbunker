@@ -11,7 +11,7 @@ import {
   videoLogs,
 } from "@/db/schema";
 import { getGatewayContext } from "@/modules/gateway/data";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, isNull } from "drizzle-orm";
 import {
   buildClientBillingSummary,
   buildClientDashboard,
@@ -23,6 +23,18 @@ import {
 } from "./core";
 import { getApprovedQuoteForVideo } from "@/modules/quotes/data";
 import { buildClientQuoteSummary } from "@/modules/quotes/core";
+
+// RMEDIA MINDBUNKER Solo-Operator Health round: a LET'S COOK operational
+// container (isOperationalContainer=true) or a cancelled Production Order
+// item (cancelledAt set) must never reach a client -- see
+// isDeliverableVideo in modules/productivity/core.ts, the same predicate
+// applied on the operator side. Applied at the SQL level (not just
+// filtered in JS after) so these rows are never even fetched for a client
+// session.
+const CLIENT_VISIBLE_VIDEO = and(
+  eq(videoLogs.isOperationalContainer, false),
+  isNull(videoLogs.cancelledAt),
+);
 
 export type ClientPortalView =
   | { status: "unavailable" }
@@ -79,6 +91,7 @@ export async function getClientPortalView(
         and(
           eq(videoLogs.clientId, identity.clientId),
           eq(projects.clientId, identity.clientId),
+          CLIENT_VISIBLE_VIDEO,
         ),
       )
       .orderBy(desc(videoLogs.updatedAt), desc(videoLogs.createdAt)),
@@ -163,6 +176,7 @@ export async function getClientDashboardView(
         and(
           eq(videoLogs.clientId, authenticatedClientId),
           eq(projects.clientId, authenticatedClientId),
+          CLIENT_VISIBLE_VIDEO,
         ),
       )
       .orderBy(desc(videoLogs.updatedAt), desc(videoLogs.createdAt)),
@@ -244,6 +258,7 @@ export async function getClientVideoDetailView(
         eq(videoLogs.id, videoId),
         eq(videoLogs.clientId, authenticatedClientId),
         eq(projects.clientId, authenticatedClientId),
+        CLIENT_VISIBLE_VIDEO,
       ),
     )
     .limit(1);
@@ -273,6 +288,7 @@ export async function getClientVideoDetailView(
               and(
                 eq(videoLogs.projectId, video.projectId),
                 eq(videoLogs.clientId, authenticatedClientId),
+                CLIENT_VISIBLE_VIDEO,
               ),
             )
         ).length

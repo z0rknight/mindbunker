@@ -581,6 +581,45 @@ export const videoLogs = sqliteTable(
     videoKind: text("video_kind", { enum: VIDEO_KINDS })
       .notNull()
       .default("CLIENT_WORK"),
+    // Sensor Wave 3 Root Fix 1 / RMEDIA LET'S COOK Wave 1 catch-up: migration
+    // 0041 (src/db/migrations/0041_peaceful_frank_castle.sql) already added
+    // this column to the real database, and the 0041-0043 Drizzle snapshots
+    // already declare it -- this branch's schema.ts simply never caught up
+    // to declare it in the ORM layer. No new migration for this field; it
+    // is additive-only at the TypeScript level, matching database reality
+    // exactly. Marks a video_logs row that is an OPERATIONAL PRODUCTION
+    // CONTAINER -- a batch/pre-flight production context the Sensor can
+    // Start once against, rather than a single deliverable video. Stays
+    // videoKind = "CLIENT_WORK": the time worked under a container is
+    // real, billable client production time. This flag controls
+    // DELIVERABLE semantics only (completion/output/delivery counts,
+    // Client Portal video listings) -- never billing eligibility.
+    isOperationalContainer: integer("is_operational_container", {
+      mode: "boolean",
+    })
+      .notNull()
+      .default(false),
+    // RMEDIA LET'S COOK Wave 1: links a deliverable (or the one container
+    // row) to the Production Order it belongs to. Nullable -- every
+    // pre-existing video_logs row, and every video created outside LET'S
+    // COOK, stays production_order_id = NULL, exactly like clientId/
+    // projectId already do for rows created before those existed.
+    productionOrderId: integer("production_order_id").references(
+      () => productionOrders.id,
+      { onDelete: "set null" },
+    ),
+    // RMEDIA LET'S COOK Wave 1 item cancellation (locked decision, brief
+    // Sec 1B): a cancelled order item is never deleted -- it remains
+    // historical evidence (Work Sessions, revisions, commercial evidence
+    // all stay intact) and stays visible inside its Production Order, but
+    // is excluded from active deliverable counts, client-facing active
+    // deliverables, and the equivalent-per-active-item denominator.
+    // Orthogonal to `status` on purpose: this is not a 6th status-enum
+    // value threaded through every existing transition check across CRM/
+    // client-portal/signals/dashboards -- it is one nullable timestamp,
+    // the same pattern isOperationalContainer already uses to be excluded
+    // via one extra AND clause at each read site.
+    cancelledAt: integer("cancelled_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
       () => new Date(),
     ),
@@ -611,6 +650,15 @@ export const videoLogs = sqliteTable(
       table.isPriority,
     ),
     index("video_logs_queue_position_idx").on(table.queuePosition),
+    index("video_logs_production_order_idx").on(table.productionOrderId),
+    // RMEDIA LET'S COOK Wave 1 (brief Sec 5): at most one operational
+    // container per Production Order. Partial unique index, mirroring the
+    // existing work_sessions_one_open_idx pattern elsewhere in this file.
+    uniqueIndex("video_logs_one_container_per_order_idx")
+      .on(table.productionOrderId)
+      .where(
+        sql`${table.isOperationalContainer} = 1 and ${table.productionOrderId} is not null`,
+      ),
     check(
       "video_logs_orientation_check",
       sql`${table.orientation} is null or ${table.orientation} in ('LANDSCAPE', 'VERTICAL', 'SQUARE')`,
@@ -622,6 +670,97 @@ export const videoLogs = sqliteTable(
     check(
       "video_logs_kind_check",
       sql`${table.videoKind} in ('CLIENT_WORK', 'SAMPLE', 'INTERNAL')`,
+    ),
+  ],
+);
+
+// RMEDIA LET'S COOK Wave 1 -- the Production Order (brief Sec 1A, locked
+// decision): the canonical operational entity for a batch of deliverables
+// ingested together (e.g. a client's multi-video content-waterfall
+// submission). Deliverable video_logs rows and exactly one operational-
+// container video_logs row both link back here via video_logs.
+// production_order_id.
+//
+// `state` is a small, canonical, operator-set lifecycle (OPEN/CLOSED/
+// CANCELLED) ONLY -- the richer RECEIVED/IN_PRODUCTION/REVIEW/DELIVERED
+// phase the brief describes is deliberately NOT persisted here. It is a
+// pure, deterministic read-model derived from the order's active items'
+// existing VIDEO_STATUSES (see deriveProductionOrderPhase in
+// modules/production-orders/core.ts), so it can never drift out of sync
+// with the one real source of truth (each item's own status) the way a
+// second, independently-settable status column could.
+//
+// `expectedValueCents` is a stated commercial EXPECTATION only -- never
+// revenue, never billed, never paid. Realized billed value for an order is
+// derived at read time from confirmed billing_allocations rows that target
+// this order's container video (see modules/production-orders/core.ts) --
+// no production_order_id column was added to billing_evidence, because one
+// billing_evidence row can legitimately cover multiple Production Orders
+// (an Upwork hourly period spanning more than one batch), and a singular
+// FK there would misrepresent that real many-to-many relationship.
+//
+// `ingestKey` is a client-generated idempotency key: LET'S COOK's ingest
+// action does an atomic "insert or return existing" on this unique column,
+// so a double-click or a network retry of the same submission cannot
+// silently create two Production Orders.
+export const PRODUCTION_ORDER_STATES = ["OPEN", "CLOSED", "CANCELLED"] as const;
+export type ProductionOrderState = (typeof PRODUCTION_ORDER_STATES)[number];
+
+export const PRODUCTION_ORDER_PRICING_MODELS = [
+  "HOURLY",
+  "FIXED",
+  "OTHER",
+] as const;
+export type ProductionOrderPricingModel =
+  (typeof PRODUCTION_ORDER_PRICING_MODELS)[number];
+
+export const productionOrders = sqliteTable(
+  "production_orders",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clients.id),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => projects.id),
+    label: text("label").notNull(),
+    channel: text("channel"),
+    state: text("state", { enum: PRODUCTION_ORDER_STATES })
+      .notNull()
+      .default("OPEN"),
+    pricingModel: text("pricing_model", {
+      enum: PRODUCTION_ORDER_PRICING_MODELS,
+    }),
+    expectedValueCents: integer("expected_value_cents"),
+    currency: text("currency"),
+    notes: text("notes"),
+    receivedAt: text("received_at").notNull(), // ISO date
+    closedAt: integer("closed_at", { mode: "timestamp" }),
+    cancelledAt: integer("cancelled_at", { mode: "timestamp" }),
+    // Idempotency key generated once by the ingest form and resent
+    // unchanged on every retry of the same submit -- see the table
+    // comment above.
+    ingestKey: text("ingest_key").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+  },
+  (table) => [
+    index("production_orders_project_idx").on(table.projectId),
+    index("production_orders_client_idx").on(table.clientId),
+    index("production_orders_state_idx").on(table.state),
+    uniqueIndex("production_orders_ingest_key_idx").on(table.ingestKey),
+    check(
+      "production_orders_state_check",
+      sql`${table.state} in ('OPEN', 'CLOSED', 'CANCELLED')`,
+    ),
+    check(
+      "production_orders_pricing_model_check",
+      sql`${table.pricingModel} is null or ${table.pricingModel} in ('HOURLY', 'FIXED', 'OTHER')`,
     ),
   ],
 );

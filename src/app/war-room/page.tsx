@@ -66,11 +66,22 @@ export default async function WarRoomPage() {
             Recorded business facts · restrained derived context
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-zinc-600 text-xs">Last updated</p>
-          <p className="text-zinc-400 text-xs font-mono">
-            {new Date(data.generatedAt).toLocaleTimeString()}
-          </p>
+        <div className="flex items-center gap-4">
+          {/* RMEDIA LET'S COOK Wave 1: one CTA into the order surface,
+              same restrained-CTA treatment as the rest of this header --
+              no War Room order list/widget, just the entry point. */}
+          <Link
+            href="/productivity/orders"
+            className="rounded-lg border border-emerald-800/60 bg-black px-3 py-2 font-mono text-xs font-bold text-emerald-400 hover:border-emerald-500"
+          >
+            🔥 LET&apos;S COOK
+          </Link>
+          <div className="text-right">
+            <p className="text-zinc-600 text-xs">Last updated</p>
+            <p className="text-zinc-400 text-xs font-mono">
+              {new Date(data.generatedAt).toLocaleTimeString()}
+            </p>
+          </div>
         </div>
       </div>
 

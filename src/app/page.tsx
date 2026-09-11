@@ -330,7 +330,7 @@ export default async function DashboardPage() {
       {/* Quick Actions */}
       <div className="mb-8">
         <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-7">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-8">
           <CoffeeQuickLogButton todayCount={caffeineSummary.todayCount} />
           <AddIncomeButton />
           <AddExpenseButton />
@@ -338,6 +338,19 @@ export default async function DashboardPage() {
           <LogBikeRideButton />
           <LogWalkButton />
           <AddRevisionButton />
+          {/* RMEDIA LET'S COOK Wave 1: one compact entry point only -- no
+              Current Orders section on Dashboard (that list lives at
+              /productivity/orders). Distinct near-black/terminal-green
+              treatment is intentional: it is the one visual hint this
+              button belongs to a contained sub-surface, not a Dashboard
+              redesign. */}
+          <Link
+            href="/productivity/orders/new"
+            className="flex flex-col items-center justify-center gap-2 rounded-xl border border-emerald-800/60 bg-black px-6 py-5 font-mono text-sm font-bold text-emerald-400 transition-all hover:border-emerald-500 hover:bg-zinc-950 active:scale-95"
+          >
+            <span className="text-lg">🔥</span>
+            LET&apos;S COOK
+          </Link>
         </div>
       </div>
 

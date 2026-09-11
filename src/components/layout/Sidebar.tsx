@@ -20,6 +20,12 @@ const navItems = [
   // Productivity. Moved immediately adjacent to Productivity rather than
   // retraining the human -- no other reordering, this is the one change.
   { href: "/projects", label: "Projects", mobileLabel: "Projects", icon: "📁", group: "OPERATIONS" },
+  // RMEDIA LET'S COOK Wave 1: batch-order intake/tracking, grouped with
+  // OPERATIONS immediately after Projects -- same "adjacent to where the
+  // operator already is" placement Brief C used for Projects itself.
+  // desktopOnly, same mobile-tab-count discipline as Sessions/Equipment
+  // above (the bottom tab bar stays at its fixed 7 destinations).
+  { href: "/productivity/orders", label: "LET'S COOK", mobileLabel: "Orders", icon: "🔥", desktopOnly: true, group: "OPERATIONS" },
   // Monday Local Intelligence Lab §B: the Work Session Ledger already
   // exists at /productivity/sessions but had no nav entry anywhere --
   // discoverable only by URL. Desktop sidebar only, so the mobile bottom

@@ -97,6 +97,12 @@ export type WorkspaceVideoCardData = {
   orientation: "LANDSCAPE" | "VERTICAL" | "SQUARE" | null;
   isPriority: boolean;
   commercialTerms: CommercialTerms | null;
+  // Solo-Operator Health round: a cancelled Production Order item stays a
+  // real card here (full history, still reachable) but must be visually
+  // distinguishable from an ordinary PLANNED item -- it's excluded from
+  // this page's own Completed/N count above, and without a marker here an
+  // operator scanning this grid can't tell why.
+  cancelledAt?: Date | string | null;
 };
 
 export function ProjectVideoCards({
@@ -133,8 +139,8 @@ export function ProjectVideoCards({
           <article
             key={video.id}
             className={`overflow-hidden rounded-2xl border bg-zinc-900/70 transition hover:border-violet-500/40 ${
-              video.isPriority ? "border-amber-400/50" : "border-zinc-800"
-            }`}
+              video.cancelledAt ? "opacity-60" : ""
+            } ${video.isPriority ? "border-amber-400/50" : "border-zinc-800"}`}
           >
             <Link href={href} className={`relative block w-full overflow-hidden bg-zinc-950 ${ASPECT_CLASSES[aspectKey]}`}>
               {coverUrl ? (
@@ -151,6 +157,11 @@ export function ProjectVideoCards({
               <span className="absolute left-2.5 top-2.5">
                 <VideoStatusBadge status={video.status} />
               </span>
+              {video.cancelledAt && (
+                <span className="absolute left-2.5 top-9 inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-red-300 backdrop-blur">
+                  Cancelled
+                </span>
+              )}
               {video.isPriority && (
                 <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full border border-amber-400/50 bg-amber-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-200 backdrop-blur">
                   ⭐ Priority

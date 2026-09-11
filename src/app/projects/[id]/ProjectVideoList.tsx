@@ -16,6 +16,9 @@ type WorkspaceVideo = {
   revisionsCount: number;
   batchLabel: string | null;
   coverUrl: string | null;
+  // Solo-Operator Health round: see the matching field/comment on
+  // WorkspaceVideoCardData in ./ProjectVideoCards.tsx.
+  cancelledAt?: Date | string | null;
 };
 
 // Sprint 3 P1 (Project + Video visual covers): a compact 11x11 thumbnail
@@ -112,7 +115,9 @@ export function ProjectVideoList({
       {videos.map((video) => (
         <div
           key={video.id}
-          className="flex min-h-20 flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 transition hover:border-violet-500/35 sm:flex-row sm:items-center sm:justify-between"
+          className={`flex min-h-20 flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 transition hover:border-violet-500/35 sm:flex-row sm:items-center sm:justify-between ${
+            video.cancelledAt ? "opacity-60" : ""
+          }`}
         >
           <div className="flex min-w-0 items-center gap-3">
             <input
@@ -133,6 +138,11 @@ export function ProjectVideoList({
                 {video.batchLabel && (
                   <span className="rounded-full border border-fuchsia-500/25 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-fuchsia-300">
                     {video.batchLabel}
+                  </span>
+                )}
+                {video.cancelledAt && (
+                  <span className="rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-red-300">
+                    Cancelled
                   </span>
                 )}
               </div>

@@ -2,7 +2,7 @@ import { PlanVideoButton } from "@/components/ui/QuickActions";
 import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
 import { getProjectWorkspace } from "@/modules/projects/actions";
 import { resolveCurrentWorkVideo } from "@/modules/projects/core";
-import { validateDeliveryUrl, countsTowardProduction } from "@/modules/productivity/core";
+import { validateDeliveryUrl, countsTowardProduction, isDeliverableVideo } from "@/modules/productivity/core";
 import { CopyLinkButton } from "@/components/ui/CopyLinkButton";
 import { formatDate } from "@/utils/date";
 import Link from "next/link";
@@ -51,10 +51,20 @@ export default async function ProjectWorkspacePage({
     commercialTerms: commercialTermsByVideoId.get(video.id) ?? null,
   }));
 
-  const doneVideos = project.videos.filter(
+  // Solo-Operator Health round: a LET'S COOK operational container or a
+  // cancelled Production Order item is never a real deliverable -- see
+  // isDeliverableVideo in modules/productivity/core.ts. Counts below (and
+  // the "Videos N" header) are scoped to this list, matching the schema's
+  // own locked invariant that isOperationalContainer controls
+  // completion/output/delivery counts. The full, unfiltered project.videos
+  // list is still what actually renders as cards below, unchanged --
+  // an operator legitimately needs to see and open the container/a
+  // cancelled item, just not have them inflate these tallies.
+  const deliverableVideos = project.videos.filter(isDeliverableVideo);
+  const doneVideos = deliverableVideos.filter(
     (video) => video.status === "DONE" && countsTowardProduction(video.videoKind),
   ).length;
-  const inFlightVideos = project.videos.filter((video) =>
+  const inFlightVideos = deliverableVideos.filter((video) =>
     ["IN_PROGRESS", "READY_FOR_REVIEW", "CHANGES_REQUESTED"].includes(video.status),
   ).length;
 
@@ -107,7 +117,7 @@ export default async function ProjectWorkspacePage({
         </div>
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Completed</p>
-          <p className="mt-2 text-lg font-black text-emerald-300">{doneVideos} / {project.videos.length}</p>
+          <p className="mt-2 text-lg font-black text-emerald-300">{doneVideos} / {deliverableVideos.length}</p>
         </div>
       </section>
 

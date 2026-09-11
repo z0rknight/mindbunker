@@ -1,3 +1,5 @@
+import { isStaleProductionOrder, type StaleProductionOrderRow } from "../production-orders/core.ts";
+
 // Operator Intelligence Patch Phase 2: WAR ROOM ACTIVE SIGNALS.
 //
 // This is a deterministic read model, not a notification system. No ML,
@@ -36,7 +38,8 @@ export type Signal = {
     | "REVISION_DRAG"
     | "CASH_RECONCILIATION"
     | "UNATTRIBUTED_REVENUE"
-    | "UNRESOLVED_CAPTURES";
+    | "UNRESOLVED_CAPTURES"
+    | "STALE_PRODUCTION_ORDER";
   severity: SignalSeverity;
   confidence: SignalConfidence;
   statement: string;
@@ -302,6 +305,38 @@ export function computeUnresolvedCapturesSignal(staleCount: number): Signal[] {
       context: null,
     },
   ];
+}
+
+// ─── H. STALE PRODUCTION ORDER (RMEDIA LET'S COOK Wave 1) ──────────────────
+//
+// Reuses the exact Signal shape and severity vocabulary above -- no new
+// alerting system, no new UI. isStaleProductionOrder (the age threshold
+// itself) lives in modules/production-orders/core.ts as a pure function;
+// this only shapes that pure result into the Signal type, matching how
+// computeUnresolvedCapturesSignal (§G) shapes a pre-computed count.
+
+export function computeStaleProductionOrdersSignals(
+  rows: readonly StaleProductionOrderRow[],
+  now: Date,
+): Signal[] {
+  return rows
+    .filter((row) => isStaleProductionOrder(row, now))
+    .sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime())
+    .map((row) => {
+      const days = Math.floor(
+        (now.getTime() - row.receivedAt.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      return {
+        id: `stale-production-order-${row.id}`,
+        kind: "STALE_PRODUCTION_ORDER" as const,
+        severity: "WATCH" as const,
+        confidence: "HIGH" as const,
+        statement: `"${row.label}" has been open ${days}d with no delivery`,
+        evidence: `${row.clientName ?? "Unknown client"}${row.projectName ? ` · ${row.projectName}` : ""}`,
+        action: { label: "Open order", href: `/productivity/orders/${row.id}` },
+        context: null,
+      };
+    });
 }
 
 // ─── ordering ───────────────────────────────────────────────────────────────
