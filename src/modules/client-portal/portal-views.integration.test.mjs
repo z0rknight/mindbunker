@@ -36,7 +36,10 @@ function buildMigratedDb() {
 
 // Mirrors data.ts's getClientPortalView project/video SELECT verbatim
 // (minus the token->clientId resolution, which is gateway/auth-data's job,
-// not this module's).
+// not this module's). Solo-Operator Health round P0 fix: the WHERE clause
+// now also mirrors CLIENT_VISIBLE_VIDEO (data.ts) exactly -- an operational
+// container (is_operational_container=1) or a cancelled Production Order
+// item (cancelled_at not null) must never be selected for a client at all.
 function selectPortalRowsForClient(db, clientId) {
   const projectRows = db
     .prepare(
@@ -65,6 +68,7 @@ function selectPortalRowsForClient(db, clientId) {
        FROM video_logs v
        INNER JOIN projects p ON v.project_id = p.id
        WHERE v.client_id = ? AND p.client_id = ?
+         AND v.is_operational_container = 0 AND v.cancelled_at IS NULL
        ORDER BY v.updated_at DESC, v.created_at DESC`,
     )
     .all(clientId, clientId)
@@ -111,6 +115,7 @@ function selectDashboardRowsForClient(db, clientId) {
        FROM video_logs v
        INNER JOIN projects p ON v.project_id = p.id
        WHERE v.client_id = ? AND p.client_id = ?
+         AND v.is_operational_container = 0 AND v.cancelled_at IS NULL
        ORDER BY v.updated_at DESC, v.created_at DESC`,
     )
     .all(clientId, clientId)
@@ -154,6 +159,16 @@ function seedTarynShapedFixture(db) {
       (203, 10, 1, 'MINI Series Ep 0 (delivered, no link yet)', '2026-08-01', 'DONE', NULL, NULL, NULL, NULL),
       (204, 11, 1, 'Bonnie Reel 1 (delivered with link)', '2026-08-10', 'DONE', 'https://drive.example/bonnie-1', NULL, NULL, NULL),
       (301, 99, 2, 'Other client private video', '2026-08-20', 'DONE', 'https://video.example/private', NULL, NULL, NULL);
+
+    -- Solo-Operator Health round P0 fixture: a real LET'S COOK operational
+    -- container (id 205, real clientId/projectId per actions.ts's real
+    -- insert shape) and a cancelled Production Order item (id 206) --
+    -- both must never reach the client, per CLIENT_VISIBLE_VIDEO.
+    INSERT INTO video_logs
+      (id, project_id, client_id, title, date, status, is_operational_container, cancelled_at)
+    VALUES
+      (205, 10, 1, '[Container] Content Waterfall', '2026-09-11', 'PLANNED', 1, NULL),
+      (206, 10, 1, 'Content Waterfall - Video 1', '2026-09-11', 'PLANNED', 0, unixepoch());
 
     INSERT INTO crm_events (client_id, video_id, type, description, created_at) VALUES
       (1, 204, 'video.finished', 'Bonnie Reel 1 marked DONE', unixepoch());
@@ -219,6 +234,54 @@ test("getClientDashboardView's exact SQL projection: cross-client isolation and 
   );
   assert.equal(otherResult.totalVideos, 1);
   assert.equal(JSON.stringify(otherResult).includes("MINI Series"), false);
+});
+
+test("getClientPortalView's exact SQL projection: a LET'S COOK operational container is never returned to the client", () => {
+  const db = buildMigratedDb();
+  seedTarynShapedFixture(db);
+
+  const { projectRows, videoRows } = selectPortalRowsForClient(db, 1);
+  const result = buildClientPortalProjects(1, projectRows, videoRows);
+
+  const serialized = JSON.stringify(result);
+  assert.equal(serialized.includes("[Container]"), false);
+  assert.equal(serialized.includes("205"), false);
+
+  const miniSeries = result.find((p) => p.name === "MINI Series");
+  // Still exactly the 3 real deliverables in this project -- the container
+  // (id 205, same project) must not inflate the count or appear as a card.
+  assert.equal(miniSeries.videos.length, 3);
+});
+
+test("getClientPortalView's exact SQL projection: a cancelled Production Order item is never returned to the client", () => {
+  const db = buildMigratedDb();
+  seedTarynShapedFixture(db);
+
+  const { projectRows, videoRows } = selectPortalRowsForClient(db, 1);
+  const result = buildClientPortalProjects(1, projectRows, videoRows);
+
+  const serialized = JSON.stringify(result);
+  assert.equal(serialized.includes("Content Waterfall - Video 1"), false);
+
+  const miniSeries = result.find((p) => p.name === "MINI Series");
+  const ids = miniSeries.videos.map((v) => v.id).sort((a, b) => a - b);
+  assert.deepEqual(ids, [201, 202, 203], "cancelled item 206 must be absent, real items unaffected");
+});
+
+test("getClientDashboardView's exact SQL projection: container + cancelled items never inflate totalVideos or appear in listings", () => {
+  const db = buildMigratedDb();
+  seedTarynShapedFixture(db);
+
+  const { projectRows, videoRows, completionEventRows } = selectDashboardRowsForClient(db, 1);
+  const result = buildClientDashboard(1, projectRows, videoRows, completionEventRows, new Date());
+
+  // Same 4 real deliverables as the baseline isolation test above --
+  // the container (205) and cancelled item (206), both real rows in the
+  // same client/project, must not be counted.
+  assert.equal(result.totalVideos, 4);
+  const serialized = JSON.stringify(result);
+  assert.equal(serialized.includes("[Container]"), false);
+  assert.equal(serialized.includes("Content Waterfall - Video 1"), false);
 });
 
 test("getClientDashboardView's exact SQL projection never selects internal-only columns (notes, revenue, revisions)", () => {
