@@ -2,7 +2,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/db";
-import { crmEvents, projects, videoLogs } from "@/db/schema";
+import { clients, crmEvents, projects, videoLogs } from "@/db/schema";
 import { isAuthenticated } from "@/lib/auth-server";
 import {
   buildCoverObjectKey,
@@ -23,7 +23,7 @@ function json(body: unknown, status = 200) {
 }
 
 function parseTarget(typeValue: unknown, idValue: unknown): CoverTarget | null {
-  if (typeValue !== "video" && typeValue !== "project") return null;
+  if (typeValue !== "video" && typeValue !== "project" && typeValue !== "client") return null;
   const id = Number(idValue);
   if (!Number.isSafeInteger(id) || id <= 0) return null;
   return { type: typeValue, id };
@@ -51,7 +51,8 @@ async function findTarget(target: CoverTarget) {
     return rows[0] ? { ...rows[0], type: "video" as const } : null;
   }
 
-  const rows = await db
+  if (target.type === "project") {
+    const rows = await db
     .select({
       id: projects.id,
       clientId: projects.clientId,
@@ -61,7 +62,20 @@ async function findTarget(target: CoverTarget) {
     .from(projects)
     .where(eq(projects.id, target.id))
     .limit(1);
-  return rows[0] ? { ...rows[0], type: "project" as const } : null;
+    return rows[0] ? { ...rows[0], type: "project" as const } : null;
+  }
+
+  const rows = await db
+    .select({
+      id: clients.id,
+      clientId: clients.id,
+      coverUrl: clients.defaultCoverUrl,
+      name: clients.name,
+    })
+    .from(clients)
+    .where(eq(clients.id, target.id))
+    .limit(1);
+  return rows[0] ? { ...rows[0], type: "client" as const } : null;
 }
 
 function revalidateCoverTarget(target: Awaited<ReturnType<typeof findTarget>>) {
@@ -70,6 +84,7 @@ function revalidateCoverTarget(target: Awaited<ReturnType<typeof findTarget>>) {
   revalidatePath("/productivity");
   if (target.clientId) revalidatePath(`/crm/${target.clientId}`);
   if (target.type === "project") revalidatePath(`/projects/${target.id}`);
+  if (target.type === "client") revalidatePath(`/crm/${target.id}`);
   if (target.type === "video" && target.projectId) {
     revalidatePath(`/projects/${target.projectId}`);
   }
@@ -144,11 +159,16 @@ export async function POST(request: Request) {
           createdAt: now,
         }),
       ]);
-    } else {
+    } else if (existing.type === "project") {
       await db
         .update(projects)
         .set({ coverUrl, updatedAt: new Date() })
         .where(eq(projects.id, existing.id));
+    } else {
+      await db
+        .update(clients)
+        .set({ defaultCoverUrl: coverUrl })
+        .where(eq(clients.id, existing.id));
     }
   } catch (error) {
     await bucket.delete(objectKey);
@@ -195,11 +215,16 @@ export async function DELETE(request: Request) {
         createdAt: now,
       }),
     ]);
-  } else {
+  } else if (existing.type === "project") {
     await db
       .update(projects)
       .set({ coverUrl: null, updatedAt: new Date() })
       .where(eq(projects.id, existing.id));
+  } else {
+    await db
+      .update(clients)
+      .set({ defaultCoverUrl: null })
+      .where(eq(clients.id, existing.id));
   }
 
   const bucket = await getMediaBucket();

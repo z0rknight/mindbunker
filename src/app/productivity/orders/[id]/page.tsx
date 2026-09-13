@@ -51,6 +51,9 @@ export default async function ProductionOrderDetailPage({
               {order.clientName} · {order.projectName} · Received {order.receivedAt}
               {order.channel ? ` · ${order.channel}` : ""}
             </p>
+            <p className={`mt-2 text-xs font-bold ${order.contractLabel ? "text-cyan-300" : "text-zinc-600"}`}>
+              Contract · {order.contractLabel ?? "No contract recorded"}
+            </p>
           </div>
           {order.state === "OPEN" && <OrderLifecycleActions orderId={order.id} />}
         </div>
@@ -58,7 +61,12 @@ export default async function ProductionOrderDetailPage({
         {/* Commercial */}
         <section className="mb-6 rounded-xl border border-zinc-800 bg-zinc-950 p-5 font-mono">
           <p className="mb-3 text-[10px] uppercase tracking-widest text-zinc-600">COMMERCIAL</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Metric
+              label="Contract"
+              value={order.contractLabel ?? "—"}
+              hint={order.contractLabel ? "Selected explicitly when this batch started." : "No commercial contract recorded for this batch."}
+            />
             <Metric
               label="Expected"
               value={

@@ -3,22 +3,30 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
+import { useQuickCapture } from "@/components/quick-capture/QuickCaptureProvider";
+import { PixelEmptyState, PixelIcon } from "@/components/ui/PixelVisuals";
 import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
-import { startWorkSession } from "@/modules/work-sessions/actions";
-import { DEFAULT_WORK_SESSION_ACTIVITY } from "@/modules/work-sessions/core";
 import { reorderExecutionQueueItem } from "@/modules/productivity/actions";
 import type { QueueEntry, QueueEligibleVideo, QueueMoveDirection } from "@/modules/productivity/queue";
+import { startWorkSession } from "@/modules/work-sessions/actions";
+import { DEFAULT_WORK_SESSION_ACTIVITY } from "@/modules/work-sessions/core";
 import { formatDate } from "@/utils/date";
-import { useQuickCapture } from "@/components/quick-capture/QuickCaptureProvider";
 
-// P0.4: "restaurant tickets" execution queue. One row per canonical
-// video_logs item -- no duplicated task records, no separate model. The
-// server already resolved isBlocked/isAwaitingReview/isExecutable via
-// modules/productivity/queue.ts; this component only renders that and
-// wires the three reliable fallback reorder controls (Move up/down/top --
-// no drag-and-drop library, per the Tuesday Patch instruction to prefer
-// reliability over gesture polish here).
 export type QueueRow = QueueEntry<QueueEligibleVideo>;
+
+const STAGES = [
+  { key: "PLANNED", label: "Queued", hint: "Ready to enter production", tone: "border-zinc-700/80 bg-zinc-950/65" },
+  { key: "MAKING", label: "In production", hint: "Editing or requested changes", tone: "border-cyan-800/50 bg-cyan-950/10" },
+  { key: "REVIEW", label: "Review", hint: "Waiting for a decision", tone: "border-violet-800/50 bg-violet-950/10" },
+] as const;
+
+type StageKey = (typeof STAGES)[number]["key"];
+
+function stageFor(item: QueueRow): StageKey {
+  if (item.status === "READY_FOR_REVIEW") return "REVIEW";
+  if (item.status === "IN_PROGRESS" || item.status === "CHANGES_REQUESTED") return "MAKING";
+  return "PLANNED";
+}
 
 function formatCommitmentDue(value: Date | string | null) {
   if (!value) return null;
@@ -29,62 +37,67 @@ function formatCommitmentDue(value: Date | string | null) {
   }).format(new Date(value));
 }
 
-export function ExecutionQueueSection({
-  queue,
-  activeVideoId,
-}: {
-  queue: QueueRow[];
-  activeVideoId: number | null;
-}) {
+export function ExecutionQueueSection({ queue, activeVideoId }: { queue: QueueRow[]; activeVideoId: number | null }) {
   const firstExecutableId = queue.find((item) => item.isExecutable)?.id ?? null;
 
   return (
     <section aria-labelledby="execution-queue" className="mb-7">
-      <div className="mb-3">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">In order</p>
-        <h2 id="execution-queue" className="mt-1 text-lg font-black text-white sm:text-xl">
-          Execution Queue <span className="font-mono text-sm text-zinc-600">{queue.length}</span>
-        </h2>
-        <p className="mt-1 max-w-2xl text-xs leading-5 text-zinc-500">
-          The real order you intend to work through client production. Reorder freely — this never changes deadlines or status.
-        </p>
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">Production flow</p>
+          <h2 id="execution-queue" className="mt-1 text-lg font-black text-white sm:text-xl">
+            Video Queue <span className="font-mono text-sm text-zinc-600">{queue.length}</span>
+          </h2>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-zinc-500">
+            Each tile is one canonical video. Status moves left to right; queue controls only change execution order.
+          </p>
+        </div>
+        <Link href="/productivity/orders" className="text-xs font-black text-emerald-400 hover:text-emerald-300">Open batches →</Link>
       </div>
 
       {queue.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/35 px-4 py-6 text-sm text-zinc-600">
+        <PixelEmptyState icon="stack" title="Queue clear" className="rounded-2xl">
           No client-work videos waiting in the active queue.
-        </div>
+        </PixelEmptyState>
       ) : (
-        <div className="space-y-2">
-          {queue.map((item, index) => (
-            <QueueRowView
-              key={item.id}
-              item={item}
-              isFirstExecutable={item.id === firstExecutableId}
-              isActive={item.id === activeVideoId}
-              isFirst={index === 0}
-              isLast={index === queue.length - 1}
-            />
-          ))}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3" data-testid="horizontal-video-pipeline">
+          {STAGES.map((stage) => {
+            const items = queue.filter((item) => stageFor(item) === stage.key);
+            return (
+              <section key={stage.key} className={`min-w-0 rounded-2xl border p-3 ${stage.tone}`}>
+                <header className="mb-3 flex items-start justify-between gap-2 border-b border-white/5 pb-3">
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-[0.14em] text-white">{stage.label}</h3>
+                    <p className="mt-0.5 text-[10px] text-zinc-600">{stage.hint}</p>
+                  </div>
+                  <span className="rounded border border-zinc-700 bg-black/40 px-2 py-0.5 font-mono text-xs text-zinc-400">{items.length}</span>
+                </header>
+                {items.length === 0 ? (
+                  <div className="grid min-h-24 place-items-center rounded-xl border border-dashed border-zinc-800/80 px-3 text-center text-[11px] text-zinc-700">No videos here</div>
+                ) : (
+                  <div className="space-y-3">
+                    {items.map((item) => (
+                      <QueueTile
+                        key={item.id}
+                        item={item}
+                        isFirstExecutable={item.id === firstExecutableId}
+                        isActive={item.id === activeVideoId}
+                        isFirst={queue[0]?.id === item.id}
+                        isLast={queue.at(-1)?.id === item.id}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
     </section>
   );
 }
 
-function QueueRowView({
-  item,
-  isFirstExecutable,
-  isActive,
-  isFirst,
-  isLast,
-}: {
-  item: QueueRow;
-  isFirstExecutable: boolean;
-  isActive: boolean;
-  isFirst: boolean;
-  isLast: boolean;
-}) {
+function QueueTile({ item, isFirstExecutable, isActive, isFirst, isLast }: { item: QueueRow; isFirstExecutable: boolean; isActive: boolean; isFirst: boolean; isLast: boolean }) {
   const router = useRouter();
   const quickCapture = useQuickCapture();
   const [isPending, startTransition] = useTransition();
@@ -105,117 +118,48 @@ function QueueRowView({
     });
   }
 
+  const coverStyle = item.coverUrl
+    ? { backgroundImage: `linear-gradient(to top, rgba(0,0,0,.82), rgba(0,0,0,.08)), url("${item.coverUrl.replaceAll('"', "%22")}")`, backgroundSize: "cover", backgroundPosition: "center" }
+    : undefined;
+
   return (
-    <div
-      className={`flex flex-col gap-3 rounded-2xl border p-3.5 sm:flex-row sm:items-center sm:justify-between ${
-        isFirstExecutable
-          ? "border-emerald-500/40 bg-emerald-500/[0.06]"
-          : item.isBlocked
-            ? "border-red-900/40 bg-red-950/10"
-            : "border-zinc-800 bg-zinc-900/60"
-      }`}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          {isFirstExecutable && (
-            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-emerald-300">
-              Next
-            </span>
-          )}
+    <article data-stage={stageFor(item)} className={`mb-stage-enter pixel-frame overflow-hidden rounded-xl border bg-zinc-950/85 transition-colors ${isFirstExecutable ? "mb-next-marker border-emerald-500/45" : item.isBlocked ? "border-red-900/55" : "border-zinc-800"}`}>
+      <div className="relative aspect-video overflow-hidden border-b border-zinc-800 bg-zinc-900" style={coverStyle}>
+        {!item.coverUrl && <div className="absolute inset-0 grid place-items-center text-zinc-700"><PixelIcon name="video" className="h-8 w-8" /></div>}
+        <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
           <VideoStatusBadge status={item.status} />
-          {item.isBlocked && (
-            <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-red-300">
-              Blocked{item.blockerCategory ? ` · ${item.blockerCategory}` : ""}
-            </span>
-          )}
-          {item.isAwaitingReview && (
-            <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-violet-300">
-              Awaiting review
-            </span>
-          )}
-          {isActive && (
-            <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-cyan-300">
-              Active now
-            </span>
-          )}
+          {isActive && <span className="mb-live-pulse" aria-label="Active now" />}
         </div>
-        <p className="mt-1.5 truncate text-sm font-black text-white">{title}</p>
-        <p className="mt-0.5 truncate text-xs text-zinc-500">
-          {[item.clientName, item.projectName].filter(Boolean).join(" / ") || "Standalone"}
-          {commitmentDue && <> · Due {commitmentDue}</>}
-          {!commitmentDue && item.projectDeadline && <> · Project due {formatDate(item.projectDeadline)}</>}
-        </p>
+        {isFirstExecutable && <span className="absolute left-2 top-2 inline-flex items-center gap-1 border border-emerald-500/45 bg-black/80 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-emerald-300"><PixelIcon name="flag" className="h-3 w-3" /> Next</span>}
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <button
-          type="button"
-          onClick={() =>
-            quickCapture.open({
-              clientId: item.clientId ?? undefined,
-              clientName: item.clientName ?? undefined,
-              projectId: item.projectId ?? undefined,
-              projectName: item.projectName ?? undefined,
-              videoId: item.id,
-              videoTitle: title,
-            })
-          }
-          title="Quick Capture for this item"
-          aria-label={`Quick Capture for ${title}`}
-          className="min-h-9 min-w-9 rounded-lg border border-zinc-700 bg-zinc-950/60 text-xs font-black text-zinc-300 hover:border-violet-500/60"
-        >
-          ⌘K
-        </button>
-        <div className="flex items-center gap-1" role="group" aria-label={`Reorder ${title}`}>
-          <button
-            type="button"
-            disabled={isPending || isFirst}
-            onClick={() => move("top")}
-            title="Move to top"
-            aria-label="Move to top"
-            className="min-h-9 min-w-9 rounded-lg border border-zinc-700 bg-zinc-950/60 text-xs font-black text-zinc-300 hover:border-violet-500/60 disabled:opacity-30"
-          >
-            ⤒
-          </button>
-          <button
-            type="button"
-            disabled={isPending || isFirst}
-            onClick={() => move("up")}
-            title="Move up"
-            aria-label="Move up"
-            className="min-h-9 min-w-9 rounded-lg border border-zinc-700 bg-zinc-950/60 text-xs font-black text-zinc-300 hover:border-violet-500/60 disabled:opacity-30"
-          >
-            ↑
-          </button>
-          <button
-            type="button"
-            disabled={isPending || isLast}
-            onClick={() => move("down")}
-            title="Move down"
-            aria-label="Move down"
-            className="min-h-9 min-w-9 rounded-lg border border-zinc-700 bg-zinc-950/60 text-xs font-black text-zinc-300 hover:border-violet-500/60 disabled:opacity-30"
-          >
-            ↓
-          </button>
+      <div className="p-3">
+        <p className="line-clamp-2 min-h-10 text-sm font-black leading-5 text-white">{title}</p>
+        <p className="mt-1 truncate text-[11px] text-zinc-500">{[item.clientName, item.projectName].filter(Boolean).join(" / ") || "Standalone"}</p>
+        <div className="mt-2 flex min-h-5 flex-wrap gap-1">
+          {item.isBlocked && <span className="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase text-red-300">Blocked{item.blockerCategory ? ` · ${item.blockerCategory}` : ""}</span>}
+          {commitmentDue && <span className="text-[10px] font-bold text-amber-300">Due {commitmentDue}</span>}
+          {!commitmentDue && item.projectDeadline && <span className="text-[10px] text-zinc-600">Project due {formatDate(item.projectDeadline)}</span>}
         </div>
-        {item.isExecutable && !isActive ? (
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={start}
-            className="min-h-9 rounded-lg bg-emerald-600 px-3 text-xs font-black text-white hover:bg-emerald-500 disabled:opacity-50"
-          >
-            Start
-          </button>
-        ) : (
-          <Link
-            href={`/productivity?video=${item.id}`}
-            className="min-h-9 rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-xs font-black text-zinc-200 hover:border-violet-500/60"
-          >
-            Open workspace
-          </Link>
-        )}
+
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-zinc-800/80 pt-2">
+          <div className="flex items-center gap-1" role="group" aria-label={`Reorder ${title}`}>
+            <button type="button" disabled={isPending || isFirst} onClick={() => move("top")} title="Move to top" aria-label="Move to top" className="min-h-9 min-w-9 rounded border border-zinc-800 text-xs text-zinc-400 disabled:opacity-25">⤒</button>
+            <button type="button" disabled={isPending || isFirst} onClick={() => move("up")} title="Move up" aria-label="Move up" className="min-h-9 min-w-9 rounded border border-zinc-800 text-xs text-zinc-400 disabled:opacity-25">↑</button>
+            <button type="button" disabled={isPending || isLast} onClick={() => move("down")} title="Move down" aria-label="Move down" className="min-h-9 min-w-9 rounded border border-zinc-800 text-xs text-zinc-400 disabled:opacity-25">↓</button>
+          </div>
+          <button type="button" onClick={() => quickCapture.open({ clientId: item.clientId ?? undefined, clientName: item.clientName ?? undefined, projectId: item.projectId ?? undefined, projectName: item.projectName ?? undefined, videoId: item.id, videoTitle: title })} className="min-h-9 rounded border border-zinc-800 px-2 text-[10px] font-black text-zinc-400">⌘K</button>
+        </div>
+
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Link href={`/productivity?video=${item.id}`} className="flex min-h-10 items-center justify-center rounded-lg border border-zinc-700 px-2 text-center text-[11px] font-black text-zinc-200 hover:border-violet-500/60">Workspace</Link>
+          {item.isExecutable && !isActive ? (
+            <button type="button" disabled={isPending} onClick={start} className="min-h-10 rounded-lg bg-emerald-600 px-2 text-[11px] font-black text-white hover:bg-emerald-500 disabled:opacity-50">Start work</button>
+          ) : (
+            <span className="flex min-h-10 items-center justify-center rounded-lg bg-zinc-900 px-2 text-center text-[10px] font-bold text-zinc-500">{isActive ? "Active now" : "Awaiting review"}</span>
+          )}
+        </div>
       </div>
-    </div>
+    </article>
   );
 }

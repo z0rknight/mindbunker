@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { getClientPortalView } from "@/modules/client-portal/data";
 import { CoverImage } from "./CoverImage";
+import { PixelEmptyState, PixelIcon } from "@/components/ui/PixelVisuals";
+import { CLIENT_VIDEO_STATUS_LABELS } from "@/modules/client-portal/core";
+import { formatCurrency } from "@/utils/date";
 
 // Monday Real-Operation Pre-Freeze §6: same reviewUrl/publishedUrl/deliveryUrl
 // precedence as the dashboard VideoCard (client/dashboard/VideoCard.tsx) --
@@ -73,7 +76,7 @@ function VaultFrame({ children }: { children: React.ReactNode }) {
       <div className="mx-auto w-full max-w-4xl">
         <header className="mb-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-400/30 bg-violet-400/10 text-sm font-black text-violet-200 shadow-lg shadow-violet-950/30">
+            <div className="mb-pixel-logo flex h-11 w-11 items-center justify-center border border-violet-400/30 bg-violet-400/10 text-sm font-black text-violet-200 shadow-lg shadow-violet-950/30">
               RM
             </div>
             <div>
@@ -104,7 +107,7 @@ export default async function ClientPortalPage({
   if (portal.status === "unavailable") {
     return (
       <VaultFrame>
-        <section className="rounded-3xl border border-zinc-800 bg-zinc-900/75 p-6 shadow-2xl shadow-black/30 sm:p-9">
+        <section className="pixel-frame pixel-frame-client rounded-3xl border border-zinc-800 bg-zinc-900/75 p-6 shadow-2xl shadow-black/30 sm:p-9">
           <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-800 text-xl text-zinc-400">
             ◈
           </div>
@@ -118,12 +121,14 @@ export default async function ClientPortalPage({
     );
   }
 
+  const activeBatch = portal.batches.find((batch) => batch.state === "OPEN") ?? null;
+
   return (
     <VaultFrame>
-      <section className="mb-6 overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/75 shadow-2xl shadow-black/30">
+      <section className="pixel-frame pixel-frame-client mb-6 overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/75 shadow-2xl shadow-black/30">
         <div className="bg-gradient-to-br from-violet-400/15 via-transparent to-cyan-400/10 p-5 sm:p-8">
-          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-violet-200">
-            Welcome to your vault
+          <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-violet-200">
+            <PixelIcon name="shield" className="h-3 w-3" /> Welcome to your vault
           </p>
           <h1 className="mt-3 break-words text-3xl font-black tracking-tight text-white sm:text-4xl">
             {portal.clientName}
@@ -135,25 +140,61 @@ export default async function ClientPortalPage({
         </div>
       </section>
 
+      {activeBatch && (
+        <section className="pixel-frame pixel-frame-client mb-6 rounded-3xl border border-emerald-400/25 bg-emerald-950/10 p-5 sm:p-7">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Current batch</p>
+              <h2 className="mt-1 text-xl font-black text-white">{activeBatch.label}</h2>
+              <p className="mt-1 text-xs text-zinc-500">{activeBatch.projectName} · received {formatPortalDate(activeBatch.receivedAt)}</p>
+            </div>
+            <span className="self-start rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-200">
+              {activeBatch.phase.replaceAll("_", " ")}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {activeBatch.items.map((item) => (
+              <div key={item.id} className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-black/30 px-3 py-2">
+                <span className="truncate text-sm font-bold text-zinc-200">{item.title}</span>
+                <span className="shrink-0 text-[10px] font-black uppercase text-zinc-500">{CLIENT_VIDEO_STATUS_LABELS[item.status]}</span>
+              </div>
+            ))}
+          </div>
+          {(activeBatch.billed.length > 0 || activeBatch.expectedValue) && (
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-800/80 pt-3 text-xs">
+              {activeBatch.billed.map((row) => (
+                <span key={row.currency} className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 font-bold text-cyan-200">
+                  Confirmed billed · {formatCurrency(row.amount, row.currency)}
+                </span>
+              ))}
+              {activeBatch.billed.length === 0 && activeBatch.expectedValue && (
+                <span className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 font-bold text-zinc-400">
+                  Expected · {formatCurrency(activeBatch.expectedValue.amount, activeBatch.expectedValue.currency)} · not final billing
+                </span>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
       {portal.projects.length === 0 ? (
-        <section className="rounded-3xl border border-dashed border-zinc-800 bg-zinc-900/40 p-7 text-center sm:p-10">
-          <p className="font-black text-white">No projects to show yet</p>
-          <p className="mt-2 text-sm leading-6 text-zinc-500">
+        <PixelEmptyState icon="project" title="No projects to show yet" className="rounded-3xl sm:p-10">
+          <p>
             Your project will appear here as soon as it is ready.
           </p>
-        </section>
+        </PixelEmptyState>
       ) : (
         <div className="space-y-5">
           {portal.projects.map((project, projectIndex) => (
             <section
               key={`${project.name}-${projectIndex}`}
-              className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70"
+              className="pixel-frame pixel-frame-client overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70"
             >
               <header className="border-b border-zinc-800 p-5 sm:p-7">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">
-                      Project
+                    <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">
+                      <PixelIcon name="project" className="h-3 w-3" /> Project
                     </p>
                     <h2 className="mt-1 break-words text-xl font-black text-white sm:text-2xl">
                       {project.name}
@@ -191,19 +232,19 @@ export default async function ClientPortalPage({
                     {project.videos.map((video) => (
                       <article
                         key={video.id}
-                        className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/45"
+                        className="pixel-frame pixel-frame-client overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/45"
                       >
                         <div className="relative aspect-video w-full overflow-hidden bg-zinc-900">
                           {video.coverUrl ? (
                             <CoverImage src={video.coverUrl} />
                           ) : (
                             <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-zinc-700">
-                              <span className="text-2xl" aria-hidden="true">🎬</span>
+                              <PixelIcon name="video" className="h-6 w-6" />
                               <span className="text-[10px] font-bold uppercase tracking-widest">No preview yet</span>
                             </div>
                           )}
                           <span
-                            className={`absolute left-2.5 top-2.5 rounded-full px-2.5 py-1 text-[10px] font-black backdrop-blur ${videoStatusClass[video.status] ?? videoStatusClass.Planned}`}
+                            className={`pixel-badge absolute left-2.5 top-2.5 px-2.5 py-1 text-[10px] font-black backdrop-blur ${videoStatusClass[video.status] ?? videoStatusClass.Planned}`}
                           >
                             {video.status}
                           </span>
@@ -212,6 +253,11 @@ export default async function ClientPortalPage({
                           <h3 className="break-words font-black text-zinc-100">
                             {video.title}
                           </h3>
+                          {video.batchLabel && (
+                            <p className="text-[10px] font-black uppercase tracking-wider text-violet-300">
+                              Batch · {video.batchLabel}
+                            </p>
+                          )}
                           {video.lastUpdated && (
                             <p className="text-[11px] text-zinc-600">
                               Updated {formatPortalTimestamp(video.lastUpdated)}

@@ -14,7 +14,7 @@ const STATUS_CLASSES: Record<ProjectStatus, string> = {
 export function ProjectStatusBadge({ status }: { status: ProjectStatus }) {
   return (
     <span
-      className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${STATUS_CLASSES[status]}`}
+      className={`pixel-badge inline-flex border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${STATUS_CLASSES[status]}`}
     >
       {PROJECT_STATUS_LABELS[status]}
     </span>

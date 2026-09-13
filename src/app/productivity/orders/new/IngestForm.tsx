@@ -6,8 +6,10 @@ import { ingestProductionOrder } from "@/modules/production-orders/actions";
 import { todayISO } from "@/utils/date";
 import type {
   IngestClientOption,
+  IngestContractOption,
   IngestProjectOption,
 } from "@/modules/production-orders/data";
+import { formatProductionOrderContractLabel } from "@/modules/production-orders/core";
 
 type ItemRow = { key: number; title: string };
 
@@ -27,9 +29,11 @@ function emptyRow(): ItemRow {
 export function IngestForm({
   clients,
   projects,
+  contracts,
 }: {
   clients: IngestClientOption[];
   projects: IngestProjectOption[];
+  contracts: IngestContractOption[];
 }) {
   const router = useRouter();
   const [ingestKey] = useState(() =>
@@ -42,6 +46,7 @@ export function IngestForm({
 
   const [clientId, setClientId] = useState<number | "">("");
   const [projectId, setProjectId] = useState<number | "">("");
+  const [contractId, setContractId] = useState<number | "">("");
   const [label, setLabel] = useState("");
   const [channel, setChannel] = useState("");
   const [pricingModel, setPricingModel] = useState<"" | "HOURLY" | "FIXED" | "OTHER">("");
@@ -54,6 +59,10 @@ export function IngestForm({
   const projectsForClient = useMemo(
     () => projects.filter((p) => p.clientId === clientId),
     [projects, clientId],
+  );
+  const contractsForClient = useMemo(
+    () => contracts.filter((contract) => contract.clientId === clientId),
+    [contracts, clientId],
   );
 
   function updateRow(key: number, title: string) {
@@ -100,6 +109,10 @@ export function IngestForm({
       setError("Choose a client and project.");
       return;
     }
+    if (contractsForClient.length > 0 && contractId === "") {
+      setError("Choose which active contract this batch uses.");
+      return;
+    }
     const items = rows
       .map((r) => ({ title: r.title.trim() }))
       .filter((r) => r.title.length > 0);
@@ -119,6 +132,7 @@ export function IngestForm({
       const result = await ingestProductionOrder({
         clientId: clientId as number,
         projectId: projectId as number,
+        contractId: contractId === "" ? null : contractId,
         label,
         channel: channel.trim() || null,
         pricingModel: pricingModel || null,
@@ -154,8 +168,13 @@ export function IngestForm({
           <select
             value={clientId}
             onChange={(e) => {
-              setClientId(e.target.value ? Number(e.target.value) : "");
+              const nextClientId = e.target.value ? Number(e.target.value) : "";
+              setClientId(nextClientId);
               setProjectId("");
+              const matchingContracts = contracts.filter(
+                (contract) => contract.clientId === nextClientId,
+              );
+              setContractId(matchingContracts.length === 1 ? matchingContracts[0].id : "");
             }}
             className="mt-1 w-full rounded border border-emerald-900/60 bg-zinc-950 px-3 py-2 text-sm text-emerald-100"
           >
@@ -185,6 +204,32 @@ export function IngestForm({
           </select>
         </label>
       </div>
+
+      <label className="block text-xs text-emerald-500">
+        ACTIVE CONTRACT
+        <select
+          value={contractId}
+          onChange={(e) => setContractId(e.target.value ? Number(e.target.value) : "")}
+          disabled={clientId === "" || contractsForClient.length === 0}
+          className="mt-1 w-full rounded border border-emerald-900/60 bg-zinc-950 px-3 py-2 text-sm text-emerald-100 disabled:opacity-50"
+        >
+          <option value="">
+            {clientId === ""
+              ? "Select client first…"
+              : contractsForClient.length === 0
+                ? "No active contract recorded"
+                : "Select active contract…"}
+          </option>
+          {contractsForClient.map((contract) => (
+            <option key={contract.id} value={contract.id}>
+              {formatProductionOrderContractLabel(contract)}
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-[11px] leading-4 text-zinc-600">
+          The selected commercial fact stays visible on this batch. No contract is inferred silently.
+        </span>
+      </label>
 
       <label className="block text-xs text-emerald-500">
         ORDER LABEL

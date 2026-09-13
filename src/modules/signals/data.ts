@@ -11,7 +11,7 @@ import {
   transactions,
   videoLogs,
 } from "@/db/schema";
-import { and, eq, gte, isNull } from "drizzle-orm";
+import { and, eq, gte, isNull, ne } from "drizzle-orm";
 import { startOfMonthISO } from "@/utils/date";
 import { getReconciliation } from "@/modules/reconciliation/actions";
 import { countStaleUnresolvedCaptures } from "@/modules/captures/data";
@@ -58,7 +58,12 @@ export async function getOpenCommitmentsWithContext(): Promise<CommitmentRow[]> 
     .innerJoin(videoLogs, eq(videoLogs.id, commitments.videoId))
     .leftJoin(projects, eq(projects.id, videoLogs.projectId))
     .leftJoin(clients, eq(clients.id, videoLogs.clientId))
-    .where(eq(commitments.status, "OPEN"));
+    .where(
+      and(
+        eq(commitments.status, "OPEN"),
+        ne(videoLogs.status, "DONE"),
+      ),
+    );
 }
 
 // Incident fix (2026-09-08, resource-limit regression): War Room calls
@@ -98,7 +103,7 @@ export async function getActiveSignals(prefetchedCommitments?: CommitmentRow[]):
       .from(blockers)
       .innerJoin(videoLogs, eq(videoLogs.id, blockers.videoId))
       .leftJoin(clients, eq(clients.id, videoLogs.clientId))
-      .where(isNull(blockers.resolvedAt)),
+      .where(and(isNull(blockers.resolvedAt), ne(videoLogs.status, "DONE"))),
     // Repeated Friction: recent window (last 30 days), not all-time --
     // "repeated" is about a current pattern, not ancient history.
     db

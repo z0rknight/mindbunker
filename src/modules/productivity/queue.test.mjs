@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   isQueueEligible,
+  moveBefore,
   moveInOrder,
   resequencePositions,
   selectExecutionQueue,
@@ -20,6 +21,9 @@ function video(overrides) {
     projectId: 1,
     projectName: "Project",
     projectDeadline: null,
+    coverUrl: null,
+    orientation: null,
+    isOperationalContainer: false,
     queuePosition: null,
     createdAt: new Date("2026-09-01T00:00:00Z"),
     updatedAt: null,
@@ -34,11 +38,15 @@ test("eligibility: only CLIENT_WORK and not DONE", () => {
   assert.equal(isQueueEligible({ videoKind: "INTERNAL", status: "IN_PROGRESS" }), false);
 });
 
-test("eligibility never references is_operational_container -- production-baseline safe", () => {
-  // A video that would be an operational container in a schema where that
-  // column exists is passed here with no such field at all; eligibility
-  // must not throw or implicitly require it.
-  assert.equal(isQueueEligible({ videoKind: "CLIENT_WORK", status: "PLANNED" }), true);
+test("operational batch containers never appear as executable videos", () => {
+  assert.equal(
+    isQueueEligible({ videoKind: "CLIENT_WORK", status: "PLANNED", isOperationalContainer: true }),
+    false,
+  );
+  assert.equal(
+    isQueueEligible({ videoKind: "CLIENT_WORK", status: "PLANNED", isOperationalContainer: false }),
+    true,
+  );
 });
 
 test("DONE videos never appear in the queue projection", () => {
@@ -156,6 +164,12 @@ test("moveInOrder: 'down' on the last item is a no-op", () => {
 
 test("moveInOrder: an id not present in the list returns the list unchanged", () => {
   assert.deepEqual(moveInOrder([1, 2, 3], 99, "top"), [1, 2, 3]);
+});
+
+test("moveBefore expresses drag intent without trusting a browser-supplied full order", () => {
+  assert.deepEqual(moveBefore([1, 2, 3, 4], 4, 2), [1, 4, 2, 3]);
+  assert.deepEqual(moveBefore([1, 2, 3, 4], 1, null), [2, 3, 4, 1]);
+  assert.deepEqual(moveBefore([1, 2, 3], 9, 2), [1, 2, 3]);
 });
 
 test("resequencePositions assigns sparse integers in list order starting at 1000", () => {

@@ -184,6 +184,20 @@ export const clients = sqliteTable("clients", {
   instagramUsername: text("instagram_username"),
   instagramBio: text("instagram_bio"),
   instagramProfilePictureUrl: text("instagram_profile_picture_url"),
+  defaultCoverUrl: text("default_cover_url"),
+  // Operational Control System: explicit client-portal capability flags.
+  // Defaults preserve the portal behaviour that was already live before
+  // these controls existed; the operator can now revoke each capability
+  // without changing the underlying commercial or production records.
+  portalCanSeeFinancials: integer("portal_can_see_financials", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  portalCanReview: integer("portal_can_review", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  portalCanSetPriority: integer("portal_can_set_priority", { mode: "boolean" })
+    .notNull()
+    .default(true),
   instagramProfileUpdatedAt: integer("instagram_profile_updated_at", {
     mode: "timestamp",
   }),
@@ -489,6 +503,9 @@ export const projects = sqliteTable(
     // a neutral placeholder (resolved in modules/media/core.ts, not
     // stored here).
     coverUrl: text("cover_url"),
+    visibleToClient: integer("visible_to_client", { mode: "boolean" })
+      .notNull()
+      .default(true),
     createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
       () => new Date(),
     ),
@@ -638,6 +655,9 @@ export const videoLogs = sqliteTable(
     // executable work item (Gate 3 of the Tuesday Patch), so ordering it
     // is one column, not a queue/workflow subsystem.
     queuePosition: integer("queue_position"),
+    visibleToClient: integer("visible_to_client", { mode: "boolean" })
+      .notNull()
+      .default(true),
   },
   (table) => [
     index("video_logs_project_created_idx").on(
@@ -724,6 +744,13 @@ export const productionOrders = sqliteTable(
     projectId: integer("project_id")
       .notNull()
       .references(() => projects.id),
+    // Sunday QA Patch: the commercial agreement intentionally selected
+    // when this batch starts. Nullable keeps every pre-batch/legacy order
+    // valid; new UI only offers ACTIVE contracts owned by this client.
+    contractId: integer("contract_id").references(
+      () => commercialContracts.id,
+      { onDelete: "restrict" },
+    ),
     label: text("label").notNull(),
     channel: text("channel"),
     state: text("state", { enum: PRODUCTION_ORDER_STATES })
@@ -752,6 +779,7 @@ export const productionOrders = sqliteTable(
   (table) => [
     index("production_orders_project_idx").on(table.projectId),
     index("production_orders_client_idx").on(table.clientId),
+    index("production_orders_contract_idx").on(table.contractId),
     index("production_orders_state_idx").on(table.state),
     uniqueIndex("production_orders_ingest_key_idx").on(table.ingestKey),
     check(

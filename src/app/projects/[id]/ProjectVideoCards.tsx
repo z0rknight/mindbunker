@@ -109,12 +109,14 @@ export function ProjectVideoCards({
   projectId,
   videos,
   projectCoverUrl = null,
+  clientDefaultCoverUrl = null,
   clientAvatarUrl = null,
   clientName = "",
 }: {
   projectId: number;
   videos: WorkspaceVideoCardData[];
   projectCoverUrl?: string | null;
+  clientDefaultCoverUrl?: string | null;
   clientAvatarUrl?: string | null;
   clientName?: string;
 }) {
@@ -133,7 +135,12 @@ export function ProjectVideoCards({
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {videos.map((video) => {
         const aspectKey = video.orientation ?? "UNKNOWN";
-        const coverUrl = resolveCoverUrl(video.coverUrl, projectCoverUrl, clientAvatarUrl);
+        const coverUrl = resolveCoverUrl(
+          video.coverUrl,
+          projectCoverUrl,
+          clientDefaultCoverUrl,
+          clientAvatarUrl,
+        );
         const href = `/productivity?video=${video.id}&returnTo=${returnTo}`;
         return (
           <article

@@ -41,7 +41,7 @@ function selectPortalRowsForClient(db, clientId) {
   const projectRows = db
     .prepare(
       `SELECT id, client_id as clientId, name, status, deadline
-       FROM projects WHERE client_id = ?
+       FROM projects WHERE client_id = ? AND visible_to_client = 1
        ORDER BY updated_at DESC, id DESC`,
     )
     .all(clientId);
@@ -58,6 +58,7 @@ function selectPortalRowsForClient(db, clientId) {
          v.delivery_url as deliveryUrl,
          v.review_url as reviewUrl,
          v.published_url as publishedUrl,
+         v.batch_label as batchLabel,
          v.cover_url as coverUrl,
          p.cover_url as projectCoverUrl,
          v.created_at as createdAt,
@@ -65,6 +66,8 @@ function selectPortalRowsForClient(db, clientId) {
        FROM video_logs v
        INNER JOIN projects p ON v.project_id = p.id
        WHERE v.client_id = ? AND p.client_id = ?
+         AND p.visible_to_client = 1 AND v.visible_to_client = 1
+         AND v.is_operational_container = 0 AND v.cancelled_at IS NULL
        ORDER BY v.updated_at DESC, v.created_at DESC`,
     )
     .all(clientId, clientId)
@@ -84,7 +87,7 @@ function selectDashboardRowsForClient(db, clientId) {
   const projectRows = db
     .prepare(
       `SELECT id, client_id as clientId, name, status, deadline
-       FROM projects WHERE client_id = ?
+       FROM projects WHERE client_id = ? AND visible_to_client = 1
        ORDER BY updated_at DESC, id DESC`,
     )
     .all(clientId);
@@ -101,6 +104,7 @@ function selectDashboardRowsForClient(db, clientId) {
          v.delivery_url as deliveryUrl,
          v.review_url as reviewUrl,
          v.published_url as publishedUrl,
+         v.batch_label as batchLabel,
          v.cover_url as coverUrl,
          p.cover_url as projectCoverUrl,
          v.orientation as orientation,
@@ -111,6 +115,8 @@ function selectDashboardRowsForClient(db, clientId) {
        FROM video_logs v
        INNER JOIN projects p ON v.project_id = p.id
        WHERE v.client_id = ? AND p.client_id = ?
+         AND p.visible_to_client = 1 AND v.visible_to_client = 1
+         AND v.is_operational_container = 0 AND v.cancelled_at IS NULL
        ORDER BY v.updated_at DESC, v.created_at DESC`,
     )
     .all(clientId, clientId)
@@ -155,6 +161,8 @@ function seedTarynShapedFixture(db) {
       (204, 11, 1, 'Bonnie Reel 1 (delivered with link)', '2026-08-10', 'DONE', 'https://drive.example/bonnie-1', NULL, NULL, NULL),
       (301, 99, 2, 'Other client private video', '2026-08-20', 'DONE', 'https://video.example/private', NULL, NULL, NULL);
 
+    UPDATE video_logs SET batch_label = 'MINI SERIES · Six episodes' WHERE id IN (201, 202, 203);
+
     INSERT INTO crm_events (client_id, video_id, type, description, created_at) VALUES
       (1, 204, 'video.finished', 'Bonnie Reel 1 marked DONE', unixepoch());
   `);
@@ -186,6 +194,7 @@ test("getClientPortalView's exact SQL projection: cover fallback chain resolves 
 
   // Ep 1 has its own cover -- wins outright.
   assert.equal(videoById.get(201).coverUrl, "https://cdn.example/ep1-cover.jpg");
+  assert.equal(videoById.get(201).batchLabel, "MINI SERIES · Six episodes");
   // Ep 2 has no own cover -- falls back to the project's cover.
   assert.equal(videoById.get(202).coverUrl, "https://cdn.example/mini-series-cover.jpg");
   // Ep 0 is DONE with no deliveryUrl -- "Completed", not "Delivered".
@@ -208,6 +217,7 @@ test("getClientDashboardView's exact SQL projection: cross-client isolation and 
   assert.equal(result.recentDeliveries[0].id, 204);
   assert.equal(result.recentDeliveries[0].status, "DONE");
   assert.equal(result.recentDeliveries[0].statusLabel, "Delivered");
+  assert.equal(result.allVideos.find((video) => video.id === 201).batchLabel, "MINI SERIES · Six episodes");
 
   const otherClientRows = selectDashboardRowsForClient(db, 2);
   const otherResult = buildClientDashboard(
@@ -234,4 +244,23 @@ test("getClientDashboardView's exact SQL projection never selects internal-only 
   assert.equal(serialized.includes("private editing note"), false);
   assert.equal(serialized.includes("confidential CRM note"), false);
   assert.equal(serialized.includes("5000"), false);
+});
+
+test("explicit project/video visibility controls remove rows from both client projections", () => {
+  const db = buildMigratedDb();
+  seedTarynShapedFixture(db);
+  db.exec(`
+    UPDATE video_logs SET visible_to_client = 0 WHERE id = 201;
+    UPDATE projects SET visible_to_client = 0 WHERE id = 11;
+  `);
+
+  const portal = selectPortalRowsForClient(db, 1);
+  assert.equal(portal.projectRows.some((row) => row.id === 11), false);
+  assert.equal(portal.videoRows.some((row) => row.id === 201), false);
+  assert.equal(portal.videoRows.some((row) => row.projectId === 11), false);
+
+  const dashboard = selectDashboardRowsForClient(db, 1);
+  assert.equal(dashboard.projectRows.some((row) => row.id === 11), false);
+  assert.equal(dashboard.videoRows.some((row) => row.id === 201), false);
+  assert.equal(dashboard.videoRows.some((row) => row.projectId === 11), false);
 });

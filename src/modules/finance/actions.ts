@@ -513,6 +513,21 @@ export async function getFinanceSummary() {
   return computeFinanceSummaryByCurrency(allTransactions, startOfMonthISO(), fxMovements);
 }
 
+// Sunday QA: a narrow read projection for Dashboard Today. These are only
+// canonical business-ledger income rows dated on the operator's São Paulo
+// calendar day. Currency buckets remain separate; no FX conversion or
+// billing estimate is introduced here.
+export async function getTodayIncomeByCurrency(): Promise<Array<{ currency: string; amount: number }>> {
+  const db = await getAuthenticatedDb();
+  const rows = await db
+    .select({ currency: transactions.currency, amount: sum(transactions.amount) })
+    .from(transactions)
+    .where(and(eq(transactions.type, "income"), eq(transactions.date, todayISO())))
+    .groupBy(transactions.currency)
+    .orderBy(transactions.currency);
+  return rows.map((row) => ({ currency: row.currency, amount: Number(row.amount ?? 0) }));
+}
+
 export async function getAllTransactions() {
   const db = await getAuthenticatedDb();
   return db.select().from(transactions).orderBy(transactions.date);

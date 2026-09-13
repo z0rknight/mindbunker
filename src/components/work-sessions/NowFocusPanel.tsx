@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { LiveIndicator, PixelIcon } from "@/components/ui/PixelVisuals";
 import { startWorkSession, stopWorkSession } from "@/modules/work-sessions/actions";
 import {
   DEFAULT_WORK_SESSION_ACTIVITY,
@@ -130,20 +131,23 @@ function ActiveSessionCard({
 
   return (
     <section
-      className={`rounded-2xl border p-4 sm:p-5 ${compact ? "mb-8" : "mb-7"} ${
+      className={`pixel-frame ${stale ? "pixel-frame-attention" : "pixel-frame-live"} rounded-2xl border p-4 sm:p-5 ${compact ? "mb-8" : "mb-7"} ${
         stale ? "border-amber-500/40 bg-amber-500/[0.08]" : "border-emerald-500/35 bg-emerald-500/[0.07]"
       }`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <p
-            className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] ${
+          <div
+            className={`flex items-center gap-2 ${
               stale ? "text-amber-300" : "text-emerald-300"
             }`}
           >
-            <span className={`h-2 w-2 animate-pulse rounded-full ${stale ? "bg-amber-400" : "bg-emerald-400"}`} />
-            {stale ? "Still working? — session running a long time" : "You are working on"}
-          </p>
+            {stale ? (
+              <span className="mb-system-label">SESSION CHECK · RUNNING LONG</span>
+            ) : (
+              <LiveIndicator label="LIVE OPERATION" />
+            )}
+          </div>
           {contextParts.length > 0 && (
             <p className="mt-1.5 truncate text-[11px] font-bold uppercase tracking-wide text-zinc-400">
               {contextParts.join(" / ")}
@@ -152,7 +156,7 @@ function ActiveSessionCard({
           <h2 className={`mt-2 truncate font-black text-white ${compact ? "text-lg" : "text-xl sm:text-2xl"}`}>
             {openSession.videoTitle}
           </h2>
-          <p className={`mt-1 font-mono text-zinc-300 ${compact ? "text-lg" : "text-2xl sm:text-3xl"}`}>
+          <p className={`mb-timer mt-1 font-mono text-zinc-200 ${compact ? "text-lg" : "text-2xl sm:text-3xl"}`}>
             {formatElapsedClock(elapsedSeconds)}
           </p>
           <p className="mt-1 text-xs text-zinc-500">
@@ -210,8 +214,11 @@ function NoActiveWorkCard({
   }
 
   return (
-    <section className={`rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40 p-4 sm:p-5 ${compact ? "mb-8" : "mb-7"}`}>
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">No active work</p>
+    <section className={`pixel-frame rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40 p-4 sm:p-5 ${compact ? "mb-8" : "mb-7"}`}>
+      <p className="mb-system-label flex items-center gap-2 text-zinc-500">
+        <PixelIcon name="flag" className="h-3.5 w-3.5" />
+        Next objective
+      </p>
       {recommended ? (
         <>
           <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-zinc-500">

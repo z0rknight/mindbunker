@@ -461,7 +461,9 @@ export async function getLastActiveByClient(): Promise<Map<number, string>> {
 
 export type SessionTimelineRange =
   | { kind: "day"; dayKey: string }
-  | { kind: "week"; mondayKey: string };
+  | { kind: "week"; mondayKey: string }
+  | { kind: "month"; monthKey: string }
+  | { kind: "span"; startKey: string; endKey: string };
 
 type RawTimelineRow = {
   id: number;
@@ -531,9 +533,23 @@ export async function getSessionTimelineItems(
   range: SessionTimelineRange,
   now: Date = new Date(),
 ): Promise<SessionTimelineItem[]> {
-  const anchorKey = range.kind === "day" ? range.dayKey : range.mondayKey;
+  const anchorKey = range.kind === "day"
+    ? range.dayKey
+    : range.kind === "week"
+      ? range.mondayKey
+      : range.kind === "month"
+        ? `${range.monthKey}-01`
+        : range.startKey;
+  const monthDays = range.kind === "month"
+    ? new Date(Date.UTC(Number(range.monthKey.slice(0, 4)), Number(range.monthKey.slice(5, 7)), 0)).getUTCDate()
+    : 0;
   const padStart = utcBoundForDateKey(anchorKey, -2);
-  const padEnd = utcBoundForDateKey(anchorKey, range.kind === "day" ? 3 : 9);
+  const padEnd = range.kind === "span"
+    ? utcBoundForDateKey(range.endKey, 3)
+    : utcBoundForDateKey(
+        anchorKey,
+        range.kind === "day" ? 3 : range.kind === "week" ? 9 : monthDays + 2,
+      );
 
   const db = await getAuthenticatedDb();
   const result = await db.$client
@@ -548,6 +564,15 @@ export async function getSessionTimelineItems(
 
   if (range.kind === "day") {
     return items.filter((item) => dayKeyFor(item.startedAt) === range.dayKey);
+  }
+  if (range.kind === "month") {
+    return items.filter((item) => dayKeyFor(item.startedAt).startsWith(`${range.monthKey}-`));
+  }
+  if (range.kind === "span") {
+    return items.filter((item) => {
+      const key = dayKeyFor(item.startedAt);
+      return key >= range.startKey && key <= range.endKey;
+    });
   }
   return items.filter((item) => mondayOfWeek(dayKeyFor(item.startedAt)) === range.mondayKey);
 }

@@ -15,7 +15,15 @@ import { VideoCard } from "./VideoCard";
 
 type FilterValue = "all" | VideoContentType;
 
-export function VideoGallery({ videos }: { videos: ClientDashboardVideoCard[] }) {
+export function VideoGallery({
+  videos,
+  allowReview = true,
+  allowPriority = true,
+}: {
+  videos: ClientDashboardVideoCard[];
+  allowReview?: boolean;
+  allowPriority?: boolean;
+}) {
   const [filter, setFilter] = useState<FilterValue>("all");
   const [query, setQuery] = useState("");
   const filteredVideos = useMemo(
@@ -65,7 +73,8 @@ export function VideoGallery({ videos }: { videos: ClientDashboardVideoCard[] })
             <VideoCard
               key={video.id}
               video={video}
-              showReviewActions={video.status === "READY_FOR_REVIEW"}
+              showReviewActions={allowReview && video.status === "READY_FOR_REVIEW"}
+              allowPriority={allowPriority}
             />
           ))}
         </div>

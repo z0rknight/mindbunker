@@ -6,9 +6,10 @@ import type { ClientBillingSummary } from "@/modules/client-portal/core";
 // is a genuine, distinct state from "$0.00" and is never collapsed into it
 // (see the comment on ClientBillingSummary in core.ts for why).
 export function BillingSummary({ billing }: { billing: ClientBillingSummary }) {
+  if (billing.visibility === "hidden") return null;
   if (!billing.hasAnyRecordedWork) {
     return (
-      <section className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-5">
+      <section className="pixel-frame pixel-frame-client rounded-2xl border border-zinc-800 bg-zinc-950/40 p-5">
         <h2 className="text-[11px] font-black uppercase tracking-widest text-zinc-500">
           Current recorded spend
         </h2>
@@ -18,7 +19,7 @@ export function BillingSummary({ billing }: { billing: ClientBillingSummary }) {
   }
 
   return (
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-5">
+    <section className="pixel-frame pixel-frame-client rounded-2xl border border-zinc-800 bg-zinc-950/40 p-5">
       <h2 className="text-[11px] font-black uppercase tracking-widest text-zinc-500">
         Current recorded spend
       </h2>

@@ -2,10 +2,11 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { shiftDateKey } from "@/utils/date";
-import { distinctFilterOptions, type SessionTimelineItem } from "@/modules/work-sessions/timeline";
+import { distinctFilterOptions, shiftMonthKey, type SessionTimelineItem } from "@/modules/work-sessions/timeline";
 import { pixelFont } from "./fonts";
 
-export type SessionViewMode = "timeline" | "week" | "table";
+export type SessionViewMode = "timeline" | "week" | "month" | "table";
+export type SessionTimelineRangeMode = "day" | "7d" | "30d" | "month";
 
 const WORK_TYPE_LABELS: Record<string, string> = {
   CLIENT_WORK: "Client work",
@@ -32,10 +33,21 @@ function formatWeekLabel(mondayKey: string): string {
   return `${fmt(monday)} – ${fmt(sunday)}`;
 }
 
+function formatMonthLabel(monthKey: string): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export function SessionViewSwitcher({
   view,
   dateKey,
   mondayKey,
+  monthKey,
+  timelineRange = "day",
   clientFilter,
   sourceFilter,
   workTypeFilter,
@@ -44,6 +56,8 @@ export function SessionViewSwitcher({
   view: SessionViewMode;
   dateKey: string;
   mondayKey?: string;
+  monthKey?: string;
+  timelineRange?: SessionTimelineRangeMode;
   clientFilter?: string | null;
   sourceFilter?: string | null;
   workTypeFilter?: string | null;
@@ -64,6 +78,22 @@ export function SessionViewSwitcher({
 
   const { clients, sources } = distinctFilterOptions(items ?? []);
   const showNavAndFilters = view !== "table";
+  const timelineRangeLabel = timelineRange === "7d"
+    ? "7 days"
+    : timelineRange === "30d"
+      ? "30 days"
+      : timelineRange === "month"
+        ? formatMonthLabel(monthKey ?? dateKey.slice(0, 7))
+        : formatDayLabel(dateKey);
+
+  function shiftedTimelineDate(direction: -1 | 1): string {
+    if (timelineRange === "7d") return shiftDateKey(dateKey, 7 * direction);
+    if (timelineRange === "30d") return shiftDateKey(dateKey, 30 * direction);
+    if (timelineRange === "month") {
+      return `${shiftMonthKey(monthKey ?? dateKey.slice(0, 7), direction)}-01`;
+    }
+    return shiftDateKey(dateKey, direction);
+  }
 
   return (
     <div
@@ -76,7 +106,7 @@ export function SessionViewSwitcher({
     >
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex rounded-md border border-zinc-800 bg-black/40 p-0.5">
-          {(["timeline", "week", "table"] as const).map((mode) => (
+          {(["timeline", "week", "month", "table"] as const).map((mode) => (
             <button
               key={mode}
               type="button"
@@ -99,7 +129,13 @@ export function SessionViewSwitcher({
               aria-label="Previous"
               onClick={() =>
                 navigate({
-                  date: view === "week" ? shiftDateKey(dateKey, -7) : shiftDateKey(dateKey, -1),
+                  date: view === "timeline"
+                    ? shiftedTimelineDate(-1)
+                    : view === "week"
+                    ? shiftDateKey(dateKey, -7)
+                    : view === "month"
+                      ? `${shiftMonthKey(monthKey ?? dateKey.slice(0, 7), -1)}-01`
+                      : shiftDateKey(dateKey, -1),
                 })
               }
               className="flex h-7 w-7 items-center justify-center rounded border border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-[#00FF41]/40 hover:text-[#00FF41]"
@@ -107,14 +143,26 @@ export function SessionViewSwitcher({
               ‹
             </button>
             <span className="min-w-[150px] text-center text-xs font-bold text-zinc-200">
-              {view === "week" ? formatWeekLabel(mondayKey ?? dateKey) : formatDayLabel(dateKey)}
+              {view === "timeline"
+                ? timelineRangeLabel
+                : view === "week"
+                ? formatWeekLabel(mondayKey ?? dateKey)
+                : view === "month"
+                  ? formatMonthLabel(monthKey ?? dateKey.slice(0, 7))
+                  : formatDayLabel(dateKey)}
             </span>
             <button
               type="button"
               aria-label="Next"
               onClick={() =>
                 navigate({
-                  date: view === "week" ? shiftDateKey(dateKey, 7) : shiftDateKey(dateKey, 1),
+                  date: view === "timeline"
+                    ? shiftedTimelineDate(1)
+                    : view === "week"
+                    ? shiftDateKey(dateKey, 7)
+                    : view === "month"
+                      ? `${shiftMonthKey(monthKey ?? dateKey.slice(0, 7), 1)}-01`
+                      : shiftDateKey(dateKey, 1),
                 })
               }
               className="flex h-7 w-7 items-center justify-center rounded border border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-[#00FF41]/40 hover:text-[#00FF41]"
@@ -124,6 +172,30 @@ export function SessionViewSwitcher({
           </div>
         )}
       </div>
+
+      {view === "timeline" && (
+        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-zinc-900 pt-3" aria-label="Timeline range">
+          {([
+            ["day", "Day"],
+            ["7d", "7 days"],
+            ["30d", "30 days"],
+            ["month", "This month"],
+          ] as const).map(([range, label]) => (
+            <button
+              key={range}
+              type="button"
+              onClick={() => navigate({ range })}
+              className={`min-h-9 rounded-lg border px-3 text-[10px] font-black uppercase tracking-wide transition ${
+                timelineRange === range
+                  ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-200"
+                  : "border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {showNavAndFilters && (clients.length > 0 || sources.length > 0) && (
         <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-900 pt-3">

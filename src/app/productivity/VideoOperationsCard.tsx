@@ -38,6 +38,7 @@ type VideoRow = {
   orientation: VideoOrientation | null;
   contentType: VideoContentType | null;
   videoKind: VideoKind;
+  visibleToClient: boolean;
   createdAt: Date | null;
   updatedAt: Date | null;
 };
@@ -80,7 +81,7 @@ export function VideoOperationsCard({
 
   return (
     <article
-      className={`group rounded-2xl border bg-zinc-900/90 transition ${
+      className={`pixel-frame ${isThisVideoActive ? "pixel-frame-live" : video.group === "attention" ? "pixel-frame-attention" : ""} group rounded-2xl border bg-zinc-900/90 transition ${
         isThisVideoActive
           ? "border-emerald-500/50 shadow-[0_0_0_1px_rgba(16,185,129,0.12),0_16px_50px_rgba(16,185,129,0.08)]"
           : video.group === "attention"
@@ -93,8 +94,8 @@ export function VideoOperationsCard({
           <div className="flex flex-wrap items-center gap-2">
             <VideoStatusBadge status={video.status} />
             {isThisVideoActive && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-300">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+              <span className="pixel-badge inline-flex items-center gap-1.5 border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-300">
+                <span className="mb-live-pulse scale-75" aria-hidden="true" />
                 {WORK_SESSION_ACTIVITY_LABELS[openSession.activityType]} now
               </span>
             )}

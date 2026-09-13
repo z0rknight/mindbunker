@@ -193,6 +193,7 @@ export default async function ProjectWorkspacePage({
           projectId={project.id}
           videos={videosWithCommercialTerms}
           projectCoverUrl={project.coverUrl}
+          clientDefaultCoverUrl={project.clientDefaultCoverUrl}
           clientAvatarUrl={project.clientAvatarUrl}
           clientName={project.clientName}
         />

@@ -4,6 +4,7 @@ import { getAuthenticatedDb } from "@/db";
 import {
   billingAllocations,
   clients,
+  commercialContracts,
   productionOrders,
   projects,
   videoLogs,
@@ -19,6 +20,7 @@ import {
   countCancelledDeliverables,
   countDoneDeliverables,
   deriveProductionOrderPhase,
+  formatProductionOrderContractLabel,
   sumBilledByCurrency,
   type ProductionOrderItem,
 } from "./core.ts";
@@ -42,6 +44,8 @@ export type ProductionOrderListRow = {
   cancelledItemCount: number;
   expectedValueCents: number | null;
   currency: string | null;
+  contractId: number | null;
+  contractLabel: string | null;
 };
 
 export async function getProductionOrders(): Promise<ProductionOrderListRow[]> {
@@ -60,10 +64,16 @@ export async function getProductionOrders(): Promise<ProductionOrderListRow[]> {
       receivedAt: productionOrders.receivedAt,
       expectedValueCents: productionOrders.expectedValueCents,
       currency: productionOrders.currency,
+      contractId: productionOrders.contractId,
+      contractPlatform: commercialContracts.platform,
+      contractBillingType: commercialContracts.billingType,
+      contractHourlyRate: commercialContracts.hourlyRate,
+      contractCurrency: commercialContracts.currency,
     })
     .from(productionOrders)
     .innerJoin(clients, eq(clients.id, productionOrders.clientId))
     .innerJoin(projects, eq(projects.id, productionOrders.projectId))
+    .leftJoin(commercialContracts, eq(commercialContracts.id, productionOrders.contractId))
     .orderBy(desc(productionOrders.receivedAt), desc(productionOrders.id));
 
   if (orders.length === 0) return [];
@@ -111,6 +121,15 @@ export async function getProductionOrders(): Promise<ProductionOrderListRow[]> {
       cancelledItemCount: countCancelledDeliverables(orderItems),
       expectedValueCents: order.expectedValueCents,
       currency: order.currency,
+      contractId: order.contractId,
+      contractLabel: order.contractId
+        ? formatProductionOrderContractLabel({
+            platform: order.contractPlatform,
+            billingType: order.contractBillingType,
+            hourlyRate: order.contractHourlyRate,
+            currency: order.contractCurrency,
+          })
+        : null,
     };
   });
 }
@@ -136,6 +155,8 @@ export type ProductionOrderDetail = {
   pricingModel: "HOURLY" | "FIXED" | "OTHER" | null;
   expectedValueCents: number | null;
   currency: string | null;
+  contractId: number | null;
+  contractLabel: string | null;
   notes: string | null;
   receivedAt: string;
   closedAt: Date | null;
@@ -165,6 +186,11 @@ export async function getProductionOrderDetail(
       pricingModel: productionOrders.pricingModel,
       expectedValueCents: productionOrders.expectedValueCents,
       currency: productionOrders.currency,
+      contractId: productionOrders.contractId,
+      contractPlatform: commercialContracts.platform,
+      contractBillingType: commercialContracts.billingType,
+      contractHourlyRate: commercialContracts.hourlyRate,
+      contractCurrency: commercialContracts.currency,
       notes: productionOrders.notes,
       receivedAt: productionOrders.receivedAt,
       closedAt: productionOrders.closedAt,
@@ -177,6 +203,7 @@ export async function getProductionOrderDetail(
     .from(productionOrders)
     .innerJoin(clients, eq(clients.id, productionOrders.clientId))
     .innerJoin(projects, eq(projects.id, productionOrders.projectId))
+    .leftJoin(commercialContracts, eq(commercialContracts.id, productionOrders.contractId))
     .where(eq(productionOrders.id, id))
     .limit(1);
 
@@ -255,6 +282,15 @@ export async function getProductionOrderDetail(
     pricingModel: order.pricingModel,
     expectedValueCents: order.expectedValueCents,
     currency: order.currency,
+    contractId: order.contractId,
+    contractLabel: order.contractId
+      ? formatProductionOrderContractLabel({
+          platform: order.contractPlatform,
+          billingType: order.contractBillingType,
+          hourlyRate: order.contractHourlyRate,
+          currency: order.contractCurrency,
+        })
+      : null,
     notes: order.notes,
     receivedAt: order.receivedAt,
     closedAt: order.closedAt,
@@ -286,6 +322,14 @@ export async function countOpenProductionOrders(): Promise<number> {
 
 export type IngestClientOption = { id: number; name: string };
 export type IngestProjectOption = { id: number; clientId: number; name: string };
+export type IngestContractOption = {
+  id: number;
+  clientId: number;
+  platform: string;
+  billingType: "HOURLY" | "FIXED";
+  hourlyRate: number | null;
+  currency: string;
+};
 
 // Deliberately its own minimal query rather than reusing
 // getProjectsOverview (modules/projects/actions.ts) -- the ingest form's
@@ -294,9 +338,10 @@ export type IngestProjectOption = { id: number; clientId: number; name: string }
 export async function getClientsAndProjectsForIngest(): Promise<{
   clients: IngestClientOption[];
   projects: IngestProjectOption[];
+  contracts: IngestContractOption[];
 }> {
   const db = await getAuthenticatedDb();
-  const [clientRows, projectRows] = await Promise.all([
+  const [clientRows, projectRows, contractRows] = await Promise.all([
     db
       .select({ id: clients.id, name: clients.name })
       .from(clients)
@@ -305,8 +350,20 @@ export async function getClientsAndProjectsForIngest(): Promise<{
       .select({ id: projects.id, clientId: projects.clientId, name: projects.name })
       .from(projects)
       .orderBy(projects.name),
+    db
+      .select({
+        id: commercialContracts.id,
+        clientId: commercialContracts.clientId,
+        platform: commercialContracts.platform,
+        billingType: commercialContracts.billingType,
+        hourlyRate: commercialContracts.hourlyRate,
+        currency: commercialContracts.currency,
+      })
+      .from(commercialContracts)
+      .where(eq(commercialContracts.status, "ACTIVE"))
+      .orderBy(commercialContracts.platform, commercialContracts.id),
   ]);
-  return { clients: clientRows, projects: projectRows };
+  return { clients: clientRows, projects: projectRows, contracts: contractRows };
 }
 
 export type OpenProductionOrderRow = {
@@ -318,10 +375,10 @@ export type OpenProductionOrderRow = {
 };
 
 // Feeds the "stale open order" War Room signal (see
-// modules/signals/core.ts computeStaleProductionOrdersSignals) -- every
-// OPEN order, regardless of age; the age filter itself is a pure
-// function applied in core.ts, not a WHERE clause here, so it stays
-// testable without a DB.
+// modules/signals/core.ts computeStaleProductionOrdersSignals). A manually
+// stale OPEN flag must not contradict canonical item truth, so orders whose
+// operational items are all terminal are removed here. The age filter itself
+// remains a pure function in core.ts and stays testable without a DB.
 export async function getOpenProductionOrdersForSignals(): Promise<
   OpenProductionOrderRow[]
 > {
@@ -333,14 +390,37 @@ export async function getOpenProductionOrdersForSignals(): Promise<
       clientName: clients.name,
       projectName: projects.name,
       receivedAt: productionOrders.receivedAt,
+      itemId: videoLogs.id,
+      itemStatus: videoLogs.status,
+      itemContainer: videoLogs.isOperationalContainer,
+      itemCancelledAt: videoLogs.cancelledAt,
     })
     .from(productionOrders)
     .innerJoin(clients, eq(clients.id, productionOrders.clientId))
     .innerJoin(projects, eq(projects.id, productionOrders.projectId))
+    .leftJoin(videoLogs, eq(videoLogs.productionOrderId, productionOrders.id))
     .where(eq(productionOrders.state, "OPEN"));
 
-  return rows.map((row) => ({
-    ...row,
-    receivedAt: new Date(`${row.receivedAt}T00:00:00Z`),
-  }));
+  const grouped = new Map<number, { row: (typeof rows)[number]; items: ProductionOrderItem[] }>();
+  for (const row of rows) {
+    const entry = grouped.get(row.id) ?? { row, items: [] };
+    if (row.itemId !== null && row.itemStatus !== null) {
+      entry.items.push({
+        videoId: row.itemId,
+        status: row.itemStatus,
+        isOperationalContainer: row.itemContainer ?? false,
+        cancelledAt: row.itemCancelledAt,
+      });
+    }
+    grouped.set(row.id, entry);
+  }
+  return [...grouped.values()]
+    .filter(({ items }) => deriveProductionOrderPhase(items) !== "DELIVERED")
+    .map(({ row }) => ({
+      id: row.id,
+      label: row.label,
+      clientName: row.clientName,
+      projectName: row.projectName,
+      receivedAt: new Date(`${row.receivedAt}T00:00:00Z`),
+    }));
 }

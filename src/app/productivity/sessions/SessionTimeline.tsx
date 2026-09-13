@@ -139,7 +139,7 @@ export function SessionTimeline({
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
                         <span className="text-xs font-bold text-white">
                           {isOpen && (
-                            <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[#00FF41] align-middle" />
+                            <span className="mb-live-pulse mr-2 inline-block scale-75 align-middle" aria-hidden="true" />
                           )}
                           <time dateTime={session.startedAt}>{formatTime(session.startedAt)}</time>
                           {session.endedAt && (

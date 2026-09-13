@@ -6,6 +6,10 @@ import { updateClient, logCrmActivity } from "@/modules/crm/actions";
 import { CRM_ACTIVITY_TYPES, isValidClientEmail } from "@/modules/crm/core";
 import { ProjectManager, type ClientProjectView } from "./ProjectManager";
 import { InstagramProfileCard } from "./InstagramProfileCard";
+import { CoverUploadField } from "@/components/media/CoverUploadField";
+import { resolveCoverUrl } from "@/modules/media/core";
+import { PortalControl } from "@/components/client-portal/PortalControl";
+import { setClientPortalCapability } from "@/modules/client-portal/admin-actions";
 
 interface ClientTabsProps {
   client: {
@@ -17,6 +21,10 @@ interface ClientTabsProps {
     instagramUsername: string | null;
     instagramBio: string | null;
     instagramProfilePictureUrl: string | null;
+    defaultCoverUrl: string | null;
+    portalCanSeeFinancials: boolean;
+    portalCanReview: boolean;
+    portalCanSetPriority: boolean;
     notes: string | null;
     source: string | null;
     contacted: boolean;
@@ -109,6 +117,7 @@ export function ClientTabs({
   const [metadataStatus, setMetadataStatus] = useState(client.status);
   const [metadataSource, setMetadataSource] = useState(client.source ?? "");
   const [metadataPending, setMetadataPending] = useState(false);
+  const [defaultCoverUrl, setDefaultCoverUrl] = useState(client.defaultCoverUrl ?? "");
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: "overview", label: "Overview", icon: "📊" },
@@ -209,6 +218,62 @@ export function ClientTabs({
               initialPhotoUrl={client.instagramProfilePictureUrl}
               importConfigured={instagramImportConfigured}
             />
+
+            <section className="rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="h-20 w-full shrink-0 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900 sm:w-32">
+                  {resolveCoverUrl(defaultCoverUrl, client.instagramProfilePictureUrl) ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- authenticated R2/external operator-selected URL.
+                    <img
+                      src={resolveCoverUrl(defaultCoverUrl, client.instagramProfilePictureUrl) ?? undefined}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-gradient-to-br from-violet-950/50 to-zinc-950 text-xs font-black uppercase tracking-widest text-zinc-600">
+                      {client.name.slice(0, 2)}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-violet-300">Default work cover</h3>
+                  <p className="mt-1 text-xs leading-5 text-zinc-500">
+                    Used when a Project or Video has no deliberately selected cover of its own.
+                  </p>
+                  <CoverUploadField
+                    targetType="client"
+                    targetId={client.id}
+                    coverUrl={defaultCoverUrl}
+                    onCoverUrlChange={setDefaultCoverUrl}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4">
+              <h3 className="text-xs font-black uppercase tracking-wider text-violet-300">Client portal controls</h3>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">Explicit capabilities; internal records remain unchanged when access is hidden.</p>
+              <div className="mt-3 grid gap-2 md:grid-cols-3">
+                <PortalControl
+                  label="Financial summary"
+                  description="Recorded billing evidence and rates"
+                  enabled={client.portalCanSeeFinancials}
+                  onChange={(enabled) => setClientPortalCapability(client.id, "financials", enabled)}
+                />
+                <PortalControl
+                  label="Review actions"
+                  description="Approve or request changes"
+                  enabled={client.portalCanReview}
+                  onChange={(enabled) => setClientPortalCapability(client.id, "review", enabled)}
+                />
+                <PortalControl
+                  label="Priority request"
+                  description="Choose the current item within a project"
+                  enabled={client.portalCanSetPriority}
+                  onChange={(enabled) => setClientPortalCapability(client.id, "priority", enabled)}
+                />
+              </div>
+            </section>
 
             {briefing && (
               <div>
@@ -453,6 +518,7 @@ export function ClientTabs({
         {activeTab === "projects" && (
           <ProjectManager
             clientId={client.id}
+            clientDefaultCoverUrl={defaultCoverUrl}
             clientAvatarUrl={client.instagramProfilePictureUrl}
             projects={projects}
             initiallyCreating={initialProjectCreation}

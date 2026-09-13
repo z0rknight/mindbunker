@@ -7,7 +7,7 @@ import {
   LogWalkButton,
   AddRevisionButton,
 } from "@/components/ui/QuickActions";
-import { getFinanceSummary, getTodayRateEquivalents } from "@/modules/finance/actions";
+import { getFinanceSummary, getTodayIncomeByCurrency, getTodayRateEquivalents } from "@/modules/finance/actions";
 import { getVideoStats } from "@/modules/productivity/actions";
 import {
   getProjectStreaks,
@@ -31,6 +31,7 @@ import { EconomicLedgerCard } from "@/components/finance/EconomicLedgerCard";
 import { isInternalClientName, splitIntentionalWork } from "@/lib/client-identity";
 import { getOpenCommitmentsWithContext, rankOpenCommitments } from "@/modules/signals";
 import { ActiveCommitmentCard } from "@/components/commitments/ActiveCommitmentCard";
+import { PixelDivider, PixelIcon } from "@/components/ui/PixelVisuals";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,7 @@ export default async function DashboardPage() {
     closedSales,
     operatorIntelligence,
     openCommitments,
+    todayIncome,
   ] = await Promise.all([
     getFinanceSummary(),
     getVideoStats(),
@@ -69,6 +71,7 @@ export default async function DashboardPage() {
     getClosedSales(),
     getDashboardOperatorIntelligence(),
     getOpenCommitmentsWithContext(),
+    getTodayIncomeByCurrency(),
   ]);
 
   const now = new Date();
@@ -91,8 +94,10 @@ export default async function DashboardPage() {
       {/* Header */}
       <div className="mb-8 flex items-end justify-between gap-4">
         <div>
-          <p className="text-zinc-500 text-sm">{greeting} 👋</p>
-          <h1 className="text-2xl font-bold text-white mt-1">Dashboard</h1>
+          <p className="mb-system-label flex items-center gap-2 text-zinc-500">
+            <PixelIcon name="shield" className="h-3.5 w-3.5" /> Operator system
+          </p>
+          <h1 className="text-2xl font-bold text-white mt-2">{greeting} · Dashboard</h1>
           <p className="text-zinc-500 text-sm mt-1">{currentMonthName()} {currentMonthKey().slice(0, 4)}</p>
         </div>
         <Link
@@ -107,6 +112,35 @@ export default async function DashboardPage() {
         openSession={workSessionOverview.openSession}
         openSessionElapsedSeconds={workSessionOverview.openSessionElapsedSeconds}
       />
+
+      {/* Operator Flow round: capture belongs beside the command surface,
+          before secondary evidence and history. These are the existing
+          actions, only repositioned; their mutations are unchanged. */}
+      <section className="mb-6" aria-labelledby="dashboard-quick-actions">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="dashboard-quick-actions" className="sr-only">Quick Actions</h2>
+          <div className="min-w-0 flex-1"><PixelDivider label="Quick actions" icon="stack" /></div>
+          <Link href="/projects" className="text-xs font-bold text-cyan-400 hover:text-cyan-300 sm:hidden">
+            Current projects →
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
+          <CoffeeQuickLogButton todayCount={caffeineSummary.todayCount} />
+          <AddIncomeButton />
+          <AddExpenseButton />
+          <LogTodayButton />
+          <LogBikeRideButton />
+          <LogWalkButton />
+          <AddRevisionButton />
+          <Link
+            href="/productivity/orders/new"
+            className="flex flex-col items-center justify-center gap-2 rounded-xl border border-emerald-800/60 bg-black px-6 py-5 font-mono text-sm font-bold text-emerald-400 transition-all hover:border-emerald-500 hover:bg-zinc-950 active:scale-95"
+          >
+            <span className="text-lg">🔥</span>
+            LET&apos;S COOK
+          </Link>
+        </div>
+      </section>
 
       {mostUrgentCommitment && (
         <div className="mb-6" data-testid="dashboard-commitment">
@@ -128,7 +162,7 @@ export default async function DashboardPage() {
               <Link
                 key={target.videoId}
                 href={`/productivity?video=${target.videoId}`}
-                className="rounded-xl border border-cyan-900/50 bg-cyan-950/10 p-4 transition hover:border-cyan-600/60"
+                className="pixel-frame rounded-xl border border-cyan-900/50 bg-cyan-950/10 p-4 transition hover:border-cyan-600/60"
               >
                 <p className="truncate text-sm font-black text-white">{target.videoTitle}</p>
                 <p className="mt-1 truncate text-xs text-zinc-500">
@@ -157,7 +191,7 @@ export default async function DashboardPage() {
                 <Link
                   key={group.key}
                   href={`/productivity?video=${first.videoId}`}
-                  className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-3 transition ${attentionClass(group.reason)}`}
+                  className={`pixel-frame pixel-frame-attention flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-3 transition ${attentionClass(group.reason)}`}
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -233,12 +267,17 @@ export default async function DashboardPage() {
           Session history (no persisted counters, no new schema); every
           number is omitted rather than shown as zero/fabricated when
           there's genuinely nothing to report yet. */}
-      {(todayWorkStats.sessionCount > 0 || projectStreaks.length > 0) && (
-        <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {todayWorkStats.sessionCount > 0 && (
-            <div>
+      <div className={`mb-8 ${projectStreaks.length > 0 ? "grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(280px,2fr)]" : ""}`}>
+          <div>
               <h2 className="mb-3 text-zinc-400 text-xs font-semibold uppercase tracking-widest">Today</h2>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <StatCard
+                  label="Faturado hoje"
+                  value={todayIncome.length > 0 ? todayIncome.map((row) => formatCurrency(row.amount, row.currency)).join(" · ") : "—"}
+                  sub="Recorded income · currency-safe"
+                  accent="green"
+                  icon="💵"
+                />
                 <StatCard
                   label="Client Production"
                   value={formatClosedDuration(todayWorkSplit.clientProductionSeconds)}
@@ -278,8 +317,7 @@ export default async function DashboardPage() {
                   ))}
                 </div>
               )}
-            </div>
-          )}
+          </div>
 
           {projectStreaks.length > 0 && (
             <div>
@@ -310,8 +348,7 @@ export default async function DashboardPage() {
               </div>
             </div>
           )}
-        </div>
-      )}
+      </div>
 
       {/* Monday Money Lab P0 §12: +1 Coffee moved back into the Quick
           Actions grid (former secondary quick-action position) rather than
@@ -327,33 +364,6 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Quick Actions */}
-      <div className="mb-8">
-        <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-8">
-          <CoffeeQuickLogButton todayCount={caffeineSummary.todayCount} />
-          <AddIncomeButton />
-          <AddExpenseButton />
-          <LogTodayButton />
-          <LogBikeRideButton />
-          <LogWalkButton />
-          <AddRevisionButton />
-          {/* RMEDIA LET'S COOK Wave 1: one compact entry point only -- no
-              Current Orders section on Dashboard (that list lives at
-              /productivity/orders). Distinct near-black/terminal-green
-              treatment is intentional: it is the one visual hint this
-              button belongs to a contained sub-surface, not a Dashboard
-              redesign. */}
-          <Link
-            href="/productivity/orders/new"
-            className="flex flex-col items-center justify-center gap-2 rounded-xl border border-emerald-800/60 bg-black px-6 py-5 font-mono text-sm font-bold text-emerald-400 transition-all hover:border-emerald-500 hover:bg-zinc-950 active:scale-95"
-          >
-            <span className="text-lg">🔥</span>
-            LET&apos;S COOK
-          </Link>
-        </div>
-      </div>
-
       {/* ── INSIGHTS & CORRELATIONS ───────────────────────────────────────── */}
       {/* Tuesday Patch Priority 1 (below-the-fold noise): these six cards
           read the exact same getWarRoomData() call War Room's own Layer
@@ -361,11 +371,11 @@ export default async function DashboardPage() {
           here is deleted (per instruction); it's collapsed by default so
           Dashboard's own scroll doesn't repeat War Room's job, while the
           data stays one click away for whoever wants it right here. */}
-      <details className="group mb-8">
+      <details className="group mb-8 rounded-2xl border border-zinc-800 bg-zinc-950/30 p-4 sm:p-5">
         <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-zinc-400 text-xs font-semibold uppercase tracking-widest">
           <span className="transition group-open:rotate-90">▸</span>
-          Operational context
-          <span className="normal-case text-zinc-600">— also on War Room</span>
+          Historical context
+          <span className="normal-case text-zinc-600">— baseline evidence, not live state</span>
         </summary>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Revenue Trend */}

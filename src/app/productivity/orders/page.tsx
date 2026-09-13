@@ -98,6 +98,9 @@ function Section({
                 <p className="mt-0.5 text-xs text-zinc-500">
                   {order.clientName} · {order.projectName} · {order.receivedAt}
                 </p>
+                <p className={`mt-1 text-[11px] ${order.contractLabel ? "text-cyan-400" : "text-zinc-700"}`}>
+                  {order.contractLabel ? `Contract · ${order.contractLabel}` : "No contract recorded"}
+                </p>
               </div>
               <div className="shrink-0 text-right text-xs text-zinc-400">
                 <p>

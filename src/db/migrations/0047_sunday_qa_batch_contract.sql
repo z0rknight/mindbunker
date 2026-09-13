@@ -1,0 +1,2 @@
+ALTER TABLE `production_orders` ADD `contract_id` integer REFERENCES commercial_contracts(id);--> statement-breakpoint
+CREATE INDEX `production_orders_contract_idx` ON `production_orders` (`contract_id`);

@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { eq, and } from "drizzle-orm";
 import { getAuthenticatedDb } from "@/db";
-import { clients, productionOrders, projects, videoLogs } from "@/db/schema";
+import { clients, commercialContracts, productionOrders, projects, videoLogs } from "@/db/schema";
 import { todayISO } from "@/utils/date";
 import { deliveredForVideoStatus } from "@/modules/productivity/config";
 import {
   canCancelProductionOrderItem,
   isProductionOrderMutable,
+  validateProductionOrderContract,
   validateProductionOrderIngestInput,
   type ProductionOrderIngestInput,
 } from "./core.ts";
@@ -58,17 +59,35 @@ export async function ingestProductionOrder(
   if (!clientRow) return { success: false, error: "Client not found." };
 
   const [projectRow] = await db
-    .select({ id: projects.id })
+    .select({ id: projects.id, clientId: projects.clientId })
     .from(projects)
     .where(eq(projects.id, input.projectId))
     .limit(1);
   if (!projectRow) return { success: false, error: "Project not found." };
+  if (projectRow.clientId !== input.clientId) {
+    return { success: false, error: "That project does not belong to the selected client." };
+  }
+
+  if (input.contractId != null) {
+    const [contractRow] = await db
+      .select({
+        id: commercialContracts.id,
+        clientId: commercialContracts.clientId,
+        status: commercialContracts.status,
+      })
+      .from(commercialContracts)
+      .where(eq(commercialContracts.id, input.contractId))
+      .limit(1);
+    const contractError = validateProductionOrderContract(input.clientId, contractRow ?? null);
+    if (contractError) return { success: false, error: contractError };
+  }
 
   await db
     .insert(productionOrders)
     .values({
       clientId: input.clientId,
       projectId: input.projectId,
+      contractId: input.contractId ?? null,
       label: input.label.trim(),
       channel: input.channel?.trim() || null,
       pricingModel: input.pricingModel ?? null,

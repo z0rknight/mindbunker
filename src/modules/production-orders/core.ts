@@ -268,6 +268,7 @@ export type ProductionOrderIngestItemInput = {
 export type ProductionOrderIngestInput = {
   clientId: number;
   projectId: number;
+  contractId?: number | null;
   label: string;
   channel?: string | null;
   pricingModel?: "HOURLY" | "FIXED" | "OTHER" | null;
@@ -278,6 +279,28 @@ export type ProductionOrderIngestInput = {
   ingestKey: string;
   items: ProductionOrderIngestItemInput[];
 };
+
+export function formatProductionOrderContractLabel(contract: {
+  platform: string | null;
+  billingType: "HOURLY" | "FIXED" | null;
+  hourlyRate: number | null;
+  currency: string | null;
+}): string {
+  const platform = contract.platform?.trim() || "Contract";
+  if (contract.billingType === "HOURLY" && contract.hourlyRate != null && contract.currency) {
+    return `${platform} · ${contract.currency} ${contract.hourlyRate.toFixed(2)}/hour`;
+  }
+  return `${platform} · ${contract.billingType === "FIXED" ? "Fixed price" : "Commercial contract"}`;
+}
+
+export function validateProductionOrderContract(
+  clientId: number,
+  contract: { clientId: number; status: "ACTIVE" | "PAUSED" | "ENDED" } | null,
+): string | null {
+  if (!contract || contract.status !== "ACTIVE") return "Choose an active contract.";
+  if (contract.clientId !== clientId) return "That contract does not belong to the selected client.";
+  return null;
+}
 
 function isPositiveInt(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
@@ -292,6 +315,9 @@ export function validateProductionOrderIngestInput(
 ): string | null {
   if (!isPositiveInt(input.clientId)) return "Choose a client.";
   if (!isPositiveInt(input.projectId)) return "Choose a project.";
+  if (input.contractId != null && !isPositiveInt(input.contractId)) {
+    return "Choose a valid active contract.";
+  }
   if (!input.label || !input.label.trim()) return "Give this order a label.";
   if (input.label.trim().length > PRODUCTION_ORDER_LABEL_MAX_LENGTH) {
     return `Label must be ${PRODUCTION_ORDER_LABEL_MAX_LENGTH} characters or fewer.`;

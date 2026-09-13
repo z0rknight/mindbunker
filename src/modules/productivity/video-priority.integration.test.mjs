@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(__dirname, "../../db/migrations");
+const actionsSource = fs.readFileSync(path.resolve(__dirname, "actions.ts"), "utf8");
 
 function buildMigratedDb() {
   const db = new DatabaseSync(":memory:");
@@ -100,6 +101,16 @@ test("setting priority on a video clears any other priority video in the same pr
   assert.equal(second.success, true);
   assert.equal(priorityOf(db, 1), false); // cleared
   assert.equal(priorityOf(db, 2), true);
+});
+
+test("the client priority action uses the verified client session, not the admin database gate", () => {
+  const action = actionsSource.slice(
+    actionsSource.indexOf("export async function setVideoPriorityAsClient"),
+    actionsSource.indexOf("export async function changeRevisionCount"),
+  );
+  assert.match(action, /isClientAuthenticated\(\)/u);
+  assert.match(action, /const db = await getDb\(\)/u);
+  assert.doesNotMatch(action, /getAuthenticatedDb\(\)/u);
 });
 
 test("competing serialized priority batches still leave exactly one priority in the project", () => {

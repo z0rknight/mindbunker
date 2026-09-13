@@ -2,7 +2,7 @@ import "server-only";
 
 import { getAuthenticatedDb } from "@/db";
 import { blockers, clients, commitments, projects, videoLogs, workSessions } from "@/db/schema";
-import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import { groupDashboardAttention, rankDashboardAttention, type AttentionCandidate } from "./core";
 
 export type RecentCurrentTarget = {
@@ -33,7 +33,7 @@ export async function getDashboardOperatorIntelligence() {
       .innerJoin(videoLogs, eq(videoLogs.id, commitments.videoId))
       .leftJoin(projects, eq(projects.id, videoLogs.projectId))
       .leftJoin(clients, eq(clients.id, videoLogs.clientId))
-      .where(eq(commitments.status, "OPEN")),
+      .where(and(eq(commitments.status, "OPEN"), ne(videoLogs.status, "DONE"))),
     db
       .select({
         sourceId: blockers.id,
@@ -50,7 +50,7 @@ export async function getDashboardOperatorIntelligence() {
       .innerJoin(videoLogs, eq(videoLogs.id, blockers.videoId))
       .leftJoin(projects, eq(projects.id, videoLogs.projectId))
       .leftJoin(clients, eq(clients.id, videoLogs.clientId))
-      .where(isNull(blockers.resolvedAt)),
+      .where(and(isNull(blockers.resolvedAt), ne(videoLogs.status, "DONE"))),
     db
       .select({
         sourceId: videoLogs.id,

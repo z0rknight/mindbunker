@@ -89,6 +89,7 @@ function project(overrides = {}) {
     id: 1,
     clientId: 1,
     clientName: "Fictitious Client",
+    clientDefaultCoverUrl: null,
     clientAvatarUrl: null,
     name: "Fictitious Project",
     status: "active",

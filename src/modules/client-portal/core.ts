@@ -69,12 +69,14 @@ export type ClientPortalVideoRow = {
   deliveryUrl: string | null;
   reviewUrl: string | null;
   publishedUrl: string | null;
+  batchLabel: string | null;
   // Client Portal Reality round: this token-based Vault surface never
   // carried covers at all, unlike the authenticated dashboard below --
   // same fallback chain (Video -> Project), tier 2 only, same as
   // toCard's coverUrl resolution.
   coverUrl: string | null;
   projectCoverUrl: string | null;
+  clientDefaultCoverUrl: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 };
@@ -91,6 +93,7 @@ export type ClientPortalProject = {
     deliveryUrl: string | null;
     reviewUrl: string | null;
     publishedUrl: string | null;
+    batchLabel: string | null;
     coverUrl: string | null;
   }>;
 };
@@ -151,7 +154,11 @@ export function buildClientPortalProjects(
         // that internal route via isInternalCoverRoute before falling
         // back to the same strict-HTTPS check for any external URL.
         const coverUrl = validateCoverUrl(
-          resolveCoverUrl(video.coverUrl, video.projectCoverUrl),
+          resolveCoverUrl(
+            video.coverUrl,
+            video.projectCoverUrl,
+            video.clientDefaultCoverUrl,
+          ),
         );
         // deliveryUrl.success is true both when a real URL validated AND
         // when there simply was none (validateDeliveryUrl treats null/""
@@ -166,6 +173,7 @@ export function buildClientPortalProjects(
           deliveryUrl: resolvedDeliveryUrl,
           reviewUrl: reviewUrl.success ? reviewUrl.value : null,
           publishedUrl: publishedUrl.success ? publishedUrl.value : null,
+          batchLabel: video.batchLabel?.trim() || null,
           coverUrl: coverUrl.success ? toClientWorkerCoverUrl(coverUrl.value) : null,
         };
       }),
@@ -199,9 +207,11 @@ export type ClientDashboardVideoRow = {
   deliveryUrl: string | null;
   reviewUrl: string | null;
   publishedUrl: string | null;
+  batchLabel: string | null;
   coverUrl: string | null;
   // Sprint 3 P1: cover fallback tier 2 -- see resolveCoverUrl below.
   projectCoverUrl: string | null;
+  clientDefaultCoverUrl: string | null;
   orientation: VideoOrientation | null;
   contentType: VideoContentType | null;
   // Lunch Reality Patch P1 §7: client-settable "priority now" video.
@@ -241,6 +251,7 @@ export type ClientDashboardVideoCard = {
   deliveryUrl: string | null;
   reviewUrl: string | null;
   publishedUrl: string | null;
+  batchLabel: string | null;
   lastUpdated: string | null;
   // Lunch Reality Patch P1 §7: client-settable "priority now" video.
   isPriority: boolean;
@@ -298,7 +309,11 @@ export function toCard(
   // full explanation in buildClientPortalProjects above -- same wrong
   // validator, same silent-null failure mode, same fix.
   const coverUrl = validateCoverUrl(
-    resolveCoverUrl(video.coverUrl, video.projectCoverUrl),
+    resolveCoverUrl(
+      video.coverUrl,
+      video.projectCoverUrl,
+      video.clientDefaultCoverUrl,
+    ),
   );
   const updated = video.updatedAt ?? video.createdAt;
   // Same fix as buildClientPortalProjects above: check the resolved value,
@@ -320,6 +335,7 @@ export function toCard(
     deliveryUrl: resolvedDeliveryUrl,
     reviewUrl: reviewUrl.success ? reviewUrl.value : null,
     publishedUrl: publishedUrl.success ? publishedUrl.value : null,
+    batchLabel: video.batchLabel?.trim() || null,
     lastUpdated:
       updated instanceof Date && !Number.isNaN(updated.getTime())
         ? updated.toISOString()
@@ -593,6 +609,7 @@ export type ClientBillingProjectBreakdown = {
 };
 
 export type ClientBillingSummary = {
+  visibility?: "visible" | "hidden";
   hasAnyRecordedWork: boolean;
   byCurrency: ClientBillingCurrencyTotal[];
   byProject: ClientBillingProjectBreakdown[];

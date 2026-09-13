@@ -16,7 +16,7 @@ const STATUS_CLASSES: Record<VideoStatus, string> = {
 export function VideoStatusBadge({ status }: { status: VideoStatus }) {
   return (
     <span
-      className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${STATUS_CLASSES[status]}`}
+      className={`pixel-badge inline-flex border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${STATUS_CLASSES[status]}`}
     >
       {VIDEO_STATUS_LABELS[status]}
     </span>

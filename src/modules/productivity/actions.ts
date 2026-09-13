@@ -51,7 +51,7 @@ import {
 } from "@/modules/video-memory/core";
 import { resolveVideoKindForClient } from "@/lib/client-identity";
 import { revalidateProductivityViews } from "./revalidation";
-import { isQueueEligible, moveInOrder, resequencePositions, type QueueMoveDirection } from "./queue";
+import { isQueueEligible, moveBefore, moveInOrder, resequencePositions, type QueueMoveDirection } from "./queue";
 
 type ProductivityActionResult =
   | {
@@ -597,6 +597,8 @@ export async function getAllVideoLogs() {
       createdAt: videoLogs.createdAt,
       updatedAt: videoLogs.updatedAt,
       queuePosition: videoLogs.queuePosition,
+      isOperationalContainer: videoLogs.isOperationalContainer,
+      visibleToClient: videoLogs.visibleToClient,
     })
     .from(videoLogs)
     .leftJoin(clients, eq(videoLogs.clientId, clients.id))
@@ -667,6 +669,7 @@ export async function reorderExecutionQueueItem(
       id: videoLogs.id,
       status: videoLogs.status,
       videoKind: videoLogs.videoKind,
+      isOperationalContainer: videoLogs.isOperationalContainer,
       queuePosition: videoLogs.queuePosition,
       createdAt: videoLogs.createdAt,
       updatedAt: videoLogs.updatedAt,
@@ -704,6 +707,47 @@ export async function reorderExecutionQueueItem(
   // not just a non-empty array at runtime.
   await db.batch(statements as unknown as [(typeof statements)[number], ...(typeof statements)[number][]]);
 
+  revalidatePath("/");
+  revalidatePath("/productivity");
+  return { success: true, message: "Queue updated." };
+}
+
+export async function moveExecutionQueueItemBefore(
+  videoId: number,
+  beforeVideoId: number | null,
+): Promise<QueueActionResult> {
+  if (!isPositiveId(videoId) || (beforeVideoId !== null && !isPositiveId(beforeVideoId))) {
+    return { success: false, error: "Invalid queue move." };
+  }
+  const db = await getAuthenticatedDb();
+  const rows = await db
+    .select({
+      id: videoLogs.id,
+      status: videoLogs.status,
+      videoKind: videoLogs.videoKind,
+      isOperationalContainer: videoLogs.isOperationalContainer,
+      queuePosition: videoLogs.queuePosition,
+      createdAt: videoLogs.createdAt,
+      updatedAt: videoLogs.updatedAt,
+    })
+    .from(videoLogs);
+  const eligible = rows.filter(isQueueEligible);
+  const orderedIds = [
+    ...eligible.filter((row) => row.queuePosition !== null).sort((a, b) => (a.queuePosition as number) - (b.queuePosition as number)),
+    ...eligible.filter((row) => row.queuePosition === null).sort((a, b) => {
+      const ts = (row: (typeof eligible)[number]) => new Date(row.updatedAt ?? row.createdAt ?? 0).getTime();
+      return ts(b) - ts(a);
+    }),
+  ].map((row) => row.id);
+  if (!orderedIds.includes(videoId) || (beforeVideoId !== null && !orderedIds.includes(beforeVideoId))) {
+    return { success: false, error: "Video is not in the active execution queue." };
+  }
+  const newOrder = moveBefore(orderedIds, videoId, beforeVideoId);
+  const positions = resequencePositions(newOrder);
+  const statements = newOrder.map((id) =>
+    db.update(videoLogs).set({ queuePosition: positions.get(id) }).where(eq(videoLogs.id, id)),
+  );
+  await db.batch(statements as unknown as [(typeof statements)[number], ...(typeof statements)[number][]]);
   revalidatePath("/");
   revalidatePath("/productivity");
   return { success: true, message: "Queue updated." };
@@ -1013,14 +1057,25 @@ export async function transitionVideoStatusAsClient(
       clientId: videoLogs.clientId,
       status: videoLogs.status,
       startedAt: videoLogs.startedAt,
+      visibleToClient: videoLogs.visibleToClient,
+      projectVisibleToClient: projects.visibleToClient,
+      clientCanReview: clients.portalCanReview,
     })
     .from(videoLogs)
+    .leftJoin(projects, eq(videoLogs.projectId, projects.id))
+    .leftJoin(clients, eq(videoLogs.clientId, clients.id))
     .where(eq(videoLogs.id, videoId))
     .limit(1);
   // Deliberately identical "not found" error whether the video doesn't
   // exist or belongs to a different client -- never confirm to a client
   // that a given videoId exists in someone else's account.
-  if (!current[0] || current[0].clientId !== clientId) {
+  if (
+    !current[0] ||
+    current[0].clientId !== clientId ||
+    !current[0].visibleToClient ||
+    !current[0].projectVisibleToClient ||
+    !current[0].clientCanReview
+  ) {
     return { success: false, error: "Video not found." };
   }
   if (current[0].status !== "READY_FOR_REVIEW") {
@@ -1056,20 +1111,34 @@ export async function setVideoPriorityAsClient(
     return { success: false, error: "Invalid request." };
   }
 
-  const db = await getAuthenticatedDb();
+  // Client authentication above is the authority for this public-facing
+  // action. Requiring the operator session here would make the control appear
+  // in the Vault but fail for the actual client.
+  const db = await getDb();
   const current = await db
     .select({
       id: videoLogs.id,
       clientId: videoLogs.clientId,
       projectId: videoLogs.projectId,
+      visibleToClient: videoLogs.visibleToClient,
+      projectVisibleToClient: projects.visibleToClient,
+      clientCanSetPriority: clients.portalCanSetPriority,
     })
     .from(videoLogs)
+    .leftJoin(projects, eq(videoLogs.projectId, projects.id))
+    .leftJoin(clients, eq(videoLogs.clientId, clients.id))
     .where(eq(videoLogs.id, videoId))
     .limit(1);
   // Deliberately identical "not found" error whether the video doesn't
   // exist or belongs to a different client -- see
   // transitionVideoStatusAsClient above for the same convention.
-  if (!current[0] || current[0].clientId !== clientId) {
+  if (
+    !current[0] ||
+    current[0].clientId !== clientId ||
+    !current[0].visibleToClient ||
+    !current[0].projectVisibleToClient ||
+    !current[0].clientCanSetPriority
+  ) {
     return { success: false, error: "Video not found." };
   }
 

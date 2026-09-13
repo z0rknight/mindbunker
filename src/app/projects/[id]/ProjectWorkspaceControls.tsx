@@ -8,6 +8,8 @@ import { deleteProject, updateProject } from "@/modules/projects/actions";
 import type { ProjectStatus } from "@/modules/projects/config";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { PortalControl } from "@/components/client-portal/PortalControl";
+import { setProjectClientVisibility } from "@/modules/client-portal/admin-actions";
 
 export function ProjectWorkspaceControls({
   project,
@@ -20,6 +22,7 @@ export function ProjectWorkspaceControls({
     deadline: string | null;
     notes: string | null;
     coverUrl: string | null;
+    visibleToClient: boolean;
   };
 }) {
   const router = useRouter();
@@ -76,7 +79,15 @@ export function ProjectWorkspaceControls({
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="min-w-56">
+        <PortalControl
+          label="Client portal"
+          description="Show this project and its visible videos"
+          enabled={project.visibleToClient}
+          onChange={(visible) => setProjectClientVisibility(project.id, visible)}
+        />
+      </div>
       <button
         type="button"
         onClick={() => setEditing(true)}

@@ -259,6 +259,28 @@ export type SessionTimelineFilters = {
   workType?: string | null;
 };
 
+const MONTH_KEY_PATTERN = /^\d{4}-\d{2}$/u;
+
+export function monthKeyFor(dateKey: string): string {
+  return dateKey.slice(0, 7);
+}
+
+export function shiftMonthKey(monthKey: string, delta: number): string {
+  if (!MONTH_KEY_PATTERN.test(monthKey)) throw new Error("Invalid month key.");
+  const [year, month] = monthKey.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1 + delta, 1));
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export function monthDayKeys(monthKey: string): string[] {
+  if (!MONTH_KEY_PATTERN.test(monthKey)) return [];
+  const [year, month] = monthKey.split("-").map(Number);
+  const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return Array.from({ length: days }, (_, index) =>
+    `${monthKey}-${String(index + 1).padStart(2, "0")}`,
+  );
+}
+
 export function filterSessionTimelineItems(
   items: readonly SessionTimelineItem[],
   filters: SessionTimelineFilters,

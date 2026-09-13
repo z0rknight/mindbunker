@@ -5,7 +5,7 @@ import { IngestForm } from "./IngestForm";
 export const dynamic = "force-dynamic";
 
 export default async function NewProductionOrderPage() {
-  const { clients, projects } = await getClientsAndProjectsForIngest();
+  const { clients, projects, contracts } = await getClientsAndProjectsForIngest();
 
   return (
     <div className="min-h-screen bg-black px-4 py-8 text-zinc-100 sm:px-8">
@@ -24,7 +24,7 @@ export default async function NewProductionOrderPage() {
             ← Orders
           </Link>
         </div>
-        <IngestForm clients={clients} projects={projects} />
+        <IngestForm clients={clients} projects={projects} contracts={contracts} />
       </div>
     </div>
   );

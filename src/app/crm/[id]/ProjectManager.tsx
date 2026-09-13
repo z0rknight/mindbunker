@@ -37,10 +37,12 @@ export type ClientProjectView = {
 function ProjectCard({
   project,
   clientId,
+  clientDefaultCoverUrl,
   clientAvatarUrl,
 }: {
   project: ClientProjectView;
   clientId: number;
+  clientDefaultCoverUrl: string | null;
   clientAvatarUrl: string | null;
 }) {
   return (
@@ -78,6 +80,7 @@ function ProjectCard({
               const coverUrl = resolveCoverUrl(
                 video.coverUrl,
                 project.coverUrl,
+                clientDefaultCoverUrl,
                 clientAvatarUrl,
               );
               return (
@@ -114,12 +117,14 @@ function ProjectCard({
 
 export function ProjectManager({
   clientId,
+  clientDefaultCoverUrl,
   clientAvatarUrl,
   projects,
   initiallyCreating = false,
   returnTo,
 }: {
   clientId: number;
+  clientDefaultCoverUrl: string | null;
   clientAvatarUrl: string | null;
   projects: ClientProjectView[];
   initiallyCreating?: boolean;
@@ -183,6 +188,7 @@ export function ProjectManager({
               key={project.id}
               project={project}
               clientId={clientId}
+              clientDefaultCoverUrl={clientDefaultCoverUrl}
               clientAvatarUrl={clientAvatarUrl}
             />
           ))}

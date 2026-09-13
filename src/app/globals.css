@@ -4,16 +4,211 @@
   color-scheme: dark;
 }
 
+/* Sunday QA: one short placement cue when the server-rendered production
+   board refreshes after a lifecycle transition. No continuous motion. */
+@keyframes mb-stage-enter {
+  from { opacity: 0.35; transform: translateX(-6px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.mb-stage-enter {
+  animation: mb-stage-enter 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mb-stage-enter { animation: none; }
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   background-color: #09090b;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px);
+  background-size: 32px 32px;
   color: #fafafa;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   min-width: 320px;
   overscroll-behavior-y: none;
+}
+
+/* MindBunker visual grammar: an original, restrained 8/16-bit interface
+   language. These marks describe operational state; they are not ornamental
+   game assets and intentionally remain quiet during long editing sessions. */
+.pixel-frame {
+  --pixel-frame-color: rgba(82, 82, 91, 0.72);
+  --pixel-frame-glow: transparent;
+  position: relative;
+  isolation: isolate;
+  background-image:
+    linear-gradient(135deg, rgba(255,255,255,.025), transparent 38%),
+    linear-gradient(to bottom, rgba(255,255,255,.012), rgba(0,0,0,.08));
+  box-shadow: inset 0 1px rgba(255,255,255,.025), 0 10px 30px rgba(0,0,0,.12);
+}
+
+.pixel-frame::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--pixel-frame-color), var(--pixel-frame-color)) 0 0 / 12px 2px no-repeat,
+    linear-gradient(var(--pixel-frame-color), var(--pixel-frame-color)) 0 0 / 2px 12px no-repeat,
+    linear-gradient(var(--pixel-frame-color), var(--pixel-frame-color)) 100% 0 / 12px 2px no-repeat,
+    linear-gradient(var(--pixel-frame-color), var(--pixel-frame-color)) 100% 0 / 2px 12px no-repeat,
+    linear-gradient(var(--pixel-frame-color), var(--pixel-frame-color)) 0 100% / 12px 2px no-repeat,
+    linear-gradient(var(--pixel-frame-color), var(--pixel-frame-color)) 0 100% / 2px 12px no-repeat,
+    linear-gradient(var(--pixel-frame-color), var(--pixel-frame-color)) 100% 100% / 12px 2px no-repeat,
+    linear-gradient(var(--pixel-frame-color), var(--pixel-frame-color)) 100% 100% / 2px 12px no-repeat;
+  filter: drop-shadow(0 0 6px var(--pixel-frame-glow));
+}
+
+.pixel-frame-live {
+  --pixel-frame-color: rgba(52, 211, 153, .7);
+  --pixel-frame-glow: rgba(16, 185, 129, .22);
+}
+
+.pixel-frame-attention {
+  --pixel-frame-color: rgba(251, 191, 36, .62);
+  --pixel-frame-glow: rgba(245, 158, 11, .16);
+}
+
+.pixel-frame-client { --pixel-frame-color: rgba(167, 139, 250, .38); }
+
+.pixel-divider {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: 1rem;
+  color: #a1a1aa;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: .6875rem;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.pixel-divider > i {
+  height: 2px;
+  flex: 1;
+  background: repeating-linear-gradient(90deg, #27272a 0 10px, transparent 10px 14px);
+}
+
+.mb-system-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: .625rem;
+  font-weight: 900;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+
+.pixel-badge {
+  border-radius: 2px !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.025);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.mb-live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: .625rem;
+  font-weight: 900;
+  letter-spacing: .18em;
+}
+
+.mb-live-pulse {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  background: #34d399;
+  box-shadow: 0 0 0 1px rgba(52,211,153,.24), 0 0 10px rgba(52,211,153,.38);
+}
+
+.mb-live-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 1px solid rgba(52,211,153,.7);
+  animation: mb-live-ring 2s ease-out infinite;
+}
+
+@keyframes mb-live-ring {
+  0% { opacity: .8; transform: scale(.6); }
+  70%, 100% { opacity: 0; transform: scale(1.45); }
+}
+
+.mb-timer {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  letter-spacing: -.025em;
+}
+
+.pixel-progress {
+  position: relative;
+  border-radius: 2px;
+}
+
+.pixel-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 13px, rgba(9,9,11,.72) 13px 15px);
+}
+
+.mb-queue-row {
+  transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease, opacity 180ms ease;
+}
+
+.mb-queue-row[data-dragging="true"] {
+  transform: translateY(-2px) scale(1.006);
+  border-color: rgba(167,139,250,.75);
+  box-shadow: 0 12px 28px rgba(0,0,0,.32), 0 0 0 1px rgba(139,92,246,.15);
+  opacity: .78;
+}
+
+.mb-next-marker { box-shadow: inset 2px 0 #34d399; }
+
+.pixel-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 8rem;
+  border: 1px dashed #3f3f46;
+  background: rgba(24,24,27,.32);
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.pixel-empty-state-icon {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border: 1px solid #3f3f46;
+  color: #71717a;
+  box-shadow: inset 0 0 0 3px #18181b;
+}
+
+.pixel-empty-state-title { margin-top: .75rem; color: #d4d4d8; font-size: .875rem; font-weight: 800; }
+.pixel-empty-state-copy { margin-top: .25rem; color: #71717a; font-size: .75rem; line-height: 1.25rem; }
+
+.mb-pixel-logo {
+  border-radius: 2px !important;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.18), 3px 3px 0 rgba(76,29,149,.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mb-live-pulse::after { animation: none; opacity: .45; transform: none; }
+  .mb-queue-row, .pixel-frame { transition: none !important; }
+  .group:hover img { transform: none !important; }
 }
 
 button,
@@ -22,6 +217,11 @@ input,
 select,
 textarea {
   touch-action: manipulation;
+}
+
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid #67e8f9;
+  outline-offset: 3px;
 }
 
 input,

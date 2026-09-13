@@ -13,6 +13,8 @@ import {
   isProductionOrderMutable,
   isStaleProductionOrder,
   sumBilledByCurrency,
+  formatProductionOrderContractLabel,
+  validateProductionOrderContract,
   validateProductionOrderIngestInput,
 } from "./core.ts";
 
@@ -196,6 +198,24 @@ test("validateProductionOrderIngestInput requires client, project, label, date, 
   assert.match(validateProductionOrderIngestInput({ ...base, receivedAt: "not-a-date" }), /date/i);
   assert.match(validateProductionOrderIngestInput({ ...base, items: [] }), /video/i);
   assert.match(validateProductionOrderIngestInput({ ...base, items: [{ title: "  " }] }), /title/i);
+});
+
+test("batch contract label keeps active hourly terms visible", () => {
+  assert.equal(
+    formatProductionOrderContractLabel({ platform: "Upwork", billingType: "HOURLY", hourlyRate: 25, currency: "USD" }),
+    "Upwork · USD 25.00/hour",
+  );
+  assert.equal(
+    formatProductionOrderContractLabel({ platform: "Direct", billingType: "FIXED", hourlyRate: null, currency: "USD" }),
+    "Direct · Fixed price",
+  );
+});
+
+test("batch contract must be active and owned by the selected client", () => {
+  assert.equal(validateProductionOrderContract(2, { clientId: 2, status: "ACTIVE" }), null);
+  assert.match(validateProductionOrderContract(2, { clientId: 1, status: "ACTIVE" }), /belong/i);
+  assert.match(validateProductionOrderContract(2, { clientId: 2, status: "PAUSED" }), /active/i);
+  assert.match(validateProductionOrderContract(2, null), /active/i);
 });
 
 // ─── Order lifecycle ────────────────────────────────────────────────────────

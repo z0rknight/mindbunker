@@ -14,9 +14,16 @@ import {
 } from "@/modules/work-sessions/core";
 import { filterSessionTimelineItems } from "@/modules/work-sessions/timeline";
 import { WorkSessionHistoryTable } from "./WorkSessionHistoryTable";
-import { SessionViewSwitcher, type SessionViewMode } from "./SessionViewSwitcher";
+import {
+  SessionViewSwitcher,
+  type SessionTimelineRangeMode,
+  type SessionViewMode,
+} from "./SessionViewSwitcher";
 import { SessionTimeline } from "./SessionTimeline";
 import { SessionWeekCalendar } from "./SessionWeekCalendar";
+import { SessionMonthCalendar } from "./SessionMonthCalendar";
+import { SessionRangeTimeline } from "./SessionRangeTimeline";
+import { shiftDateKey } from "@/utils/date";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +35,7 @@ type SearchParams = {
   client?: string | string[];
   source?: string | string[];
   workType?: string | string[];
+  range?: string | string[];
 };
 
 function firstParam(value: string | string[] | undefined): string | null {
@@ -60,7 +68,7 @@ export default async function WorkSessionHistoryPage({
   // Timeline/Week default apply.
   const hasLegacyFilter = filterVideoId !== null || filterProjectId !== null;
   const view: SessionViewMode =
-    requestedView === "timeline" || requestedView === "week" || requestedView === "table"
+    requestedView === "timeline" || requestedView === "week" || requestedView === "month" || requestedView === "table"
       ? requestedView
       : hasLegacyFilter
         ? "table"
@@ -168,6 +176,12 @@ export default async function WorkSessionHistoryPage({
   const rawDate = firstParam(query.date);
   const dateKey = rawDate && DATE_KEY_PATTERN.test(rawDate) ? rawDate : todayKey;
   const mondayKey = mondayOfWeek(dateKey);
+  const monthKey = dateKey.slice(0, 7);
+  const requestedRange = firstParam(query.range);
+  const timelineRange: SessionTimelineRangeMode =
+    requestedRange === "7d" || requestedRange === "30d" || requestedRange === "month"
+      ? requestedRange
+      : "day";
 
   const clientFilter = firstParam(query.client);
   const sourceFilter = firstParam(query.source);
@@ -175,7 +189,17 @@ export default async function WorkSessionHistoryPage({
 
   const [items, videoOptions] = await Promise.all([
     getSessionTimelineItems(
-      view === "week" ? { kind: "week", mondayKey } : { kind: "day", dayKey: dateKey },
+      view === "week"
+        ? { kind: "week", mondayKey }
+        : view === "month" || (view === "timeline" && timelineRange === "month")
+          ? { kind: "month", monthKey }
+          : view === "timeline" && timelineRange !== "day"
+            ? {
+                kind: "span",
+                startKey: shiftDateKey(dateKey, timelineRange === "7d" ? -6 : -29),
+                endKey: dateKey,
+              }
+            : { kind: "day", dayKey: dateKey },
       now,
     ),
     getVideoOptionsForCorrection(),
@@ -209,13 +233,20 @@ export default async function WorkSessionHistoryPage({
         view={view}
         dateKey={dateKey}
         mondayKey={mondayKey}
+        monthKey={monthKey}
+        timelineRange={timelineRange}
         clientFilter={clientFilter}
         sourceFilter={sourceFilter}
         workTypeFilter={workTypeFilter}
         items={items}
       />
 
-      {view === "timeline" ? (
+      {view === "timeline" && timelineRange !== "day" ? (
+        <SessionRangeTimeline
+          items={filteredItems}
+          totalCountBeforeFilters={items.length}
+        />
+      ) : view === "timeline" ? (
         <SessionTimeline
           items={filteredItems}
           totalCountBeforeFilters={items.length}
@@ -223,12 +254,14 @@ export default async function WorkSessionHistoryPage({
           nowIso={now.toISOString()}
           videoOptions={videoOptions}
         />
-      ) : (
+      ) : view === "week" ? (
         <SessionWeekCalendar
           items={filteredItems}
           mondayKey={mondayKey}
           nowIso={now.toISOString()}
         />
+      ) : (
+        <SessionMonthCalendar items={filteredItems} monthKey={monthKey} />
       )}
     </div>
   );

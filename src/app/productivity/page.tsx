@@ -155,6 +155,13 @@ export default async function ProductivityPage({
   const todayTrackedSeconds = sessionDays[0]?.dayKey === today ? sessionDays[0].totalClosedSeconds : 0;
   const thisWeekTrackedSeconds =
     sessionWeeks[0]?.weekKey === mondayOfWeek(today) ? sessionWeeks[0].totalClosedSeconds : 0;
+  const inProductionCount = executionQueue.filter(
+    (item) => item.status === "IN_PROGRESS" || item.status === "CHANGES_REQUESTED",
+  ).length;
+  const inReviewCount = executionQueue.filter(
+    (item) => item.status === "READY_FOR_REVIEW",
+  ).length;
+  const blockedCount = executionQueue.filter((item) => item.isBlocked).length;
 
   function workSessionStateFor(videoId: number) {
     return {
@@ -235,6 +242,36 @@ export default async function ProductivityPage({
         </nav>
       </header>
 
+      <section aria-label="Productivity operational snapshot" className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
+        <StatCard label="Queue load" value={executionQueue.length} accent="violet" icon="🎞️" />
+        <StatCard label="In production" value={inProductionCount} accent="blue" icon="✂️" />
+        <StatCard label="In review" value={inReviewCount} accent="violet" icon="👁️" />
+        <StatCard label="Blocked" value={blockedCount} accent={blockedCount > 0 ? "red" : "zinc"} icon="⛔" />
+        <StatCard label="Done this month" value={stats.month} sub={currentMonthName()} accent="green" icon="✓" />
+      </section>
+
+      <section className="mb-6 rounded-2xl border border-violet-800/40 bg-violet-950/10 p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">Capture</p>
+            <h2 className="mt-1 text-base font-black text-white">Quick actions</h2>
+            <p className="mt-1 max-w-xl text-xs leading-5 text-zinc-500">
+              Plan work or capture an operational fact before entering the queue. Press <kbd className="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">⌘K</kbd> anywhere for a deadline, blocker, correction, follow-up, note, or backfilled work time.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:w-[720px] lg:grid-cols-4">
+            <PlanVideoButton initialProjectId={initialProjectId} initiallyOpen={query.planVideo === "1"} />
+            <FinishedVideoButton />
+            <Link href="/productivity/backfill" className="flex min-h-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-black text-zinc-300 transition hover:border-violet-500/60 hover:text-white">
+              Backfill a day →
+            </Link>
+            <Link href="/productivity/captures" className="flex min-h-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-black text-zinc-300 transition hover:border-violet-500/60 hover:text-white">
+              Capture Inbox →
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <NeedsAttentionSection groups={attentionGroups} />
 
       <NowFocusPanel
@@ -256,51 +293,25 @@ export default async function ProductivityPage({
         activeVideoId={workSessionOverview.openSession?.videoId ?? null}
       />
 
-      <section className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-900/45 p-4 sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">Capture</p>
-            <h2 className="mt-1 text-base font-black text-white">Quick actions</h2>
-            <p className="mt-1 text-xs text-zinc-500">
-              Plan work first. Finished Video remains available as a utility — register a correction from inside a video&apos;s own workspace instead.
-              Press <kbd className="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">⌘K</kbd> anywhere to capture a deadline, blocker, correction, follow-up, note, or backfilled work time without leaving this page.
-            </p>
+      <div className="space-y-4">
+        <details open={initialVideoId !== null} className="group rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4 sm:p-5">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-zinc-300">
+            <span><span className="mr-2 inline-block transition group-open:rotate-90">▸</span>Detailed video workspaces</span>
+            <span className="font-mono text-xs text-zinc-600">{groups.current.length + groups.attention.length + groups.planned.length}</span>
+          </summary>
+          <div className="mt-6 space-y-10 border-t border-zinc-800 pt-6">
+            {renderSection("current")}
+            {renderSection("attention")}
+            {renderSection("planned")}
           </div>
-          <div className="grid grid-cols-2 gap-3 lg:w-[720px] lg:grid-cols-4">
-            <PlanVideoButton
-              initialProjectId={initialProjectId}
-              initiallyOpen={query.planVideo === "1"}
-            />
-            <FinishedVideoButton />
-            <Link
-              href="/productivity/backfill"
-              className="flex min-h-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-black text-zinc-300 transition hover:border-violet-500/60 hover:text-white"
-            >
-              Backfill a day →
-            </Link>
-            <Link
-              href="/productivity/captures"
-              className="flex min-h-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-black text-zinc-300 transition hover:border-violet-500/60 hover:text-white"
-            >
-              Capture Inbox →
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-5">
-        <StatCard label="Today" value={stats.today} accent="violet" icon="🎬" />
-        <StatCard label="This Week" value={stats.week} accent="violet" icon="📅" />
-        <StatCard label="This Month" value={stats.month} sub={currentMonthName()} accent="violet" icon="🗓️" />
-        <StatCard label="Revisions" value={stats.totalRevisions} accent="zinc" icon="🔄" />
-        <StatCard label="All Videos" value={stats.total} accent="zinc" icon="🏆" />
-      </div>
-
-      <div className="space-y-10">
-        {renderSection("current")}
-        {renderSection("attention")}
-        {renderSection("planned")}
-        {renderSection("completed", true)}
+        </details>
+        <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4 sm:p-5">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-zinc-400">
+            <span><span className="mr-2 inline-block transition group-open:rotate-90">▸</span>Recent / completed archive</span>
+            <span className="font-mono text-xs text-zinc-600">{groups.completed.length}</span>
+          </summary>
+          <div className="mt-6 border-t border-zinc-800 pt-6">{renderSection("completed", true)}</div>
+        </details>
       </div>
 
       <footer className="mt-10 border-t border-zinc-800 pt-5 text-xs text-zinc-600">

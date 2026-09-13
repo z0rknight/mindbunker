@@ -16,6 +16,17 @@ import { ActiveCommitmentCard } from "@/components/commitments/ActiveCommitmentC
 import { OpenDecisionCard, RecordDecisionButton } from "./DecisionControls";
 import { formatCurrency, startOfMonthISO, todayISO } from "@/utils/date";
 import Link from "next/link";
+import { WarRoomRefreshControl } from "./WarRoomRefreshControl";
+import { getWorkSessionOverview } from "@/modules/work-sessions/data";
+import {
+  getAllVideoLogs,
+  getOpenBlockersByVideo,
+  getSoonestOpenCommitmentByVideo,
+} from "@/modules/productivity/actions";
+import { selectExecutionQueue, selectNextExecutable } from "@/modules/productivity/queue";
+import { getVideoNextAction } from "@/modules/productivity/core";
+import { NowFocusPanel } from "@/components/work-sessions/NowFocusPanel";
+import { PixelDivider, PixelIcon } from "@/components/ui/PixelVisuals";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +41,7 @@ export default async function WarRoomPage() {
   // Promise.all. Fetching it once and handing the same resolved rows to
   // both removes the duplicate query without changing either result.
   const openCommitmentsPromise = getOpenCommitmentsWithContext();
-  const [data, signals, dailyLedger, openDecisions, weekEstimates, monthHours, crmSummary, openCommitments] =
+  const [data, signals, dailyLedger, openDecisions, weekEstimates, monthHours, crmSummary, openCommitments, workSessionOverview, videos, blockerMap, commitmentMap] =
     await Promise.all([
       getWarRoomData(),
       openCommitmentsPromise.then((rows) => getActiveSignals(rows)),
@@ -40,6 +51,10 @@ export default async function WarRoomPage() {
       getClientHoursForPeriod(startOfMonthISO(), today),
       getCRMSummary(),
       openCommitmentsPromise,
+      getWorkSessionOverview(),
+      getAllVideoLogs(),
+      getOpenBlockersByVideo(),
+      getSoonestOpenCommitmentByVideo(),
     ]);
   const { income, efficiency, biological, momentum } = data;
   // Only overdue + due-soon (next 48h) commitments belong here -- War
@@ -48,25 +63,38 @@ export default async function WarRoomPage() {
   const relevantCommitments = rankOpenCommitments(openCommitments, now)
     .filter((c) => c.dueAt.getTime() < now.getTime() + 48 * 60 * 60 * 1_000)
     .slice(0, WAR_ROOM_COMMITMENT_LIMIT);
+  const queue = selectExecutionQueue(videos, {
+    blockedVideoIds: new Set(blockerMap.keys()),
+    blockerCategoryByVideoId: blockerMap,
+    soonestCommitmentDueAtByVideoId: commitmentMap,
+  });
+  const next = selectNextExecutable(queue);
+  const recommended = next
+    ? {
+        id: next.id,
+        title: next.title ?? `Video ${next.date}`,
+        clientName: next.clientName,
+        projectName: next.projectName,
+        nextAction: getVideoNextAction(next.status),
+      }
+    : null;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-5 sm:p-6">
-      <ActiveCommitmentsSection commitments={relevantCommitments} nowIso={now.toISOString()} />
-      <ActiveSignalsSection signals={signals} />
-      <DecisionsSection decisions={openDecisions} />
-      <DailyLedgerSection rows={dailyLedger} />
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="mb-8 flex flex-col items-start justify-between gap-3 sm:flex-row">
+      <header className="pixel-frame mb-6 flex flex-col items-start justify-between gap-4 rounded-2xl border border-cyan-900/40 bg-gradient-to-br from-cyan-950/20 to-zinc-950 p-4 sm:flex-row sm:items-center sm:p-5">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <span className="text-2xl">💎</span>
+            <span className="grid h-8 w-8 place-items-center border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
+              <PixelIcon name="signal" className="h-4 w-4" />
+            </span>
             <h1 className="text-3xl font-black text-white tracking-tight">WAR ROOM</h1>
           </div>
           <p className="text-zinc-500 text-sm">
             Recorded business facts · restrained derived context
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-end">
           {/* RMEDIA LET'S COOK Wave 1: one CTA into the order surface,
               same restrained-CTA treatment as the rest of this header --
               no War Room order list/widget, just the entry point. */}
@@ -76,14 +104,25 @@ export default async function WarRoomPage() {
           >
             🔥 LET&apos;S COOK
           </Link>
-          <div className="text-right">
-            <p className="text-zinc-600 text-xs">Last updated</p>
-            <p className="text-zinc-400 text-xs font-mono">
-              {new Date(data.generatedAt).toLocaleTimeString()}
-            </p>
-          </div>
+          <WarRoomRefreshControl generatedAt={data.generatedAt} />
         </div>
+      </header>
+
+      <NowFocusPanel
+        openSession={workSessionOverview.openSession}
+        openSessionElapsedSeconds={workSessionOverview.openSessionElapsedSeconds}
+        recommended={recommended}
+        variant="dominant"
+      />
+
+      {/* Command state first: what is due, what changed, what needs a
+          decision. History and descriptive analytics follow below. */}
+      <div className="grid items-start gap-4 lg:grid-cols-3" data-testid="war-room-command-grid">
+        <ActiveCommitmentsSection commitments={relevantCommitments} nowIso={now.toISOString()} />
+        <ActiveSignalsSection signals={signals} />
+        <DecisionsSection decisions={openDecisions} />
       </div>
+      <DailyLedgerSection rows={dailyLedger} />
 
       {/* ── LAYER 1: INCOME INTELLIGENCE ──────────────────────────────────── */}
       <section className="mb-8">
@@ -528,13 +567,8 @@ export default async function WarRoomPage() {
 // ─── SUB-COMPONENTS ───────────────────────────────────────────────────────────
 
 function SectionHeader({ label, icon }: { label: string; icon: string }) {
-  return (
-    <div className="flex items-center gap-2 mb-4">
-      <span className="text-base">{icon}</span>
-      <h2 className="text-zinc-300 text-xs font-black uppercase tracking-widest">{label}</h2>
-      <div className="flex-1 h-px bg-zinc-800" />
-    </div>
-  );
+  void icon;
+  return <PixelDivider label={label} icon={label.includes("SIGNAL") ? "signal" : label.includes("COMMITMENT") ? "flag" : undefined} />;
 }
 
 function MetricCard({

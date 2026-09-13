@@ -12,12 +12,14 @@ export function ProjectVideoWorkspace({
   projectId,
   videos,
   projectCoverUrl = null,
+  clientDefaultCoverUrl = null,
   clientAvatarUrl = null,
   clientName = "",
 }: {
   projectId: number;
   videos: WorkspaceVideoCardData[];
   projectCoverUrl?: string | null;
+  clientDefaultCoverUrl?: string | null;
   clientAvatarUrl?: string | null;
   clientName?: string;
 }) {
@@ -55,6 +57,7 @@ export function ProjectVideoWorkspace({
           projectId={projectId}
           videos={videos}
           projectCoverUrl={projectCoverUrl}
+          clientDefaultCoverUrl={clientDefaultCoverUrl}
           clientAvatarUrl={clientAvatarUrl}
           clientName={clientName}
         />
@@ -63,6 +66,7 @@ export function ProjectVideoWorkspace({
           projectId={projectId}
           videos={videos}
           projectCoverUrl={projectCoverUrl}
+          clientDefaultCoverUrl={clientDefaultCoverUrl}
           clientAvatarUrl={clientAvatarUrl}
           clientName={clientName}
         />

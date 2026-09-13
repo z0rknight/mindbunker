@@ -2,15 +2,17 @@ import { IS_CLIENT_DEPLOY_TARGET, STATIC_BASE_PATH } from "../../lib/auth-core.t
 
 // Sprint 3 P1 (Project + Video visual covers): a deliberately tiny helper,
 // not an asset pipeline. The three-tier fallback chain is: a Video's own
-// coverUrl -> its Project's coverUrl -> the Client's avatar
-// (instagramProfilePictureUrl) -> a neutral placeholder rendered locally
+// coverUrl -> its Project's coverUrl -> the Client's deliberately selected
+// defaultCoverUrl -> the Client's avatar (instagramProfilePictureUrl) -> a
+// neutral placeholder rendered locally
 // by each surface (an icon, or initials -- e.g. LeadAvatar in
 // src/app/crm/page.tsx already does the initials case; this module does
 // not reimplement that, it only picks which image URL wins, if any).
 //
 // No giant image is ever stored here -- every candidate is already just a
 // URL column (videoLogs.coverUrl, projects.coverUrl,
-// clients.instagramProfilePictureUrl), each already HTTPS-validated at
+// clients.defaultCoverUrl, clients.instagramProfilePictureUrl), each already
+// HTTPS-validated at
 // its own write path.
 export function resolveCoverUrl(
   ...candidates: Array<string | null | undefined>
@@ -30,7 +32,7 @@ export const COVER_CONTENT_TYPES = [
 ] as const;
 
 export type CoverContentType = (typeof COVER_CONTENT_TYPES)[number];
-export type CoverTargetType = "video" | "project";
+export type CoverTargetType = "video" | "project" | "client";
 
 const EXTENSION_BY_CONTENT_TYPE: Record<CoverContentType, string> = {
   "image/png": "png",

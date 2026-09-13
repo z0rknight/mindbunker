@@ -13,11 +13,12 @@ import {
 
 test("resolveCoverUrl returns the first truthy candidate in order", () => {
   assert.equal(
-    resolveCoverUrl("video-cover", "project-cover", "client-avatar"),
+    resolveCoverUrl("video-cover", "project-cover", "client-default", "client-avatar"),
     "video-cover",
   );
-  assert.equal(resolveCoverUrl(null, "project-cover", "client-avatar"), "project-cover");
-  assert.equal(resolveCoverUrl(null, undefined, "client-avatar"), "client-avatar");
+  assert.equal(resolveCoverUrl(null, "project-cover", "client-default", "client-avatar"), "project-cover");
+  assert.equal(resolveCoverUrl(null, null, "client-default", "client-avatar"), "client-default");
+  assert.equal(resolveCoverUrl(null, undefined, null, "client-avatar"), "client-avatar");
 });
 
 test("resolveCoverUrl returns null when every candidate is empty", () => {

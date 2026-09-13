@@ -17,6 +17,7 @@ type CardData = {
   deliveryUrl: string | null;
   reviewUrl: string | null;
   publishedUrl: string | null;
+  batchLabel: string | null;
   lastUpdated: string | null;
   isPriority: boolean;
   projectVideoCount: number | null;
@@ -69,16 +70,18 @@ export function VideoCard({
   video,
   dateLabel,
   showReviewActions = false,
+  allowPriority = true,
 }: {
   video: CardData;
   dateLabel?: string;
   showReviewActions?: boolean;
+  allowPriority?: boolean;
 }) {
   const aspectKey = video.orientation ?? "UNKNOWN";
   const formattedDate = formatDate(video.lastUpdated);
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/40">
+    <article className="pixel-frame pixel-frame-client overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/40">
       <Link
         href={`/client/dashboard/videos/${video.id}`}
         className={`relative block w-full overflow-hidden bg-zinc-900 ${ASPECT_CLASSES[aspectKey]}`}
@@ -92,7 +95,7 @@ export function VideoCard({
           </div>
         )}
         <span
-          className={`absolute left-2.5 top-2.5 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide backdrop-blur ${STATUS_CLASSES[video.status]}`}
+          className={`pixel-badge absolute left-2.5 top-2.5 inline-flex border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide backdrop-blur ${STATUS_CLASSES[video.status]}`}
         >
           {video.statusLabel}
         </span>
@@ -125,6 +128,12 @@ export function VideoCard({
           )}
         </div>
 
+        {video.batchLabel && (
+          <p className="text-[10px] font-black uppercase tracking-wider text-violet-300">
+            Batch · {video.batchLabel}
+          </p>
+        )}
+
         {primaryLink(video) && (
           <a
             href={primaryLink(video)!.href}
@@ -137,7 +146,7 @@ export function VideoCard({
         )}
 
         {showReviewActions && <ReviewActions videoId={video.id} />}
-        {video.projectId !== null && (
+        {allowPriority && video.projectId !== null && (
           <PriorityToggle
             videoId={video.id}
             isPriority={video.isPriority}

@@ -117,6 +117,7 @@ test("portal projection cannot expand beyond the token-bound client", () => {
           reviewUrl: null,
           publishedUrl: null,
           coverUrl: null,
+          batchLabel: null,
         },
       ],
     },
@@ -271,6 +272,8 @@ function video(overrides) {
     status: "IN_PROGRESS",
     deliveryUrl: null,
     coverUrl: null,
+    projectCoverUrl: null,
+    clientDefaultCoverUrl: null,
     orientation: null,
     contentType: null,
     isPriority: false,
@@ -507,6 +510,24 @@ test("a video's own cover wins over its project's cover", () => {
     NOW,
   );
   assert.equal(result.currentWork[0].coverUrl, "https://cdn.example.com/video-cover.jpg");
+});
+
+test("client default cover is used only after video and project covers", () => {
+  const result = buildClientDashboard(
+    2,
+    dashboardProjects,
+    [
+      video({
+        id: 1,
+        coverUrl: null,
+        projectCoverUrl: null,
+        clientDefaultCoverUrl: "https://cdn.example.com/client-default.jpg",
+      }),
+    ],
+    [],
+    NOW,
+  );
+  assert.equal(result.currentWork[0].coverUrl, "https://cdn.example.com/client-default.jpg");
 });
 
 test("no cover anywhere in the chain stays null, not a fabricated URL", () => {

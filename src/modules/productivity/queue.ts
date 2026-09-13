@@ -1,4 +1,4 @@
-import type { VideoKind, VideoStatus } from "./config";
+import type { VideoKind, VideoOrientation, VideoStatus } from "./config";
 
 // P0.4 (Tuesday Reality & Usability Patch): the solo-operator global
 // execution queue. video_logs is already the canonical executable work
@@ -7,16 +7,12 @@ import type { VideoKind, VideoStatus } from "./config";
 // section, NOW/FOCUS's recommendation) must call instead of re-deriving
 // membership or order locally.
 //
-// Deliberately does NOT reference is_operational_container: that column
-// only exists locally (migration 0040 is not yet applied to production --
-// see the Tuesday Patch Gate 1/production-baseline report). Eligibility
-// here uses only videoKind and status, both guaranteed in the current
-// production baseline.
 export function isQueueEligible(video: {
   videoKind: VideoKind;
   status: VideoStatus;
+  isOperationalContainer?: boolean;
 }): boolean {
-  return video.videoKind === "CLIENT_WORK" && video.status !== "DONE";
+  return video.videoKind === "CLIENT_WORK" && video.status !== "DONE" && !video.isOperationalContainer;
 }
 
 export type QueueEligibleVideo = {
@@ -30,6 +26,9 @@ export type QueueEligibleVideo = {
   projectId: number | null;
   projectName: string | null;
   projectDeadline: string | null;
+  coverUrl: string | null;
+  orientation: VideoOrientation | null;
+  isOperationalContainer: boolean;
   queuePosition: number | null;
   createdAt: Date | string | null;
   updatedAt: Date | string | null;
@@ -143,6 +142,22 @@ export function moveInOrder(
     videoId,
     ...withoutItem.slice(targetIndex),
   ];
+}
+
+// Pointer/drag companion to moveInOrder. The server still reloads the
+// canonical queue immediately before applying this operation, so the
+// browser supplies intent (move A before B), never the authoritative list.
+export function moveBefore(
+  orderedIds: readonly number[],
+  videoId: number,
+  beforeVideoId: number | null,
+): number[] {
+  if (!orderedIds.includes(videoId)) return [...orderedIds];
+  const remaining = orderedIds.filter((id) => id !== videoId);
+  if (beforeVideoId === null) return [...remaining, videoId];
+  const target = remaining.indexOf(beforeVideoId);
+  if (target === -1) return [...orderedIds];
+  return [...remaining.slice(0, target), videoId, ...remaining.slice(target)];
 }
 
 // Assigns fresh sparse positions (1000, 2000, 3000, ...) to an ordered id

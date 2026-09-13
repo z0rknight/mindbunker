@@ -57,12 +57,14 @@ export function ProjectVideoList({
   projectId,
   videos,
   projectCoverUrl = null,
+  clientDefaultCoverUrl = null,
   clientAvatarUrl = null,
   clientName = "",
 }: {
   projectId: number;
   videos: WorkspaceVideo[];
   projectCoverUrl?: string | null;
+  clientDefaultCoverUrl?: string | null;
   clientAvatarUrl?: string | null;
   clientName?: string;
 }) {
@@ -128,7 +130,12 @@ export function ProjectVideoList({
               aria-label={`Select ${video.title ?? "video"}`}
             />
             <RowThumbnail
-              url={resolveCoverUrl(video.coverUrl, projectCoverUrl, clientAvatarUrl)}
+              url={resolveCoverUrl(
+                video.coverUrl,
+                projectCoverUrl,
+                clientDefaultCoverUrl,
+                clientAvatarUrl,
+              )}
               clientName={clientName}
             />
             <Link href={`/productivity?video=${video.id}&returnTo=${returnTo}`} className="min-w-0 flex-1">

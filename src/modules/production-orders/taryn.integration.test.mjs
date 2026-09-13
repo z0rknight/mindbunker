@@ -40,6 +40,42 @@ test("Taryn: creation invariants — one order, one container, N deliverables, a
   for (const row of rows) assert.equal(row.status, "PLANNED");
 });
 
+test("Batch contract migration is additive and preserves legacy orders", () => {
+  const db = buildMigratedDb();
+  seedClientAndProject(db);
+  const order = ingestOrderRowSql(db, {
+    clientId: 1,
+    projectId: 1,
+    label: "Legacy batch",
+    receivedAt: "2026-08-24",
+    ingestKey: "legacy-contract-null",
+  });
+
+  const columns = db.prepare(`PRAGMA table_info(production_orders)`).all();
+  assert.ok(columns.some((column) => column.name === "contract_id"));
+  assert.equal(
+    db.prepare(`SELECT contract_id FROM production_orders WHERE id = ?`).get(order.id).contract_id,
+    null,
+    "existing orders stay valid without a fabricated contract",
+  );
+
+  db.prepare(
+    `INSERT INTO commercial_contracts (client_id, platform, billing_type, hourly_rate, currency, status)
+     VALUES (1, 'Upwork', 'HOURLY', 25, 'USD', 'ACTIVE')`,
+  ).run();
+  const contractId = db.prepare(`SELECT id FROM commercial_contracts WHERE client_id = 1`).get().id;
+  db.prepare(`UPDATE production_orders SET contract_id = ? WHERE id = ?`).run(contractId, order.id);
+  assert.equal(
+    db.prepare(`SELECT contract_id FROM production_orders WHERE id = ?`).get(order.id).contract_id,
+    contractId,
+  );
+  assert.throws(
+    () => db.prepare(`UPDATE production_orders SET contract_id = 999999 WHERE id = ?`).run(order.id),
+    /FOREIGN KEY constraint failed/,
+  );
+  assert.deepEqual(db.prepare(`PRAGMA foreign_key_check`).all(), []);
+});
+
 test("Taryn: the container is excluded from Sensor-eligible deliverable counting semantics but stays a real video_logs row", () => {
   const db = buildMigratedDb();
   seedClientAndProject(db);

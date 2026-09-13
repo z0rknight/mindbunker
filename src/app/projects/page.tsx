@@ -1,19 +1,18 @@
-import { displayClientName, getClientAccent } from "@/lib/client-identity";
+import { displayClientName } from "@/lib/client-identity";
 import { getProjectsOverview } from "@/modules/projects/actions";
 import { getProductivityQuickOptions } from "@/modules/productivity/actions";
 import {
   filterProjectsBySearch,
   getProjectException,
   getProjectNextAction,
-  groupProjectsByClient,
+  getProjectProgress,
   groupProjectsForOverview,
   isProjectOverdue,
-  type ClientProjectGroup,
   type ProjectExceptionKind,
   type ProjectOverviewItem,
   type ProjectSortMode,
 } from "@/modules/projects/core";
-import { PROJECT_STATUS_LABELS } from "@/modules/projects/config";
+import { PROJECT_GROUP_LABELS, PROJECT_GROUPS, PROJECT_STATUS_LABELS, type ProjectGroup } from "@/modules/projects/config";
 import { formatDate, todayISO } from "@/utils/date";
 import { formatLastActive } from "@/modules/work-sessions/core";
 import Link from "next/link";
@@ -22,17 +21,17 @@ import { StatusFilter } from "./StatusFilter";
 import { ProjectSearch } from "./ProjectSearch";
 import { SortToggle } from "./SortToggle";
 import { NewProjectButton } from "./NewProjectButton";
+import { resolveCoverUrl } from "@/modules/media/core";
+import { ProjectCover } from "./ProjectCover";
+import { PixelEmptyState, PixelIcon } from "@/components/ui/PixelVisuals";
 
 export const dynamic = "force-dynamic";
 
-// Tuesday Patch Priority 2: the 4-column homogeneous card grid was
-// explicitly rejected in the original QA ("parece um pouco poluído e sem
-// hierarquia"). This replaces it with the brief's own target architecture:
-// exception -> client -> project -> metadata, compact rows grouped by
-// client, vertical scanning instead of zigzag. See
-// modules/projects/core.ts for groupProjectsByClient/getProjectException/
-// getProjectNextAction -- this file only renders what those already
-// decided.
+// Operator Flow round: cards now provide the requested visual recognition,
+// but retain the hierarchy that made the compact-list redesign truthful:
+// exception -> client -> project -> metadata. The grid stays grouped by
+// client and uses the existing attention-first sort, so visuals do not
+// flatten operational priority into a homogeneous gallery.
 
 const EXCEPTION_LABEL: Record<ProjectExceptionKind, string> = {
   OVERDUE: "Overdue",
@@ -46,7 +45,7 @@ const EXCEPTION_CLASS: Record<ProjectExceptionKind, string> = {
   PLANNED: "border-zinc-600/50 bg-zinc-800/60 text-zinc-400",
 };
 
-function ProjectRow({
+function ProjectCard({
   project,
   today,
   nowIso,
@@ -61,10 +60,17 @@ function ProjectRow({
     ? Math.max(1, Math.round((Date.parse(today) - Date.parse(project.deadline)) / (24 * 60 * 60 * 1000)))
     : null;
 
+  const progress = getProjectProgress(project);
+  const coverUrl = resolveCoverUrl(
+    project.coverUrl,
+    project.clientDefaultCoverUrl,
+    project.clientAvatarUrl,
+  );
+
   return (
     <Link
       href={`/projects/${project.id}`}
-      className={`group flex items-center justify-between gap-3 rounded-xl border px-4 py-3 transition ${
+      className={`pixel-frame group overflow-hidden rounded-2xl border transition ${
         exception === "OVERDUE"
           ? "border-red-900/50 bg-red-950/10 hover:border-red-700/60"
           : exception === "BLOCKED"
@@ -72,25 +78,38 @@ function ProjectRow({
             : "border-zinc-800 bg-zinc-900/50 hover:border-zinc-600"
       }`}
     >
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
+      <ProjectCover url={coverUrl} projectName={project.name} clientName={project.clientName} />
+      <div className="p-4">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-[10px] font-black uppercase tracking-[0.18em] text-cyan-400/80">
+              {displayClientName(project.clientName)}
+            </p>
+            <h3 className="mt-1 truncate text-base font-black text-white">{project.name}</h3>
+          </div>
           {exception && (
-            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${EXCEPTION_CLASS[exception]}`}>
+            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${EXCEPTION_CLASS[exception]}`}>
               {exception === "OVERDUE" && overdueDays ? `${overdueDays}d overdue` : EXCEPTION_LABEL[exception]}
             </span>
           )}
-          <p className="truncate font-black text-white">{project.name}</p>
         </div>
-        <p className="mt-1 truncate text-xs text-zinc-500">
-          {project.totalVideos > 0
-            ? `Videos ${project.doneVideos}/${project.totalVideos} complete`
-            : "No videos yet"}
-          {nextAction && <> · Next: {nextAction}</>}
-          {!nextAction && <> · Stage: {PROJECT_STATUS_LABELS[project.status]}</>}
+
+        <div className="pixel-progress mt-4 h-1.5 overflow-hidden bg-zinc-800">
+          <div className="h-full bg-cyan-500" style={{ width: `${progress}%` }} />
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+          <span className="font-bold text-zinc-300">
+            {project.totalVideos > 0 ? `${project.doneVideos}/${project.totalVideos} videos` : "No videos yet"}
+          </span>
+          <span className="text-zinc-600">{progress}% complete</span>
+        </div>
+
+        <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-zinc-500">
+          {nextAction ?? `Stage: ${PROJECT_STATUS_LABELS[project.status]}`}
         </p>
-      </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <div className="hidden text-right sm:block">
+
+        <div className="mt-3 flex items-end justify-between gap-3 border-t border-zinc-800/80 pt-3">
+          <div>
           {project.deadline && (
             <p className={`text-xs font-bold ${exception === "OVERDUE" ? "text-red-300" : "text-zinc-500"}`}>
               Due {formatDate(project.deadline)}
@@ -101,43 +120,39 @@ function ProjectRow({
               Active {formatLastActive(project.lastActiveAt, nowIso)}
             </p>
           )}
+          {!project.deadline && !project.lastActiveAt && <p className="text-[11px] text-zinc-700">No recent activity</p>}
+          </div>
+          <span className="shrink-0 text-xs font-black text-cyan-300">Open →</span>
         </div>
-        <span className="text-xs font-black text-cyan-300 opacity-0 transition group-hover:opacity-100">
-          Open →
-        </span>
       </div>
     </Link>
   );
 }
 
-function ClientGroupSection({
+function ProjectGroupSection({
   group,
+  projects,
   today,
   nowIso,
 }: {
-  group: ClientProjectGroup;
+  group: ProjectGroup;
+  projects: ProjectOverviewItem[];
   today: string;
   nowIso: string;
 }) {
-  const accent = getClientAccent(group.clientId, group.clientName);
+  if (projects.length === 0) return null;
   return (
-    <section aria-labelledby={`client-${group.clientId}`}>
-      <div className="mb-2 flex items-center gap-2">
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${accent.dot}`} aria-hidden="true" />
-        <Link
-          href={`/crm/${group.clientId}`}
-          id={`client-${group.clientId}`}
-          className={`text-sm font-black uppercase tracking-wide hover:opacity-80 ${accent.text}`}
-        >
-          {displayClientName(group.clientName)}
-        </Link>
-        <span className="text-xs font-bold text-zinc-600">
-          {group.projects.length} project{group.projects.length === 1 ? "" : "s"}
-        </span>
+    <section aria-labelledby={`projects-${group}`}>
+      <div className="mb-3 flex items-center gap-2">
+        <PixelIcon name={group === "completed" ? "archive" : "project"} className={`h-3.5 w-3.5 ${group === "active" ? "text-cyan-400" : group === "planned" ? "text-violet-400" : "text-zinc-700"}`} />
+        <h2 id={`projects-${group}`} className="text-sm font-black uppercase tracking-wide text-zinc-300">
+          {PROJECT_GROUP_LABELS[group]}
+        </h2>
+        <span className="text-xs font-bold text-zinc-600">{projects.length}</span>
       </div>
-      <div className="space-y-1.5">
-        {group.projects.map((project) => (
-          <ProjectRow key={project.id} project={project} today={today} nowIso={nowIso} />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {projects.map((project) => (
+          <ProjectCard key={project.id} project={project} today={today} nowIso={nowIso} />
         ))}
       </div>
     </section>
@@ -179,16 +194,32 @@ export default async function ProjectsPage({
   if (statusFilter) visibleProjects = visibleProjects.filter((p) => p.status === statusFilter);
   visibleProjects = filterProjectsBySearch(visibleProjects, searchQuery);
 
-  const clientGroups = groupProjectsByClient(visibleProjects, today, sortMode);
-  const needsAttention = visibleProjects.filter((p) => getProjectException(p, today) === "OVERDUE" || p.openBlockerCount > 0);
+  const visibleGroups = groupProjectsForOverview(visibleProjects);
+  if (sortMode === "recent") {
+    for (const group of PROJECT_GROUPS) {
+      visibleGroups[group].sort((a, b) =>
+        (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0) || b.id - a.id,
+      );
+    }
+  } else {
+    const exceptionRank = (project: ProjectOverviewItem) => {
+      const exception = getProjectException(project, today);
+      return exception === "OVERDUE" ? 0 : exception === "BLOCKED" ? 1 : exception === "PLANNED" ? 2 : 3;
+    };
+    for (const group of PROJECT_GROUPS) {
+      visibleGroups[group].sort((a, b) => exceptionRank(a) - exceptionRank(b));
+    }
+  }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-5 sm:px-6 md:p-8">
+    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
       <header className="mb-6">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300">
           Clients → projects → videos
         </p>
-        <h1 className="mt-1 text-2xl font-bold text-white">📁 Projects</h1>
+        <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold text-white">
+          <PixelIcon name="project" className="h-5 w-5 text-cyan-300" /> Projects
+        </h1>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <NewProjectButton clients={quickOptions.clients} />
           <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-black text-cyan-300">
@@ -212,9 +243,8 @@ export default async function ProjectsPage({
       </header>
 
       {allProjects.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-900/50 p-8 text-center">
-          <p className="font-black text-white">No projects yet</p>
-          <p className="mt-1 text-sm text-zinc-500">
+        <PixelEmptyState icon="project" title="No projects yet" className="rounded-2xl">
+          <p>
             Choose a client in CRM to create the first work commitment.
           </p>
           <Link
@@ -223,45 +253,15 @@ export default async function ProjectsPage({
           >
             Open CRM
           </Link>
-        </div>
+        </PixelEmptyState>
       ) : visibleProjects.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/30 px-4 py-6 text-sm text-zinc-600">
-          No projects match this filter.
-        </div>
+        <PixelEmptyState icon="archive" title="No matching projects" className="rounded-2xl">
+          Adjust the current client, status, or search filter.
+        </PixelEmptyState>
       ) : (
         <div className="space-y-8">
-          {needsAttention.length > 0 && (
-            <section aria-labelledby="needs-attention">
-              <h2 id="needs-attention" className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-red-300">
-                Needs attention
-              </h2>
-              <div className="space-y-1.5">
-                {needsAttention.map((project) => {
-                  const exception = getProjectException(project, today)!;
-                  const overdueDays = project.deadline
-                    ? Math.max(1, Math.round((Date.parse(today) - Date.parse(project.deadline)) / (24 * 60 * 60 * 1000)))
-                    : null;
-                  return (
-                    <Link
-                      key={project.id}
-                      href={`/projects/${project.id}`}
-                      className="flex items-center gap-2 rounded-xl border border-red-900/50 bg-red-950/10 px-4 py-2.5 text-sm hover:border-red-700/60"
-                    >
-                      <span className="text-red-300">⚠</span>
-                      <span className="font-black text-white">{project.name}</span>
-                      <span className="text-zinc-500">· {displayClientName(project.clientName)} ·</span>
-                      <span className="font-bold text-red-300">
-                        {exception === "OVERDUE" && overdueDays ? `${overdueDays} days overdue` : "blocked"}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
-          {clientGroups.map((group) => (
-            <ClientGroupSection key={group.clientId} group={group} today={today} nowIso={nowIso} />
+          {PROJECT_GROUPS.map((group) => (
+            <ProjectGroupSection key={group} group={group} projects={visibleGroups[group]} today={today} nowIso={nowIso} />
           ))}
         </div>
       )}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { requireClientAuth } from "@/lib/client-portal-session";
 import { getClientBillingSummary, getClientDashboardView } from "@/modules/client-portal/data";
 import { BillingSummary } from "./BillingSummary";
@@ -6,6 +7,9 @@ import { LogoutButton } from "./LogoutButton";
 import { StatTile } from "./StatTile";
 import { VideoCard } from "./VideoCard";
 import { VideoGallery } from "./VideoGallery";
+import { PixelEmptyState, PixelIcon } from "@/components/ui/PixelVisuals";
+import { CLIENT_VIDEO_STATUS_LABELS } from "@/modules/client-portal/core";
+import { formatCurrency } from "@/utils/date";
 
 // Renders one authenticated client's private data. Next.js's automatic
 // dynamic-rendering detection (triggered by cookies() inside
@@ -40,13 +44,17 @@ export default async function ClientDashboardPage() {
   }
 
   const hasAnyVideos = view.totalVideos > 0;
+  const activeBatch = view.batches.find((batch) => batch.state === "OPEN") ?? null;
+  const pastBatches = view.batches.filter((batch) => batch.id !== activeBatch?.id);
 
   return (
     <main className="min-h-dvh bg-zinc-950 pb-16 text-white">
       <header className="border-b border-zinc-800/80 bg-zinc-900/60 px-4 py-5 backdrop-blur sm:px-6">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">RMEDIA · Client Portal</p>
+            <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">
+              <PixelIcon name="shield" className="h-3 w-3" /> RMEDIA · Client Portal
+            </p>
             <h1 className="mt-0.5 text-xl font-black tracking-tight sm:text-2xl">
               Welcome back, {view.clientName}
             </h1>
@@ -56,16 +64,51 @@ export default async function ClientDashboardPage() {
       </header>
 
       <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6">
+        {activeBatch && (
+          <section className="pixel-frame pixel-frame-client rounded-2xl border border-emerald-500/30 bg-emerald-950/10 p-4 sm:p-5" aria-labelledby="current-batch">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">In production now</p>
+                <h2 id="current-batch" className="mt-1 text-xl font-black text-white">{activeBatch.label}</h2>
+                <p className="mt-1 text-xs text-zinc-500">{activeBatch.projectName} · received {activeBatch.receivedAt}</p>
+              </div>
+              <span className="self-start rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-200">
+                {activeBatch.phase.replaceAll("_", " ")}
+              </span>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {activeBatch.items.map((item) => (
+                <Link key={item.id} href={`/client/dashboard/videos/${item.id}`} className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-black/30 px-3 py-2 text-sm hover:border-violet-500/40">
+                  <span className="truncate font-bold text-zinc-200">{item.title}</span>
+                  <span className="shrink-0 text-[10px] font-black uppercase text-zinc-500">{CLIENT_VIDEO_STATUS_LABELS[item.status]}</span>
+                </Link>
+              ))}
+            </div>
+            {view.permissions.canSeeFinancials && (activeBatch.billed.length > 0 || activeBatch.expectedValue) && (
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-800/80 pt-3 text-xs">
+                {activeBatch.billed.map((row) => (
+                  <span key={row.currency} className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 font-bold text-cyan-200">
+                    Confirmed billed · {formatCurrency(row.amount, row.currency)}
+                  </span>
+                ))}
+                {activeBatch.billed.length === 0 && activeBatch.expectedValue && (
+                  <span className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 font-bold text-zinc-400">
+                    Expected · {formatCurrency(activeBatch.expectedValue.amount, activeBatch.expectedValue.currency)} · not final billing
+                  </span>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
         <BillingSummary billing={billing} />
 
         {!hasAnyVideos ? (
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-8 text-center">
-            <p className="text-2xl" aria-hidden="true">🎬</p>
-            <p className="mt-3 text-sm font-bold text-zinc-300">No videos yet</p>
-            <p className="mt-1 text-xs text-zinc-500">
+          <PixelEmptyState icon="video" title="No videos yet" className="rounded-2xl">
+            <p>
               Once RMEDIA starts production on your account, you&apos;ll see progress here.
             </p>
-          </section>
+          </PixelEmptyState>
         ) : (
           <>
             <section className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -96,7 +139,13 @@ export default async function ClientDashboardPage() {
                 </h2>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {view.readyForReview.map((video) => (
-                    <VideoCard key={video.id} video={video} showReviewActions dateLabel="Ready" />
+                    <VideoCard
+                      key={video.id}
+                      video={video}
+                      showReviewActions={view.permissions.canReview}
+                      allowPriority={view.permissions.canSetPriority}
+                      dateLabel="Ready"
+                    />
                   ))}
                 </div>
               </section>
@@ -109,7 +158,7 @@ export default async function ClientDashboardPage() {
                 </h2>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {view.currentWork.map((video) => (
-                    <VideoCard key={video.id} video={video} dateLabel="Updated" />
+                    <VideoCard key={video.id} video={video} allowPriority={view.permissions.canSetPriority} dateLabel="Updated" />
                   ))}
                 </div>
               </section>
@@ -122,7 +171,7 @@ export default async function ClientDashboardPage() {
                 </h2>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {view.recentDeliveries.map((video) => (
-                    <VideoCard key={video.id} video={video} dateLabel="Delivered" />
+                    <VideoCard key={video.id} video={video} allowPriority={view.permissions.canSetPriority} dateLabel="Delivered" />
                   ))}
                 </div>
               </section>
@@ -151,7 +200,33 @@ export default async function ClientDashboardPage() {
               </section>
             )}
 
-            <VideoGallery videos={view.allVideos} />
+            <VideoGallery
+              videos={view.allVideos}
+              allowReview={view.permissions.canReview}
+              allowPriority={view.permissions.canSetPriority}
+            />
+
+            {pastBatches.length > 0 && (
+              <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
+                <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-black text-zinc-400">
+                  <span><span className="mr-2 inline-block transition group-open:rotate-90">▸</span>Previous batches</span>
+                  <span className="font-mono text-xs text-zinc-600">{pastBatches.length}</span>
+                </summary>
+                <div className="mt-4 space-y-2 border-t border-zinc-800 pt-4">
+                  {pastBatches.map((batch) => (
+                    <div key={batch.id} className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold text-zinc-200">{batch.label}</p>
+                          <p className="mt-0.5 text-[11px] text-zinc-600">{batch.projectName} · {batch.items.length} videos</p>
+                        </div>
+                        <span className="text-[10px] font-black uppercase text-zinc-500">{batch.phase.replaceAll("_", " ")}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
           </>
         )}
       </div>

@@ -74,7 +74,7 @@ export function Sidebar() {
     <>
       <header className="fixed inset-x-0 top-0 z-40 flex h-16 items-center justify-between border-b border-zinc-800 bg-zinc-950/95 px-4 backdrop-blur md:hidden safe-top">
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-sm font-bold text-white">
+          <div className="mb-pixel-logo flex h-8 w-8 items-center justify-center bg-violet-600 text-sm font-bold text-white">
             MB
           </div>
           <div>
@@ -103,7 +103,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="px-6 py-6 border-b border-zinc-800">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+          <div className="mb-pixel-logo w-8 h-8 bg-violet-600 flex items-center justify-center text-white font-bold text-sm">
             MB
           </div>
           <div>

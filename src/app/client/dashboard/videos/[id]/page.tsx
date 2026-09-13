@@ -115,6 +115,11 @@ export default async function ClientVideoDetailPage({
               </>
             )}
           </p>
+          {video.batchLabel && (
+            <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-violet-300">
+              Batch · {video.batchLabel}
+            </p>
+          )}
         </div>
 
         {link && (
@@ -128,8 +133,8 @@ export default async function ClientVideoDetailPage({
           </a>
         )}
 
-        {video.status === "READY_FOR_REVIEW" && <ReviewActions videoId={video.id} />}
-        {video.projectId !== null && (
+        {video.canReview && video.status === "READY_FOR_REVIEW" && <ReviewActions videoId={video.id} />}
+        {video.canSetPriority && video.projectId !== null && (
           <PriorityToggle
             videoId={video.id}
             isPriority={video.isPriority}

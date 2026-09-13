@@ -6,8 +6,11 @@ import {
   assignOverlapLanes,
   distinctFilterOptions,
   filterSessionTimelineItems,
+  monthDayKeys,
+  monthKeyFor,
   rawDurationSeconds,
   sessionsByDayKey,
+  shiftMonthKey,
   wallClockDurationSeconds,
 } from "./timeline.ts";
 
@@ -252,4 +255,13 @@ test("sessionsByDayKey: buckets a session by its own startedAt local day, sorted
   const key = [...map.keys()][0];
   assert.equal(map.get(key).length, 2);
   assert.deepEqual(map.get(key).map((s) => s.id), [early.id, late.id]);
+});
+
+test("month range helpers preserve calendar boundaries, including leap years", () => {
+  assert.equal(monthKeyFor("2026-09-11"), "2026-09");
+  assert.equal(shiftMonthKey("2026-01", -1), "2025-12");
+  assert.equal(shiftMonthKey("2026-12", 1), "2027-01");
+  assert.equal(monthDayKeys("2026-02").length, 28);
+  assert.equal(monthDayKeys("2028-02").at(-1), "2028-02-29");
+  assert.deepEqual(monthDayKeys("invalid"), []);
 });

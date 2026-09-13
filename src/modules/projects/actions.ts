@@ -33,6 +33,7 @@ export async function getProjectWorkspace(projectId: number) {
       id: projects.id,
       clientId: projects.clientId,
       clientName: clients.name,
+      clientDefaultCoverUrl: clients.defaultCoverUrl,
       // Sprint 3 P1: cover fallback chain tier 3 -- see
       // modules/media/core.ts.
       clientAvatarUrl: clients.instagramProfilePictureUrl,
@@ -41,6 +42,7 @@ export async function getProjectWorkspace(projectId: number) {
       deadline: projects.deadline,
       notes: projects.notes,
       coverUrl: projects.coverUrl,
+      visibleToClient: projects.visibleToClient,
       createdAt: projects.createdAt,
       updatedAt: projects.updatedAt,
     })
@@ -64,6 +66,7 @@ export async function getProjectWorkspace(projectId: number) {
       orientation: videoLogs.orientation,
       videoKind: videoLogs.videoKind,
       batchLabel: videoLogs.batchLabel,
+      visibleToClient: videoLogs.visibleToClient,
       // Solo-Operator Health round: needed so the page-level counts (and
       // any future caller) can filter through isDeliverableVideo --
       // see modules/productivity/core.ts.
@@ -143,6 +146,7 @@ export async function getProjectsOverview() {
       id: projects.id,
       clientId: projects.clientId,
       clientName: clients.name,
+      clientDefaultCoverUrl: clients.defaultCoverUrl,
       clientAvatarUrl: clients.instagramProfilePictureUrl,
       name: projects.name,
       status: projects.status,

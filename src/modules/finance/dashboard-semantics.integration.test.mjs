@@ -25,3 +25,17 @@ test("Dashboard labels the finance summary as economic history, never current ca
 test("the economic ledger card explicitly labels itself as all-time history, not an active-window figure", () => {
   assert.match(ledgerCard, /all time history/iu);
 });
+
+// Sunday QA Patch — Bug 2 regression: "Faturado hoje" disappeared (or
+// silently read as $0) on a day with no recorded income. Verifies the
+// exact guard is still present: an empty todayIncome array renders "—",
+// never a fabricated zero, and the value comes from a length check on
+// real rows, not a falsy-number check that would misread a genuine $0.
+test("Faturado hoje renders an em dash on a day with no recorded income, never a fabricated zero", () => {
+  assert.match(dashboard, /label="Faturado hoje"/u);
+  assert.match(
+    dashboard,
+    /todayIncome\.length > 0[\s\S]{0,200}:\s*"—"/u,
+    "the empty-income fallback must be a length check on the real income rows, not `amount || 0` or similar",
+  );
+});

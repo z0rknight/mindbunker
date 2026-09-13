@@ -46,25 +46,31 @@ test("revision count is read-only everywhere in Productivity except Register Cor
   assert.match(operationalMemory, /Register Correction/u);
 });
 
-// Tuesday Patch Priority 2: the homogeneous 4-column card grid ("parece um
-// pouco poluído e sem hierarquia" in the original QA) was replaced with
-// client-grouped compact rows -- exception -> client -> project ->
-// metadata. Lifecycle counts (done/in-flight/planned) are no longer
-// spelled out per-card; they're collapsed into one derived next-action
-// line by modules/projects/core.ts's getProjectNextAction, and real
-// project-level exceptions surface via getProjectException. This test
-// asserts the NEW invariants and that the old per-card grid is gone,
-// rather than the old grid's own implementation details.
-test("Projects groups by client with derived exceptions instead of a homogeneous card grid", () => {
+// Operator Flow round: restore visual recognition without regressing the
+// truthful client/exception hierarchy. Cards remain grouped and attention-
+// sorted; their covers use project -> client default -> avatar fallback.
+test("Projects uses visual cards grouped by operational stage with client and exception context", () => {
   const projects = source("../../app/projects/page.tsx");
-  assert.match(projects, /groupProjectsByClient/u);
+  assert.match(projects, /groupProjectsForOverview/u);
+  assert.match(projects, /PROJECT_GROUPS/u);
   assert.match(projects, /getProjectException/u);
   assert.match(projects, /getProjectNextAction/u);
   assert.match(projects, /project\.doneVideos/u);
+  assert.match(projects, /ProjectCover/u);
+  assert.match(projects, /project\.coverUrl,[\s\S]*project\.clientDefaultCoverUrl,[\s\S]*project\.clientAvatarUrl/u);
   assert.doesNotMatch(projects, /2xl:grid-cols-4/u);
-  assert.doesNotMatch(projects, /xl:grid-cols-3/u);
   assert.doesNotMatch(projects, /PROJECT #/u);
   assert.doesNotMatch(projects, /min-h-12 w-full items-center justify-center rounded-xl bg-cyan-700/u);
+});
+
+test("Dashboard and Productivity put operator capture before secondary evidence", () => {
+  const dashboard = source("../../app/page.tsx");
+  const productivity = source("../../app/productivity/page.tsx");
+  assert.ok(dashboard.indexOf("dashboard-quick-actions") < dashboard.indexOf("dashboard-attention"));
+  assert.ok(productivity.indexOf("Quick actions") < productivity.indexOf("<NeedsAttentionSection"));
+  assert.match(dashboard, /Historical context/u);
+  assert.match(dashboard, /baseline evidence, not live state/u);
+  assert.doesNotMatch(dashboard, /<details open/u);
 });
 
 test("CRM puts the operational dossier before audit evidence and keeps custody reachable", () => {

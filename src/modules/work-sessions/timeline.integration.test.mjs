@@ -84,13 +84,33 @@ function utcBoundForDateKey(dateKey, offsetDays) {
 }
 
 function queryRange(db, range) {
-  const anchorKey = range.kind === "day" ? range.dayKey : range.mondayKey;
+  const anchorKey = range.kind === "day"
+    ? range.dayKey
+    : range.kind === "week"
+      ? range.mondayKey
+      : range.kind === "month"
+        ? `${range.monthKey}-01`
+        : range.startKey;
+  const monthDays = range.kind === "month"
+    ? new Date(Date.UTC(Number(range.monthKey.slice(0, 4)), Number(range.monthKey.slice(5, 7)), 0)).getUTCDate()
+    : 0;
   const padStart = utcBoundForDateKey(anchorKey, -2);
-  const padEnd = utcBoundForDateKey(anchorKey, range.kind === "day" ? 3 : 9);
+  const padEnd = range.kind === "span"
+    ? utcBoundForDateKey(range.endKey, 3)
+    : utcBoundForDateKey(anchorKey, range.kind === "day" ? 3 : range.kind === "week" ? 9 : monthDays + 2);
   const rows = db.prepare(SESSION_TIMELINE_SQL).all(padStart, padEnd).map(plain);
   const startedAtIso = (row) => new Date(row.started_at * 1000).toISOString();
   if (range.kind === "day") {
     return rows.filter((row) => dayKeyFor(startedAtIso(row)) === range.dayKey);
+  }
+  if (range.kind === "month") {
+    return rows.filter((row) => dayKeyFor(startedAtIso(row)).startsWith(`${range.monthKey}-`));
+  }
+  if (range.kind === "span") {
+    return rows.filter((row) => {
+      const key = dayKeyFor(startedAtIso(row));
+      return key >= range.startKey && key <= range.endKey;
+    });
   }
   return rows.filter((row) => mondayOfWeek(dayKeyFor(startedAtIso(row))) === range.mondayKey);
 }
@@ -162,6 +182,31 @@ test("week boundary: a Sunday session does not leak into the following week's qu
   const nextWeek = queryRange(db, { kind: "week", mondayKey: "2026-09-14" });
   assert.equal(thisWeek.length, 1);
   assert.equal(nextWeek.length, 0);
+  db.close();
+});
+
+test("month boundary follows America/Sao_Paulo and excludes adjacent local months", () => {
+  const db = createFixtureDatabase();
+  // Sep 30 23:30 local = Oct 1 02:30 UTC: still belongs to September.
+  insertSession(db, { videoId: 100, startedAt: unixSeconds("2026-10-01T02:30:00.000Z"), endedAt: unixSeconds("2026-10-01T02:50:00.000Z") });
+  // Oct 1 00:30 local = Oct 1 03:30 UTC: belongs to October.
+  insertSession(db, { videoId: 100, startedAt: unixSeconds("2026-10-01T03:30:00.000Z"), endedAt: unixSeconds("2026-10-01T04:00:00.000Z") });
+
+  assert.equal(queryRange(db, { kind: "month", monthKey: "2026-09" }).length, 1);
+  assert.equal(queryRange(db, { kind: "month", monthKey: "2026-10" }).length, 1);
+  db.close();
+});
+
+test("multi-day span includes both local endpoints and excludes adjacent days", () => {
+  const db = createFixtureDatabase();
+  insertSession(db, { videoId: 100, startedAt: unixSeconds("2026-09-05T15:00:00.000Z"), endedAt: unixSeconds("2026-09-05T16:00:00.000Z") });
+  insertSession(db, { videoId: 100, startedAt: unixSeconds("2026-09-06T15:00:00.000Z"), endedAt: unixSeconds("2026-09-06T16:00:00.000Z") });
+  insertSession(db, { videoId: 100, startedAt: unixSeconds("2026-09-12T15:00:00.000Z"), endedAt: unixSeconds("2026-09-12T16:00:00.000Z") });
+  insertSession(db, { videoId: 100, startedAt: unixSeconds("2026-09-13T15:00:00.000Z"), endedAt: unixSeconds("2026-09-13T16:00:00.000Z") });
+
+  const rows = queryRange(db, { kind: "span", startKey: "2026-09-06", endKey: "2026-09-12" });
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((row) => dayKeyFor(new Date(row.started_at * 1000).toISOString())), ["2026-09-06", "2026-09-12"]);
   db.close();
 });
 

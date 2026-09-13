@@ -22,6 +22,7 @@ export type ProjectOverviewItem = {
   plannedVideos: number;
   // Sprint 3 P1 (Project + Video visual covers).
   coverUrl: string | null;
+  clientDefaultCoverUrl: string | null;
   clientAvatarUrl: string | null;
   // MICRO PATCH §2 (Last Active): ISO instant of the most recent closed,
   // attributed Work Session for this project, unbounded lookback. null
@@ -135,6 +136,7 @@ export function getProjectException(
 export type ClientProjectGroup = {
   clientId: number;
   clientName: string;
+  clientDefaultCoverUrl: string | null;
   clientAvatarUrl: string | null;
   hasException: boolean;
   projects: ProjectOverviewItem[];
@@ -169,6 +171,7 @@ export function groupProjectsByClient(
       byClient.set(project.clientId, {
         clientId: project.clientId,
         clientName: project.clientName,
+        clientDefaultCoverUrl: project.clientDefaultCoverUrl,
         clientAvatarUrl: project.clientAvatarUrl,
         hasException: false,
         projects: [project],

@@ -33,6 +33,8 @@ import { CommercialTermsPanel } from "./CommercialTermsPanel";
 import { ProjectReferencesPanel } from "./ProjectReferencesPanel";
 import { CoverUploadField } from "@/components/media/CoverUploadField";
 import { OperationalMemoryPanel } from "./OperationalMemoryPanel";
+import { PortalControl } from "@/components/client-portal/PortalControl";
+import { setVideoClientVisibility } from "@/modules/client-portal/admin-actions";
 
 type VideoEditorProps = {
   video: {
@@ -54,6 +56,7 @@ type VideoEditorProps = {
     videoKind: VideoKind;
     status: VideoStatus;
     revisionsCount: number;
+    visibleToClient: boolean;
   };
   clients: Array<{ id: number; name: string }>;
   projects: Array<{
@@ -318,6 +321,13 @@ export function VideoEditor({
                     </div>
                   </div>
                 </section>
+
+                <PortalControl
+                  label="Client portal"
+                  description="Expose this video only when its Project is also visible"
+                  enabled={video.visibleToClient}
+                  onChange={(visible) => setVideoClientVisibility(video.id, visible)}
+                />
 
                 <WorkSessionPanel
                   key={`${video.id}-${initialWorkSessionState.summary.closedSeconds}-${initialWorkSessionState.summary.sessionCount}-${initialWorkSessionState.openSession?.id ?? "idle"}`}
