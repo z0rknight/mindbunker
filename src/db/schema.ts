@@ -793,6 +793,63 @@ export const productionOrders = sqliteTable(
   ],
 );
 
+// Dave Monday Release -- the smallest solo-operator primitive for "I owe
+// Emmanuel money right now and here's how to pay it." Checked first
+// against every existing commercial table (transactions, billing_evidence,
+// quotes, commercial_contracts) -- none fit: transactions is realized cash
+// movement (this is a request, not yet a movement), billing_evidence is a
+// period's already-earned amount (this can exist before/independent of
+// any period), quotes are immutable-after-creation FIXED-price approvals
+// tied to a specific video/scope (this is a running-account request, not
+// scoped to one deliverable), commercial_contracts is the relationship
+// itself, not a specific ask. This table stores only the operator-stated
+// ask and how to pay it -- NEVER a confirmation that payment happened.
+// PAID is an operator-set status (the client clicking the Wise link marks
+// nothing), and the real, canonical proof that money moved remains
+// exactly where it already lives: `transactions`. This table's only job is
+// "what is currently being asked for, and where do I send it."
+export const PAYMENT_REQUEST_STATUSES = ["OPEN", "PAID", "CANCELLED"] as const;
+export type PaymentRequestStatus = (typeof PAYMENT_REQUEST_STATUSES)[number];
+
+export const paymentRequests = sqliteTable(
+  "payment_requests",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "restrict" }),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull(),
+    paymentUrl: text("payment_url").notNull(),
+    status: text("status", { enum: PAYMENT_REQUEST_STATUSES })
+      .notNull()
+      .default("OPEN"),
+    note: text("note"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("payment_requests_client_idx").on(table.clientId),
+    index("payment_requests_status_idx").on(table.status),
+    // At most one OPEN request per client -- the client-facing CTA shows
+    // "the" current ask; two simultaneous OPEN requests would make that
+    // ambiguous. Mirrors the existing work_sessions_one_open_idx pattern
+    // (a partial unique index, not an app-level-only promise).
+    uniqueIndex("payment_requests_one_open_per_client_idx")
+      .on(table.clientId)
+      .where(sql`${table.status} = 'OPEN'`),
+    check(
+      "payment_requests_status_check",
+      sql`${table.status} in ('OPEN', 'PAID', 'CANCELLED')`,
+    ),
+    check("payment_requests_amount_check", sql`${table.amountCents} > 0`),
+  ],
+);
+
 // Pre-Operation Reality Hardening §7: revisions AS HISTORICAL FACTS.
 // videoLogs.revisionsCount above is a mutable integer -- correcting it
 // (RevisionControls' "-" button) rewrites history in place, which is fine

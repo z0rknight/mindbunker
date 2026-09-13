@@ -264,3 +264,68 @@ test("explicit project/video visibility controls remove rows from both client pr
   assert.equal(dashboard.videoRows.some((row) => row.id === 201), false);
   assert.equal(dashboard.videoRows.some((row) => row.projectId === 11), false);
 });
+
+// Dave Monday Release: getClientDashboardView's server-side financial gate
+// on paymentRequest -- mirrors the exact ternary in data.ts (identical
+// pattern to the one already applied to `batches`).
+function selectOpenPaymentRequest(db, clientId) {
+  return db
+    .prepare(
+      `SELECT id, client_id as clientId, amount_cents as amountCents, currency,
+              payment_url as paymentUrl, status, note
+       FROM payment_requests WHERE client_id = ? AND status = 'OPEN' LIMIT 1`,
+    )
+    .get(clientId);
+}
+
+function gatedPaymentRequest(row, canSeeFinancials) {
+  if (!canSeeFinancials) return null;
+  if (!row || row.status !== "OPEN") return null;
+  return { amountCents: row.amountCents, currency: row.currency, paymentUrl: row.paymentUrl };
+}
+
+test("Dave-shaped fixture: portalCanSeeFinancials=true exposes the real OPEN payment request", () => {
+  const db = buildMigratedDb();
+  seedTarynShapedFixture(db);
+  db.exec(`
+    UPDATE clients SET name = 'Dave DeMink' WHERE id = 2;
+    INSERT INTO payment_requests (id, client_id, amount_cents, currency, payment_url, status)
+    VALUES (1, 2, 37266, 'USD', 'https://wise.com/pay/r/HO2YUO3U08AXDzo', 'OPEN');
+  `);
+
+  const row = selectOpenPaymentRequest(db, 2);
+  const view = gatedPaymentRequest(row, true);
+  assert.deepEqual(view, {
+    amountCents: 37266,
+    currency: "USD",
+    paymentUrl: "https://wise.com/pay/r/HO2YUO3U08AXDzo",
+  });
+  db.close();
+});
+
+test("portalCanSeeFinancials=false strips the payment request server-side, indistinguishable from no request at all", () => {
+  const db = buildMigratedDb();
+  seedTarynShapedFixture(db);
+  db.exec(`
+    INSERT INTO payment_requests (id, client_id, amount_cents, currency, payment_url, status)
+    VALUES (1, 2, 37266, 'USD', 'https://wise.com/pay/r/HO2YUO3U08AXDzo', 'OPEN');
+  `);
+
+  const row = selectOpenPaymentRequest(db, 2);
+  const view = gatedPaymentRequest(row, false);
+  assert.equal(view, null);
+  db.close();
+});
+
+test("payment request client isolation: another client's OPEN request never resolves for this client", () => {
+  const db = buildMigratedDb();
+  seedTarynShapedFixture(db);
+  db.exec(`
+    INSERT INTO payment_requests (id, client_id, amount_cents, currency, payment_url, status)
+    VALUES (1, 1, 10000, 'USD', 'https://wise.com/pay/r/taryn', 'OPEN');
+  `);
+
+  const daveRow = selectOpenPaymentRequest(db, 2);
+  assert.equal(daveRow, undefined);
+  db.close();
+});

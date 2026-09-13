@@ -8,6 +8,7 @@ import {
   buildClientVideoDetail,
   clientVideoStatusLabel,
   filterClientDashboardVideos,
+  searchClientDashboardVideos,
   toCard,
 } from "./core.ts";
 
@@ -274,6 +275,7 @@ function video(overrides) {
     coverUrl: null,
     projectCoverUrl: null,
     clientDefaultCoverUrl: null,
+    clientLogoUrl: null,
     orientation: null,
     contentType: null,
     isPriority: false,
@@ -541,6 +543,61 @@ test("no cover anywhere in the chain stays null, not a fabricated URL", () => {
   assert.equal(result.currentWork[0].coverUrl, null);
 });
 
+// Dave Monday Release §7: tier 4 of the fallback chain -- the client's
+// own logo/avatar, surfaced separately from `coverUrl` (never folded into
+// the same crop-to-fill treatment -- see BrandedCoverFallback for why).
+test("clientLogoUrl is surfaced only when no real cover exists at tiers 1-3", () => {
+  const result = buildClientDashboard(
+    2,
+    dashboardProjects,
+    [
+      video({
+        id: 1,
+        coverUrl: null,
+        projectCoverUrl: null,
+        clientDefaultCoverUrl: null,
+        clientLogoUrl: "https://cdn.example.com/dave-logo.jpg",
+      }),
+    ],
+    [],
+    NOW,
+  );
+  assert.equal(result.currentWork[0].coverUrl, null);
+  assert.equal(result.currentWork[0].clientLogoUrl, "https://cdn.example.com/dave-logo.jpg");
+});
+
+test("clientLogoUrl stays null when a real cover exists -- never rendered alongside a real cover", () => {
+  const result = buildClientDashboard(
+    2,
+    dashboardProjects,
+    [
+      video({
+        id: 1,
+        coverUrl: null,
+        projectCoverUrl: null,
+        clientDefaultCoverUrl: "https://cdn.example.com/client-default.jpg",
+        clientLogoUrl: "https://cdn.example.com/dave-logo.jpg",
+      }),
+    ],
+    [],
+    NOW,
+  );
+  assert.equal(result.currentWork[0].coverUrl, "https://cdn.example.com/client-default.jpg");
+  assert.equal(result.currentWork[0].clientLogoUrl, null);
+});
+
+test("neither coverUrl nor clientLogoUrl is fabricated when nothing at all is configured", () => {
+  const result = buildClientDashboard(
+    2,
+    dashboardProjects,
+    [video({ id: 1, coverUrl: null, projectCoverUrl: null, clientDefaultCoverUrl: null, clientLogoUrl: null })],
+    [],
+    NOW,
+  );
+  assert.equal(result.currentWork[0].coverUrl, null);
+  assert.equal(result.currentWork[0].clientLogoUrl, null);
+});
+
 test("dashboard content filter stays inside the already client-scoped projection", () => {
   const result = buildClientDashboard(
     2,
@@ -704,4 +761,86 @@ test("toCard never leaks internal/financial fields onto the client-facing card",
   // passing because toCard returned an empty object.
   assert.equal(card.id, 1);
   assert.equal(card.reviewUrl, "https://frame.io/review/abc");
+});
+
+// Dave Monday Release §3/§4: searchClientDashboardVideos is now the one
+// search entry point (moved to the top of the dashboard). It is a pure
+// filter over an already-client-safe array -- structurally, it can never
+// return a row that wasn't already in its input, so "cannot return
+// hidden/cross-client data" is guaranteed by construction, not by this
+// function re-checking ownership. These tests prove the matching itself
+// is correct and that the result is always a subset of the input.
+function searchableCard(overrides) {
+  return {
+    id: 1,
+    title: "Untitled",
+    status: "IN_PROGRESS",
+    statusLabel: "In production",
+    projectId: 1,
+    projectName: "Mini Series",
+    contentType: null,
+    contentTypeLabel: null,
+    orientation: null,
+    coverUrl: null,
+    deliveryUrl: null,
+    reviewUrl: null,
+    publishedUrl: null,
+    batchLabel: null,
+    clientLogoUrl: null,
+    lastUpdated: null,
+    isPriority: false,
+    projectVideoCount: null,
+    ...overrides,
+  };
+}
+
+test("search matches by title", () => {
+  const videos = [
+    searchableCard({ id: 1, title: "3SEP - DaveDeMink - VSF__1" }),
+    searchableCard({ id: 2, title: "Landing Page" }),
+  ];
+  const result = searchClientDashboardVideos(videos, "vsf");
+  assert.deepEqual(result.map((v) => v.id), [1]);
+});
+
+test("search matches by project name", () => {
+  const videos = [
+    searchableCard({ id: 1, title: "A", projectName: "Meta Ads - September" }),
+    searchableCard({ id: 2, title: "B", projectName: "Short Form Videos" }),
+  ];
+  const result = searchClientDashboardVideos(videos, "meta ads");
+  assert.deepEqual(result.map((v) => v.id), [1]);
+});
+
+test("search matches by batch/Production-Order label -- Dave's real multi-batch case", () => {
+  const videos = [
+    searchableCard({ id: 1, title: "Reel 1", batchLabel: "Reels Batch September" }),
+    searchableCard({ id: 2, title: "Horizontal 1", batchLabel: "Horizontal Batch September" }),
+  ];
+  const result = searchClientDashboardVideos(videos, "reels");
+  assert.deepEqual(result.map((v) => v.id), [1]);
+});
+
+test("an empty query returns every video, never fewer than the input", () => {
+  const videos = [searchableCard({ id: 1 }), searchableCard({ id: 2 })];
+  assert.equal(searchClientDashboardVideos(videos, "").length, 2);
+  assert.equal(searchClientDashboardVideos(videos, "   ").length, 2);
+});
+
+test("search results are always a subset of the input -- structurally cannot introduce a new row", () => {
+  const videos = [
+    searchableCard({ id: 1, title: "Dave video" }),
+    searchableCard({ id: 2, title: "Other video" }),
+  ];
+  const result = searchClientDashboardVideos(videos, "dave");
+  for (const match of result) {
+    assert.ok(videos.some((v) => v.id === match.id), "every result must come from the input array");
+  }
+});
+
+test("search is case-insensitive and matches substrings, not just whole words", () => {
+  const videos = [searchableCard({ id: 1, title: "3SEP-DAVEDEMINK-HSF__2" })];
+  assert.equal(searchClientDashboardVideos(videos, "davedemink").length, 1);
+  assert.equal(searchClientDashboardVideos(videos, "DAVEDEMINK").length, 1);
+  assert.equal(searchClientDashboardVideos(videos, "nonexistent").length, 0);
 });

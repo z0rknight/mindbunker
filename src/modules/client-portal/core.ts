@@ -212,6 +212,11 @@ export type ClientDashboardVideoRow = {
   // Sprint 3 P1: cover fallback tier 2 -- see resolveCoverUrl below.
   projectCoverUrl: string | null;
   clientDefaultCoverUrl: string | null;
+  // Dave Monday Release: tier 4 of the fallback chain -- see toCard's own
+  // updated comment on why this is now included (superseding the earlier
+  // "deliberately not tier 3" decision, which rejected a *naive* stretched-
+  // avatar rendering, not a branded one).
+  clientLogoUrl: string | null;
   orientation: VideoOrientation | null;
   contentType: VideoContentType | null;
   // Lunch Reality Patch P1 §7: client-settable "priority now" video.
@@ -253,6 +258,10 @@ export type ClientDashboardVideoCard = {
   publishedUrl: string | null;
   batchLabel: string | null;
   lastUpdated: string | null;
+  // Dave Monday Release: rendered only when coverUrl is null -- the
+  // branded fallback treatment (centered logo on a dark card, never
+  // stretched), one tier before the plain generic RMEDIA placeholder.
+  clientLogoUrl: string | null;
   // Lunch Reality Patch P1 §7: client-settable "priority now" video.
   isPriority: boolean;
   // Quick Morning Reality Patch (26 Aug 2026) §4: how many videos this
@@ -300,14 +309,20 @@ export function toCard(
   const deliveryUrl = validateDeliveryUrl(video.deliveryUrl);
   const reviewUrl = validateDeliveryUrl(video.reviewUrl);
   const publishedUrl = validateDeliveryUrl(video.publishedUrl);
-  // Sprint 3 P1 cover fallback chain, tier 2 only (Video -> Project): the
-  // Client's own avatar is deliberately not tier 3 here -- a client
-  // viewing their own portal doesn't need their own avatar as a video
-  // placeholder; VideoCard's existing "No preview yet" state already
-  // covers the empty case cleanly.
-  // Client Vault Cover Bug fix (25 Aug 2026): see the identical fix and
-  // full explanation in buildClientPortalProjects above -- same wrong
-  // validator, same silent-null failure mode, same fix.
+  // Sprint 3 P1 cover fallback chain, tiers 1-3 (Video -> Project ->
+  // Client default cover). Client Vault Cover Bug fix (25 Aug 2026): see
+  // the identical fix and full explanation in buildClientPortalProjects
+  // above -- same wrong validator, same silent-null failure mode, same fix.
+  //
+  // Dave Monday Release: tier 4 (the client's own logo/avatar) is
+  // deliberately NOT folded into this same resolveCoverUrl chain, and is
+  // exposed separately below as clientLogoUrl instead -- it needs a
+  // different rendering treatment (centered/contained on a branded
+  // background, never cropped to fill a 16:9/9:16 frame the way a real
+  // cover legitimately can be). This supersedes the earlier "deliberately
+  // not tier 3" decision on this exact line, which was rejecting a naive
+  // stretched-avatar-as-cover rendering -- not a branded one, which is
+  // what VideoCard now does when clientLogoUrl is the only thing left.
   const coverUrl = validateCoverUrl(
     resolveCoverUrl(
       video.coverUrl,
@@ -319,6 +334,11 @@ export function toCard(
   // Same fix as buildClientPortalProjects above: check the resolved value,
   // not just .success (which is also true when there's simply no URL).
   const resolvedDeliveryUrl = deliveryUrl.success ? deliveryUrl.value : null;
+  // Only ever surfaced when there is no real cover at tiers 1-3 -- see
+  // VideoCard, which renders BrandedCoverFallback instead of the plain
+  // "No preview yet" placeholder exactly when this is non-null.
+  const hasRealCover = coverUrl.success && coverUrl.value !== null;
+  const clientLogoUrl = hasRealCover ? null : validateCoverUrl(video.clientLogoUrl);
   return {
     id: video.id,
     title: video.title?.trim() || `Video ${video.date}`,
@@ -336,6 +356,7 @@ export function toCard(
     reviewUrl: reviewUrl.success ? reviewUrl.value : null,
     publishedUrl: publishedUrl.success ? publishedUrl.value : null,
     batchLabel: video.batchLabel?.trim() || null,
+    clientLogoUrl: clientLogoUrl?.success ? clientLogoUrl.value : null,
     lastUpdated:
       updated instanceof Date && !Number.isNaN(updated.getTime())
         ? updated.toISOString()
@@ -497,12 +518,15 @@ export function filterClientDashboardVideos(
 
 // Client Portal Gateway round: instant text search over the video library.
 // Deliberately searches only the same client-safe fields already rendered
-// on the card (title, project name) -- never internal notes, which never
-// reach this type in the first place (ClientDashboardVideoCard has no
-// notes field), so there is no separate "don't leak notes" check needed
-// here beyond the type itself. Case-insensitive substring match, not a
-// fuzzy/ranked search -- with realistic per-client volumes (dozens, not
-// tens of thousands) a plain substring filter is instant and predictable.
+// on the card (title, project name, batch/Production-Order label) -- never
+// internal notes, which never reach this type in the first place
+// (ClientDashboardVideoCard has no notes field), so there is no separate
+// "don't leak notes" check needed here beyond the type itself. Case-
+// insensitive substring match, not a fuzzy/ranked search -- with realistic
+// per-client volumes (dozens, not tens of thousands) a plain substring
+// filter is instant and predictable. Dave Monday Release: batchLabel added
+// to the haystack -- a client with multiple batches (horizontal, reels,
+// thumbnails) needs to find "the reels batch," not just a single video.
 export function searchClientDashboardVideos<T extends ClientDashboardVideoCard>(
   videos: readonly T[],
   query: string,
@@ -510,7 +534,7 @@ export function searchClientDashboardVideos<T extends ClientDashboardVideoCard>(
   const needle = query.trim().toLowerCase();
   if (!needle) return [...videos];
   return videos.filter((video) => {
-    const haystack = `${video.title} ${video.projectName ?? ""}`.toLowerCase();
+    const haystack = `${video.title} ${video.projectName ?? ""} ${video.batchLabel ?? ""}`.toLowerCase();
     return haystack.includes(needle);
   });
 }

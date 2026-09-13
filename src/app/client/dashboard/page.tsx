@@ -3,6 +3,8 @@ import Link from "next/link";
 import { requireClientAuth } from "@/lib/client-portal-session";
 import { getClientBillingSummary, getClientDashboardView } from "@/modules/client-portal/data";
 import { BillingSummary } from "./BillingSummary";
+import { CurrentAccount } from "./CurrentAccount";
+import { DashboardSearch } from "./DashboardSearch";
 import { LogoutButton } from "./LogoutButton";
 import { StatTile } from "./StatTile";
 import { VideoCard } from "./VideoCard";
@@ -64,6 +66,10 @@ export default async function ClientDashboardPage() {
       </header>
 
       <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6">
+        <CurrentAccount request={view.paymentRequest} />
+
+        {hasAnyVideos && <DashboardSearch videos={view.allVideos} allowPriority={view.permissions.canSetPriority} />}
+
         {activeBatch && (
           <section className="pixel-frame pixel-frame-client rounded-2xl border border-emerald-500/30 bg-emerald-950/10 p-4 sm:p-5" aria-labelledby="current-batch">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

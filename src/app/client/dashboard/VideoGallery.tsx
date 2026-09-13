@@ -8,13 +8,18 @@ import {
 } from "@/modules/productivity/config";
 import {
   filterClientDashboardVideos,
-  searchClientDashboardVideos,
   type ClientDashboardVideoCard,
 } from "@/modules/client-portal/core";
 import { VideoCard } from "./VideoCard";
 
 type FilterValue = "all" | VideoContentType;
 
+// Dave Monday Release: this gallery's own free-text search was removed --
+// DashboardSearch (rendered near the top of the page) is now the one
+// search entry point, per direct operator feedback ("the search engine is
+// too low"). This component keeps the content-type filter chips (a
+// different, complementary job: browsing everything of one kind, not
+// finding one specific thing).
 export function VideoGallery({
   videos,
   allowReview = true,
@@ -25,33 +30,19 @@ export function VideoGallery({
   allowPriority?: boolean;
 }) {
   const [filter, setFilter] = useState<FilterValue>("all");
-  const [query, setQuery] = useState("");
   const filteredVideos = useMemo(
-    () => searchClientDashboardVideos(filterClientDashboardVideos(videos, filter), query),
-    [filter, query, videos],
+    () => filterClientDashboardVideos(videos, filter),
+    [filter, videos],
   );
 
   return (
     <section aria-labelledby="video-library-title">
       <div className="mb-3 flex flex-col gap-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 id="video-library-title" className="text-sm font-black uppercase tracking-widest text-zinc-400">
-              Video library
-            </h2>
-            <p className="mt-1 text-xs text-zinc-600">Find any video by title or project.</p>
-          </div>
-          <label className="relative block w-full sm:w-72">
-            <span className="sr-only">Search videos</span>
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search videos..."
-              autoComplete="off"
-              className="min-h-11 w-full rounded-full border border-zinc-800 bg-zinc-900 px-4 text-sm text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none"
-            />
-          </label>
+        <div>
+          <h2 id="video-library-title" className="text-sm font-black uppercase tracking-widest text-zinc-400">
+            Video library
+          </h2>
+          <p className="mt-1 text-xs text-zinc-600">Browse everything, or filter by type.</p>
         </div>
         <div className="flex max-w-full gap-2 overflow-x-auto pb-1" aria-label="Filter videos by content type">
           <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>All</FilterButton>
@@ -80,7 +71,7 @@ export function VideoGallery({
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/30 px-4 py-7 text-center text-sm text-zinc-600">
-          {query.trim() ? "No videos match your search." : "No videos in this category yet."}
+          No videos in this category yet.
         </div>
       )}
     </section>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { VideoStatus } from "@/modules/productivity/config";
 import { CoverImage } from "./CoverImage";
+import { BrandedCoverFallback } from "./BrandedCoverFallback";
 import { ReviewActions } from "./ReviewActions";
 import { PriorityToggle } from "./PriorityToggle";
 
@@ -18,6 +19,7 @@ type CardData = {
   reviewUrl: string | null;
   publishedUrl: string | null;
   batchLabel: string | null;
+  clientLogoUrl: string | null;
   lastUpdated: string | null;
   isPriority: boolean;
   projectVideoCount: number | null;
@@ -88,6 +90,8 @@ export function VideoCard({
       >
         {video.coverUrl ? (
           <CoverImage src={video.coverUrl} />
+        ) : video.clientLogoUrl ? (
+          <BrandedCoverFallback logoUrl={video.clientLogoUrl} />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-zinc-900 to-zinc-950 text-zinc-700">
             <span className="text-2xl" aria-hidden="true">🎬</span>

@@ -26,6 +26,8 @@ import {
 } from "./core";
 import { getApprovedQuoteForVideo } from "@/modules/quotes/data";
 import { buildClientQuoteSummary } from "@/modules/quotes/core";
+import { getOpenPaymentRequestForClient } from "@/modules/payment-requests/data";
+import { toClientPaymentRequestView, type ClientPaymentRequestView } from "@/modules/payment-requests/core";
 
 // RMEDIA MINDBUNKER Solo-Operator Health round: a LET'S COOK operational
 // container (isOperationalContainer=true) or a cancelled Production Order
@@ -145,6 +147,12 @@ export type ClientDashboardView =
   | ({
       status: "active";
       clientName: string;
+      // Dave Monday Release: null whenever there is no OPEN request, OR
+      // whenever portalCanSeeFinancials is false -- both cases render
+      // identically (no Current Account section), which is exactly right:
+      // a client with financials off must not be able to tell a hidden
+      // request apart from no request at all.
+      paymentRequest: ClientPaymentRequestView;
       permissions: {
         canSeeFinancials: boolean;
         canReview: boolean;
@@ -266,6 +274,7 @@ export async function getClientDashboardView(
       id: clients.id,
       name: clients.name,
       defaultCoverUrl: clients.defaultCoverUrl,
+      instagramProfilePictureUrl: clients.instagramProfilePictureUrl,
       portalCanSeeFinancials: clients.portalCanSeeFinancials,
       portalCanReview: clients.portalCanReview,
       portalCanSetPriority: clients.portalCanSetPriority,
@@ -277,7 +286,7 @@ export async function getClientDashboardView(
     return { status: "unavailable" };
   }
 
-  const [projectRows, videoRows, completionEventRows, batches] = await Promise.all([
+  const [projectRows, videoRows, completionEventRows, batches, paymentRequestRow] = await Promise.all([
     db
       .select({
         id: projects.id,
@@ -342,11 +351,19 @@ export async function getClientDashboardView(
       .orderBy(desc(crmEvents.createdAt))
       .limit(100),
     getClientBatchViews(authenticatedClientId),
+    // Dave Monday Release: fetched unconditionally (cheap, indexed,
+    // client-scoped), but gated to null below when portalCanSeeFinancials
+    // is false -- server-side, not left to the page's render logic. See
+    // the same hardening already applied to `batches` a few lines down.
+    getOpenPaymentRequestForClient(authenticatedClientId),
   ]);
 
   return {
     status: "active",
     clientName: clientRow[0].name,
+    paymentRequest: clientRow[0].portalCanSeeFinancials
+      ? toClientPaymentRequestView(paymentRequestRow)
+      : null,
     permissions: {
       canSeeFinancials: clientRow[0].portalCanSeeFinancials,
       canReview: clientRow[0].portalCanReview,
@@ -368,6 +385,7 @@ export async function getClientDashboardView(
       videoRows.map((video) => ({
         ...video,
         clientDefaultCoverUrl: clientRow[0].defaultCoverUrl,
+        clientLogoUrl: clientRow[0].instagramProfilePictureUrl,
       })),
       completionEventRows,
       new Date(),
@@ -399,6 +417,7 @@ export async function getClientVideoDetailView(
       id: clients.id,
       name: clients.name,
       defaultCoverUrl: clients.defaultCoverUrl,
+      instagramProfilePictureUrl: clients.instagramProfilePictureUrl,
       portalCanReview: clients.portalCanReview,
       portalCanSetPriority: clients.portalCanSetPriority,
     })
@@ -444,7 +463,11 @@ export async function getClientVideoDetailView(
     )
     .limit(1);
   const video = rows[0]
-    ? { ...rows[0], clientDefaultCoverUrl: clientRow[0].defaultCoverUrl }
+    ? {
+        ...rows[0],
+        clientDefaultCoverUrl: clientRow[0].defaultCoverUrl,
+        clientLogoUrl: clientRow[0].instagramProfilePictureUrl,
+      }
     : null;
   if (!video) {
     return { status: "unavailable" };

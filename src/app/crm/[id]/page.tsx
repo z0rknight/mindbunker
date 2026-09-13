@@ -18,6 +18,7 @@ import { computeClientCommercialValue } from "@/modules/quotes/core";
 import { ClientCommercialValuePanel } from "./ClientCommercialValuePanel";
 import { getClientCustody } from "@/modules/custody/data";
 import { ChainOfCustodyPanel } from "@/components/custody/ChainOfCustodyPanel";
+import { getPaymentRequestsForClient } from "@/modules/payment-requests/data";
 import { getRateEquivalentsForPeriod } from "@/modules/finance/actions";
 import { mondayOfWeek } from "@/modules/work-sessions/core";
 import { todayISO } from "@/utils/date";
@@ -54,7 +55,7 @@ export default async function ClientDetailPage({
     notFound();
   }
   const today = todayISO();
-  const [workspace, bookingConfiguration, projects, instagramStatus, clientIntelligence, quotes, custody, weekEstimates] =
+  const [workspace, bookingConfiguration, projects, instagramStatus, clientIntelligence, quotes, custody, weekEstimates, paymentRequests] =
     await Promise.all([
       getAdminGatewayWorkspace(clientId),
       getAdminBookingConfiguration(),
@@ -69,6 +70,7 @@ export default async function ClientDetailPage({
       // War Room calculation (getRateEquivalentsForPeriod), never a
       // second monetary computation; Finance stays the canonical owner.
       getRateEquivalentsForPeriod(mondayOfWeek(today), today),
+      getPaymentRequestsForClient(clientId),
     ]);
   const weekEstimateForClient = weekEstimates.find((row) => row.clientId === clientId) ?? null;
   // Client Service Reality Patch §6/§8 -- Quote rows carry Date | null
@@ -277,6 +279,7 @@ export default async function ClientDetailPage({
         events={workspace.events}
         projects={projects}
         instagramImportConfigured={instagramStatus.configured}
+        paymentRequests={paymentRequests}
         initialTab={requestedTab === "projects" ? "projects" : undefined}
         initialProjectCreation={shouldCreateProject}
         projectReturnTo={projectReturnTo}

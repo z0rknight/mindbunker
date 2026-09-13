@@ -9,6 +9,7 @@ import { InstagramProfileCard } from "./InstagramProfileCard";
 import { CoverUploadField } from "@/components/media/CoverUploadField";
 import { resolveCoverUrl } from "@/modules/media/core";
 import { PortalControl } from "@/components/client-portal/PortalControl";
+import { PaymentRequestPanel } from "@/components/client-portal/PaymentRequestPanel";
 import { setClientPortalCapability } from "@/modules/client-portal/admin-actions";
 
 interface ClientTabsProps {
@@ -57,6 +58,15 @@ interface ClientTabsProps {
   }>;
   projects: ClientProjectView[];
   instagramImportConfigured: boolean;
+  paymentRequests: Array<{
+    id: number;
+    clientId: number;
+    amountCents: number;
+    currency: string;
+    paymentUrl: string;
+    status: "OPEN" | "PAID" | "CANCELLED";
+    note: string | null;
+  }>;
   initialTab?: Tab;
   initialProjectCreation?: boolean;
   projectReturnTo?: string;
@@ -97,6 +107,7 @@ export function ClientTabs({
   events,
   projects,
   instagramImportConfigured,
+  paymentRequests,
   initialTab,
   initialProjectCreation,
   projectReturnTo,
@@ -274,6 +285,8 @@ export function ClientTabs({
                 />
               </div>
             </section>
+
+            <PaymentRequestPanel clientId={client.id} requests={paymentRequests} />
 
             {briefing && (
               <div>
