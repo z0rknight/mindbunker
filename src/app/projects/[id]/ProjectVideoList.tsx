@@ -7,6 +7,7 @@ import { formatDate } from "@/utils/date";
 import { BulkEditVideosButton } from "./BulkEditVideosButton";
 import type { VideoStatus } from "@/modules/productivity/config";
 import { resolveCoverUrl } from "@/modules/media/core";
+import { videoWorkspaceHref } from "@/modules/productivity/core";
 
 type WorkspaceVideo = {
   id: number;
@@ -69,7 +70,7 @@ export function ProjectVideoList({
   clientName?: string;
 }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const returnTo = encodeURIComponent(`/projects/${projectId}`);
+  const returnTo = `/projects/${projectId}`;
 
   function toggle(id: number) {
     setSelected((current) => {
@@ -138,7 +139,7 @@ export function ProjectVideoList({
               )}
               clientName={clientName}
             />
-            <Link href={`/productivity?video=${video.id}&returnTo=${returnTo}`} className="min-w-0 flex-1">
+            <Link href={videoWorkspaceHref(video.id, returnTo)} className="min-w-0 flex-1">
               <p className="truncate font-black text-white">{video.title ?? `Video ${formatDate(video.date)}`}</p>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-600">
                 <span>{formatDate(video.date)} · {video.revisionsCount} revision{video.revisionsCount === 1 ? "" : "s"}</span>
@@ -155,7 +156,7 @@ export function ProjectVideoList({
               </div>
             </Link>
           </div>
-          <Link href={`/productivity?video=${video.id}&returnTo=${returnTo}`} className="flex shrink-0 items-center gap-3">
+          <Link href={videoWorkspaceHref(video.id, returnTo)} className="flex shrink-0 items-center gap-3">
             <VideoStatusBadge status={video.status} />
             <span className="text-sm font-black text-violet-300">Open video →</span>
           </Link>

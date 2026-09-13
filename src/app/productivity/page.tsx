@@ -12,7 +12,10 @@ import {
 } from "@/modules/productivity/actions";
 import {
   getVideoNextAction,
+  getVideoWorkspaceDisclosureState,
+  getVideoWorkspaceGroup,
   groupOperationalVideos,
+  selectVideoWorkspaceLogs,
   type ProductivityGroup,
 } from "@/modules/productivity/core";
 import { selectExecutionQueue, selectNextExecutable } from "@/modules/productivity/queue";
@@ -118,11 +121,13 @@ export default async function ProductivityPage({
       getSoonestOpenCommitmentByVideo(),
     ]);
   const attentionGroups = selectProductivityAttention(activeSignals);
-  const recentLogs = logs.slice(0, 50);
+  const recentLogs = selectVideoWorkspaceLogs(logs, initialVideoId);
   const groups = groupOperationalVideos(recentLogs, {
     today: todayISO(),
     openSessionVideoId: workSessionOverview.openSession?.videoId,
   });
+  const requestedWorkspaceGroup = getVideoWorkspaceGroup(groups, initialVideoId);
+  const workspaceDisclosure = getVideoWorkspaceDisclosureState(requestedWorkspaceGroup);
   const sessionSummaryByVideo = new Map(
     workSessionOverview.summaries.map((summary) => [summary.videoId, summary]),
   );
@@ -294,7 +299,7 @@ export default async function ProductivityPage({
       />
 
       <div className="space-y-4">
-        <details open={initialVideoId !== null} className="group rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4 sm:p-5">
+        <details open={workspaceDisclosure.operationalOpen} className="group rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4 sm:p-5">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-zinc-300">
             <span><span className="mr-2 inline-block transition group-open:rotate-90">▸</span>Detailed video workspaces</span>
             <span className="font-mono text-xs text-zinc-600">{groups.current.length + groups.attention.length + groups.planned.length}</span>
@@ -305,7 +310,7 @@ export default async function ProductivityPage({
             {renderSection("planned")}
           </div>
         </details>
-        <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4 sm:p-5">
+        <details open={workspaceDisclosure.completedOpen} className="group rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4 sm:p-5">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-zinc-400">
             <span><span className="mr-2 inline-block transition group-open:rotate-90">▸</span>Recent / completed archive</span>
             <span className="font-mono text-xs text-zinc-600">{groups.completed.length}</span>

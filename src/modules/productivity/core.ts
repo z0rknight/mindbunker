@@ -567,6 +567,60 @@ export type ProductivityGroups<T extends OperationalVideo> = Record<
   Array<OperationalVideoEntry<T>>
 >;
 
+type WorkspaceVideo = OperationalVideo & {
+  isOperationalContainer?: boolean;
+};
+
+// Workspace access is deliberately independent from execution-queue
+// eligibility. Keep the compact overview bounded, but always retain the
+// requested real video so an older DONE/delivered record can still open.
+// Operational containers belong to their Production Order, not the ordinary
+// video workspace. Cancelled rows retain their existing operator behavior.
+export function selectVideoWorkspaceLogs<T extends WorkspaceVideo>(
+  videos: readonly T[],
+  requestedVideoId: number | null,
+  limit = 50,
+): T[] {
+  const ordinaryVideos = videos.filter((video) => !video.isOperationalContainer);
+  const recentVideos = ordinaryVideos.slice(0, limit);
+  if (
+    requestedVideoId === null ||
+    recentVideos.some((video) => video.id === requestedVideoId)
+  ) {
+    return recentVideos;
+  }
+
+  const requestedVideo = ordinaryVideos.find(
+    (video) => video.id === requestedVideoId,
+  );
+  return requestedVideo ? [...recentVideos, requestedVideo] : recentVideos;
+}
+
+export function getVideoWorkspaceGroup<T extends OperationalVideo>(
+  groups: ProductivityGroups<T>,
+  requestedVideoId: number | null,
+): ProductivityGroup | null {
+  if (requestedVideoId === null) return null;
+  for (const group of ["current", "attention", "planned", "completed"] as const) {
+    if (groups[group].some((video) => video.id === requestedVideoId)) return group;
+  }
+  return null;
+}
+
+export function getVideoWorkspaceDisclosureState(
+  group: ProductivityGroup | null,
+) {
+  return {
+    operationalOpen: group !== null && group !== "completed",
+    completedOpen: group === "completed",
+  };
+}
+
+export function videoWorkspaceHref(videoId: number, returnTo?: string) {
+  const base = `/productivity?video=${videoId}`;
+  return returnTo ? `${base}&returnTo=${encodeURIComponent(returnTo)}` : base;
+}
+
 export function getVideoNextAction(status: VideoStatus) {
   const labels: Record<VideoStatus, string> = {
     PLANNED: "Start production",

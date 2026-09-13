@@ -7,6 +7,7 @@ import { useQuickCapture } from "@/components/quick-capture/QuickCaptureProvider
 import { PixelEmptyState, PixelIcon } from "@/components/ui/PixelVisuals";
 import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
 import { reorderExecutionQueueItem } from "@/modules/productivity/actions";
+import { videoWorkspaceHref } from "@/modules/productivity/core";
 import type { QueueEntry, QueueEligibleVideo, QueueMoveDirection } from "@/modules/productivity/queue";
 import { startWorkSession } from "@/modules/work-sessions/actions";
 import { DEFAULT_WORK_SESSION_ACTIVITY } from "@/modules/work-sessions/core";
@@ -114,7 +115,7 @@ function QueueTile({ item, isFirstExecutable, isActive, isFirst, isLast }: { ite
   function start() {
     startTransition(async () => {
       const result = await startWorkSession(item.id, DEFAULT_WORK_SESSION_ACTIVITY);
-      if (result.success) router.push(`/productivity?video=${item.id}`);
+      if (result.success) router.push(videoWorkspaceHref(item.id));
     });
   }
 
@@ -152,7 +153,7 @@ function QueueTile({ item, isFirstExecutable, isActive, isFirst, isLast }: { ite
         </div>
 
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <Link href={`/productivity?video=${item.id}`} className="flex min-h-10 items-center justify-center rounded-lg border border-zinc-700 px-2 text-center text-[11px] font-black text-zinc-200 hover:border-violet-500/60">Workspace</Link>
+          <Link href={videoWorkspaceHref(item.id)} className="flex min-h-10 items-center justify-center rounded-lg border border-zinc-700 px-2 text-center text-[11px] font-black text-zinc-200 hover:border-violet-500/60">Workspace</Link>
           {item.isExecutable && !isActive ? (
             <button type="button" disabled={isPending} onClick={start} className="min-h-10 rounded-lg bg-emerald-600 px-2 text-[11px] font-black text-white hover:bg-emerald-500 disabled:opacity-50">Start work</button>
           ) : (

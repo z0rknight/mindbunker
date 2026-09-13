@@ -5,6 +5,7 @@ import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
 import { formatDate } from "@/utils/date";
 import type { VideoStatus } from "@/modules/productivity/config";
 import { resolveCoverUrl } from "@/modules/media/core";
+import { videoWorkspaceHref } from "@/modules/productivity/core";
 import type { CommercialTerms } from "@/modules/quotes/actions";
 
 // Quick Morning Reality Patch (26 Aug 2026) §7: "make videos the comandas."
@@ -120,7 +121,7 @@ export function ProjectVideoCards({
   clientAvatarUrl?: string | null;
   clientName?: string;
 }) {
-  const returnTo = encodeURIComponent(`/projects/${projectId}`);
+  const returnTo = `/projects/${projectId}`;
 
   if (videos.length === 0) {
     return (
@@ -141,7 +142,7 @@ export function ProjectVideoCards({
           clientDefaultCoverUrl,
           clientAvatarUrl,
         );
-        const href = `/productivity?video=${video.id}&returnTo=${returnTo}`;
+        const href = videoWorkspaceHref(video.id, returnTo);
         return (
           <article
             key={video.id}

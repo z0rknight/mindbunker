@@ -5,15 +5,20 @@ import {
   completedVideoLogs,
   computeRevisionCount,
   getVideoNextAction,
+  getVideoWorkspaceDisclosureState,
+  getVideoWorkspaceGroup,
   getVideoMetadataChanges,
   groupOperationalVideos,
+  isDeliverableVideo,
   planVideoTransition,
+  selectVideoWorkspaceLogs,
   validateCoverUrl,
   validateVideoAssignment,
   validateVideoCreateInput,
   validateDeliveryUrl,
   validateVideoInput,
   validateVideoPriorityInput,
+  videoWorkspaceHref,
 } from "./core.ts";
 import { isVideoDirectlyFinishable } from "./config.ts";
 
@@ -66,6 +71,86 @@ test("active work is sorted first and lifecycle actions stay explicit", () => {
   assert.equal(
     getVideoNextAction("CHANGES_REQUESTED"),
     "Apply requested changes",
+  );
+});
+
+test("individual workspace access is independent from lifecycle and queue eligibility", () => {
+  const videos = [
+    { id: 1, status: "PLANNED" },
+    { id: 2, status: "IN_PROGRESS" },
+    { id: 3, status: "READY_FOR_REVIEW" },
+    { id: 4, status: "CHANGES_REQUESTED" },
+    { id: 5, status: "DONE", delivered: true },
+  ].map((video) => ({
+    ...video,
+    projectDeadline: null,
+    createdAt: "2026-09-13T12:00:00.000Z",
+    updatedAt: null,
+    isOperationalContainer: false,
+  }));
+
+  const groups = groupOperationalVideos(
+    selectVideoWorkspaceLogs(videos, 5),
+    { today: "2026-09-13" },
+  );
+
+  assert.equal(getVideoWorkspaceGroup(groups, 1), "planned");
+  assert.equal(getVideoWorkspaceGroup(groups, 2), "current");
+  assert.equal(getVideoWorkspaceGroup(groups, 3), "attention");
+  assert.equal(getVideoWorkspaceGroup(groups, 4), "attention");
+  assert.equal(getVideoWorkspaceGroup(groups, 5), "completed");
+  assert.equal(getVideoWorkspaceGroup(groups, 999), null);
+  assert.deepEqual(getVideoWorkspaceDisclosureState("current"), {
+    operationalOpen: true,
+    completedOpen: false,
+  });
+  assert.deepEqual(getVideoWorkspaceDisclosureState("completed"), {
+    operationalOpen: false,
+    completedOpen: true,
+  });
+});
+
+test("requested completed video remains renderable outside the recent window", () => {
+  const videos = Array.from({ length: 52 }, (_, index) => ({
+    id: index + 1,
+    status: index === 51 ? "DONE" : "PLANNED",
+    projectDeadline: null,
+    createdAt: null,
+    updatedAt: null,
+    isOperationalContainer: false,
+  }));
+
+  const selected = selectVideoWorkspaceLogs(videos, 52, 50);
+  assert.equal(selected.length, 51);
+  assert.equal(selected.at(-1).id, 52);
+});
+
+test("operational containers stay out of individual workspaces while cancelled behavior is unchanged", () => {
+  const container = {
+    id: 1,
+    status: "PLANNED",
+    projectDeadline: null,
+    createdAt: null,
+    updatedAt: null,
+    isOperationalContainer: true,
+  };
+  const cancelled = {
+    ...container,
+    id: 2,
+    isOperationalContainer: false,
+    cancelledAt: new Date(),
+  };
+
+  assert.deepEqual(selectVideoWorkspaceLogs([container, cancelled], 1), [cancelled]);
+  assert.equal(isDeliverableVideo({ isOperationalContainer: true, cancelledAt: null }), false);
+  assert.equal(isDeliverableVideo({ isOperationalContainer: false, cancelledAt: new Date() }), false);
+});
+
+test("Project and Productivity links target the canonical individual workspace URL", () => {
+  assert.equal(videoWorkspaceHref(27), "/productivity?video=27");
+  assert.equal(
+    videoWorkspaceHref(27, "/projects/8"),
+    "/productivity?video=27&returnTo=%2Fprojects%2F8",
   );
 });
 
