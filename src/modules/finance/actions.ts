@@ -18,7 +18,12 @@ import {
   cashMovements,
   videoLogs,
   workSessions,
+  projects,
 } from "@/db/schema";
+import {
+  buildClientBillingSummary,
+  type ClientBillingProjectBreakdown,
+} from "@/modules/client-portal/core";
 import { computeFxCashMovements } from "../fx/core";
 import { getTodayWorkSessionStats } from "../work-sessions/data";
 import { toUnixSeconds } from "../work-sessions/core";
@@ -39,6 +44,8 @@ import {
   validateFreelanceIncomeInput,
   validatePlatformFeeInput,
   validateBillingAllocationInput,
+  selectUnallocatedManualEvidence,
+  type UnallocatedManualEvidence,
   computeDerivedProportionAllocation,
   validateDebtInput,
   computeDebtRemainingBalance,
@@ -1216,6 +1223,98 @@ export async function getBillingAllocationsForEvidence(billingEvidenceId: number
     .from(billingAllocations)
     .where(eq(billingAllocations.billingEvidenceId, billingEvidenceId))
     .orderBy(desc(billingAllocations.createdAt));
+}
+
+// Operator Project Commercial Attribution (14SEP follow-up, Bonnie
+// closure): the operator-side sibling of getClientBillingSummary
+// (client-portal/data.ts) -- same 4-query shape, same ownership
+// re-check pattern, reusing the EXACT SAME pure buildClientBillingSummary
+// (client-portal/core.ts) rather than duplicating Finance's grouping
+// rules. The only real difference from the client-facing version is
+// this one is never gated by portalCanSeeFinancials -- that flag only
+// controls what a CLIENT sees on /client, never what the operator can
+// see in CRM/Finance, which is why this is its own function rather than
+// a parameter added to the client one.
+//
+// unallocatedManualEvidence logic (selectUnallocatedManualEvidence) lives
+// in ./core.ts, pure and directly unit-tested -- see that function's own
+// comment for why it's MANUAL-source-only, not "total evidence minus
+// total allocated." Re-exported here too so UI callers can import it
+// alongside the other finance/actions types they already use.
+export type { UnallocatedManualEvidence };
+
+export async function getClientProjectCommercialAttribution(clientId: number): Promise<{
+  byProject: ClientBillingProjectBreakdown[];
+  unallocatedManualEvidence: UnallocatedManualEvidence[];
+}> {
+  const db = await getAuthenticatedDb();
+  const [contractRows, evidenceRows, allocationRows, projectRows] = await Promise.all([
+    db
+      .select({
+        id: commercialContracts.id,
+        clientId: commercialContracts.clientId,
+        currency: commercialContracts.currency,
+        billingType: commercialContracts.billingType,
+        hourlyRate: commercialContracts.hourlyRate,
+      })
+      .from(commercialContracts)
+      .where(eq(commercialContracts.clientId, clientId)),
+    db
+      .select({
+        id: billingEvidence.id,
+        contractId: billingEvidence.contractId,
+        contractClientId: commercialContracts.clientId,
+        currency: billingEvidence.currency,
+        billableMinutes: billingEvidence.billableMinutes,
+        grossAmount: billingEvidence.grossAmount,
+        source: billingEvidence.source,
+        externalReference: billingEvidence.externalReference,
+        periodStart: billingEvidence.periodStart,
+        periodEnd: billingEvidence.periodEnd,
+      })
+      .from(billingEvidence)
+      .innerJoin(commercialContracts, eq(billingEvidence.contractId, commercialContracts.id))
+      .where(eq(commercialContracts.clientId, clientId)),
+    db
+      .select({
+        billingEvidenceId: billingAllocations.billingEvidenceId,
+        contractClientId: commercialContracts.clientId,
+        amount: billingAllocations.amount,
+        minutes: billingAllocations.minutes,
+        currency: billingAllocations.currency,
+        videoId: billingAllocations.videoId,
+        // Re-verified below, same defense-in-depth pattern
+        // getClientBillingSummary already uses: a videoId is only
+        // trusted for project attribution once its own clientId also
+        // matches -- otherwise treated as unattributed rather than
+        // risking another client's project name.
+        videoClientId: videoLogs.clientId,
+        videoProjectId: videoLogs.projectId,
+      })
+      .from(billingAllocations)
+      .innerJoin(billingEvidence, eq(billingAllocations.billingEvidenceId, billingEvidence.id))
+      .innerJoin(commercialContracts, eq(billingEvidence.contractId, commercialContracts.id))
+      .leftJoin(videoLogs, eq(billingAllocations.videoId, videoLogs.id))
+      .where(eq(commercialContracts.clientId, clientId)),
+    db.select({ id: projects.id, name: projects.name }).from(projects).where(eq(projects.clientId, clientId)),
+  ]);
+
+  const projectNameById = new Map(projectRows.map((project) => [project.id, project.name]));
+  const safeAllocationRows = allocationRows.map((row) => ({
+    contractClientId: row.contractClientId,
+    amount: row.amount,
+    minutes: row.minutes,
+    currency: row.currency,
+    videoId: row.videoId,
+    projectId: row.videoId !== null && row.videoClientId === clientId ? row.videoProjectId : null,
+  }));
+
+  const summary = buildClientBillingSummary(clientId, contractRows, evidenceRows, safeAllocationRows, projectNameById);
+
+  const allocatedEvidenceIds = new Set(allocationRows.map((row) => row.billingEvidenceId));
+  const unallocatedManualEvidence = selectUnallocatedManualEvidence(clientId, evidenceRows, allocatedEvidenceIds);
+
+  return { byProject: summary.byProject, unallocatedManualEvidence };
 }
 
 // Preview only -- computes the DERIVED_PROPORTION slices from tracked

@@ -2,22 +2,51 @@ import Link from "next/link";
 import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
 import { resolveCoverUrl } from "@/modules/media/core";
 import { boundedSlice, selectActiveJobs } from "@/modules/crm/spatial-composition";
+import type { UnallocatedManualEvidence } from "@/modules/finance/actions";
+import type { ClientBillingProjectBreakdown } from "@/modules/client-portal/core";
+import { formatCurrency } from "@/utils/date";
 import type { ClientProjectView } from "./ProjectManager";
 
 const MAX_ACTIVE_PROJECTS = 4;
 const MAX_VIDEOS_PER_PROJECT = 5;
 const MAX_UNASSIGNED_VIDEOS = 4;
 
+// 14SEP Patch Sniper (Operator Project Commercial Attribution): one
+// compact, honestly-labeled commercial fact per project -- "confirmed
+// attributable" billing_allocations, never a bare "$0" when nothing has
+// been allocated (that's simply omitted), never labeled "Cost" /
+// "Revenue" / "Total" since a project's allocations are not necessarily
+// its full lifetime value. Video status breakdown reuses the exact same
+// canonical lifecycle statuses already shown per-video below -- no new
+// taxonomy.
+function statusBreakdown(videos: ClientProjectView["videos"]): string {
+  const counts = new Map<string, number>();
+  for (const video of videos) counts.set(video.status, (counts.get(video.status) ?? 0) + 1);
+  const order: Array<[string, string]> = [
+    ["DONE", "done"],
+    ["READY_FOR_REVIEW", "in review"],
+    ["IN_PROGRESS", "in production"],
+    ["CHANGES_REQUESTED", "updates in progress"],
+    ["PLANNED", "planned"],
+  ];
+  return order
+    .filter(([status]) => (counts.get(status) ?? 0) > 0)
+    .map(([status, label]) => `${counts.get(status)} ${label}`)
+    .join(" · ");
+}
+
 function ActiveJobCard({
   project,
   clientId,
   clientDefaultCoverUrl,
   clientAvatarUrl,
+  commercial,
 }: {
   project: ClientProjectView;
   clientId: number;
   clientDefaultCoverUrl: string | null;
   clientAvatarUrl: string | null;
+  commercial: ClientBillingProjectBreakdown[];
 }) {
   const { shown: shownVideos, hiddenCount } = boundedSlice(project.videos, MAX_VIDEOS_PER_PROJECT);
 
@@ -31,9 +60,27 @@ function ActiveJobCard({
               {project.deadline ? `Due ${project.deadline}` : "No deadline"} · {project.videos.length} video
               {project.videos.length === 1 ? "" : "s"}
             </p>
+            <p className="mt-0.5 text-[11px] text-zinc-600">{statusBreakdown(project.videos)}</p>
           </div>
           <ProjectStatusBadge status={project.status} />
         </div>
+        {commercial.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {commercial.map((row) => (
+              <span
+                key={row.currency}
+                className="rounded-lg border border-emerald-700/40 bg-emerald-950/20 px-2.5 py-1 text-xs font-black text-emerald-300"
+              >
+                Confirmed attributable {formatCurrency(row.amount, row.currency)}
+                {row.minutes !== null && (
+                  <span className="ml-1 font-normal text-emerald-400/70">
+                    · {row.minutes >= 60 ? `${Math.floor(row.minutes / 60)}h ${row.minutes % 60}m` : `${row.minutes}m`} allocated
+                  </span>
+                )}
+              </span>
+            ))}
+          </div>
+        )}
         <p className="mt-3 text-xs font-black text-cyan-400">Open project workspace →</p>
       </Link>
 
@@ -86,12 +133,16 @@ export function ActiveJobsPanel({
   clientAvatarUrl,
   projects,
   unassignedVideos,
+  commercialByProject,
+  unallocatedManualEvidence,
 }: {
   clientId: number;
   clientDefaultCoverUrl: string | null;
   clientAvatarUrl: string | null;
   projects: ClientProjectView[];
   unassignedVideos: Array<{ id: number; title: string | null; status: string; date: string }>;
+  commercialByProject: Map<number, ClientBillingProjectBreakdown[]>;
+  unallocatedManualEvidence: UnallocatedManualEvidence[];
 }) {
   const { shown: activeProjects, hiddenCount: hiddenActiveCount } = selectActiveJobs(projects, MAX_ACTIVE_PROJECTS);
   const { shown: shownUnassigned } = boundedSlice(unassignedVideos, MAX_UNASSIGNED_VIDEOS);
@@ -121,6 +172,7 @@ export function ActiveJobsPanel({
               clientId={clientId}
               clientDefaultCoverUrl={clientDefaultCoverUrl}
               clientAvatarUrl={clientAvatarUrl}
+              commercial={commercialByProject.get(project.id) ?? []}
             />
           ))}
         </div>
@@ -148,6 +200,28 @@ export function ActiveJobsPanel({
               >
                 {video.title ?? "Untitled video"}
               </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {unallocatedManualEvidence.length > 0 && (
+        <div className="mt-4 border-t border-zinc-800 pt-3">
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-amber-500">
+            Unallocated historical billing
+          </p>
+          <div className="space-y-1.5">
+            {unallocatedManualEvidence.map((evidence) => (
+              <div
+                key={evidence.id}
+                className="rounded-lg border border-amber-900/40 bg-amber-950/10 px-3 py-2 text-xs"
+              >
+                <span className="font-black text-amber-300">{formatCurrency(evidence.amount, evidence.currency)}</span>
+                <span className="ml-2 text-zinc-500">
+                  {evidence.periodStart} – {evidence.periodEnd} · not assigned to a current project
+                </span>
+                <p className="mt-0.5 text-[11px] text-zinc-600">{evidence.label}</p>
+              </div>
             ))}
           </div>
         </div>

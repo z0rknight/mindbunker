@@ -678,3 +678,64 @@ export function computeUpcomingObligations(
   }
   return Array.from(totals.entries()).map(([currency, amount]) => ({ currency, amount: round2(amount) }));
 }
+
+// Operator Project Commercial Attribution (14SEP follow-up, Bonnie
+// closure): picks out only the small, deliberately-curated set of
+// billing_evidence rows an operator explicitly hand-typed a note for
+// (source=MANUAL -- e.g. Dave's $100 landing-page entry, Taryn's
+// January Bonnie Ads entry) that have never been allocated to a video.
+// Deliberately NOT "all evidence minus all allocated" -- that would
+// treat every routine weekly Upwork report row (expected to be
+// project-unallocated by default) as a false signal. Pure so it's
+// directly testable without a DB connection; the caller
+// (finance/actions.ts's getClientProjectCommercialAttribution) does the
+// real query and passes rows straight through.
+export type UnallocatedManualEvidenceRow = {
+  id: number;
+  contractClientId: number;
+  source: string;
+  grossAmount: number;
+  currency: string;
+  periodStart: string;
+  periodEnd: string;
+  externalReference: string | null;
+};
+
+export type UnallocatedManualEvidence = {
+  id: number;
+  amount: number;
+  currency: string;
+  periodStart: string;
+  periodEnd: string;
+  label: string;
+};
+
+const UNALLOCATED_EVIDENCE_LABEL_MAX_LENGTH = 80;
+
+export function selectUnallocatedManualEvidence(
+  clientId: number,
+  evidenceRows: readonly UnallocatedManualEvidenceRow[],
+  allocatedEvidenceIds: ReadonlySet<number>,
+): UnallocatedManualEvidence[] {
+  return evidenceRows
+    .filter(
+      (evidence) =>
+        evidence.contractClientId === clientId &&
+        evidence.source === "MANUAL" &&
+        !allocatedEvidenceIds.has(evidence.id),
+    )
+    .map((evidence) => ({
+      id: evidence.id,
+      amount: round2(evidence.grossAmount),
+      currency: evidence.currency,
+      periodStart: evidence.periodStart,
+      periodEnd: evidence.periodEnd,
+      // Truncated, never re-authored -- shows only what the evidence
+      // row's own text already says.
+      label: evidence.externalReference
+        ? evidence.externalReference.length > UNALLOCATED_EVIDENCE_LABEL_MAX_LENGTH
+          ? `${evidence.externalReference.slice(0, UNALLOCATED_EVIDENCE_LABEL_MAX_LENGTH)}…`
+          : evidence.externalReference
+        : "Manually recorded billing evidence",
+    }));
+}

@@ -4,7 +4,7 @@ import { getClientById, getClientIntelligence } from "@/modules/crm/actions";
 import { getAdminGatewayWorkspace } from "@/modules/gateway/data";
 import { getProjectsForClient, getUnassignedClientVideos } from "@/modules/projects/actions";
 import { getInstagramImportStatus } from "@/modules/crm/actions";
-import { getCommercialContracts } from "@/modules/finance/actions";
+import { getClientProjectCommercialAttribution, getCommercialContracts } from "@/modules/finance/actions";
 import { notFound } from "next/navigation";
 import { ClientIntelligencePanel } from "./ClientIntelligencePanel";
 import { ClientTabs } from "./ClientTabs";
@@ -26,6 +26,7 @@ import { ActiveJobsPanel } from "./ActiveJobsPanel";
 import { ClientMetricStrip } from "./ClientMetricStrip";
 import { ClientDashboardManager } from "./ClientDashboardManager";
 import { filterVideosForClient, selectActiveContractForClient } from "@/modules/crm/spatial-composition";
+import { indexClientBillingByProject } from "@/modules/client-portal/core";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,7 @@ export default async function ClientDetailPage({
     paymentRequests,
     allUnassignedVideos,
     allContracts,
+    commercialAttribution,
   ] = await Promise.all([
     getAdminGatewayWorkspace(clientId),
     getAdminBookingConfiguration(),
@@ -117,11 +119,16 @@ export default async function ClientDetailPage({
     // page stays at the same query count it already had.
     getUnassignedClientVideos(),
     getCommercialContracts(),
+    // Operator Project Commercial Attribution: already clientId-scoped
+    // (unlike the two global queries above), so no client-side filter
+    // needed -- this is the one new query this page adds.
+    getClientProjectCommercialAttribution(clientId),
   ]);
   const weekEstimateForClient = weekEstimates.find((row) => row.clientId === clientId) ?? null;
   const unassignedVideos = filterVideosForClient(allUnassignedVideos, clientId);
   const activeContract = selectActiveContractForClient(allContracts, clientId);
   const recentNote = clientIntelligence.recentMemoryNotes[0] ?? null;
+  const commercialByProject = indexClientBillingByProject(commercialAttribution.byProject);
   // Client Service Reality Patch §6/§8 -- Quote rows carry Date | null
   // fields (createdAt) from the DB layer; serialize to string | null
   // before crossing into the "use client" QuotePanel, same pattern as
@@ -158,6 +165,8 @@ export default async function ClientDetailPage({
             clientAvatarUrl={client.instagramProfilePictureUrl}
             projects={projects}
             unassignedVideos={unassignedVideos}
+            commercialByProject={commercialByProject}
+            unallocatedManualEvidence={commercialAttribution.unallocatedManualEvidence}
           />
         </div>
         <div className="order-2 lg:order-3">

@@ -632,3 +632,62 @@ test("computeUpcomingObligations sums renewals within the window and excludes pa
     { currency: "BRL", amount: 15 },
   ]);
 });
+
+// Operator Project Commercial Attribution (Bonnie closure follow-up):
+// selectUnallocatedManualEvidence must surface ONLY source=MANUAL rows
+// with zero allocations -- never the routine weekly Upwork report rows
+// (which are expected to be project-unallocated by default), never
+// another client's rows, and never $0 for a client with nothing to show.
+import { selectUnallocatedManualEvidence } from "./core.ts";
+
+function manualEvidenceRow(overrides) {
+  return {
+    id: 1,
+    contractClientId: 2,
+    source: "MANUAL",
+    grossAmount: 75,
+    currency: "USD",
+    periodStart: "2026-01-19",
+    periodEnd: "2026-01-22",
+    externalReference: "Bonnie Ads",
+    ...overrides,
+  };
+}
+
+test("selectUnallocatedManualEvidence surfaces a MANUAL row with no allocations", () => {
+  const result = selectUnallocatedManualEvidence(2, [manualEvidenceRow()], new Set());
+  assert.deepEqual(result, [
+    { id: 1, amount: 75, currency: "USD", periodStart: "2026-01-19", periodEnd: "2026-01-22", label: "Bonnie Ads" },
+  ]);
+});
+
+test("selectUnallocatedManualEvidence excludes routine UPWORK_REPORT rows even when unallocated", () => {
+  const row = manualEvidenceRow({ source: "UPWORK_REPORT" });
+  assert.deepEqual(selectUnallocatedManualEvidence(2, [row], new Set()), []);
+});
+
+test("selectUnallocatedManualEvidence excludes a MANUAL row that already has an allocation", () => {
+  const result = selectUnallocatedManualEvidence(2, [manualEvidenceRow({ id: 9 })], new Set([9]));
+  assert.deepEqual(result, []);
+});
+
+test("selectUnallocatedManualEvidence never returns another client's evidence", () => {
+  const row = manualEvidenceRow({ contractClientId: 4 });
+  assert.deepEqual(selectUnallocatedManualEvidence(2, [row], new Set()), []);
+});
+
+test("selectUnallocatedManualEvidence with nothing to show returns an empty array, not a fabricated entry", () => {
+  assert.deepEqual(selectUnallocatedManualEvidence(2, [], new Set()), []);
+});
+
+test("selectUnallocatedManualEvidence truncates a long external reference and never re-authors it", () => {
+  const longRef = "A".repeat(120);
+  const [result] = selectUnallocatedManualEvidence(2, [manualEvidenceRow({ externalReference: longRef })], new Set());
+  assert.equal(result.label.length, 81); // 80 chars + ellipsis
+  assert.ok(result.label.startsWith("A".repeat(80)));
+});
+
+test("selectUnallocatedManualEvidence falls back to a generic label when no external reference exists", () => {
+  const [result] = selectUnallocatedManualEvidence(2, [manualEvidenceRow({ externalReference: null })], new Set());
+  assert.equal(result.label, "Manually recorded billing evidence");
+});
