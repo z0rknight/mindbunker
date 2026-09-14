@@ -80,7 +80,7 @@ export default async function ClientDashboardPage() {
         {view.dashboardSections.showCurrentAccount && <CurrentAccount request={view.paymentRequest} />}
 
         {view.dashboardSections.showSearch && hasAnyVideos && (
-          <DashboardSearch videos={view.allVideos} allowPriority={view.permissions.canSetPriority} />
+          <DashboardSearch videos={view.allVideos} billing={billing} allowPriority={view.permissions.canSetPriority} />
         )}
 
         {view.dashboardSections.showActiveWork && activeBatch && (

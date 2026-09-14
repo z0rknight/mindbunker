@@ -539,6 +539,100 @@ export function searchClientDashboardVideos<T extends ClientDashboardVideoCard>(
   });
 }
 
+// Client Portal "Work Explorer" (14SEP follow-up, Bonnie/Taryn reference
+// case): a client asking "what was done for X" needs the answer grouped
+// by project/work-family, not a flat video grid -- see the mission's own
+// "BONNIE — CONTENT WATERFALL / 9 deliverables / Delivered / Aug 2026"
+// example. This is a PURE reshape of data the dashboard already fetches
+// (ClientDashboardVideoCard[] from buildClientDashboard,
+// ClientBillingProjectBreakdown[] from buildClientBillingSummary) -- no
+// new query, no new table, no semantic invention. Grouping key is the
+// video's own canonical projectId/projectName, exactly the fields
+// already rendered on each card; there is no "Bonnie" concept in the
+// schema and this function does not invent one -- a search for "Bonnie"
+// works because that word happens to already be in real project names,
+// nothing more.
+export type ClientWorkGroup = {
+  projectId: number;
+  projectName: string;
+  videos: ClientDashboardVideoCard[];
+  deliveredCount: number;
+  inProgressCount: number;
+  readyForReviewCount: number;
+  plannedCount: number;
+  // Most recent activity across the group's own videos -- an honest
+  // "last touched" signal, not a claim about original production dates
+  // (which this card shape doesn't carry -- see ClientDashboardVideoRow's
+  // `date` field, deliberately not threaded through toCard).
+  lastUpdated: string | null;
+  // Empty means "no commercial attribution recorded for this project" --
+  // never collapsed into a fabricated $0, matching ClientBillingSummary's
+  // own hasAnyRecordedWork convention. Already financials-gated upstream
+  // (getClientBillingSummary returns byProject: [] whenever
+  // portalCanSeeFinancials is false), so this function never needs its
+  // own visibility check -- it simply reflects what it's given.
+  billed: ClientBillingProjectBreakdown[];
+};
+
+export function groupClientWorkByProject(
+  videos: readonly ClientDashboardVideoCard[],
+  billingByProject: ReadonlyMap<number, readonly ClientBillingProjectBreakdown[]>,
+): ClientWorkGroup[] {
+  const groups = new Map<number, ClientWorkGroup>();
+  for (const video of videos) {
+    // A client's own dashboard videos are always project-attached (the
+    // upstream query INNER JOINs projects) -- guarded here anyway rather
+    // than assumed, so this function stays safe if ever reused against a
+    // differently-shaped list.
+    if (video.projectId === null) continue;
+    let group = groups.get(video.projectId);
+    if (!group) {
+      group = {
+        projectId: video.projectId,
+        projectName: video.projectName ?? "Untitled project",
+        videos: [],
+        deliveredCount: 0,
+        inProgressCount: 0,
+        readyForReviewCount: 0,
+        plannedCount: 0,
+        lastUpdated: null,
+        billed: [...(billingByProject.get(video.projectId) ?? [])],
+      };
+      groups.set(video.projectId, group);
+    }
+    group.videos.push(video);
+    if (video.status === "DONE") group.deliveredCount += 1;
+    else if (video.status === "IN_PROGRESS" || video.status === "CHANGES_REQUESTED") group.inProgressCount += 1;
+    else if (video.status === "READY_FOR_REVIEW") group.readyForReviewCount += 1;
+    else group.plannedCount += 1;
+    if (video.lastUpdated && (!group.lastUpdated || video.lastUpdated > group.lastUpdated)) {
+      group.lastUpdated = video.lastUpdated;
+    }
+  }
+  return Array.from(groups.values()).toSorted((a, b) =>
+    (b.lastUpdated ?? "").localeCompare(a.lastUpdated ?? ""),
+  );
+}
+
+// Small helper for callers (the dashboard page) building the Map
+// groupClientWorkByProject expects, from the flat byProject array
+// getClientBillingSummary already returns. Rows with projectId === null
+// ("Other / not yet assigned" in ClientBillingSummary's own vocabulary)
+// are dropped here -- they cannot attach to any specific work group by
+// definition, and are never silently folded into one.
+export function indexClientBillingByProject(
+  byProject: readonly ClientBillingProjectBreakdown[],
+): Map<number, ClientBillingProjectBreakdown[]> {
+  const index = new Map<number, ClientBillingProjectBreakdown[]>();
+  for (const row of byProject) {
+    if (row.projectId === null) continue;
+    const existing = index.get(row.projectId);
+    if (existing) existing.push(row);
+    else index.set(row.projectId, [row]);
+  }
+  return index;
+}
+
 // Client Vault "video must act like a video" fix (25 Aug 2026, brief §9):
 // a client-safe single-video detail, built from the same validated card
 // (toCard) plus an optional approved-quote summary. No internal notes, no

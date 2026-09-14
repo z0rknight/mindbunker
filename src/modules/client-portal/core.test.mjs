@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  groupClientWorkByProject,
+  indexClientBillingByProject,
   CLIENT_VIDEO_STATUS_LABELS,
   buildClientDashboard,
   buildClientPortalProjects,
@@ -844,6 +846,89 @@ test("search is case-insensitive and matches substrings, not just whole words", 
   assert.equal(searchClientDashboardVideos(videos, "davedemink").length, 1);
   assert.equal(searchClientDashboardVideos(videos, "DAVEDEMINK").length, 1);
   assert.equal(searchClientDashboardVideos(videos, "nonexistent").length, 0);
+});
+
+// Work Explorer (Bonnie/Taryn reference case): groupClientWorkByProject is
+// a pure reshape of already-client-safe cards, so the ownership/isolation
+// guarantee is the same "structurally cannot introduce a new row" argument
+// as search above -- these tests cover the grouping/counting/billing-
+// attachment logic itself.
+function billingRow(overrides) {
+  return { projectId: 1, projectName: "Project", currency: "USD", amount: 100, minutes: 240, ...overrides };
+}
+
+test("groupClientWorkByProject groups videos under their own project, in canonical name only", () => {
+  const videos = [
+    searchableCard({ id: 1, projectId: 5, projectName: "Bonnie - Content Waterfall", title: "Clip 1" }),
+    searchableCard({ id: 2, projectId: 5, projectName: "Bonnie - Content Waterfall", title: "Clip 2" }),
+    searchableCard({ id: 3, projectId: 16, projectName: "Bonnie @ Content Waterfall September", title: "Clip 3" }),
+  ];
+  const groups = groupClientWorkByProject(videos, new Map());
+  assert.equal(groups.length, 2);
+  const byId = new Map(groups.map((g) => [g.projectId, g]));
+  assert.equal(byId.get(5).videos.length, 2);
+  assert.equal(byId.get(16).videos.length, 1);
+  assert.equal(byId.get(5).projectName, "Bonnie - Content Waterfall");
+});
+
+test("groupClientWorkByProject counts each lifecycle state correctly", () => {
+  const videos = [
+    searchableCard({ id: 1, status: "DONE" }),
+    searchableCard({ id: 2, status: "DONE" }),
+    searchableCard({ id: 3, status: "IN_PROGRESS" }),
+    searchableCard({ id: 4, status: "CHANGES_REQUESTED" }),
+    searchableCard({ id: 5, status: "READY_FOR_REVIEW" }),
+    searchableCard({ id: 6, status: "PLANNED" }),
+  ];
+  const [group] = groupClientWorkByProject(videos, new Map());
+  assert.equal(group.deliveredCount, 2);
+  assert.equal(group.inProgressCount, 2);
+  assert.equal(group.readyForReviewCount, 1);
+  assert.equal(group.plannedCount, 1);
+});
+
+test("groupClientWorkByProject: a video with no project is never silently attached to a group", () => {
+  const videos = [searchableCard({ id: 1, projectId: null, projectName: null })];
+  const groups = groupClientWorkByProject(videos, new Map());
+  assert.equal(groups.length, 0);
+});
+
+test("groupClientWorkByProject: no billing entry means no commercial attribution, never a fabricated $0", () => {
+  const videos = [searchableCard({ id: 1, projectId: 5, projectName: "Bonnie - Content Waterfall" })];
+  const [group] = groupClientWorkByProject(videos, new Map());
+  assert.deepEqual(group.billed, []);
+});
+
+test("groupClientWorkByProject attaches real billing rows only to their own project", () => {
+  const videos = [
+    searchableCard({ id: 1, projectId: 5, projectName: "Bonnie - Content Waterfall" }),
+    searchableCard({ id: 2, projectId: 16, projectName: "Bonnie @ Content Waterfall September" }),
+  ];
+  const billingMap = new Map([[5, [billingRow({ projectId: 5, amount: 75 })]]]);
+  const groups = groupClientWorkByProject(videos, billingMap);
+  const byId = new Map(groups.map((g) => [g.projectId, g]));
+  assert.equal(byId.get(5).billed[0].amount, 75);
+  assert.deepEqual(byId.get(16).billed, []);
+});
+
+test("groupClientWorkByProject sorts by most recently updated group first", () => {
+  const videos = [
+    searchableCard({ id: 1, projectId: 5, projectName: "Old", lastUpdated: "2026-01-01T00:00:00.000Z" }),
+    searchableCard({ id: 2, projectId: 16, projectName: "New", lastUpdated: "2026-09-13T00:00:00.000Z" }),
+  ];
+  const groups = groupClientWorkByProject(videos, new Map());
+  assert.deepEqual(groups.map((g) => g.projectId), [16, 5]);
+});
+
+test("indexClientBillingByProject groups billing rows by project and drops unattributed (null-project) rows", () => {
+  const index = indexClientBillingByProject([
+    billingRow({ projectId: 5, amount: 75 }),
+    billingRow({ projectId: 5, currency: "BRL", amount: 20 }),
+    billingRow({ projectId: null, amount: 999 }),
+  ]);
+  assert.equal(index.size, 1);
+  assert.equal(index.get(5).length, 2);
+  assert.equal(index.has(null), false);
 });
 
 // ─── Operator Discovery + Portal Personalization patch (2026-09-14) ────────
