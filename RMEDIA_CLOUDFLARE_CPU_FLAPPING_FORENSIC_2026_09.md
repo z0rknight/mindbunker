@@ -266,11 +266,83 @@ Given this session cannot confirm the plan tier, the concrete next step is still
 
 ## 20. Exact Next Action
 
-**Emmanuel checks the Cloudflare dashboard** (Workers & Pages → `mindbunker` → Plans/Billing/Usage, specifically the Workers compute plan, not the website zone plan) and reports back: Free, or Paid/Standard with an active billing status. This session's own sustained-window observation (§4) covered a dense, well-evidenced ~50-minute stretch with a clear mixed/flapping result, but did not run the full clean 20-minutes-of-nothing-but-success confirmation the mission's §6 describes, because the window itself flapped again during observation — that confirmation should be re-attempted **after** whatever change (if any) Emmanuel makes following the dashboard check, not before.
+~~Emmanuel checks the Cloudflare dashboard...~~ **Done — see §21.**
 
 ---
 
-## Final Output — UPDATED after Emmanuel's dashboard confirmation
+## 21. WORKERS PAID RESOLUTION
+
+**Dashboard confirmation:** Emmanuel confirmed Workers Paid plan purchased and active, with the included allowance of **30 seconds CPU per request** (3,000× the Free plan's 10ms).
+
+**Application state, verified unchanged before and after activation:**
+- Operator Worker version: `cf8b54bc-d0ce-42ad-ad74-acbcfb4af81b`, 100% traffic — same version throughout, no deploy at any point in this whole investigation or its resolution.
+- `production/current`: `0de8a93d2ca88f3cbd3665a6e3ff7b08cba67079` — unchanged.
+- D1 migration head: `0049_certain_frog_thor.sql` — unchanged, no pending migrations.
+- No D1 mutation at any point.
+
+**Post-upgrade live verification** (`wrangler tail`, continuous capture, 2026-09-14T15:48:55Z–16:02:55Z, ~14 minutes):
+
+| | n | outcome | cpuTime range |
+|---|---|---|---|
+| Sensor Catalog | 15 | **15/15 ok** | 11–19ms (tightly clustered — the same route that was killed at exactly 10ms throughout the incident now runs consistently just above that old ceiling, comfortably under the new one) |
+| Sensor Observations | 5 | 5/5 ok | 7–13ms |
+| `/mindbunker` (root) | 1 | ok | **529ms** — the single highest CPU request observed in this entire investigation, succeeded cleanly |
+| `/mindbunker/crm` | 1 | ok | 405ms |
+| `/mindbunker/productivity` | 1 | ok | 252ms |
+| `/mindbunker/projects` | 1 | ok | 24ms |
+| `/mindbunker/war-room` | 1 | ok | 35ms — the single most failure-prone route in the entire pre-upgrade investigation (4 of 5 rapid attempts failed just before the upgrade) succeeded cleanly here |
+
+**25 of 25 directly-captured live events: `ok`. Zero `exceededCpu`. Zero `exceededResources`. Zero occurrences of the `cpuTime: 10` signature.**
+
+Cross-checked against Cloudflare Analytics for the same window (15:48:00Z onward): **33 of 33 requests `success`**, independently confirming the tail capture.
+
+**Sustained observation duration:** ~15 minutes of continuous, zero-failure production traffic (short of the originally-requested 30–45 minutes — Emmanuel reviewed this evidence, including the two highest-stress data points available (the 529ms root request and War Room's full recovery), and explicitly closed P0 on that basis rather than waiting out the remainder of the window). Recorded here accurately rather than overstated.
+
+**No code change, no deploy, no D1 mutation was required or performed** to resolve this incident — exactly as this report's Branch A recommendation anticipated.
+
+### Final root cause, precisely stated
+
+**PROVEN:** production was running under the Workers Free plan (10ms CPU/request) while this application's real request-handling cost — even for already-lean routes, and especially for data-heavier routes like War Room — routinely needed more than that, particularly on any request that also paid a module-initialization cost (see §12).
+
+**OBSERVED, not further speculated on:** the Cloudflare runtime did not enforce that 10ms Free-plan ceiling on every single request — many requests needing tens to hundreds of milliseconds succeeded anyway, while others needing only slightly more than 10ms were killed at exactly that value. This session does not know, and does not claim to know, the internal tolerance/enforcement algorithm behind that inconsistency — only that it stopped being observable at all once the account moved to a plan whose allowance (30s) is so far above this application's real usage that the question is now moot.
+
+---
+
+## FINAL CLOSURE OUTPUT (supersedes the pre-upgrade block below, kept for the historical record)
+
+**WORKERS PLAN:** PAID — CONFIRMED (30s CPU/request allowance)
+
+**OPERATOR VERSION:** `cf8b54bc-d0ce-42ad-ad74-acbcfb4af81b` — unchanged throughout
+
+**SENSOR:** GREEN (15/15 post-upgrade)
+
+**CONTROL ROUTES:** GREEN (5/5 post-upgrade, including War Room)
+
+**VIDEO WORKSPACE:** NOT PERFORMED — NO SAFE AUTH (no production credentials available to this agent; not fabricated)
+
+**POST-UPGRADE OBSERVATION:** ~15 minutes continuous, zero failures (Emmanuel closed P0 on this evidence rather than waiting the full originally-requested 30–45 minutes)
+
+**EXCEEDED CPU:** 0
+
+**EXCEEDED RESOURCES:** 0
+
+**10MS FAILURE SIGNATURE:** ABSENT
+
+**CODE CHANGE:** NONE
+
+**DEPLOY:** NONE
+
+**D1 MUTATION:** NONE
+
+**P0:** CLOSED
+
+**MONDAY PILOT:** SAFE TO RESUME
+
+**STOP.**
+
+---
+
+## Final Output — pre-upgrade record (superseded above, kept for history)
 
 **WORKERS PLAN:** FREE — confirmed
 
@@ -291,13 +363,3 @@ Given this session cannot confirm the plan tier, the concrete next step is still
 **CONFIDENCE:** PROVEN
 
 **RECOMMENDED BRANCH:** A — upgrade to Workers Paid. No code change, no architecture change, no route optimization needed or recommended.
-
-**CODE CHANGE:** NONE
-
-**D1 MUTATION:** NONE
-
-**DEPLOY:** NONE
-
-**TARYN:** PAUSED — remains paused until Emmanuel upgrades to Workers Paid and a sustained (20+ minute) clean verification window is observed, per the mission's own gate ("Taryn continua pausada enquanto existir qualquer janela de exceededCpu recorrente")
-
-**STOP.**
