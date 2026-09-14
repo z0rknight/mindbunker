@@ -9,3 +9,12 @@
 // cap. Deliberately NOT used by Client Portal, login/auth, or the public
 // site -- those keep their own narrower, reader-friendly widths.
 export const OPERATOR_WORKSPACE_CLASS = "w-full px-4 py-5 sm:px-6 md:px-8";
+
+// Same fix, same reasoning, for the separate Client Worker's authenticated
+// dashboard -- it had the exact same `mx-auto max-w-5xl` centering-cap
+// pattern as the Operator side did. Kept as its own named export (same
+// value) rather than reusing OPERATOR_WORKSPACE_CLASS directly so each
+// call site stays self-documenting about which app it's widening. Not
+// used by /client/login, /client/reset, or any other narrow reader/form
+// surface -- those keep their own narrower widths on purpose.
+export const CLIENT_PORTAL_WORKSPACE_CLASS = "w-full px-4 sm:px-6";

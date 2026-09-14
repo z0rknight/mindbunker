@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { CLIENT_PORTAL_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { requireClientAuth } from "@/lib/client-portal-session";
 import { getClientBillingSummary, getClientDashboardView } from "@/modules/client-portal/data";
 import { BillingSummary } from "./BillingSummary";
@@ -52,7 +53,7 @@ export default async function ClientDashboardPage() {
   return (
     <main className="min-h-dvh bg-zinc-950 pb-16 text-white">
       <header className="border-b border-zinc-800/80 bg-zinc-900/60 px-4 py-5 backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
+        <div className="flex w-full items-center justify-between gap-3">
           <div>
             <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">
               <PixelIcon name="shield" className="h-3 w-3" /> RMEDIA · Client Portal
@@ -65,7 +66,7 @@ export default async function ClientDashboardPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6">
+      <div className={`space-y-8 py-6 ${CLIENT_PORTAL_WORKSPACE_CLASS}`}>
         {/* Operator Discovery + Portal Personalization patch (2026-09-14):
             each `dashboardSections.show*` check below is a LAYOUT
             preference only. The data underneath was already filtered
@@ -159,7 +160,7 @@ export default async function ClientDashboardPage() {
                 <h2 className="mb-3 text-sm font-black uppercase tracking-widest text-violet-300">
                   Needs your attention
                 </h2>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {view.readyForReview.map((video) => (
                     <VideoCard
                       key={video.id}
@@ -178,7 +179,7 @@ export default async function ClientDashboardPage() {
                 <h2 className="mb-3 text-sm font-black uppercase tracking-widest text-zinc-400">
                   Current work
                 </h2>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {view.currentWork.map((video) => (
                     <VideoCard key={video.id} video={video} allowPriority={view.permissions.canSetPriority} dateLabel="Updated" />
                   ))}
@@ -191,7 +192,7 @@ export default async function ClientDashboardPage() {
                 <h2 className="mb-3 text-sm font-black uppercase tracking-widest text-zinc-400">
                   Recent deliveries
                 </h2>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {view.recentDeliveries.map((video) => (
                     <VideoCard key={video.id} video={video} allowPriority={view.permissions.canSetPriority} dateLabel="Delivered" />
                   ))}

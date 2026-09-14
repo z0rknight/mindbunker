@@ -73,7 +73,7 @@ function formatPortalTimestamp(value: string) {
 function VaultFrame({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-dvh overflow-x-hidden bg-[#08090c] px-4 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(1.25rem+env(safe-area-inset-top))] text-white sm:px-6 sm:py-10">
-      <div className="mx-auto w-full max-w-4xl">
+      <div className="mx-auto w-full max-w-6xl">
         <header className="mb-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="mb-pixel-logo flex h-11 w-11 items-center justify-center border border-violet-400/30 bg-violet-400/10 text-sm font-black text-violet-200 shadow-lg shadow-violet-950/30">
