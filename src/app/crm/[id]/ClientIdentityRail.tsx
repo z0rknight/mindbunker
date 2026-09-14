@@ -34,9 +34,17 @@ export function ClientIdentityRail({
         )}
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
-        <h1 className="truncate text-lg font-bold text-white">{client.name}</h1>
-        <RenameClientButton clientId={client.id} currentName={client.name} />
+      {/* Wave 5 §14: at the ~1180px breakpoint this rail's column is narrow
+          enough that name + Rename button sharing one row truncated the
+          name down to a single letter (e.g. "D…" for "Dave DeMink"),
+          materially degrading identification. Stacking them and letting
+          the name wrap instead of truncate fixes that without touching
+          the grid/breakpoints themselves. */}
+      <div className="mt-3">
+        <h1 className="text-lg font-bold leading-snug text-white break-words">{client.name}</h1>
+        <div className="mt-1">
+          <RenameClientButton clientId={client.id} currentName={client.name} />
+        </div>
       </div>
       {client.instagramUsername && (
         <p className="mt-0.5 text-xs font-bold text-fuchsia-400">@{client.instagramUsername}</p>
