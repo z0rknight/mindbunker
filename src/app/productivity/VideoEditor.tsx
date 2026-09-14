@@ -2,6 +2,7 @@
 
 import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
 import {
+  deleteVideoLog,
   transitionVideoStatus,
   updateVideoMetadata,
 } from "@/modules/productivity/actions";
@@ -196,6 +197,32 @@ export function VideoEditor({
       }
       if (result.status) setStatus(result.status);
       setFeedback(result.message ?? "Status updated.");
+      router.refresh();
+    });
+  }
+
+  // 14SEP Patch Sniper §16-17: the only piece of video CRUD (assign/
+  // unassign via the Project select above, hide/show via the Client
+  // portal toggle above, open via this modal itself) this workspace was
+  // missing. deleteVideoLog already blocks deletion on any real
+  // dependent history (tracked work, operational notes, commitments,
+  // friction, blockers, deliveries, checklist items) -- this just
+  // surfaces that existing, already-safe action here instead of only on
+  // the separate Productivity board cards.
+  function handleDelete() {
+    const confirmed = window.confirm(
+      `DELETE VIDEO\n\n"${displayTitle}"${video.clientName ? ` — ${video.clientName}` : ""}\n\nThis permanently removes this unused video record. This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    setError("");
+    setFeedback("");
+    startTransition(async () => {
+      const result = await deleteVideoLog(video.id);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      closeEditor();
       router.refresh();
     });
   }
@@ -606,6 +633,20 @@ export function VideoEditor({
               >
                 {isPending ? "Saving…" : "Save video details"}
               </button>
+
+              <div className="border-t border-zinc-800 pt-4">
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isPending}
+                  className="min-h-11 w-full rounded-xl border border-red-900/50 bg-red-950/20 px-4 text-xs font-black uppercase tracking-wide text-red-300 transition hover:bg-red-950/40 disabled:opacity-40"
+                >
+                  Delete video
+                </button>
+                <p className="mt-1.5 text-[11px] leading-4 text-zinc-600">
+                  Only for mistaken or unused test records. Blocked automatically if this video has any tracked work, revisions, deliveries, or other real history.
+                </p>
+              </div>
                 </form>
               </div>
             </div>

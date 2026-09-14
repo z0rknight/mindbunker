@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { StatCard } from "@/components/ui/StatCard";
 import { AddIncomeButton, AddExpenseButton } from "@/components/ui/QuickActions";
 import {
@@ -510,7 +511,7 @@ export default async function FinancePage() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
+    <div className={OPERATOR_WORKSPACE_CLASS}>
       <div className="mb-8 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">💰 Finance</h1>

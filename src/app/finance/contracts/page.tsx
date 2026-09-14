@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { getCommercialContracts } from "@/modules/finance/actions";
 import { getAllClients } from "@/modules/crm/actions";
 import { AddContractButton } from "./AddContractButton";
@@ -15,7 +16,7 @@ export default async function ContractsPage() {
   ]);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-5 sm:px-6 md:p-8">
+    <div className={`${OPERATOR_WORKSPACE_CLASS} max-w-4xl`}>
       <div className="mb-6 flex items-center justify-between gap-3">
         <div>
           <Link href="/finance" className="text-zinc-500 text-xs hover:text-white">← Finance</Link>

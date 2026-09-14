@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { StatCard } from "@/components/ui/StatCard";
 import { LogTodayButton, LogBikeRideButton, LogWalkButton } from "@/components/ui/QuickActions";
 import { LastNightSleepButton, CoffeeQuickLogButton } from "@/components/ui/HealthQuickActions";
@@ -17,7 +18,7 @@ export default async function HealthPage() {
     await getHealthPageData({ timelineDays: ACTIVITY_TIMELINE_DAYS, ledgerDays: 30 });
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
+    <div className={OPERATOR_WORKSPACE_CLASS}>
       <div className="mb-8 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">🫀 Health</h1>
@@ -82,35 +83,39 @@ export default async function HealthPage() {
         />
       </div>
 
-      {/* Today's Log Status */}
-      <div className="mb-8 p-4 rounded-xl border border-zinc-800 bg-zinc-900/50">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="text-white font-medium text-sm">
-              {summary.todayLog || summary.coffeeServingsToday !== null
-                ? "✅ Today's health evidence is active"
-                : "⚠️ No health evidence for today yet"}
-            </p>
-            <p className="text-zinc-500 text-xs mt-0.5">
-              {summary.todayLog
-                ? `Sleep: ${summary.todayLog.sleepHours ?? "—"}h · Coffee: ${summary.coffeeServingsToday ?? "—"} · Caffeine: ${summary.caffeineToday === null ? "—" : summary.caffeineTodaySource === "ESTIMATED" ? `~${summary.caffeineToday}mg estimated` : `${summary.caffeineToday}mg manual`} · Screen: ${summary.todayLog.screenTimeHours ?? "—"}h · Cycling: ${summary.todayLog.cyclingKm ?? "—"}km · Walk: ${summary.todayLog.walkingMinutes ?? "—"}min`
-                : summary.coffeeServingsToday !== null
-                  ? `Coffee: ${summary.coffeeServingsToday} servings · ~${summary.caffeineToday}mg estimated · other health fields not measured`
-                  : "Log your daily metrics to track trends"}
-            </p>
+      {/* 14SEP Patch Sniper §7: Today's Log Status + the Activity Timeline
+          used to stack full-width one above the other, leaving the
+          timeline's fixed-width 12-week heatmap surrounded by dead space
+          once the page stopped being artificially narrow. Placed
+          side-by-side instead -- both are the exact same existing
+          content, nothing new was added. */}
+      <div className="mb-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-start">
+        <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/50">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-white font-medium text-sm">
+                {summary.todayLog || summary.coffeeServingsToday !== null
+                  ? "✅ Today's health evidence is active"
+                  : "⚠️ No health evidence for today yet"}
+              </p>
+              <p className="text-zinc-500 text-xs mt-0.5">
+                {summary.todayLog
+                  ? `Sleep: ${summary.todayLog.sleepHours ?? "—"}h · Coffee: ${summary.coffeeServingsToday ?? "—"} · Caffeine: ${summary.caffeineToday === null ? "—" : summary.caffeineTodaySource === "ESTIMATED" ? `~${summary.caffeineToday}mg estimated` : `${summary.caffeineToday}mg manual`} · Screen: ${summary.todayLog.screenTimeHours ?? "—"}h · Cycling: ${summary.todayLog.cyclingKm ?? "—"}km · Walk: ${summary.todayLog.walkingMinutes ?? "—"}min`
+                  : summary.coffeeServingsToday !== null
+                    ? `Coffee: ${summary.coffeeServingsToday} servings · ~${summary.caffeineToday}mg estimated · other health fields not measured`
+                    : "Log your daily metrics to track trends"}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
+            <LastNightSleepButton todayISODate={today} />
+            <CoffeeQuickLogButton todayCount={caffeineSummary.todayCount} />
+            <LogTodayButton todayISODate={today} />
+            <LogBikeRideButton todayISODate={today} />
+            <LogWalkButton todayISODate={today} />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <LastNightSleepButton todayISODate={today} />
-          <CoffeeQuickLogButton todayCount={caffeineSummary.todayCount} />
-          <LogTodayButton todayISODate={today} />
-          <LogBikeRideButton todayISODate={today} />
-          <LogWalkButton todayISODate={today} />
-        </div>
-      </div>
 
-      {/* Activity Timeline */}
-      <div className="mb-8">
         <ActivityTimeline days={timelineDays} />
       </div>
 

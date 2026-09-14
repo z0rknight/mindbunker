@@ -1,3 +1,4 @@
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { PlanVideoButton } from "@/components/ui/QuickActions";
 import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
 import { getProjectWorkspace } from "@/modules/projects/actions";
@@ -79,7 +80,7 @@ export default async function ProjectWorkspacePage({
     : null;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 md:p-8">
+    <div className={OPERATOR_WORKSPACE_CLASS}>
       <header className="mb-7">
         <Link href="/projects" className="inline-flex min-h-10 items-center text-sm font-bold text-zinc-500 transition hover:text-zinc-300">
           ← All projects

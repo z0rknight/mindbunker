@@ -1,3 +1,4 @@
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { getAdminBookingConfiguration } from "@/modules/booking/data";
 import { getClientById, getClientIntelligence } from "@/modules/crm/actions";
 import { getAdminGatewayWorkspace } from "@/modules/gateway/data";
@@ -141,7 +142,7 @@ export default async function ClientDetailPage({
   const commercialValue = computeClientCommercialValue(quotes);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
+    <div className={OPERATOR_WORKSPACE_CLASS}>
       {/* Spatial Recomposition Wave 4: 5-region grid -- Identity Rail
           (left) / Active Jobs (center, primary) / Operational Dossier
           (right) on desktop, stacking Identity -> Dossier -> Active Jobs

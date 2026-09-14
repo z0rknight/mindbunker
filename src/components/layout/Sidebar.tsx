@@ -49,7 +49,11 @@ const navItems = [
   // no duplicate page. Desktop sidebar only, same mobile-tab-count
   // discipline as Sessions/Contracts/All History above.
   { href: "/finance/subscriptions", label: "Subscriptions", mobileLabel: "Subs", icon: "🔁", desktopOnly: true, group: "MONEY" },
-  { href: "/finance/debts", label: "Debts", mobileLabel: "Debts", icon: "🧮", desktopOnly: true, group: "MONEY" },
+  // 14SEP Patch Sniper §6: removed from primary navigation -- low-frequency
+  // admin surface, and Emmanuel said directly "I don't think I need this on
+  // my menu, only a section at finance." The route, data, and every link
+  // are untouched; Finance's own "💳 Debts" card still links to
+  // /finance/debts exactly as before, so nothing became unreachable.
   // Monday Real-Operation Pre-Freeze §9: Commercial Contracts becomes a
   // first-class operational surface, reachable directly from main nav
   // (previously only one click deep inside /finance). Same

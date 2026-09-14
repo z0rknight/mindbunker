@@ -1,3 +1,4 @@
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { StatCard } from "@/components/ui/StatCard";
 import {
   AddIncomeButton,
@@ -82,7 +83,7 @@ export default async function DashboardPage() {
   const todayWorkSplit = splitIntentionalWork(todayWorkStats);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
+    <div className={OPERATOR_WORKSPACE_CLASS}>
       {/* Header */}
       <div className="mb-8 flex items-end justify-between gap-4">
         <div>

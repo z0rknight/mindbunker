@@ -11,6 +11,10 @@ import {
   type VideoStatus,
 } from "./config.ts";
 import { isInternalCoverRoute } from "../media/core.ts";
+import {
+  VIDEO_OPERATIONAL_MEMORY_DELETE_ERROR,
+  videoOperationalMemoryBlocksDeletion,
+} from "../video-memory/core.ts";
 
 export type VideoInputValues = {
   title: string;
@@ -711,4 +715,47 @@ export function groupOperationalVideos<T extends OperationalVideo>(
   }
 
   return groups;
+}
+
+// 14SEP Patch Sniper §16-17/§36: deleteVideoLog's dependency-check
+// decision, pulled out into a pure function so the actual "does this
+// video have real history" rule is directly testable without a
+// Cloudflare-only DB connection -- this repo's `node --test` runner
+// can't import getAuthenticatedDb (see auth-data.test.mjs's own comment
+// on why). deleteVideoLog (productivity/actions.ts) calls this exact
+// function with its already-fetched dependency-check results; nothing
+// about the decision logic itself changed, it was only extracted.
+export type VideoDeletionDependencyCheck = {
+  hasTrackedWork: boolean;
+  operationalMemoryCount: number;
+  hasCommitmentMemory: boolean;
+  hasFrictionMemory: boolean;
+  hasBlockerMemory: boolean;
+  hasDeliveryMemory: boolean;
+  hasChecklistMemory: boolean;
+};
+
+export type VideoDeletionOutcome =
+  | { allowed: true }
+  | { allowed: false; reason: string };
+
+export function resolveVideoDeletionOutcome(
+  check: VideoDeletionDependencyCheck,
+): VideoDeletionOutcome {
+  if (check.hasTrackedWork) {
+    return { allowed: false, reason: "Videos with tracked work cannot be deleted." };
+  }
+  if (videoOperationalMemoryBlocksDeletion(check.operationalMemoryCount)) {
+    return { allowed: false, reason: VIDEO_OPERATIONAL_MEMORY_DELETE_ERROR };
+  }
+  if (
+    check.hasCommitmentMemory ||
+    check.hasFrictionMemory ||
+    check.hasBlockerMemory ||
+    check.hasDeliveryMemory ||
+    check.hasChecklistMemory
+  ) {
+    return { allowed: false, reason: "Videos with operational custody records cannot be deleted." };
+  }
+  return { allowed: true };
 }

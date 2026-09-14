@@ -9,14 +9,13 @@ import {
 import {
   RELATIONSHIP_STATUS_LABELS,
   computeCRMActionableKPIs,
-  getCRMNeedsAttention,
-  type CRMAttentionItem,
   type WorkbenchClient,
   type WorkbenchQuote,
 } from "@/modules/crm/core";
 import { formatDate, formatCurrency, todayISO } from "@/utils/date";
 import { AddClientButton } from "./AddClientButton";
 import { ClientActions } from "./ClientActions";
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -40,16 +39,6 @@ export default async function CRMPage() {
     };
   });
 
-  // Tuesday Patch Priority 3 (brief §CRM.1): "Needs attention -> Leads ->
-  // Active Clients -> Dormant" -- the mixed "contact vs commercial state"
-  // hierarchy is replaced with this explicit order. Geladeira clients
-  // never enter Needs Attention or the KPI denominators (see
-  // isActiveSurface / getCRMNeedsAttention).
-  const needsAttention = getCRMNeedsAttention(
-    clients as WorkbenchClient[],
-    workbenchData.quotes as WorkbenchQuote[],
-    today,
-  );
   const kpis = computeCRMActionableKPIs(
     clients as WorkbenchClient[],
     workbenchData.quotes as WorkbenchQuote[],
@@ -65,7 +54,7 @@ export default async function CRMPage() {
   const geladeiraClients = clients.filter((c) => c.archivalState === "GELADEIRA");
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
+    <div className={OPERATOR_WORKSPACE_CLASS}>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">👥 CRM</h1>
@@ -90,21 +79,6 @@ export default async function CRMPage() {
       <div className="mb-6">
         <AddClientButton />
       </div>
-
-      {/* Needs Attention (brief §CRM.5): the only place this surface
-          spends strong color. Everything below reads quiet by comparison. */}
-      {needsAttention.length > 0 && (
-        <div className="mb-8">
-          <h2 className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-red-300">
-            Needs attention
-          </h2>
-          <div className="space-y-1.5">
-            {needsAttention.map((item) => (
-              <NeedsAttentionRow key={`${item.kind}-${item.clientId}`} item={item} />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Leads */}
       {leads.length > 0 && (
@@ -215,21 +189,6 @@ export default async function CRMPage() {
         </div>
       )}
     </div>
-  );
-}
-
-function NeedsAttentionRow({ item }: { item: CRMAttentionItem }) {
-  const icon = item.kind === "FOLLOW_UP_OVERDUE" ? "⏰" : item.kind === "QUOTE_AWAITING_RESPONSE" ? "📝" : "💤";
-  return (
-    <Link
-      href={`/crm/${item.clientId}`}
-      className="flex items-center gap-2 rounded-xl border border-red-900/50 bg-red-950/10 px-4 py-2.5 text-sm hover:border-red-700/60"
-    >
-      <span className="text-red-300">{icon}</span>
-      <span className="font-black text-white">{item.clientName}</span>
-      <span className="text-zinc-500">—</span>
-      <span className="font-bold text-red-300">{item.detail}</span>
-    </Link>
   );
 }
 

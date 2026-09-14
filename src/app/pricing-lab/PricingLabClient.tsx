@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { getProductivityQuickOptions } from "@/modules/productivity/actions";
 import {
   computePackagePricing,
@@ -819,7 +820,7 @@ export function PricingLabClient({ config }: { config: PricingConfig }) {
   const discountPct = Math.round(result.discountRate * 100);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-5 sm:px-6 md:p-8">
+    <div className={`${OPERATOR_WORKSPACE_CLASS} max-w-6xl`}>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">🧪 Pricing Lab</h1>
         <p className="mt-1 text-sm text-zinc-500">

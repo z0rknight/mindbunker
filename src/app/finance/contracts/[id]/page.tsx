@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import {
   getCommercialContractById,
   getBillingEvidenceForContract,
@@ -57,7 +58,7 @@ export default async function ContractDetailPage({
     : null;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-5 sm:px-6 md:p-8">
+    <div className={`${OPERATOR_WORKSPACE_CLASS} max-w-4xl`}>
       <Link href="/finance/contracts" className="text-zinc-500 text-xs hover:text-white">
         ← Contracts
       </Link>

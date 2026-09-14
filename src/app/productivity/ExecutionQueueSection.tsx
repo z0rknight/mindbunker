@@ -85,7 +85,7 @@ export function ExecutionQueueSection({ queue, activeVideoId }: { queue: QueueRo
                 {items.length === 0 ? (
                   <div className="grid min-h-24 place-items-center rounded-xl border border-dashed border-zinc-800/80 px-3 text-center text-[11px] text-zinc-700">No videos here</div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {items.map((item) => (
                       <QueueTile
                         key={item.id}

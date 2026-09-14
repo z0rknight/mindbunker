@@ -27,6 +27,7 @@ import { selectExecutionQueue, selectNextExecutable } from "@/modules/productivi
 import { getVideoNextAction } from "@/modules/productivity/core";
 import { NowFocusPanel } from "@/components/work-sessions/NowFocusPanel";
 import { PixelDivider, PixelIcon } from "@/components/ui/PixelVisuals";
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -80,7 +81,7 @@ export default async function WarRoomPage() {
     : null;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-5 sm:p-6">
+    <div className={OPERATOR_WORKSPACE_CLASS}>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="pixel-frame mb-6 flex flex-col items-start justify-between gap-4 rounded-2xl border border-cyan-900/40 bg-gradient-to-br from-cyan-950/20 to-zinc-950 p-4 sm:flex-row sm:items-center sm:p-5">
         <div>
@@ -108,19 +109,38 @@ export default async function WarRoomPage() {
         </div>
       </header>
 
-      <NowFocusPanel
-        openSession={workSessionOverview.openSession}
-        openSessionElapsedSeconds={workSessionOverview.openSessionElapsedSeconds}
-        recommended={recommended}
-        variant="dominant"
-      />
+      {/* 14SEP Patch Sniper §27-28: War Room is the live command center
+          Emmanuel leaves open while operating -- LEFT is current
+          situation/command, CENTER reserves a 16:9 stage for a future
+          live visualization (deliberately a placeholder this patch, per
+          the mission's own instruction not to build the animation now),
+          RIGHT is the bounded queue/supporting signals. Every section
+          below is the exact same existing component with the exact same
+          props as before -- only their position in the grid changed. */}
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.6fr)_minmax(300px,0.95fr)]" data-testid="war-room-command-grid">
+        <div className="space-y-4">
+          <NowFocusPanel
+            openSession={workSessionOverview.openSession}
+            openSessionElapsedSeconds={workSessionOverview.openSessionElapsedSeconds}
+            recommended={recommended}
+            variant="dominant"
+          />
+          <DecisionsSection decisions={openDecisions} />
+        </div>
 
-      {/* Command state first: what is due, what changed, what needs a
-          decision. History and descriptive analytics follow below. */}
-      <div className="grid items-start gap-4 lg:grid-cols-3" data-testid="war-room-command-grid">
-        <ActiveCommitmentsSection commitments={relevantCommitments} nowIso={now.toISOString()} />
-        <ActiveSignalsSection signals={signals} />
-        <DecisionsSection decisions={openDecisions} />
+        <div
+          className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-cyan-900/50 bg-gradient-to-br from-cyan-950/10 to-zinc-950 text-center"
+          data-testid="war-room-live-stage"
+        >
+          <PixelIcon name="signal" className="h-6 w-6 text-cyan-800" />
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-800">Live visualization stage</p>
+          <p className="max-w-xs px-4 text-[11px] text-zinc-700">Reserved for a future 16:9 view. Layout is ready now so this doesn&apos;t need another redesign later.</p>
+        </div>
+
+        <div className="space-y-4">
+          <ActiveCommitmentsSection commitments={relevantCommitments} nowIso={now.toISOString()} />
+          <ActiveSignalsSection signals={signals} />
+        </div>
       </div>
       {/* House Cleaning Wave 2 §12: the research found this 7-day, 5-column
           table (each cell often packing 2-4 sub-values) too dense for a

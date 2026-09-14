@@ -3,6 +3,7 @@ import {
   PlanVideoButton,
 } from "@/components/ui/QuickActions";
 import { StatCard } from "@/components/ui/StatCard";
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import {
   getAllVideoLogs,
   getOpenBlockersByVideo,
@@ -264,7 +265,7 @@ export default async function ProductivityPage({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
+    <div className={OPERATOR_WORKSPACE_CLASS}>
       <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">

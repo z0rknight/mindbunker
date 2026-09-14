@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import {
   getSessionNarratives,
   getSessionTimelineItems,
@@ -100,7 +101,7 @@ export default async function WorkSessionHistoryPage({
       filterProjectId === null ? null : (sessions[0]?.projectName ?? "this project");
 
     return (
-      <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 md:p-8">
+      <div className={OPERATOR_WORKSPACE_CLASS}>
         <div className="mb-6">
           <Link
             href="/productivity"
@@ -187,7 +188,16 @@ export default async function WorkSessionHistoryPage({
   const sourceFilter = firstParam(query.source);
   const workTypeFilter = firstParam(query.workType);
 
-  const [items, videoOptions] = await Promise.all([
+  // 14SEP Patch Sniper §20: "the main view / first screen when opening
+  // should be a week sample and a month sample, with the detailed tooling
+  // below." True first entry only -- no ?view=, no legacy ?video=/?project=
+  // filter -- reuses the exact same canonical getSessionTimelineItems call
+  // this page already makes for the week/month tabs, just fetched once
+  // more up front. Every existing view (Timeline/Week/Month/Table) is
+  // still fully reachable via the switcher exactly as before.
+  const isDefaultLanding = requestedView === null && !hasLegacyFilter;
+
+  const [items, videoOptions, landingWeekItems, landingMonthItems] = await Promise.all([
     getSessionTimelineItems(
       view === "week"
         ? { kind: "week", mondayKey }
@@ -203,6 +213,8 @@ export default async function WorkSessionHistoryPage({
       now,
     ),
     getVideoOptionsForCorrection(),
+    isDefaultLanding ? getSessionTimelineItems({ kind: "week", mondayKey }, now) : Promise.resolve(null),
+    isDefaultLanding ? getSessionTimelineItems({ kind: "month", monthKey }, now) : Promise.resolve(null),
   ]);
   const filteredItems = filterSessionTimelineItems(items, {
     clientId: clientFilter,
@@ -211,7 +223,7 @@ export default async function WorkSessionHistoryPage({
   });
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 md:p-8">
+    <div className={OPERATOR_WORKSPACE_CLASS}>
       <div className="mb-6">
         <Link
           href="/productivity"
@@ -238,6 +250,19 @@ export default async function WorkSessionHistoryPage({
           </Link>
         </div>
       </div>
+
+      {isDefaultLanding && landingWeekItems && landingMonthItems && (
+        <div className="mb-6 grid gap-4 xl:grid-cols-2">
+          <div>
+            <h2 className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">This week</h2>
+            <SessionWeekCalendar items={landingWeekItems} mondayKey={mondayKey} nowIso={now.toISOString()} />
+          </div>
+          <div>
+            <h2 className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">This month</h2>
+            <SessionMonthCalendar items={landingMonthItems} monthKey={monthKey} />
+          </div>
+        </div>
+      )}
 
       <SessionViewSwitcher
         view={view}

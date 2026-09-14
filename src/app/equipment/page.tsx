@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { StatCard } from "@/components/ui/StatCard";
 import { getEquipmentOverview } from "@/modules/equipment/actions";
 import {
@@ -43,7 +44,7 @@ export default async function EquipmentPage({
   const maxDomainTotal = Math.max(1, ...byDomain.map((d) => d.coverage.total));
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
+    <div className={OPERATOR_WORKSPACE_CLASS}>
       {/* HEADER */}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>

@@ -12,6 +12,7 @@ import {
   isDeliverableVideo,
   isUnassignedClientVideo,
   planVideoTransition,
+  resolveVideoDeletionOutcome,
   selectVideoWorkspaceLogs,
   validateCoverUrl,
   validateVideoAssignment,
@@ -679,4 +680,52 @@ test("computeRevisionCount: counts the revisions rows belonging to one video", (
 
 test("computeRevisionCount: zero rows is an honest 0", () => {
   assert.equal(computeRevisionCount([]), 0);
+});
+
+// 14SEP Patch Sniper §16-17/§36: resolveVideoDeletionOutcome is the exact
+// decision logic deleteVideoLog (productivity/actions.ts) now calls --
+// extracted so it's testable without a Cloudflare-only DB connection.
+function noDependencies() {
+  return {
+    hasTrackedWork: false,
+    operationalMemoryCount: 0,
+    hasCommitmentMemory: false,
+    hasFrictionMemory: false,
+    hasBlockerMemory: false,
+    hasDeliveryMemory: false,
+    hasChecklistMemory: false,
+  };
+}
+
+test("resolveVideoDeletionOutcome: a video with no real history is safe to delete", () => {
+  assert.deepEqual(resolveVideoDeletionOutcome(noDependencies()), { allowed: true });
+});
+
+test("resolveVideoDeletionOutcome: tracked work session blocks deletion", () => {
+  const outcome = resolveVideoDeletionOutcome({ ...noDependencies(), hasTrackedWork: true });
+  assert.equal(outcome.allowed, false);
+  assert.match(outcome.reason, /tracked work/i);
+});
+
+test("resolveVideoDeletionOutcome: operational memory notes block deletion", () => {
+  const outcome = resolveVideoDeletionOutcome({ ...noDependencies(), operationalMemoryCount: 1 });
+  assert.equal(outcome.allowed, false);
+});
+
+test("resolveVideoDeletionOutcome: each of commitment/friction/blocker/delivery/checklist memory alone blocks deletion", () => {
+  const fields = ["hasCommitmentMemory", "hasFrictionMemory", "hasBlockerMemory", "hasDeliveryMemory", "hasChecklistMemory"];
+  for (const field of fields) {
+    const outcome = resolveVideoDeletionOutcome({ ...noDependencies(), [field]: true });
+    assert.equal(outcome.allowed, false, `expected ${field} alone to block deletion`);
+    assert.match(outcome.reason, /operational custody records/i);
+  }
+});
+
+test("resolveVideoDeletionOutcome: tracked work is checked first even when other dependencies also exist", () => {
+  const outcome = resolveVideoDeletionOutcome({
+    ...noDependencies(),
+    hasTrackedWork: true,
+    hasDeliveryMemory: true,
+  });
+  assert.match(outcome.reason, /tracked work/i);
 });

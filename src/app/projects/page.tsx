@@ -25,6 +25,7 @@ import { NewProjectButton } from "./NewProjectButton";
 import { resolveCoverUrl } from "@/modules/media/core";
 import { ProjectCover } from "./ProjectCover";
 import { PixelEmptyState, PixelIcon } from "@/components/ui/PixelVisuals";
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -270,7 +271,7 @@ export default async function ProjectsPage({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
+    <div className={OPERATOR_WORKSPACE_CLASS}>
       <header className="mb-6">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300">
           Clients → projects → videos

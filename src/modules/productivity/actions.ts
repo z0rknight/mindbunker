@@ -28,6 +28,7 @@ import {
   getVideoMetadataChanges,
   isPositiveId,
   planVideoTransition,
+  resolveVideoDeletionOutcome,
   validateDeliveryUrl,
   validateVideoAssignment,
   validateVideoCreateInput,
@@ -43,11 +44,7 @@ import {
   isVideoStatus,
   type VideoStatus,
 } from "./config";
-import {
-  VIDEO_OPERATIONAL_MEMORY_DELETE_ERROR,
-  VIDEO_OPERATIONAL_NOTE_EVENT_TYPE,
-  videoOperationalMemoryBlocksDeletion,
-} from "@/modules/video-memory/core";
+import { VIDEO_OPERATIONAL_NOTE_EVENT_TYPE } from "@/modules/video-memory/core";
 import { revalidateProductivityViews } from "./revalidation";
 import { isQueueEligible, moveBefore, moveInOrder, resequencePositions, type QueueMoveDirection } from "./queue";
 import {
@@ -1237,28 +1234,19 @@ export async function deleteVideoLog(
     db.select({ id: deliveries.id }).from(deliveries).where(eq(deliveries.videoId, id)).limit(1),
     db.select({ id: productionChecklistItems.id }).from(productionChecklistItems).where(eq(productionChecklistItems.videoId, id)).limit(1),
   ]);
-  if (trackedWork[0]) {
+  const deletionOutcome = resolveVideoDeletionOutcome({
+    hasTrackedWork: Boolean(trackedWork[0]),
+    operationalMemoryCount: operationalMemory.length,
+    hasCommitmentMemory: Boolean(commitmentMemory[0]),
+    hasFrictionMemory: Boolean(frictionMemory[0]),
+    hasBlockerMemory: Boolean(blockerMemory[0]),
+    hasDeliveryMemory: Boolean(deliveryMemory[0]),
+    hasChecklistMemory: Boolean(checklistMemory[0]),
+  });
+  if (!deletionOutcome.allowed) {
     return {
       success: false,
-      error: "Videos with tracked work cannot be deleted.",
-    };
-  }
-  if (videoOperationalMemoryBlocksDeletion(operationalMemory.length)) {
-    return {
-      success: false,
-      error: VIDEO_OPERATIONAL_MEMORY_DELETE_ERROR,
-    };
-  }
-  if (
-    commitmentMemory[0] ||
-    frictionMemory[0] ||
-    blockerMemory[0] ||
-    deliveryMemory[0] ||
-    checklistMemory[0]
-  ) {
-    return {
-      success: false,
-      error: "Videos with operational custody records cannot be deleted.",
+      error: deletionOutcome.reason,
     };
   }
 
