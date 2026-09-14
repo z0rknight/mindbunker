@@ -270,3 +270,103 @@ textarea {
 ::-webkit-scrollbar-thumb:hover {
   background: #52525b;
 }
+
+/* ── War Room Restaurant View V1 ─────────────────────────────────────────
+   A moody top-down tavern floor rendered entirely in DOM/CSS layers, art
+   assets are swappable rects/gradients only -- no baked labels, no game
+   engine. Every animation here is cheap ambient CSS, guarded by the same
+   prefers-reduced-motion block used everywhere else in this file. */
+.wr-floor {
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 8%, rgba(251, 191, 36, .10), transparent 62%),
+    radial-gradient(ellipse 60% 50% at 12% 85%, rgba(251, 146, 60, .06), transparent 65%),
+    radial-gradient(ellipse 60% 50% at 88% 85%, rgba(251, 146, 60, .06), transparent 65%),
+    repeating-linear-gradient(90deg, #1c1410 0 34px, #201713 34px 36px),
+    linear-gradient(180deg, #17110d 0%, #120d0a 100%);
+}
+
+.wr-vignette {
+  background: radial-gradient(ellipse 90% 90% at 50% 50%, transparent 55%, rgba(0, 0, 0, .55) 100%);
+}
+
+@keyframes wr-lamp-flicker {
+  0%, 100% { opacity: 1; }
+  8% { opacity: .82; }
+  20% { opacity: 1; }
+  45% { opacity: .9; }
+  60% { opacity: 1; }
+}
+
+.wr-lamp-glow {
+  animation: wr-lamp-flicker 5.5s ease-in-out infinite;
+}
+
+.wr-table-marker {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  border-radius: 1px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .4);
+}
+
+.wr-table-marker-active { background: #34d399; box-shadow: 0 0 8px rgba(52, 211, 153, .55); }
+.wr-table-marker-review { background: #fbbf24; box-shadow: 0 0 8px rgba(251, 191, 36, .5); }
+.wr-table-marker-blocked { background: #f87171; box-shadow: 0 0 8px rgba(248, 113, 113, .55); }
+.wr-table-marker-idle { background: #52525b; }
+
+.wr-table-marker-review::after,
+.wr-table-marker-blocked::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  animation: mb-live-ring 2.4s ease-out infinite;
+}
+.wr-table-marker-review::after { color: rgba(251, 191, 36, .65); }
+.wr-table-marker-blocked::after { color: rgba(248, 113, 113, .65); }
+
+.wr-table-button {
+  transition: transform 160ms ease, filter 160ms ease;
+}
+.wr-table-button:hover,
+.wr-table-button:focus-visible {
+  transform: translateY(-2px);
+  filter: brightness(1.12);
+}
+
+.wr-editor-glow {
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, .35), 0 0 22px rgba(56, 189, 248, .28);
+}
+
+@keyframes wr-editor-pulse {
+  0%, 100% { opacity: .85; }
+  50% { opacity: 1; }
+}
+.wr-editor-pulse { animation: wr-editor-pulse 2.2s ease-in-out infinite; }
+
+.wr-ticket {
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+@keyframes wr-ticket-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(251, 191, 36, 0); }
+  50% { box-shadow: 0 0 10px rgba(251, 191, 36, .35); }
+}
+.wr-ticket-review { animation: wr-ticket-pulse 2.6s ease-in-out infinite; }
+
+@keyframes wr-panel-enter {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.wr-panel-enter { animation: wr-panel-enter 160ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wr-lamp-glow { animation: none; }
+  .wr-table-marker-review::after,
+  .wr-table-marker-blocked::after { animation: none; opacity: .55; }
+  .wr-editor-pulse { animation: none; }
+  .wr-ticket-review { animation: none; box-shadow: 0 0 6px rgba(251, 191, 36, .25); }
+  .wr-panel-enter { animation: none; }
+  .wr-table-button { transition: none; }
+}

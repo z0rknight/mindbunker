@@ -18,6 +18,7 @@ import { formatCurrency, startOfMonthISO, todayISO } from "@/utils/date";
 import Link from "next/link";
 import { WarRoomRefreshControl } from "./WarRoomRefreshControl";
 import { getWorkSessionOverview } from "@/modules/work-sessions/data";
+import { getLastActiveByClient } from "@/modules/work-sessions/data";
 import {
   getAllVideoLogs,
   getOpenBlockersByVideo,
@@ -28,6 +29,11 @@ import { getVideoNextAction } from "@/modules/productivity/core";
 import { NowFocusPanel } from "@/components/work-sessions/NowFocusPanel";
 import { PixelDivider, PixelIcon } from "@/components/ui/PixelVisuals";
 import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
+import { getProductionOrders } from "@/modules/production-orders/data";
+import { getRestaurantClientCandidates } from "@/modules/war-room/data";
+import { getClientProjectCommercialAttribution } from "@/modules/finance/actions";
+import { selectRestaurantClients, buildRestaurantViewModel } from "@/modules/war-room/restaurant-core";
+import { WarRoomRestaurantStage } from "./restaurant/WarRoomRestaurantStage";
 
 export const dynamic = "force-dynamic";
 
@@ -42,21 +48,65 @@ export default async function WarRoomPage() {
   // Promise.all. Fetching it once and handing the same resolved rows to
   // both removes the duplicate query without changing either result.
   const openCommitmentsPromise = getOpenCommitmentsWithContext();
-  const [data, signals, dailyLedger, openDecisions, weekEstimates, monthHours, crmSummary, openCommitments, workSessionOverview, videos, blockerMap, commitmentMap] =
-    await Promise.all([
-      getWarRoomData(),
-      openCommitmentsPromise.then((rows) => getActiveSignals(rows)),
-      getDailyLedger(7),
-      listOpenDecisions(),
-      getRateEquivalentsForPeriod(mondayOfWeek(today), today),
-      getClientHoursForPeriod(startOfMonthISO(), today),
-      getCRMSummary(),
-      openCommitmentsPromise,
-      getWorkSessionOverview(),
-      getAllVideoLogs(),
-      getOpenBlockersByVideo(),
-      getSoonestOpenCommitmentByVideo(),
-    ]);
+  const [
+    data,
+    signals,
+    dailyLedger,
+    openDecisions,
+    weekEstimates,
+    monthHours,
+    crmSummary,
+    openCommitments,
+    workSessionOverview,
+    videos,
+    blockerMap,
+    commitmentMap,
+    restaurantClientCandidates,
+    productionOrders,
+    lastActiveByClient,
+  ] = await Promise.all([
+    getWarRoomData(),
+    openCommitmentsPromise.then((rows) => getActiveSignals(rows)),
+    getDailyLedger(7),
+    listOpenDecisions(),
+    getRateEquivalentsForPeriod(mondayOfWeek(today), today),
+    getClientHoursForPeriod(startOfMonthISO(), today),
+    getCRMSummary(),
+    openCommitmentsPromise,
+    getWorkSessionOverview(),
+    getAllVideoLogs(),
+    getOpenBlockersByVideo(),
+    getSoonestOpenCommitmentByVideo(),
+    getRestaurantClientCandidates(),
+    getProductionOrders(),
+    getLastActiveByClient(),
+  ]);
+
+  // Restaurant View (War Room Restaurant View V1): select the bounded
+  // 6-8 relevant clients first (pure, from data already fetched above --
+  // no extra query), THEN fetch canonical commercial attribution only for
+  // those selected clients. This keeps the feature at a fixed, small
+  // number of extra queries regardless of total client count instead of
+  // an N+1 over every client in the database.
+  const selectedRestaurantClients = selectRestaurantClients(
+    restaurantClientCandidates,
+    videos,
+    new Set(blockerMap.keys()),
+    lastActiveByClient,
+  );
+  const restaurantCommercialEntries = await Promise.all(
+    selectedRestaurantClients.map(
+      async (client) => [client.id, await getClientProjectCommercialAttribution(client.id)] as const,
+    ),
+  );
+  const restaurantViewModel = buildRestaurantViewModel({
+    selectedClients: selectedRestaurantClients,
+    commercialByClientId: new Map(restaurantCommercialEntries),
+    productionOrders,
+    openSession: workSessionOverview.openSession,
+    openSessionElapsedSeconds: workSessionOverview.openSessionElapsedSeconds,
+    openSessionStale: workSessionOverview.openSessionStale,
+  });
   const { income, efficiency, biological, momentum } = data;
   // Only overdue + due-soon (next 48h) commitments belong here -- War
   // Room is "exceções / visão situacional" (brief's own surface
@@ -109,14 +159,14 @@ export default async function WarRoomPage() {
         </div>
       </header>
 
-      {/* 14SEP Patch Sniper §27-28: War Room is the live command center
+      {/* War Room Restaurant View V1: War Room is the live command center
           Emmanuel leaves open while operating -- LEFT is current
-          situation/command, CENTER reserves a 16:9 stage for a future
-          live visualization (deliberately a placeholder this patch, per
-          the mission's own instruction not to build the animation now),
-          RIGHT is the bounded queue/supporting signals. Every section
-          below is the exact same existing component with the exact same
-          props as before -- only their position in the grid changed. */}
+          situation/command, CENTER is the 16:9 Restaurant View stage
+          (clients as tables, open Production Orders as the comanda rail,
+          the canonical Work Session as the editor station), RIGHT is the
+          bounded queue/supporting signals. Every side section below is
+          the exact same existing component with the exact same props as
+          before -- only their position in the grid changed. */}
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.6fr)_minmax(300px,0.95fr)]" data-testid="war-room-command-grid">
         <div className="space-y-4">
           <NowFocusPanel
@@ -128,14 +178,7 @@ export default async function WarRoomPage() {
           <DecisionsSection decisions={openDecisions} />
         </div>
 
-        <div
-          className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-cyan-900/50 bg-gradient-to-br from-cyan-950/10 to-zinc-950 text-center"
-          data-testid="war-room-live-stage"
-        >
-          <PixelIcon name="signal" className="h-6 w-6 text-cyan-800" />
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-800">Live visualization stage</p>
-          <p className="max-w-xs px-4 text-[11px] text-zinc-700">Reserved for a future 16:9 view. Layout is ready now so this doesn&apos;t need another redesign later.</p>
-        </div>
+        <WarRoomRestaurantStage viewModel={restaurantViewModel} />
 
         <div className="space-y-4">
           <ActiveCommitmentsSection commitments={relevantCommitments} nowIso={now.toISOString()} />
