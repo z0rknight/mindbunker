@@ -8,9 +8,7 @@ import { ProjectManager, type ClientProjectView } from "./ProjectManager";
 import { InstagramProfileCard } from "./InstagramProfileCard";
 import { CoverUploadField } from "@/components/media/CoverUploadField";
 import { resolveCoverUrl } from "@/modules/media/core";
-import { PortalControl } from "@/components/client-portal/PortalControl";
 import { PaymentRequestPanel } from "@/components/client-portal/PaymentRequestPanel";
-import { setClientDashboardSection, setClientPortalCapability } from "@/modules/client-portal/admin-actions";
 
 interface ClientTabsProps {
   client: {
@@ -268,102 +266,12 @@ export function ClientTabs({
               </div>
             </section>
 
-            {/* House Cleaning Wave 2 §21 (RMEDIA_SYSTEM_SIMPLIFICATION_RESEARCH_2026_09.md):
-                a lead has no production relationship yet -- portal
-                capabilities and dashboard-layout toggles are meaningless
-                until they convert. Conditional on the existing
-                client.status field only; nothing about these two
-                sections changes once status becomes "active". */}
-            {client.status !== "lead" && (
-            <>
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4">
-              <h3 className="text-xs font-black uppercase tracking-wider text-violet-300">Client portal controls</h3>
-              <p className="mt-1 text-xs leading-5 text-zinc-500">Explicit capabilities; internal records remain unchanged when access is hidden.</p>
-              <div className="mt-3 grid gap-2 md:grid-cols-3">
-                <PortalControl
-                  label="Financial summary"
-                  description="Recorded billing evidence and rates"
-                  enabled={client.portalCanSeeFinancials}
-                  onChange={(enabled) => setClientPortalCapability(client.id, "financials", enabled)}
-                />
-                <PortalControl
-                  label="Review actions"
-                  description="Approve or request changes"
-                  enabled={client.portalCanReview}
-                  onChange={(enabled) => setClientPortalCapability(client.id, "review", enabled)}
-                />
-                <PortalControl
-                  label="Priority request"
-                  description="Choose the current item within a project"
-                  enabled={client.portalCanSetPriority}
-                  onChange={(enabled) => setClientPortalCapability(client.id, "priority", enabled)}
-                />
-              </div>
-            </section>
-
-            {/* Operator Discovery + Portal Personalization patch
-                (2026-09-14): LAYOUT toggles, deliberately a separate
-                section from "Client portal controls" above -- those gate
-                real capabilities/actions (financials, review, priority),
-                these only decide whether a dashboard section renders at
-                all. A section hidden here can still have fully visible
-                data underneath it (e.g. Video Library hidden does not
-                touch video.visibleToClient) -- see PortalControl's own
-                "Visible/Hidden" copy, which reads correctly for both
-                meanings without implying a security boundary that isn't
-                there. */}
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4">
-              <h3 className="text-xs font-black uppercase tracking-wider text-violet-300">Client dashboard sections</h3>
-              <p className="mt-1 text-xs leading-5 text-zinc-500">
-                Layout only. Financial data stays gated by the capability above regardless of this toggle.
-              </p>
-              <div className="mt-3 grid gap-2 md:grid-cols-3">
-                <PortalControl
-                  label="Current account"
-                  description="Open payment request card"
-                  enabled={client.portalShowCurrentAccount}
-                  onChange={(enabled) => setClientDashboardSection(client.id, "currentAccount", enabled)}
-                />
-                <PortalControl
-                  label="Search"
-                  description="Search this client's own videos"
-                  enabled={client.portalShowSearch}
-                  onChange={(enabled) => setClientDashboardSection(client.id, "search", enabled)}
-                />
-                <PortalControl
-                  label="Summary"
-                  description="Stat tiles and weekly/monthly counts"
-                  enabled={client.portalShowSummary}
-                  onChange={(enabled) => setClientDashboardSection(client.id, "summary", enabled)}
-                />
-                <PortalControl
-                  label="Active work"
-                  description="In-production batch, attention, current work"
-                  enabled={client.portalShowActiveWork}
-                  onChange={(enabled) => setClientDashboardSection(client.id, "activeWork", enabled)}
-                />
-                <PortalControl
-                  label="Recent deliveries"
-                  description="Most recently delivered videos"
-                  enabled={client.portalShowRecentDeliveries}
-                  onChange={(enabled) => setClientDashboardSection(client.id, "recentDeliveries", enabled)}
-                />
-                <PortalControl
-                  label="Completed by type"
-                  description="Breakdown chips by content type"
-                  enabled={client.portalShowCompletedByType}
-                  onChange={(enabled) => setClientDashboardSection(client.id, "completedByType", enabled)}
-                />
-                <PortalControl
-                  label="Video library"
-                  description="Full gallery + previous batches archive"
-                  enabled={client.portalShowVideoLibrary}
-                  onChange={(enabled) => setClientDashboardSection(client.id, "videoLibrary", enabled)}
-                />
-              </div>
-            </section>
-            </>
-            )}
+            {/* Spatial Recomposition Wave 4 §10: the "Client portal
+                controls" and "Client dashboard sections" PortalControl
+                grids that used to live here moved to ClientDashboardManager
+                on the main page (bottom region of the spatial layout) --
+                same actions, same flags, just no longer duplicated inside
+                this tab. */}
 
             <PaymentRequestPanel clientId={client.id} requests={paymentRequests} />
 

@@ -1,17 +1,14 @@
 import { getAdminBookingConfiguration } from "@/modules/booking/data";
 import { getClientById, getClientIntelligence } from "@/modules/crm/actions";
 import { getAdminGatewayWorkspace } from "@/modules/gateway/data";
-import { getProjectsForClient } from "@/modules/projects/actions";
-import { PROJECT_STATUS_GROUPS } from "@/modules/projects/config";
+import { getProjectsForClient, getUnassignedClientVideos } from "@/modules/projects/actions";
 import { getInstagramImportStatus } from "@/modules/crm/actions";
+import { getCommercialContracts } from "@/modules/finance/actions";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { ClientIntelligencePanel } from "./ClientIntelligencePanel";
 import { ClientTabs } from "./ClientTabs";
-import { RenameClientButton } from "./RenameClientButton";
 import { GeladeiraControl } from "./GeladeiraControl";
 import { OpportunityPanel } from "./OpportunityPanel";
-import { PortalAccessPanel } from "./PortalAccessPanel";
 import { QuotePanel } from "./QuotePanel";
 import { getQuotesForClient } from "@/modules/quotes/data";
 import { computeClientCommercialValue } from "@/modules/quotes/core";
@@ -23,6 +20,11 @@ import { getRateEquivalentsForPeriod } from "@/modules/finance/actions";
 import { mondayOfWeek } from "@/modules/work-sessions/core";
 import { todayISO } from "@/utils/date";
 import { ClientOperationalDossier } from "./ClientOperationalDossier";
+import { ClientIdentityRail } from "./ClientIdentityRail";
+import { ActiveJobsPanel } from "./ActiveJobsPanel";
+import { ClientMetricStrip } from "./ClientMetricStrip";
+import { ClientDashboardManager } from "./ClientDashboardManager";
+import { filterVideosForClient, selectActiveContractForClient } from "@/modules/crm/spatial-composition";
 
 export const dynamic = "force-dynamic";
 
@@ -81,24 +83,44 @@ export default async function ClientDetailPage({
     notFound();
   }
   const today = todayISO();
-  const [workspace, bookingConfiguration, projects, instagramStatus, clientIntelligence, quotes, custody, weekEstimates, paymentRequests] =
-    await Promise.all([
-      getAdminGatewayWorkspace(clientId),
-      getAdminBookingConfiguration(),
-      getProjectsForClient(clientId),
-      getInstagramImportStatus(),
-      getClientIntelligence(clientId),
-      getQuotesForClient(clientId),
-      getClientCustody(clientId),
-      // Tuesday Patch Completion Round §H: "put the weekly value where the
-      // complaint actually was" -- the original complaint about Dave's
-      // $300/week was made looking at this exact page. Reuses the same
-      // War Room calculation (getRateEquivalentsForPeriod), never a
-      // second monetary computation; Finance stays the canonical owner.
-      getRateEquivalentsForPeriod(mondayOfWeek(today), today),
-      getPaymentRequestsForClient(clientId),
-    ]);
+  const [
+    workspace,
+    bookingConfiguration,
+    projects,
+    instagramStatus,
+    clientIntelligence,
+    quotes,
+    custody,
+    weekEstimates,
+    paymentRequests,
+    allUnassignedVideos,
+    allContracts,
+  ] = await Promise.all([
+    getAdminGatewayWorkspace(clientId),
+    getAdminBookingConfiguration(),
+    getProjectsForClient(clientId),
+    getInstagramImportStatus(),
+    getClientIntelligence(clientId),
+    getQuotesForClient(clientId),
+    getClientCustody(clientId),
+    // Tuesday Patch Completion Round §H: "put the weekly value where the
+    // complaint actually was" -- the original complaint about Dave's
+    // $300/week was made looking at this exact page. Reuses the same
+    // War Room calculation (getRateEquivalentsForPeriod), never a
+    // second monetary computation; Finance stays the canonical owner.
+    getRateEquivalentsForPeriod(mondayOfWeek(today), today),
+    getPaymentRequestsForClient(clientId),
+    // Spatial Recomposition Wave 4 §6: these two are global (all-clients)
+    // queries that already exist for other surfaces -- filtered to this
+    // client in JS below rather than adding new client-scoped SQL, so the
+    // page stays at the same query count it already had.
+    getUnassignedClientVideos(),
+    getCommercialContracts(),
+  ]);
   const weekEstimateForClient = weekEstimates.find((row) => row.clientId === clientId) ?? null;
+  const unassignedVideos = filterVideosForClient(allUnassignedVideos, clientId);
+  const activeContract = selectActiveContractForClient(allContracts, clientId);
+  const recentNote = clientIntelligence.recentMemoryNotes[0] ?? null;
   // Client Service Reality Patch §6/§8 -- Quote rows carry Date | null
   // fields (createdAt) from the DB layer; serialize to string | null
   // before crossing into the "use client" QuotePanel, same pattern as
@@ -119,104 +141,49 @@ export default async function ClientDetailPage({
   const commercialValue = computeClientCommercialValue(quotes);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
-      {/* Header */}
-      <div className="mb-6">
-        <Link
-          href="/crm"
-          className="text-zinc-500 text-sm hover:text-zinc-300 transition-colors inline-flex items-center gap-1"
-        >
-          ← Back to CRM
-        </Link>
-        <div className="mt-2 flex items-center gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-800 text-xs font-black text-zinc-400">
-            {client.instagramProfilePictureUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={client.instagramProfilePictureUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              client.name.slice(0, 2).toUpperCase()
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className="truncate text-2xl font-bold text-white">{client.name}</h1>
-              <RenameClientButton clientId={client.id} currentName={client.name} />
-            </div>
-            {client.instagramUsername && <p className="mt-0.5 text-xs font-bold text-fuchsia-400">@{client.instagramUsername}</p>}
-          </div>
+    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 md:p-8">
+      {/* Spatial Recomposition Wave 4: 5-region grid -- Identity Rail
+          (left) / Active Jobs (center, primary) / Operational Dossier
+          (right) on desktop, stacking Identity -> Dossier -> Active Jobs
+          on narrow screens per the blueprint's mobile order. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[17%_minmax(0,1fr)_26%]">
+        <div className="order-1">
+          <ClientIdentityRail client={client} />
         </div>
-        <div className="flex items-center gap-3 mt-1">
-          <span
-            className={`text-xs font-semibold uppercase tracking-wider px-2 py-1 rounded ${
-              client.status === "active"
-                ? "bg-emerald-500/20 text-emerald-400"
-                : client.status === "lead"
-                ? "bg-blue-500/20 text-blue-400"
-                : "bg-zinc-500/20 text-zinc-400"
-            }`}
-          >
-            {client.status}
-          </span>
-          {/* Brief C §11A: the opportunity-stage badge that used to render
-              here duplicated the exact same label OpportunityPanel already
-              shows in its own header just below -- when opportunityStage is
-              "active" the page visibly said "ACTIVE" twice. Removed here;
-              OpportunityPanel remains the one place that stage renders. */}
-          {client.source && (
-            <span className="text-zinc-500 text-xs">via {client.source}</span>
-          )}
-          <Link
-            href={`/crm/${client.id}/preview`}
-            className="ml-auto rounded-full border border-amber-700/40 bg-amber-950/30 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-amber-300 hover:bg-amber-900/40"
-          >
-            👁 View as client
-          </Link>
+        <div className="order-3 lg:order-2">
+          <ActiveJobsPanel
+            clientId={client.id}
+            clientDefaultCoverUrl={client.defaultCoverUrl}
+            clientAvatarUrl={client.instagramProfilePictureUrl}
+            projects={projects}
+            unassignedVideos={unassignedVideos}
+          />
+        </div>
+        <div className="order-2 lg:order-3">
+          <ClientOperationalDossier
+            status={client.status}
+            lastInteractionAt={client.lastInteractionAt?.toISOString() ?? null}
+            nextAction={client.nextAction}
+            nextActionDate={client.nextActionDate}
+            contract={activeContract}
+            portalPasswordSetAt={client.portalPasswordSetAt ? client.portalPasswordSetAt.toISOString() : null}
+            recentNote={recentNote}
+          />
         </div>
       </div>
 
-      <ClientOperationalDossier
-        status={client.status}
-        lastInteractionAt={client.lastInteractionAt?.toISOString() ?? null}
-        realizedRevenue={clientIntelligence.totalRevenueByCurrency}
-        activeProjectsCount={clientIntelligence.activeProjectsCount}
-        currentProductionCount={clientIntelligence.videosInProgressCount}
-        nextAction={client.nextAction}
-        nextActionDate={client.nextActionDate}
-      />
+      {/* Client Metrics -- lower strip, 4 facts, no bare hours, no
+          lifetime revenue (see mission constraints). */}
+      <div className="mt-4">
+        <ClientMetricStrip
+          totalProjectsCount={clientIntelligence.totalProjectsCount}
+          activeProjectsCount={clientIntelligence.activeProjectsCount}
+          completedVideosCount={clientIntelligence.completedVideosCount}
+          revisionCount={clientIntelligence.revisionCount}
+        />
+      </div>
 
-      {/* Brief C ("Final Local Ingest / Live Readiness") §11B: real QA
-          found Active Projects "too buried" -- reachable only inside the
-          Projects tab several clicks down. This surfaces them right at the
-          top, using the exact same `projects` data already fetched below
-          for ProjectManager (no new query), and links straight into each
-          Project workspace. Compact operational metrics (active project
-          count, total videos, tracked hours) already exist and are shown
-          just below in ClientIntelligencePanel -- not duplicated here. */}
-      {(() => {
-        const activeProjects = projects.filter(
-          (project) => PROJECT_STATUS_GROUPS[project.status] === "active",
-        );
-        if (activeProjects.length === 0) return null;
-        return (
-          <div className="mb-6 rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-4">
-            <p className="mb-3 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">
-              Active projects ({activeProjects.length})
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {activeProjects.map((project) => (
-                <Link
-                  key={project.id}
-                  href={`/projects/${project.id}`}
-                  className="rounded-xl border border-cyan-700/40 bg-zinc-950/50 px-3 py-2 text-xs font-bold text-cyan-200 transition hover:bg-cyan-900/30"
-                >
-                  {project.name}
-                </Link>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
+      <div className="mt-6 space-y-6">
       <OpportunityPanel
         client={{
           id: client.id,
@@ -261,25 +228,6 @@ export default async function ClientDetailPage({
         hasPortalPassword={Boolean(client.portalPasswordHash)}
       />
 
-      {/* House Cleaning Wave 2 §21: a portal login is premature for a lead
-          -- there's no production relationship yet for them to check on.
-          Conditionally simplified using the existing client.status field,
-          not a new entity/model. Once a lead converts (status becomes
-          "active"), this section appears with nothing lost -- the
-          underlying portalPasswordHash/setAt fields are untouched either
-          way. */}
-      {client.status !== "lead" && (
-        <div className="mb-6">
-          <PortalAccessPanel
-            clientId={client.id}
-            clientEmail={client.email}
-            portalPasswordSetAt={
-              client.portalPasswordSetAt ? client.portalPasswordSetAt.toISOString() : null
-            }
-          />
-        </div>
-      )}
-
       {/* Quote Approval (Client Service Reality Patch §6) -- log a quote
           from a Pricing Lab calculation, move it DRAFT -> SENT ->
           APPROVED/DECLINED, then create the linked Project/Video once
@@ -296,6 +244,33 @@ export default async function ClientDetailPage({
           autoOpen={shouldCreateQuote}
         />
       </div>
+      </div>
+
+      {/* Client Dashboard Manager -- Wave 4 §10: visual section-map
+          replacing the two flat checkbox-wall PortalControl grids that
+          used to live inside ClientTabs' Overview tab (now removed
+          there). Same underlying actions/flags, just regrouped. Gated
+          on client.status like the panel it replaces -- a lead has no
+          production relationship yet, so a portal manager is clutter. */}
+      {client.status !== "lead" && (
+        <div className="mt-6">
+          <ClientDashboardManager
+            clientId={client.id}
+            clientEmail={client.email}
+            portalPasswordSetAt={client.portalPasswordSetAt ? client.portalPasswordSetAt.toISOString() : null}
+            portalCanSeeFinancials={client.portalCanSeeFinancials}
+            portalCanReview={client.portalCanReview}
+            portalCanSetPriority={client.portalCanSetPriority}
+            portalShowCurrentAccount={client.portalShowCurrentAccount}
+            portalShowSearch={client.portalShowSearch}
+            portalShowSummary={client.portalShowSummary}
+            portalShowActiveWork={client.portalShowActiveWork}
+            portalShowRecentDeliveries={client.portalShowRecentDeliveries}
+            portalShowCompletedByType={client.portalShowCompletedByType}
+            portalShowVideoLibrary={client.portalShowVideoLibrary}
+          />
+        </div>
+      )}
 
       {/* Client Tabs */}
       <ClientTabs
