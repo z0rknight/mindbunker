@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   daysAgoISO,
+  formatOperatorTime,
   inclusiveWindowStartISO,
   operatorDateKey,
   operatorMonthProgress,
@@ -54,4 +55,17 @@ test("month boundaries and calendar subtraction use America/Sao_Paulo", () => {
     dayOfMonth: 31,
     daysInMonth: 31,
   });
+});
+
+// Global Health Audit — War Room hydration P0 (React #418): the bug was
+// two different runtimes computing different text for the same instant
+// because neither called out an explicit timeZone. This test pins
+// formatOperatorTime's output for a fixed instant so a regression that
+// reintroduces a bare toLocaleTimeString()-style call (implicitly using
+// whatever timezone the test runner's own host happens to be in) fails
+// here instead of only showing up as a live-site hydration mismatch.
+test("formatOperatorTime is stable for a fixed instant regardless of host timezone", () => {
+  const instant = "2026-09-01T23:58:01.000Z";
+  assert.equal(formatOperatorTime(instant), "08:58:01 PM");
+  assert.equal(formatOperatorTime(new Date(instant)), "08:58:01 PM");
 });

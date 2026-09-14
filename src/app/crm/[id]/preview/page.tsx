@@ -39,7 +39,16 @@ export default async function ClientPreviewPage({
           {view.activeProjectsCount} active project{view.activeProjectsCount === 1 ? "" : "s"} · {view.totalVideos} video{view.totalVideos === 1 ? "" : "s"}
         </p>
 
-        {view.readyForReview.length > 0 && (
+        {/* Operator Discovery + Portal Personalization patch (2026-09-14):
+            this preview already only ever showed a subset of the real
+            dashboard's sections (no Current Account, Search, Summary, or
+            Completed-by-type here) -- preserving that, per the brief's own
+            "no impersonation infrastructure expansion." The two section
+            toggles this preview DOES represent (Active work, Recent
+            deliveries) are now gated the same way the real dashboard
+            gates them, so toggling them in CRM has a visible effect here
+            without redesigning or expanding what this page shows. */}
+        {view.dashboardSections.showActiveWork && view.readyForReview.length > 0 && (
           <section className="mt-8">
             <h2 className="text-xs font-black uppercase tracking-wider text-violet-300 mb-3">Ready for review</h2>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -50,7 +59,7 @@ export default async function ClientPreviewPage({
           </section>
         )}
 
-        {view.currentWork.length > 0 && (
+        {view.dashboardSections.showActiveWork && view.currentWork.length > 0 && (
           <section className="mt-8">
             <h2 className="text-xs font-black uppercase tracking-wider text-cyan-300 mb-3">In production</h2>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -61,7 +70,7 @@ export default async function ClientPreviewPage({
           </section>
         )}
 
-        {view.recentDeliveries.length > 0 && (
+        {view.dashboardSections.showRecentDeliveries && view.recentDeliveries.length > 0 && (
           <section className="mt-8">
             <h2 className="text-xs font-black uppercase tracking-wider text-emerald-300 mb-3">Recent deliveries</h2>
             <div className="grid gap-4 sm:grid-cols-2">

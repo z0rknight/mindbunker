@@ -1,6 +1,7 @@
 import { displayClientName } from "@/lib/client-identity";
-import { getProjectsOverview } from "@/modules/projects/actions";
+import { getProjectsOverview, getUnassignedClientVideos } from "@/modules/projects/actions";
 import { getProductivityQuickOptions } from "@/modules/productivity/actions";
+import { videoWorkspaceHref } from "@/modules/productivity/core";
 import {
   filterProjectsBySearch,
   getProjectException,
@@ -129,6 +130,51 @@ function ProjectCard({
   );
 }
 
+// QA fix (2026-09-14): real CLIENT_WORK videos with no project_id (see
+// getUnassignedClientVideos) are otherwise structurally invisible when
+// filtering Projects by client -- Productivity shows them, Projects
+// never can, because Projects is entirely project-shaped. This is a
+// bounded, operator-only indicator, not a fake project: it never invents
+// a project row, and every link goes straight into Productivity (via the
+// same canonical videoWorkspaceHref every other "open this video" link
+// in the app already uses) -- the one place these videos actually live.
+function UnassignedDeliverablesSection({
+  videos,
+}: {
+  videos: Array<{ id: number; title: string | null; date: string; status: string; clientName: string }>;
+}) {
+  if (videos.length === 0) return null;
+  return (
+    <section aria-labelledby="unassigned-deliverables" className="rounded-2xl border border-amber-800/50 bg-amber-950/10 p-4 sm:p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <PixelIcon name="flag" className="h-3.5 w-3.5 text-amber-400" />
+        <h2 id="unassigned-deliverables" className="text-sm font-black uppercase tracking-wide text-amber-300">
+          Unassigned deliverables
+        </h2>
+        <span className="text-xs font-bold text-amber-600">{videos.length}</span>
+      </div>
+      <p className="mb-3 text-xs leading-5 text-zinc-500">
+        Real client work with no project. Not a project -- open the video directly in Productivity to assign one.
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {videos.map((video) => (
+          <Link
+            key={video.id}
+            href={videoWorkspaceHref(video.id)}
+            className="flex items-center justify-between gap-2 rounded-xl border border-amber-900/40 bg-zinc-950/60 px-3 py-2.5 text-xs hover:border-amber-600/60"
+          >
+            <span className="min-w-0">
+              <span className="block truncate font-bold text-zinc-200">{video.title ?? `Video ${formatDate(video.date)}`}</span>
+              <span className="block truncate text-[11px] text-zinc-600">{video.clientName}</span>
+            </span>
+            <span className="shrink-0 font-black text-amber-400">Open →</span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ProjectGroupSection({
   group,
   projects,
@@ -171,12 +217,24 @@ export default async function ProjectsPage({
   const searchQuery = typeof query.q === "string" ? query.q : "";
   const sortMode: ProjectSortMode = query.sort === "recent" ? "recent" : "attention";
 
-  const [allProjects, quickOptions] = await Promise.all([
+  const [allProjects, quickOptions, unassignedVideos] = await Promise.all([
     getProjectsOverview(),
     getProductivityQuickOptions(),
+    getUnassignedClientVideos(),
   ]);
+  const visibleUnassignedVideos =
+    clientFilterId !== null
+      ? unassignedVideos.filter((video) => video.clientId === clientFilterId)
+      : unassignedVideos;
+  // QA fix (2026-09-14): a client with ONLY unassigned deliverables (no
+  // project at all yet) must still be reachable in the client filter --
+  // otherwise Emmanuel has no way to select them and see the unassigned
+  // section below.
   const clientOptions = Array.from(
-    new Map(allProjects.map((p) => [p.clientId, p.clientName])).entries(),
+    new Map([
+      ...allProjects.map((p): [number, string] => [p.clientId, p.clientName]),
+      ...unassignedVideos.map((v): [number, string] => [v.clientId, v.clientName]),
+    ]).entries(),
   )
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -242,7 +300,13 @@ export default async function ProjectsPage({
         </div>
       </header>
 
-      {allProjects.length === 0 ? (
+      {visibleUnassignedVideos.length > 0 && (
+        <div className="mb-8">
+          <UnassignedDeliverablesSection videos={visibleUnassignedVideos} />
+        </div>
+      )}
+
+      {allProjects.length === 0 && visibleUnassignedVideos.length === 0 ? (
         <PixelEmptyState icon="project" title="No projects yet" className="rounded-2xl">
           <p>
             Choose a client in CRM to create the first work commitment.
@@ -254,11 +318,11 @@ export default async function ProjectsPage({
             Open CRM
           </Link>
         </PixelEmptyState>
-      ) : visibleProjects.length === 0 ? (
+      ) : visibleProjects.length === 0 && visibleUnassignedVideos.length === 0 ? (
         <PixelEmptyState icon="archive" title="No matching projects" className="rounded-2xl">
           Adjust the current client, status, or search filter.
         </PixelEmptyState>
-      ) : (
+      ) : visibleProjects.length === 0 ? null : (
         <div className="space-y-8">
           {PROJECT_GROUPS.map((group) => (
             <ProjectGroupSection key={group} group={group} projects={visibleGroups[group]} today={today} nowIso={nowIso} />

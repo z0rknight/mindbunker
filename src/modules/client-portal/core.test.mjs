@@ -8,6 +8,7 @@ import {
   buildClientVideoDetail,
   clientVideoStatusLabel,
   filterClientDashboardVideos,
+  resolveDashboardSections,
   searchClientDashboardVideos,
   toCard,
 } from "./core.ts";
@@ -843,4 +844,64 @@ test("search is case-insensitive and matches substrings, not just whole words", 
   assert.equal(searchClientDashboardVideos(videos, "davedemink").length, 1);
   assert.equal(searchClientDashboardVideos(videos, "DAVEDEMINK").length, 1);
   assert.equal(searchClientDashboardVideos(videos, "nonexistent").length, 0);
+});
+
+// ─── Operator Discovery + Portal Personalization patch (2026-09-14) ────────
+
+const allSectionsVisible = {
+  showCurrentAccount: true,
+  showSearch: true,
+  showSummary: true,
+  showActiveWork: true,
+  showRecentDeliveries: true,
+  showCompletedByType: true,
+  showVideoLibrary: true,
+};
+
+test("resolveDashboardSections: defaults (every column true) preserve prior behavior -- every section shows when financials are on", () => {
+  assert.deepEqual(
+    resolveDashboardSections(allSectionsVisible, { canSeeFinancials: true }),
+    allSectionsVisible,
+  );
+});
+
+test("resolveDashboardSections: financial capability beats the Current Account presentation preference", () => {
+  const result = resolveDashboardSections(allSectionsVisible, { canSeeFinancials: false });
+  assert.equal(result.showCurrentAccount, false, "showCurrentAccount=true + canSeeFinancials=false must still resolve to hidden");
+  // No other section is affected by the financial capability -- it is
+  // narrowly scoped to the one section that can leak money figures.
+  assert.equal(result.showSearch, true);
+  assert.equal(result.showSummary, true);
+  assert.equal(result.showActiveWork, true);
+  assert.equal(result.showRecentDeliveries, true);
+  assert.equal(result.showCompletedByType, true);
+  assert.equal(result.showVideoLibrary, true);
+});
+
+test("resolveDashboardSections: an operator who already turned Current Account off stays off regardless of financial capability", () => {
+  const result = resolveDashboardSections(
+    { ...allSectionsVisible, showCurrentAccount: false },
+    { canSeeFinancials: true },
+  );
+  assert.equal(result.showCurrentAccount, false);
+});
+
+test("resolveDashboardSections: every other section toggle passes through unchanged, on or off", () => {
+  const prefs = {
+    showCurrentAccount: false,
+    showSearch: false,
+    showSummary: true,
+    showActiveWork: false,
+    showRecentDeliveries: true,
+    showCompletedByType: false,
+    showVideoLibrary: true,
+  };
+  assert.deepEqual(resolveDashboardSections(prefs, { canSeeFinancials: true }), prefs);
+});
+
+test("resolveDashboardSections: one client's preferences are a pure function of its own inputs -- no shared/hidden state between calls", () => {
+  const daveOff = resolveDashboardSections({ ...allSectionsVisible, showVideoLibrary: false }, { canSeeFinancials: true });
+  const taryn = resolveDashboardSections(allSectionsVisible, { canSeeFinancials: true });
+  assert.equal(daveOff.showVideoLibrary, false);
+  assert.equal(taryn.showVideoLibrary, true, "a second, unrelated call must not observe the first call's input");
 });

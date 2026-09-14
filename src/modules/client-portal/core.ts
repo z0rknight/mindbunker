@@ -716,3 +716,36 @@ export function buildClientBillingSummary(
     byProject,
   };
 }
+
+// ─── Operator Discovery + Portal Personalization patch (2026-09-14) ────────
+//
+// Dashboard LAYOUT preferences (the portalShow* columns) vs. real
+// capability/data gates (portalCanSeeFinancials, project/video
+// visibleToClient). This resolver makes the "capability/data beats
+// presentation preference" rule an explicit, tested, named function
+// instead of something that only happens to hold because of where a null
+// check lives in a page component. The Current Account section already
+// gets a null `paymentRequest` server-side when financials are off (see
+// getClientDashboardView) -- this resolver adds the *reverse* direction
+// as a real guarantee: even if the caller passed the record through
+// anyway, resolveDashboardSections itself will never say "show" for a
+// section a capability has turned off.
+export type ClientDashboardSectionPrefs = {
+  showCurrentAccount: boolean;
+  showSearch: boolean;
+  showSummary: boolean;
+  showActiveWork: boolean;
+  showRecentDeliveries: boolean;
+  showCompletedByType: boolean;
+  showVideoLibrary: boolean;
+};
+
+export function resolveDashboardSections(
+  prefs: ClientDashboardSectionPrefs,
+  permissions: { canSeeFinancials: boolean },
+): ClientDashboardSectionPrefs {
+  return {
+    ...prefs,
+    showCurrentAccount: prefs.showCurrentAccount && permissions.canSeeFinancials,
+  };
+}

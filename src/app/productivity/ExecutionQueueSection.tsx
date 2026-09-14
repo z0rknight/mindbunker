@@ -3,12 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { useQuickCapture } from "@/components/quick-capture/QuickCaptureProvider";
 import { PixelEmptyState, PixelIcon } from "@/components/ui/PixelVisuals";
 import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
 import { reorderExecutionQueueItem } from "@/modules/productivity/actions";
 import { videoWorkspaceHref } from "@/modules/productivity/core";
-import type { QueueEntry, QueueEligibleVideo, QueueMoveDirection } from "@/modules/productivity/queue";
+import { stageForQueueItem, type QueueEntry, type QueueEligibleVideo, type QueueMoveDirection } from "@/modules/productivity/queue";
 import { startWorkSession } from "@/modules/work-sessions/actions";
 import { DEFAULT_WORK_SESSION_ACTIVITY } from "@/modules/work-sessions/core";
 import { formatDate } from "@/utils/date";
@@ -24,9 +23,7 @@ const STAGES = [
 type StageKey = (typeof STAGES)[number]["key"];
 
 function stageFor(item: QueueRow): StageKey {
-  if (item.status === "READY_FOR_REVIEW") return "REVIEW";
-  if (item.status === "IN_PROGRESS" || item.status === "CHANGES_REQUESTED") return "MAKING";
-  return "PLANNED";
+  return stageForQueueItem(item.status);
 }
 
 function formatCommitmentDue(value: Date | string | null) {
@@ -61,11 +58,23 @@ export function ExecutionQueueSection({ queue, activeVideoId }: { queue: QueueRo
           No client-work videos waiting in the active queue.
         </PixelEmptyState>
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3" data-testid="horizontal-video-pipeline">
+        // QA fix (2026-09-14): stages used to be three side-by-side grid
+        // columns of equal height (grid-cols-3, each stage a single-file
+        // vertical stack). With 33 Queued / 7 In production / 1 Review --
+        // the real shape of this queue -- that stretched every column to
+        // the tallest one, leaving Review's column empty below its one
+        // card and reading as a broken grid rather than an intentional
+        // board (exactly Emmanuel's report). Each stage is now its own
+        // full-width section, stacked top to bottom, with its OWN
+        // responsive card grid inside (1 col phone / 2 tablet / 3
+        // desktop) -- a short stage is simply a short section, not an
+        // empty column next to a tall one. This also shortens the tallest
+        // stage from N rows to ceil(N/3) rows.
+        <div className="space-y-6" data-testid="horizontal-video-pipeline">
           {STAGES.map((stage) => {
             const items = queue.filter((item) => stageFor(item) === stage.key);
             return (
-              <section key={stage.key} className={`min-w-0 rounded-2xl border p-3 ${stage.tone}`}>
+              <section key={stage.key} className={`min-w-0 rounded-2xl border p-3 sm:p-4 ${stage.tone}`}>
                 <header className="mb-3 flex items-start justify-between gap-2 border-b border-white/5 pb-3">
                   <div>
                     <h3 className="text-xs font-black uppercase tracking-[0.14em] text-white">{stage.label}</h3>
@@ -76,7 +85,7 @@ export function ExecutionQueueSection({ queue, activeVideoId }: { queue: QueueRo
                 {items.length === 0 ? (
                   <div className="grid min-h-24 place-items-center rounded-xl border border-dashed border-zinc-800/80 px-3 text-center text-[11px] text-zinc-700">No videos here</div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {items.map((item) => (
                       <QueueTile
                         key={item.id}
@@ -100,7 +109,6 @@ export function ExecutionQueueSection({ queue, activeVideoId }: { queue: QueueRo
 
 function QueueTile({ item, isFirstExecutable, isActive, isFirst, isLast }: { item: QueueRow; isFirstExecutable: boolean; isActive: boolean; isFirst: boolean; isLast: boolean }) {
   const router = useRouter();
-  const quickCapture = useQuickCapture();
   const [isPending, startTransition] = useTransition();
   const title = item.title ?? `Video ${formatDate(item.date)}`;
   const commitmentDue = formatCommitmentDue(item.soonestCommitmentDueAt);
@@ -143,13 +151,18 @@ function QueueTile({ item, isFirstExecutable, isActive, isFirst, isLast }: { ite
           {!commitmentDue && item.projectDeadline && <span className="text-[10px] text-zinc-600">Project due {formatDate(item.projectDeadline)}</span>}
         </div>
 
+        {/* Global Health Audit — Productivity density: "Move to top" and a
+            per-tile ⌘K button were removed here. Up/Down cover ordinary
+            reordering; jumping far is rare enough to not need a dedicated
+            button on every one of ~40+ tiles, and ⌘K is already globally
+            available (see the page header's own "Press ⌘K anywhere" copy)
+            -- this was the exact same action exposed a second time on
+            every card. No capability is lost, only the duplicate control. */}
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-zinc-800/80 pt-2">
           <div className="flex items-center gap-1" role="group" aria-label={`Reorder ${title}`}>
-            <button type="button" disabled={isPending || isFirst} onClick={() => move("top")} title="Move to top" aria-label="Move to top" className="min-h-9 min-w-9 rounded border border-zinc-800 text-xs text-zinc-400 disabled:opacity-25">⤒</button>
             <button type="button" disabled={isPending || isFirst} onClick={() => move("up")} title="Move up" aria-label="Move up" className="min-h-9 min-w-9 rounded border border-zinc-800 text-xs text-zinc-400 disabled:opacity-25">↑</button>
             <button type="button" disabled={isPending || isLast} onClick={() => move("down")} title="Move down" aria-label="Move down" className="min-h-9 min-w-9 rounded border border-zinc-800 text-xs text-zinc-400 disabled:opacity-25">↓</button>
           </div>
-          <button type="button" onClick={() => quickCapture.open({ clientId: item.clientId ?? undefined, clientName: item.clientName ?? undefined, projectId: item.projectId ?? undefined, projectName: item.projectName ?? undefined, videoId: item.id, videoTitle: title })} className="min-h-9 rounded border border-zinc-800 px-2 text-[10px] font-black text-zinc-400">⌘K</button>
         </div>
 
         <div className="mt-2 grid grid-cols-2 gap-2">

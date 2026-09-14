@@ -198,6 +198,39 @@ export const clients = sqliteTable("clients", {
   portalCanSetPriority: integer("portal_can_set_priority", { mode: "boolean" })
     .notNull()
     .default(true),
+  // Operator Discovery + Portal Personalization patch (2026-09-14): a
+  // small allowlisted set of DASHBOARD LAYOUT toggles -- whether a
+  // section renders at all -- distinct from the capability/data-visibility
+  // flags above and from projects.visibleToClient/videoLogs.visibleToClient.
+  // Those keep deciding whether a client may see a given record anywhere;
+  // these only decide whether one of that client's own dashboard sections
+  // is shown. Every default is `true` so every existing client's portal
+  // renders exactly as it did before this column existed. Explicit
+  // booleans, not a JSON layout blob, matching the existing
+  // portalCanSeeFinancials/portalCanReview/portalCanSetPriority shape --
+  // the set is small and stable, so a generic layout-builder engine would
+  // be solving a problem this product doesn't have.
+  portalShowCurrentAccount: integer("portal_show_current_account", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  portalShowSearch: integer("portal_show_search", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  portalShowSummary: integer("portal_show_summary", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  portalShowActiveWork: integer("portal_show_active_work", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  portalShowRecentDeliveries: integer("portal_show_recent_deliveries", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  portalShowCompletedByType: integer("portal_show_completed_by_type", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  portalShowVideoLibrary: integer("portal_show_video_library", { mode: "boolean" })
+    .notNull()
+    .default(true),
   instagramProfileUpdatedAt: integer("instagram_profile_updated_at", {
     mode: "timestamp",
   }),

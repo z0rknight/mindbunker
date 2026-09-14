@@ -179,9 +179,36 @@ export default async function ProductivityPage({
     };
   }
 
-  function renderSection(group: ProductivityGroup, compact = false) {
+  // Global Health Audit — Productivity density: onlyVideoId renders a
+  // single requested video's full workspace card instead of the whole
+  // group, so opening one video from the Execution Board never re-mounts
+  // every other current/attention/planned video's administration card.
+  // Section eyebrow/count/description are skipped in that mode -- the
+  // caller already provides its own "Open workspace" heading.
+  function renderSection(group: ProductivityGroup, compact = false, onlyVideoId?: number) {
     const details = sectionDetails[group];
-    const videos = groups[group];
+    const groupVideos = groups[group];
+    const videos = onlyVideoId != null ? groupVideos.filter((video) => video.id === onlyVideoId) : groupVideos;
+
+    if (onlyVideoId != null) {
+      return (
+        <div className="space-y-3">
+          {videos.map((video) => (
+            <VideoOperationsCard
+              key={video.id}
+              video={video}
+              clients={options.clients}
+              projects={options.projects}
+              workSessionState={workSessionStateFor(video.id)}
+              initiallyOpen
+              returnTo={safeReturnTo}
+              compact={compact}
+            />
+          ))}
+        </div>
+      );
+    }
+
     return (
       <section key={group} aria-labelledby={`${group}-videos`}>
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -190,7 +217,7 @@ export default async function ProductivityPage({
               {details.eyebrow}
             </p>
             <h2 id={`${group}-videos`} className="mt-1 text-lg font-black text-white sm:text-xl">
-              {details.title} <span className="font-mono text-sm text-zinc-600">{videos.length}</span>
+              {details.title} <span className="font-mono text-sm text-zinc-600">{groupVideos.length}</span>
             </h2>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-zinc-500">{details.description}</p>
           </div>
@@ -298,18 +325,47 @@ export default async function ProductivityPage({
         activeVideoId={workSessionOverview.openSession?.videoId ?? null}
       />
 
-      <div className="space-y-4">
-        <details open={workspaceDisclosure.operationalOpen} className="group rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4 sm:p-5">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-zinc-300">
-            <span><span className="mr-2 inline-block transition group-open:rotate-90">▸</span>Detailed video workspaces</span>
-            <span className="font-mono text-xs text-zinc-600">{groups.current.length + groups.attention.length + groups.planned.length}</span>
-          </summary>
-          <div className="mt-6 space-y-10 border-t border-zinc-800 pt-6">
-            {renderSection("current")}
-            {renderSection("attention")}
-            {renderSection("planned")}
+      {/* Global Health Audit — Productivity density root cause: current,
+          attention, and planned videos used to ALSO render a full
+          administration card here for every single one of them (up to 42),
+          duplicating the exact same videos the Execution Board above
+          already shows with a leaner, action-focused tile. That is
+          removed. The full workspace editor now mounts here only for the
+          one video actually requested via ?video= (Workspace link/direct
+          link) -- preserving 100% of open-a-workspace capability while
+          cutting the duplicate administration surface entirely. See
+          selectVideoWorkspaceLogs/getVideoWorkspaceGroup in core.ts
+          (unchanged) for why a DONE/delivered video outside the recent-50
+          window can still be the one video rendered here. */}
+      {initialVideoId !== null && requestedWorkspaceGroup !== null && requestedWorkspaceGroup !== "completed" && (
+        <section aria-labelledby="open-workspace-title" className="mb-7">
+          <h2 id="open-workspace-title" className="mb-3 text-sm font-black uppercase tracking-widest text-zinc-400">
+            Open workspace
+          </h2>
+          {renderSection(requestedWorkspaceGroup, false, initialVideoId)}
+        </section>
+      )}
+
+      {initialVideoId !== null && requestedWorkspaceGroup === null && (
+        <section aria-labelledby="video-not-found-title" className="mb-7 rounded-2xl border border-red-900/50 bg-red-950/10 p-6 text-center">
+          <h2 id="video-not-found-title" className="text-lg font-black text-red-200">
+            Video not found
+          </h2>
+          <p className="mt-2 text-sm text-zinc-500">
+            This video does not exist, or it is a technical container that has no workspace of its own.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+            <Link href="/productivity" className="min-h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-black text-zinc-200 hover:border-violet-500/60">
+              Back to Productivity
+            </Link>
+            <Link href="/projects" className="min-h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-black text-zinc-200 hover:border-violet-500/60">
+              Back to Projects
+            </Link>
           </div>
-        </details>
+        </section>
+      )}
+
+      <div className="space-y-4">
         <details open={workspaceDisclosure.completedOpen} className="group rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4 sm:p-5">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-zinc-400">
             <span><span className="mr-2 inline-block transition group-open:rotate-90">▸</span>Recent / completed archive</span>

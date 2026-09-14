@@ -10,6 +10,7 @@ import {
   getVideoMetadataChanges,
   groupOperationalVideos,
   isDeliverableVideo,
+  isUnassignedClientVideo,
   planVideoTransition,
   selectVideoWorkspaceLogs,
   validateCoverUrl,
@@ -144,6 +145,28 @@ test("operational containers stay out of individual workspaces while cancelled b
   assert.deepEqual(selectVideoWorkspaceLogs([container, cancelled], 1), [cancelled]);
   assert.equal(isDeliverableVideo({ isOperationalContainer: true, cancelledAt: null }), false);
   assert.equal(isDeliverableVideo({ isOperationalContainer: false, cancelledAt: new Date() }), false);
+});
+
+// QA fix (2026-09-14): Dave LF discovery gap -- exact repro was 5 real
+// CLIENT_WORK videos with client_id set and project_id NULL. This is the
+// pure predicate getUnassignedClientVideos' SQL mirrors; these cases are
+// the ones that make Projects structurally unable to show the video (no
+// project to filter/group by) without inventing a fake project.
+test("isUnassignedClientVideo identifies real client deliverables with no project, and nothing else", () => {
+  const base = {
+    clientId: 4,
+    projectId: null,
+    videoKind: "CLIENT_WORK",
+    isOperationalContainer: false,
+    cancelledAt: null,
+  };
+  assert.equal(isUnassignedClientVideo(base), true, "no project + real client work -> unassigned");
+  assert.equal(isUnassignedClientVideo({ ...base, projectId: 6 }), false, "has a project -> not unassigned");
+  assert.equal(isUnassignedClientVideo({ ...base, clientId: null }), false, "no client at all -> not a client deliverable");
+  assert.equal(isUnassignedClientVideo({ ...base, videoKind: "SAMPLE" }), false, "SAMPLE is never a client deliverable");
+  assert.equal(isUnassignedClientVideo({ ...base, videoKind: "INTERNAL" }), false, "INTERNAL is never a client deliverable");
+  assert.equal(isUnassignedClientVideo({ ...base, isOperationalContainer: true }), false, "a container is never a deliverable");
+  assert.equal(isUnassignedClientVideo({ ...base, cancelledAt: new Date() }), false, "cancelled work is history, not a discovery gap");
 });
 
 test("Project and Productivity links target the canonical individual workspace URL", () => {

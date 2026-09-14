@@ -66,11 +66,23 @@ export default async function ClientDashboardPage() {
       </header>
 
       <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6">
-        <CurrentAccount request={view.paymentRequest} />
+        {/* Operator Discovery + Portal Personalization patch (2026-09-14):
+            each `dashboardSections.show*` check below is a LAYOUT
+            preference only. The data underneath was already filtered
+            server-side (paymentRequest is null when financials are off;
+            batches/videos are already scoped to this client's
+            visibleToClient=true records) -- hiding a section here never
+            changes what data exists, only whether it's shown. Search
+            (below) intentionally keeps searching view.allVideos even when
+            Video Library itself is hidden -- see DashboardSearch's own
+            data source, unchanged by this patch. */}
+        {view.dashboardSections.showCurrentAccount && <CurrentAccount request={view.paymentRequest} />}
 
-        {hasAnyVideos && <DashboardSearch videos={view.allVideos} allowPriority={view.permissions.canSetPriority} />}
+        {view.dashboardSections.showSearch && hasAnyVideos && (
+          <DashboardSearch videos={view.allVideos} allowPriority={view.permissions.canSetPriority} />
+        )}
 
-        {activeBatch && (
+        {view.dashboardSections.showActiveWork && activeBatch && (
           <section className="pixel-frame pixel-frame-client rounded-2xl border border-emerald-500/30 bg-emerald-950/10 p-4 sm:p-5" aria-labelledby="current-batch">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -117,28 +129,32 @@ export default async function ClientDashboardPage() {
           </PixelEmptyState>
         ) : (
           <>
-            <section className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <StatTile label="Active projects" value={view.activeProjectsCount} />
-              <StatTile label="Total videos" value={view.totalVideos} />
-              <StatTile label="In production" value={view.totals.inProduction} />
-              <StatTile label="Ready for review" value={view.totals.readyForReview} />
-              <StatTile label="Completed" value={view.totals.completed} />
-            </section>
+            {view.dashboardSections.showSummary && (
+              <>
+                <section className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  <StatTile label="Active projects" value={view.activeProjectsCount} />
+                  <StatTile label="Total videos" value={view.totalVideos} />
+                  <StatTile label="In production" value={view.totals.inProduction} />
+                  <StatTile label="Ready for review" value={view.totals.readyForReview} />
+                  <StatTile label="Completed" value={view.totals.completed} />
+                </section>
 
-            <section className="grid grid-cols-2 gap-3">
-              <StatTile label="Videos this week" value={view.videosThisWeek} />
-              <StatTile label="Videos this month" value={view.videosThisMonth} />
-            </section>
+                <section className="grid grid-cols-2 gap-3">
+                  <StatTile label="Videos this week" value={view.videosThisWeek} />
+                  <StatTile label="Videos this month" value={view.videosThisMonth} />
+                </section>
 
-            {view.completedThisWeek > 0 && (
-              <section className="rounded-2xl border border-emerald-900/50 bg-emerald-950/20 px-4 py-3.5">
-                <p className="text-sm font-bold text-emerald-200">
-                  {view.completedThisWeek} video{view.completedThisWeek === 1 ? "" : "s"} completed this week
-                </p>
-              </section>
+                {view.completedThisWeek > 0 && (
+                  <section className="rounded-2xl border border-emerald-900/50 bg-emerald-950/20 px-4 py-3.5">
+                    <p className="text-sm font-bold text-emerald-200">
+                      {view.completedThisWeek} video{view.completedThisWeek === 1 ? "" : "s"} completed this week
+                    </p>
+                  </section>
+                )}
+              </>
             )}
 
-            {view.readyForReview.length > 0 && (
+            {view.dashboardSections.showActiveWork && view.readyForReview.length > 0 && (
               <section>
                 <h2 className="mb-3 text-sm font-black uppercase tracking-widest text-violet-300">
                   Needs your attention
@@ -157,7 +173,7 @@ export default async function ClientDashboardPage() {
               </section>
             )}
 
-            {view.currentWork.length > 0 && (
+            {view.dashboardSections.showActiveWork && view.currentWork.length > 0 && (
               <section>
                 <h2 className="mb-3 text-sm font-black uppercase tracking-widest text-zinc-400">
                   Current work
@@ -170,7 +186,7 @@ export default async function ClientDashboardPage() {
               </section>
             )}
 
-            {view.recentDeliveries.length > 0 && (
+            {view.dashboardSections.showRecentDeliveries && view.recentDeliveries.length > 0 && (
               <section>
                 <h2 className="mb-3 text-sm font-black uppercase tracking-widest text-zinc-400">
                   Recent deliveries
@@ -183,7 +199,7 @@ export default async function ClientDashboardPage() {
               </section>
             )}
 
-            {view.contentBreakdown.length > 0 && (
+            {view.dashboardSections.showCompletedByType && view.contentBreakdown.length > 0 && (
               <section className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
                 <h2 className="mb-2 text-[11px] font-black uppercase tracking-widest text-zinc-500">
                   Completed by type
@@ -206,13 +222,15 @@ export default async function ClientDashboardPage() {
               </section>
             )}
 
-            <VideoGallery
-              videos={view.allVideos}
-              allowReview={view.permissions.canReview}
-              allowPriority={view.permissions.canSetPriority}
-            />
+            {view.dashboardSections.showVideoLibrary && (
+              <VideoGallery
+                videos={view.allVideos}
+                allowReview={view.permissions.canReview}
+                allowPriority={view.permissions.canSetPriority}
+              />
+            )}
 
-            {pastBatches.length > 0 && (
+            {view.dashboardSections.showActiveWork && pastBatches.length > 0 && (
               <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
                 <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-black text-zinc-400">
                   <span><span className="mr-2 inline-block transition group-open:rotate-90">▸</span>Previous batches</span>

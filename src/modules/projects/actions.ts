@@ -204,6 +204,48 @@ export async function getProjectsOverview() {
   }));
 }
 
+// QA fix (2026-09-14): Projects is entirely project-centric -- filtering
+// by a client only ever shows that client's PROJECTS, so a real
+// CLIENT_WORK video that was created with no project_id at all (e.g.
+// Dave's "3SEP-DaveDeMink-LF_1..5") has no project to appear under and
+// is structurally invisible here, even though Productivity (which lists
+// every video regardless of project_id) shows it fine. This is not a
+// filter bug -- video.projectId is genuinely null in production -- so
+// the fix is not a query correction but a new, explicit, operator-only
+// surface: "Unassigned deliverables." It deliberately does NOT invent a
+// fake project; it just tells Emmanuel these videos exist and are this
+// client's, with a link into the one place they actually live
+// (Productivity, via the existing videoWorkspaceHref canonical URL).
+export async function getUnassignedClientVideos() {
+  const db = await getAuthenticatedDb();
+  const rows = await db
+    .select({
+      id: videoLogs.id,
+      title: videoLogs.title,
+      date: videoLogs.date,
+      status: videoLogs.status,
+      clientId: videoLogs.clientId,
+      clientName: clients.name,
+      createdAt: videoLogs.createdAt,
+    })
+    .from(videoLogs)
+    .innerJoin(clients, eq(videoLogs.clientId, clients.id))
+    .where(
+      sql`${videoLogs.projectId} is null
+        and ${videoLogs.clientId} is not null
+        and ${videoLogs.videoKind} = 'CLIENT_WORK'
+        and ${videoLogs.isOperationalContainer} = 0
+        and ${videoLogs.cancelledAt} is null
+        and ${clients.archivalState} <> 'GELADEIRA'`,
+    )
+    .orderBy(desc(videoLogs.createdAt), desc(videoLogs.id));
+
+  // clientId is nullable in the schema, but the WHERE clause above
+  // guarantees it's set on every returned row -- coerce so callers don't
+  // have to re-check what SQL already enforced.
+  return rows.map((row) => ({ ...row, clientId: row.clientId as number }));
+}
+
 export async function createProject(
   clientId: number,
   input: {

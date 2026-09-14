@@ -20,6 +20,7 @@ import {
   buildClientDashboard,
   buildClientPortalProjects,
   buildClientVideoDetail,
+  resolveDashboardSections,
   type ClientBillingSummary,
   type ClientDashboard,
   type ClientVideoDetail,
@@ -158,6 +159,21 @@ export type ClientDashboardView =
         canReview: boolean;
         canSetPriority: boolean;
       };
+      // Operator Discovery + Portal Personalization patch (2026-09-14):
+      // LAYOUT preference only -- whether a section renders. Never used to
+      // decide whether a record or a capability is visible; `permissions`
+      // above and each record's own visibleToClient stay the sole
+      // authority for that, and both are enforced upstream of this object
+      // (see paymentRequest/batches immediately above, and buildClientDashboard).
+      dashboardSections: {
+        showCurrentAccount: boolean;
+        showSearch: boolean;
+        showSummary: boolean;
+        showActiveWork: boolean;
+        showRecentDeliveries: boolean;
+        showCompletedByType: boolean;
+        showVideoLibrary: boolean;
+      };
       batches: ClientBatchView[];
     } & ClientDashboard);
 
@@ -278,6 +294,13 @@ export async function getClientDashboardView(
       portalCanSeeFinancials: clients.portalCanSeeFinancials,
       portalCanReview: clients.portalCanReview,
       portalCanSetPriority: clients.portalCanSetPriority,
+      portalShowCurrentAccount: clients.portalShowCurrentAccount,
+      portalShowSearch: clients.portalShowSearch,
+      portalShowSummary: clients.portalShowSummary,
+      portalShowActiveWork: clients.portalShowActiveWork,
+      portalShowRecentDeliveries: clients.portalShowRecentDeliveries,
+      portalShowCompletedByType: clients.portalShowCompletedByType,
+      portalShowVideoLibrary: clients.portalShowVideoLibrary,
     })
     .from(clients)
     .where(eq(clients.id, authenticatedClientId))
@@ -350,7 +373,11 @@ export async function getClientDashboardView(
       )
       .orderBy(desc(crmEvents.createdAt))
       .limit(100),
-    getClientBatchViews(authenticatedClientId),
+    // Operator Discovery + Portal Personalization patch: batches only
+    // feed the "Active work" section (current + previous batches) -- skip
+    // the query entirely when that section is off for this client, rather
+    // than fetching and then discarding it at render time.
+    clientRow[0].portalShowActiveWork ? getClientBatchViews(authenticatedClientId) : Promise.resolve([]),
     // Dave Monday Release: fetched unconditionally (cheap, indexed,
     // client-scoped), but gated to null below when portalCanSeeFinancials
     // is false -- server-side, not left to the page's render logic. See
@@ -369,6 +396,18 @@ export async function getClientDashboardView(
       canReview: clientRow[0].portalCanReview,
       canSetPriority: clientRow[0].portalCanSetPriority,
     },
+    dashboardSections: resolveDashboardSections(
+      {
+        showCurrentAccount: clientRow[0].portalShowCurrentAccount,
+        showSearch: clientRow[0].portalShowSearch,
+        showSummary: clientRow[0].portalShowSummary,
+        showActiveWork: clientRow[0].portalShowActiveWork,
+        showRecentDeliveries: clientRow[0].portalShowRecentDeliveries,
+        showCompletedByType: clientRow[0].portalShowCompletedByType,
+        showVideoLibrary: clientRow[0].portalShowVideoLibrary,
+      },
+      { canSeeFinancials: clientRow[0].portalCanSeeFinancials },
+    ),
     // Sunday QA Patch hardening: strip financial fields at the read-model
     // level, exactly like getClientPortalView already does -- the page's
     // own `view.permissions.canSeeFinancials` render gate stays as a second,

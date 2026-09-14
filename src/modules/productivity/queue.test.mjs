@@ -7,6 +7,7 @@ import {
   resequencePositions,
   selectExecutionQueue,
   selectNextExecutable,
+  stageForQueueItem,
 } from "./queue.ts";
 
 function video(overrides) {
@@ -47,6 +48,25 @@ test("operational batch containers never appear as executable videos", () => {
     isQueueEligible({ videoKind: "CLIENT_WORK", status: "PLANNED", isOperationalContainer: false }),
     true,
   );
+});
+
+// QA fix (2026-09-14): Productivity board layout -- stage grouping stays
+// a pure status->lane mapping, independent from the grid/column layout
+// that renders it. This is the exact rule ExecutionQueueSection.tsx's
+// own stageFor() now delegates to.
+test("stageForQueueItem groups every queue-eligible status into exactly one of three stages", () => {
+  assert.equal(stageForQueueItem("PLANNED"), "PLANNED");
+  assert.equal(stageForQueueItem("IN_PROGRESS"), "MAKING");
+  assert.equal(stageForQueueItem("CHANGES_REQUESTED"), "MAKING");
+  assert.equal(stageForQueueItem("READY_FOR_REVIEW"), "REVIEW");
+});
+
+test("stageForQueueItem: a status it doesn't recognize as MAKING/REVIEW falls back to PLANNED, never throws or returns undefined", () => {
+  // DONE is queue-ineligible in the first place (see isQueueEligible), but
+  // stageForQueueItem itself must still be a total function over every
+  // VideoStatus -- a queue-eligibility bug elsewhere must never turn into
+  // a crash here.
+  assert.equal(stageForQueueItem("DONE"), "PLANNED");
 });
 
 test("DONE videos never appear in the queue projection", () => {

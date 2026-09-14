@@ -10,7 +10,7 @@ import { CoverUploadField } from "@/components/media/CoverUploadField";
 import { resolveCoverUrl } from "@/modules/media/core";
 import { PortalControl } from "@/components/client-portal/PortalControl";
 import { PaymentRequestPanel } from "@/components/client-portal/PaymentRequestPanel";
-import { setClientPortalCapability } from "@/modules/client-portal/admin-actions";
+import { setClientDashboardSection, setClientPortalCapability } from "@/modules/client-portal/admin-actions";
 
 interface ClientTabsProps {
   client: {
@@ -26,6 +26,13 @@ interface ClientTabsProps {
     portalCanSeeFinancials: boolean;
     portalCanReview: boolean;
     portalCanSetPriority: boolean;
+    portalShowCurrentAccount: boolean;
+    portalShowSearch: boolean;
+    portalShowSummary: boolean;
+    portalShowActiveWork: boolean;
+    portalShowRecentDeliveries: boolean;
+    portalShowCompletedByType: boolean;
+    portalShowVideoLibrary: boolean;
     notes: string | null;
     source: string | null;
     contacted: boolean;
@@ -282,6 +289,68 @@ export function ClientTabs({
                   description="Choose the current item within a project"
                   enabled={client.portalCanSetPriority}
                   onChange={(enabled) => setClientPortalCapability(client.id, "priority", enabled)}
+                />
+              </div>
+            </section>
+
+            {/* Operator Discovery + Portal Personalization patch
+                (2026-09-14): LAYOUT toggles, deliberately a separate
+                section from "Client portal controls" above -- those gate
+                real capabilities/actions (financials, review, priority),
+                these only decide whether a dashboard section renders at
+                all. A section hidden here can still have fully visible
+                data underneath it (e.g. Video Library hidden does not
+                touch video.visibleToClient) -- see PortalControl's own
+                "Visible/Hidden" copy, which reads correctly for both
+                meanings without implying a security boundary that isn't
+                there. */}
+            <section className="rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4">
+              <h3 className="text-xs font-black uppercase tracking-wider text-violet-300">Client dashboard sections</h3>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">
+                Layout only. Financial data stays gated by the capability above regardless of this toggle.
+              </p>
+              <div className="mt-3 grid gap-2 md:grid-cols-3">
+                <PortalControl
+                  label="Current account"
+                  description="Open payment request card"
+                  enabled={client.portalShowCurrentAccount}
+                  onChange={(enabled) => setClientDashboardSection(client.id, "currentAccount", enabled)}
+                />
+                <PortalControl
+                  label="Search"
+                  description="Search this client's own videos"
+                  enabled={client.portalShowSearch}
+                  onChange={(enabled) => setClientDashboardSection(client.id, "search", enabled)}
+                />
+                <PortalControl
+                  label="Summary"
+                  description="Stat tiles and weekly/monthly counts"
+                  enabled={client.portalShowSummary}
+                  onChange={(enabled) => setClientDashboardSection(client.id, "summary", enabled)}
+                />
+                <PortalControl
+                  label="Active work"
+                  description="In-production batch, attention, current work"
+                  enabled={client.portalShowActiveWork}
+                  onChange={(enabled) => setClientDashboardSection(client.id, "activeWork", enabled)}
+                />
+                <PortalControl
+                  label="Recent deliveries"
+                  description="Most recently delivered videos"
+                  enabled={client.portalShowRecentDeliveries}
+                  onChange={(enabled) => setClientDashboardSection(client.id, "recentDeliveries", enabled)}
+                />
+                <PortalControl
+                  label="Completed by type"
+                  description="Breakdown chips by content type"
+                  enabled={client.portalShowCompletedByType}
+                  onChange={(enabled) => setClientDashboardSection(client.id, "completedByType", enabled)}
+                />
+                <PortalControl
+                  label="Video library"
+                  description="Full gallery + previous batches archive"
+                  enabled={client.portalShowVideoLibrary}
+                  onChange={(enabled) => setClientDashboardSection(client.id, "videoLibrary", enabled)}
                 />
               </div>
             </section>

@@ -147,7 +147,13 @@ export function OpenDecisionCard({ decision }: { decision: OpenDecisionRow }) {
         )}
         {decision.reviewAt && (
           <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-            Review {new Date(decision.reviewAt).toLocaleDateString()}
+            {/* Global Health Audit — War Room hydration P0: explicit
+                timeZone, matching formatOperatorTime's own reasoning --
+                this is a "use client" component, so its date-only text
+                can also mismatch between SSR (Worker/UTC) and hydration
+                (browser locale) near a UTC/America-Sao_Paulo day
+                boundary. */}
+            Review {new Date(decision.reviewAt).toLocaleDateString("en-US", { timeZone: "America/Sao_Paulo" })}
           </span>
         )}
       </div>

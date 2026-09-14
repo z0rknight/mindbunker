@@ -45,6 +45,61 @@ export async function setClientPortalCapability(
   return { success: true as const };
 }
 
+// Operator Discovery + Portal Personalization patch (2026-09-14):
+// DASHBOARD LAYOUT toggles -- whether a section renders at all -- kept
+// deliberately separate from setClientPortalCapability above (which gates
+// real actions/data: financials, review, priority) and from
+// setProjectClientVisibility/setVideoClientVisibility below (which gate
+// whether a specific record is visible anywhere). This action only ever
+// flips one of the small, allowlisted portalShow* columns; it can never
+// touch a capability or a record's own visibility.
+type DashboardSection =
+  | "currentAccount"
+  | "search"
+  | "summary"
+  | "activeWork"
+  | "recentDeliveries"
+  | "completedByType"
+  | "videoLibrary";
+
+const DASHBOARD_SECTION_COLUMN = {
+  currentAccount: "portalShowCurrentAccount",
+  search: "portalShowSearch",
+  summary: "portalShowSummary",
+  activeWork: "portalShowActiveWork",
+  recentDeliveries: "portalShowRecentDeliveries",
+  completedByType: "portalShowCompletedByType",
+  videoLibrary: "portalShowVideoLibrary",
+} as const satisfies Record<DashboardSection, keyof typeof clients.$inferSelect>;
+
+export async function setClientDashboardSection(
+  clientId: number,
+  section: DashboardSection,
+  visible: boolean,
+) {
+  if (!validId(clientId) || typeof visible !== "boolean") {
+    return { success: false as const, error: "Invalid dashboard section setting." };
+  }
+  const column = DASHBOARD_SECTION_COLUMN[section];
+  if (!column) return { success: false as const, error: "Unknown dashboard section." };
+  const db = await getAuthenticatedDb();
+  const current = await db.select({ id: clients.id, value: clients[column] }).from(clients).where(eq(clients.id, clientId)).limit(1);
+  if (!current[0]) return { success: false as const, error: "Client not found." };
+  if (current[0].value === visible) return { success: true as const };
+  await db.batch([
+    db.update(clients).set({ [column]: visible }).where(eq(clients.id, clientId)),
+    db.insert(crmEvents).values({
+      clientId,
+      actor: "admin",
+      type: "client_portal.dashboard_section_changed",
+      description: `Client dashboard section "${section}" ${visible ? "shown" : "hidden"}`,
+    }),
+  ]);
+  revalidatePath(`/crm/${clientId}`);
+  revalidatePath("/client/dashboard");
+  return { success: true as const };
+}
+
 export async function setProjectClientVisibility(projectId: number, visible: boolean) {
   if (!validId(projectId) || typeof visible !== "boolean") return { success: false as const, error: "Invalid project setting." };
   const db = await getAuthenticatedDb();

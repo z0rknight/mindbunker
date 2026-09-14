@@ -541,6 +541,29 @@ export function isDeliverableVideo(video: {
   return !video.isOperationalContainer && video.cancelledAt === null;
 }
 
+// QA fix (2026-09-14): the exact predicate getUnassignedClientVideos'
+// SQL WHERE clause implements (src/modules/projects/actions.ts) --
+// kept here as a pure, unit-testable mirror of that query's real-world
+// meaning: a genuine CLIENT_WORK deliverable that has a client but no
+// project to appear under in Projects. A SAMPLE/INTERNAL video, an
+// operational container, a cancelled row, or a video that already has a
+// project is never "unassigned" by this definition.
+export function isUnassignedClientVideo(video: {
+  clientId: number | null;
+  projectId: number | null;
+  videoKind: VideoKind;
+  isOperationalContainer: boolean;
+  cancelledAt: Date | string | null;
+}): boolean {
+  return (
+    video.clientId !== null &&
+    video.projectId === null &&
+    video.videoKind === "CLIENT_WORK" &&
+    !video.isOperationalContainer &&
+    video.cancelledAt === null
+  );
+}
+
 export type ProductivityGroup =
   | "current"
   | "attention"

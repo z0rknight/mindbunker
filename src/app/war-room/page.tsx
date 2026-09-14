@@ -124,6 +124,26 @@ export default async function WarRoomPage() {
       </div>
       <DailyLedgerSection rows={dailyLedger} />
 
+      {/* Global Health Audit — War Room boundary (Section 8-9): War Room's
+          job is "what is active now / what needs attention / what just
+          changed" -- everything above this point. Layers I-V below are
+          descriptive BI/analytics/historical correlation (income
+          trajectory, production stats, sleep/caffeine correlation,
+          momentum trends, weekly/monthly estimates): real information
+          nobody should lose, but none of it is a live operational fact
+          that changes what to touch next. No canonical specialist surface
+          currently owns all of it, so per the brief it stays accessible
+          here rather than being deleted or half-moved -- just collapsed
+          by default so it is no longer command-dominant, reusing the same
+          <details> disclosure primitive already used on the Productivity
+          page rather than inventing a new one. */}
+      <details className="group mt-2 rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4 sm:p-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-zinc-400">
+          <span><span className="mr-2 inline-block transition group-open:rotate-90">▸</span>Business &amp; health analytics (historical · not live ops)</span>
+          <span className="font-mono text-xs text-zinc-600">5 sections</span>
+        </summary>
+        <div className="mt-6 border-t border-zinc-800 pt-6">
+
       {/* ── LAYER 1: INCOME INTELLIGENCE ──────────────────────────────────── */}
       <section className="mb-8">
         <SectionHeader label="I. INCOME CONTEXT" icon="💰" />
@@ -559,6 +579,9 @@ export default async function WarRoomPage() {
           />
         </div>
       </section>
+
+        </div>
+      </details>
 
     </div>
   );

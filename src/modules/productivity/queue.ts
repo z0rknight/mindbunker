@@ -15,6 +15,21 @@ export function isQueueEligible(video: {
   return video.videoKind === "CLIENT_WORK" && video.status !== "DONE" && !video.isOperationalContainer;
 }
 
+// QA fix (2026-09-14): the three Execution Board stages, pulled out of
+// ExecutionQueueSection.tsx's own local stageFor() so the grouping rule
+// is a plain, unit-testable function instead of logic embedded in a "use
+// client" component. This is purely which of the three visual lanes a
+// queue-eligible item belongs to -- it does not change canonical video
+// status, queue eligibility (isQueueEligible above), or reorder any
+// data; ExecutionQueueSection still owns all rendering.
+export type ExecutionStage = "PLANNED" | "MAKING" | "REVIEW";
+
+export function stageForQueueItem(status: VideoStatus): ExecutionStage {
+  if (status === "READY_FOR_REVIEW") return "REVIEW";
+  if (status === "IN_PROGRESS" || status === "CHANGES_REQUESTED") return "MAKING";
+  return "PLANNED";
+}
+
 export type QueueEligibleVideo = {
   id: number;
   title: string | null;

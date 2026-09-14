@@ -117,6 +117,28 @@ export function formatDate(dateStr: string): string {
 }
 
 /**
+ * Global Health Audit — War Room hydration P0: format a clock time using
+ * the explicit canonical operator timezone, never the runtime's own
+ * locale/timezone. `toLocaleTimeString()` with no explicit `timeZone`
+ * produces DIFFERENT text on the server (a Cloudflare Worker, which has
+ * no real "local" timezone -- effectively UTC) than on the client (the
+ * browser's own OS timezone) -- a classic React hydration mismatch
+ * (production error #418), and exactly the 3-hour (UTC vs.
+ * America/Sao_Paulo) shift the audit observed. Any server/client-rendered
+ * clock value in this app must go through this function, never a bare
+ * `toLocaleTimeString()` call.
+ */
+export function formatOperatorTime(value: Date | string): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: OPERATOR_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
+}
+
+/**
  * Format currency. Monday Money Lab P0: accepts an optional explicit
  * currency code (ISO 4217, e.g. "USD", "BRL") -- every call site that
  * already knows its currency should pass it. Defaults to "USD" only

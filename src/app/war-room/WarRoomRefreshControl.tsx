@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { formatOperatorTime } from "@/utils/date";
 
 const REFRESH_INTERVAL_MS = 30_000;
 
@@ -40,7 +41,17 @@ export function WarRoomRefreshControl({ generatedAt }: { generatedAt: string }) 
           {isPending ? "Refreshing" : "Live · 30s"}
         </p>
         <p className="font-mono text-xs text-zinc-400">
-          {new Date(lastRefreshAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          {/* Global Health Audit — War Room hydration P0 root cause: this
+              used to call toLocaleTimeString() with no explicit timeZone,
+              which resolves to the RUNTIME's own default -- UTC on the
+              Cloudflare Worker during SSR, the browser's local timezone
+              during client hydration. That produced two different text
+              nodes for the same initial render (a real ~3h shift for
+              America/Sao_Paulo) and React production error #418.
+              formatOperatorTime always uses the explicit canonical
+              America/Sao_Paulo timezone, so server and client compute the
+              exact same string regardless of either runtime's own default. */}
+          {formatOperatorTime(lastRefreshAt)}
         </p>
       </div>
       <button
