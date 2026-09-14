@@ -1,0 +1,301 @@
+# RMEDIA OS — P0 Platform Limit Forensic
+## Cloudflare CPU Flapping — Proving the Effective Limit
+
+**Mode:** Forensic observation only. No code change, no deploy, no D1 mutation, no Taryn work, no Spatial UI work.
+
+---
+
+## 1. Executive Verdict
+
+The evidence does **not** support a simple "the account is on Workers Free" explanation, and it does **not** support "the route has a CPU bug" either. Every single failure captured across this entire investigation — 14+ occurrences, spanning three separate observation sessions over several hours, across **four different routes** (Sensor Catalog, War Room, Productivity, and the original incident's own samples) — shows the **exact same signature**: `outcome: exceededCpu`, `cpuTime: 10` (milliseconds), never any other value. Meanwhile, in the same minutes-to-seconds windows, the same Worker, same version, same account routinely and repeatedly succeeds using 20×–60× more CPU (up to 605ms observed, un-optimized, uncapped).
+
+This pattern — a hard, invariant 10ms kill applied to only *some* requests, while *other* requests on the identical Worker sail past 10ms by a wide margin, with the split changing from one moment to the next — is most consistent with **Branch B: a Workers Paid-tier CPU allowance that exists and is usually honored, but is not being applied consistently to every request.** This is a plausible, evidence-supported hypothesis, not a proven fact — this session cannot read Cloudflare's billing state, and the "why" of the inconsistency is outside what account-level API access or application code inspection can resolve.
+
+**No application code defect was found.** Every route audited (Sensor auth path, Sensor catalog handler, War Room's data-fetching) does bounded, reasonable work for the actual data volume in this database. War Room is the heaviest route tested and fails most often in absolute terms, but it is not pathological — it simply has the least CPU headroom to lose before crossing whatever the intermittent 10ms ceiling is.
+
+**Confidence: HIGH** that this is an infrastructure/platform-enforcement inconsistency, not an application bug. **UNKNOWN** on the exact Cloudflare-side mechanism. **Recommended branch: B**, with a support-evidence package prepared below in case Emmanuel confirms Workers Paid is active and wants to escalate to Cloudflare.
+
+---
+
+## 2. Current Worker / Account / Config
+
+Verified at the start of this wave (2026-09-14T15:20:55Z) and re-confirmed at the end:
+
+| Fact | Value |
+|---|---|
+| Operator Worker version | `cf8b54bc-d0ce-42ad-ad74-acbcfb4af81b`, 100% traffic — unchanged throughout |
+| `production/current` | `0de8a93d2ca88f3cbd3665a6e3ff7b08cba67079` — unchanged |
+| D1 migration head | `0049_certain_frog_thor.sql` — no pending migrations |
+| Account | `a2511426086f83bc2d6031478dbf2e69` |
+| Zone `emmanueldarosa.com` | Confirmed on the **same account** (`account.id` matches exactly) |
+| Route table (`zones/{id}/workers/routes`) | `emmanueldarosa.com/mindbunker*` → script `mindbunker`. Confirmed directly, no dispatch namespace, no service binding, no alternate Worker anywhere in the chain |
+| All scripts on this account | `late-disk-3e57`, `mindbunker`, `rmedia-book`, `tiny-truth-4730`, `white-wave-1af9` — all report `usage_model: "standard"` (this field is a legacy artifact in current Cloudflare pricing and does **not** distinguish Free vs. Paid — confirmed by its uniform value across every script regardless of role) |
+| `wrangler.jsonc` | No `limits` block, no `account_id` override, single flat config, single environment, no `env` blocks |
+| Cron triggers / Queues / Durable Objects / scheduled handlers | **None found** anywhere in this repo |
+
+**CURRENT_WINDOW at start of wave: HEALTHY** (22+ minutes unbroken success immediately prior). **By the end of this wave, the window had flapped again** — see §4.
+
+---
+
+## 3. Workers Plan Evidence
+
+**WORKERS PLAN: UNKNOWN.** This session's OAuth token has no billing-read scope — `GET /accounts/{id}/subscriptions` returns `Authentication error` (code 10000) consistently, and the token's own scope list (`user:read`, `account:read`, `workers:write`, etc.) confirms no billing/subscription scope was ever granted. This is a hard capability limit, not a retry-able transient failure — re-verified this wave, same result.
+
+No Cloudflare dashboard screenshot was supplied during this session. Per instruction, the technical experiment proceeds without claiming a plan tier.
+
+**One relevant, if indirect, data point:** the zone's *website* plan (`Free Website`) was confirmed via `GET /zones?name=emmanueldarosa.com` — but per explicit instruction and Cloudflare's own architecture, **this is a completely separate subscription from the Workers compute plan** and carries no information about the Worker's CPU-time allowance. Noted only to rule it out as a source of confusion, not as evidence of the Workers plan itself.
+
+---
+
+## 4. Timeline (spanning ~4 hours of intermittent observation, with a dense final 50-minute window)
+
+Built from Cloudflare Analytics (`workersInvocationsAdaptive`, minute-granularity) cross-verified against direct `wrangler tail` captures where available:
+
+| UTC window | Sensor outcome | State |
+|---|---|---|
+| 14:08–14:36 | success | HEALTHY (28 min) |
+| **14:37:55–14:56:54** | **exceededResources, every minute** | **FAILING (19 min, unbroken)** |
+| **14:57:56–15:21:55** | success, every minute | **HEALTHY (24 min, unbroken)** |
+| 15:23:24–15:24:22 | mixed — sensor OK throughout, but **War Room fails 4 times in ~57 seconds** while root/CRM succeed | **MIXED — route-dependent, sub-minute granularity** |
+| 15:24:56 onward | success | HEALTHY again |
+
+**Transitions are not periodic, not obviously quota-window-aligned in a clean way, and not idle/wake-aligned** (the Sensor's own ~60s cadence never varied; failures and successes both occur at the same `:5x` second mark every time, ruling out any client-side timing explanation). The clearest new finding this wave: **the mixed window (15:23–15:24) shows sub-minute-scale route-dependent flapping**, which a pure 20-minute-scale account-wide toggle does not explain on its own — see §5 and §15.
+
+---
+
+## 5. Sensor Success/Failure CPU Distribution
+
+From all directly-tail-captured Sensor Catalog events across this investigation (17 total, deduplicated):
+
+| | n | min | median | p90 | max |
+|---|---|---|---|---|---|
+| **Healthy (`ok`)** | 10 | 8ms | 17ms | 39ms | 39ms |
+| **Failed (`exceededCpu`)** | 7 | 10ms | 10ms | 10ms | 10ms |
+
+**Every single failure is exactly 10ms — zero variance across 7 independent occurrences spanning hours.** Healthy requests never approach 10ms at the low end (8ms) and never exceed 39ms at the observed high end. This means: on a request that is allowed to run normally, the Sensor Catalog route needs on the order of 10–40ms of real CPU — **already brushing directly against a literal 10ms ceiling even when healthy**. This route is inherently borderline for a 10ms budget; it is comfortably clear of a Paid-tier budget (30,000ms default).
+
+---
+
+## 6. Control-Route Comparison — SENSOR ONLY or WORKER-WIDE?
+
+**Verdict: WORKER-WIDE, not sensor-only.** Directly proven this wave:
+
+| Route | Samples | Outcomes | CPU range (ok) |
+|---|---|---|---|
+| `/mindbunker` (root) | 4 | 4/4 ok | 207–268ms |
+| `/mindbunker/productivity` | 5 | 4 ok, **1 exceededCpu@10ms** | 32–564ms |
+| `/mindbunker/projects` | 2 | 2/2 ok | 52–605ms |
+| `/mindbunker/crm` | 3 | 3/3 ok | 36–351ms |
+| `/mindbunker/war-room` | 7 | 2 ok (early), **then 4 consecutive exceededCpu@10ms**, then 1 ok | 23–62ms (ok) |
+| `/mindbunker/api/sensor/v1/observations` | 2 | 2/2 ok | 7–11ms |
+| `/mindbunker/api/sensor/v1/catalog` | 17 | 10 ok, 7 exceededCpu@10ms | 8–39ms (ok) |
+
+Two different routes (`productivity`, `war-room`) were directly caught failing with the identical `exceededCpu`/`cpuTime:10` signature as the Sensor route, during the same investigation. **This rules out any Sensor-specific cause** (its auth path, its specific headers, its specific caller) as the root mechanism — whatever is happening is a property of the Worker/account, expressed differently depending on how much CPU each specific request happens to need.
+
+**The starkest single data point:** at `15:23:24Z`, `/mindbunker` succeeded using 207ms and `/mindbunker/crm` succeeded using 351ms — both comfortably clear of 10ms. One second later, at `15:23:25Z`, `/mindbunker/war-room` was killed at exactly 10ms. Same Worker. Same version. Same account. One second apart.
+
+---
+
+## 7. Sensor Cadence / Retry Findings
+
+**No retry storm.** Verified two independent ways:
+
+1. Every directly-tail-captured Sensor Catalog request lands once, at the `:5x`-seconds-past-the-minute mark, one per minute — never two in the same minute in any raw capture.
+2. The Cloudflare Analytics API occasionally reports `sum.requests: 10` or `sum.requests: 11` in a single one-second bucket (seen at `12:26:55`, `13:41:55`, `13:51:55`, `14:30:55`, `14:42:55`, `15:15:55`). **This was cross-checked directly against raw `wrangler tail` output for the exact same timestamps** (e.g. `13:41:55`, which the Analytics API reported as `exceededResources 10`) — the raw tail capture shows exactly **one** real request at that timestamp, not ten. **Conclusion: the "10-count" bucket values are an artifact of Cloudflare's adaptive-sampling extrapolation in the low-traffic Analytics API, not real duplicate/retried requests.** This is stated as a finding, not an assumption — it is directly falsifiable and was falsified against ground-truth tail data.
+
+Polling cadence: confirmed steady ~60 seconds, no drift, no acceleration after a failure (a failed minute is followed by the next attempt roughly 60s later, same as a successful one — the Sensor does not appear to retry immediately on failure).
+
+---
+
+## 8. Sensor Instance Count
+
+**EXPECTED SENSOR CLIENTS:** 1 (a single operator, single Mac).
+**OBSERVED DISTINCT CLIENT/DEVICE IDENTITIES:** 2 registered in `sensor_devices` — but only 1 is active.
+
+| id | name | last_seen_at |
+|---|---|---|
+| 1 | Emmanuel Mac Sensor Production | 2026-09-14T15:21:55 (actively polling, matches live cadence) |
+| 2 | Emmanuel's Mac | `null` — never successfully authenticated |
+
+Device 2 has never completed an authenticated request (its `last_seen_at`, which is unconditionally updated on every successful `authenticateSensorRequest` call, is null). It is not contributing to current traffic or to the observed CPU pattern. Not touched this wave (out of scope — data-only findings, no mutation).
+
+---
+
+## 9. Auth-Path Audit (`authenticateSensorRequest` and its imports)
+
+Read-only source inspection, `src/modules/sensor/server.ts` and `src/modules/sensor/core.ts`:
+
+| Step | Classification | Notes |
+|---|---|---|
+| `parseSensorToken` (regex match on a short string) | TRIVIAL | Simple bounded regex, no backtracking risk (anchored, fixed-length patterns) |
+| `hashSensorToken` → `crypto.subtle.digest("SHA-256", ...)` | TRIVIAL in steady state; **POTENTIALLY MATERIAL on a cold isolate** | Single-round SHA-256 over a short token — not PBKDF2, not iterated. WebCrypto subsystem initialization on a Worker's first crypto call in a fresh isolate is a plausible, real one-time cost; steady-state cost is negligible |
+| DB SELECT (`sensor_devices` by publicId+tokenHash) | TRIVIAL (D1 wait, not CPU) | Indexed lookup, single row |
+| DB UPDATE (`lastSeenAt`) | TRIVIAL (D1 wait, not CPU) | Single-row update by primary key |
+
+**No expensive iterated hashing, no synchronous loops, no large in-memory structure built per request.** This path was already inspected in the original incident and is re-confirmed clean this wave.
+
+---
+
+## 10. Catalog-Path Audit
+
+`src/app/api/sensor/v1/catalog/route.ts`, stage by stage:
+
+| Stage | Work | Classification |
+|---|---|---|
+| AUTH | see §9 | TRIVIAL–POTENTIALLY MATERIAL (cold-start only) |
+| READS | 3 parallel D1 queries, each with an explicit `.limit()` (100/200/500) | TRIVIAL at current data volume (see §11) |
+| TRANSFORMS | 3 `.map()` calls over already-small result arrays | TRIVIAL |
+| SORTS / FILTERS | Done entirely in SQL (`orderBy`, `where`) — **no client-side sort or filter** | TRIVIAL |
+| SERIALIZATION | `Response.json(...)` over a small object | TRIVIAL at current data volume |
+| RESPONSE | One header set | TRIVIAL |
+
+**No repeated scans, no nested loops, no large object spreads, no client-side date formatting, no client-side hashing beyond the one auth SHA-256.** This route was already the subject of a full line-by-line audit during the original incident and remains clean on re-inspection. **Module-scope cost is the only material candidate found** — see §12.
+
+---
+
+## 11. Data-Size Sensitivity
+
+Read-only counts, current production D1:
+
+| Table | Rows | Route's own `.limit()` | Headroom |
+|---|---|---|---|
+| `clients` (non-Geladeira) | 5 (of 5 total) | 100 | 20× under limit |
+| `projects` (non-archived, non-Geladeira client) | ~9 | 200 | 22× under limit |
+| `video_logs` (via non-archived project join) | ≤66 (of 66 total video_logs in the whole DB) | 500 | 7.6× under limit |
+
+**The catalog route is nowhere near its own explicit bounds today.** It scales with *current non-archived* rows, not full historical rows (archived projects/Geladeira clients are excluded by the query's own `WHERE` clause), and every dimension has a hard `.limit()` ceiling regardless. **It will not become "progressively worse over time"** in an unbounded way — worst case, it eventually saturates at 500 videos / 200 projects / 100 clients and stays there. At the *current* scale, this stage of the request is trivially cheap; the CPU cost of a healthy request (8–39ms) is not plausibly explained by this stage alone.
+
+---
+
+## 12. Cold/Warm Findings
+
+**No reliable Cloudflare-exposed cold-start marker was found** — `wrangler tail`'s JSON output does not include an explicit `coldStart` boolean or isolate-age field in this account's tier. Per instruction, this is reported as **UNKNOWN**, not invented.
+
+**Indirect evidence, however, is suggestive:** `src/db/index.ts` does `import * as schema from "./schema"`, and `schema.ts` is **2,793 lines, defining 58 tables and 110 indexes**. Every route that touches the database (which is nearly all of them, including the Sensor Catalog) pulls in this entire module graph. Building 58 Drizzle `sqliteTable()` definitions with their column/index/foreign-key metadata is real, non-trivial JS object construction — paid once per fresh isolate, reused for free on every subsequent request to that same warm isolate. This is a **plausible, concrete candidate for why a request's CPU cost can vary so widely (8ms vs. 605ms) on the identical route** depending on whether the isolate serving it happens to be warm already. **Classification: PLAUSIBLE, not proven** — this session cannot directly observe isolate lifecycle from outside the Worker.
+
+---
+
+## 13. Aggregate CPU / Quota Hypothesis
+
+Tested and **not supported** by the evidence:
+
+- If a rolling/replenishing account-wide CPU quota were the mechanism, heavier-traffic periods should predict failure onset. No such correlation was found — the 14:37 failure onset followed a *quiet* period (root/CRM/etc. were not being hit heavily beforehand), and the 15:23 War Room failures occurred in the *same second* as successful, CPU-heavy requests to other routes (207–351ms), which a shared, currently-exhausted quota should have blocked too.
+- If it were periodic (e.g., every 20 minutes on the clock), the transition timestamps should show a clean modulus. They do not: 14:37, 14:57 (20 min later), but then healthy for 24 min before the next mixed window at 15:23 (26 min later) — inconsistent spacing.
+
+**This hypothesis is falsified as a *primary* explanation**, though a per-isolate (not per-account) micro-quota interacting with cold-start timing (§12) remains an open, plausible variant not fully distinguishable from outside the platform.
+
+---
+
+## 14. Cloudflare Configuration Audit
+
+Re-confirmed, read-only, this wave:
+
+- `wrangler.jsonc`: no `limits.cpu_ms`, no `account_id` override, single environment.
+- Worker script settings API (`/workers/scripts/mindbunker/settings`): no `limits` key present at all.
+- No Smart Placement config found.
+- No secondary/hidden deployment: `wrangler deployments list` shows a single deployment history, one version at 100% traffic throughout this entire investigation.
+- `wrangler.maintenance.jsonc` exists in this repo but declares the **same** script name (`mindbunker`) — it is an alternate deploy *config* for the same script, not a second live Worker; not relevant to routing since `wrangler deployments list` confirms only one live version exists.
+
+**No explicit CPU override anywhere in this account's configuration that this token can read.**
+
+---
+
+## 15. Root-Cause Classification
+
+| Candidate | Verdict |
+|---|---|
+| A. Workers Free / flat 10ms limit | **Contradicted** — routine successes at 200–605ms rule out a flat, always-on 10ms ceiling |
+| B. Workers Paid but inconsistently applied | **Best-supported by evidence** — explains both the high-CPU successes and the exact, invariant 10ms kills, and explains why the split changes from second to second |
+| C. Cloudflare platform/runtime behavior (isolate placement, cold-start interaction with a real limit) | **Plausible, overlapping with B** — §12's cold-start candidate could be *why* a request occasionally lands under a stricter effective budget, without contradicting B |
+| D. Route-specific/runtime-specific issue | **Not supported as primary cause** — two different routes (Sensor, War Room, Productivity) show the identical signature; not isolated to one code path |
+| E. Application CPU pathology | **Not found** — every audited stage (§9, §10) is bounded and lean at current data volume; War Room is heavier than Sensor by design (12 parallel data sources vs. 3) but nothing in it is an accidental quadratic scan, unbounded loop, or obvious defect |
+
+**Confidence: HIGH** that this is B/C (platform-side inconsistency), not A, D, or E. **Not PROVEN** — proof requires either Cloudflare's own internal telemetry or a confirmed, stable plan-tier answer from Emmanuel's dashboard that this session cannot obtain.
+
+---
+
+## 16. Confidence Level
+
+**HIGH** on: worker-wide scope (not sensor-only), no retry storm, no application CPU bug, no config override, no dispatch/service-binding misdirection, exact invariant 10ms failure signature.
+**MEDIUM** on: cold-start-interacting-with-a-real-limit as the specific mechanism behind B/C.
+**UNKNOWN, explicitly not guessed:** the actual Workers plan tier; the exact Cloudflare-side reason enforcement is inconsistent.
+
+---
+
+## 17. Emergency Mitigation Ranking
+
+Evaluated, **not implemented**, per instruction. RMEDIA is a one-person business — proportional response strongly favors options that trade a small recurring cost for eliminated engineering/maintenance burden.
+
+| Option | Operator impact | Engineering time | Maintenance burden | Risk | Rank |
+|---|---|---|---|---|---|
+| **A. Workers Paid** | None (transparent) | Zero (account setting only) | Zero | Low — standard, well-documented Cloudflare product | **1st — if plan tier turns out to be the actual gap** |
+| C. Cache the catalog response briefly (e.g., 30–60s) | Slightly staler Sensor data, imperceptible in practice | Small, bounded | Low, one cache-control decision | Low | 2nd — cheap, real mitigation regardless of root cause, but treats a symptom |
+| B. Sensor polls less frequently | Slightly less real-time device activity data | Trivial (native app config) | Low | Low, but doesn't address root cause and reduces a working feature's fidelity | 3rd |
+| E. Optimize the route further | None | Small–moderate | Low | Low, but likely low-yield — the route is already lean (§10), and the failures aren't confined to it (§6) | 4th |
+| D. Separate minimal Sensor API Worker | None | Moderate–high (new deploy target, new routing, new maintenance surface) | **Ongoing, permanent** | Adds real architectural complexity for a problem that isn't proven to be Sensor-specific (§6 shows it isn't) | **Last — actively discouraged given §6's evidence** |
+
+**If Emmanuel confirms Workers Paid is already active:** Option D should not be built reflexively — the evidence in §6 already shows this is worker-wide, so isolating the Sensor route into its own Worker would not fix War Room or Productivity's failures, and would add a permanent second deploy target for a one-person business to maintain going forward.
+
+---
+
+## 18. Recommended Decision Branch
+
+**Branch B — prepare for the possibility that Workers Paid is active but inconsistently enforced.**
+
+Given this session cannot confirm the plan tier, the concrete next step is still gated on Emmanuel's dashboard check (§3). Two sub-paths follow directly from that check:
+
+- **If the dashboard shows Free:** this collapses cleanly to Branch A. Upgrade to Workers Paid (Option A above) is the correct, proportional fix — a few dollars a month, zero code change, zero new maintenance surface. After upgrading, re-run the exact verification already used successfully once before in this engagement: `wrangler tail` for a few minutes, confirm ≥3 Sensor Catalog requests all `ok`, then hold the account-wide Analytics view open for a sustained window (ideally the full 20+ minutes this wave's mission asked for, not yet completed — see §20) before declaring it closed.
+- **If the dashboard already shows Paid, Standard, active, current billing:** this is Branch B confirmed, and the support-evidence package in §19 is ready to hand to Cloudflare support as-is.
+
+---
+
+## 19. Cloudflare Support Package (ready to file if Branch B is confirmed)
+
+- **Account ID:** `a2511426086f83bc2d6031478dbf2e69`
+- **Worker:** `mindbunker`, version `cf8b54bc-d0ce-42ad-ad74-acbcfb4af81b` (single deployed version throughout the entire incident window, confirmed via `wrangler deployments list`)
+- **Route:** `emmanueldarosa.com/mindbunker*` (confirmed via zone route table, no dispatch/service-binding layer)
+- **Failure window examples (UTC):** `14:37:55–14:56:54` (19 min unbroken), `15:23:25–15:24:22` (War Room specifically, 4 occurrences in 57s)
+- **Failed request example:** `cf-ray: a3afc1396a971b26`, `2026-09-14T13:41:55.402Z`, `GET /mindbunker/api/sensor/v1/catalog`, `outcome: exceededCpu`, `cpuTime: 10`, `wallTime: 13`
+- **Successful >10ms example, same Worker/version, same hour:** `2026-09-14T15:23:24.767Z`, `GET /mindbunker/crm`, `outcome: ok`, `cpuTime: 351`
+- **Route trace:** documented in full in §2 — no dispatch namespace, no service binding, no alternate script anywhere in the request path
+- **No CPU override proof:** `wrangler.jsonc` has no `limits` block (repo, this session); Worker script settings API returns no `limits` key (live account state, this session)
+
+---
+
+## 20. Exact Next Action
+
+**Emmanuel checks the Cloudflare dashboard** (Workers & Pages → `mindbunker` → Plans/Billing/Usage, specifically the Workers compute plan, not the website zone plan) and reports back: Free, or Paid/Standard with an active billing status. This session's own sustained-window observation (§4) covered a dense, well-evidenced ~50-minute stretch with a clear mixed/flapping result, but did not run the full clean 20-minutes-of-nothing-but-success confirmation the mission's §6 describes, because the window itself flapped again during observation — that confirmation should be re-attempted **after** whatever change (if any) Emmanuel makes following the dashboard check, not before.
+
+---
+
+## Final Output
+
+**WORKERS PLAN:** UNKNOWN
+
+**CURRENT SENSOR:** FLAPPING
+
+**FAILURE SCOPE:** WORKER-WIDE
+
+**HEALTHY SENSOR CPU:** median 17ms / p90 39ms / max 39ms
+
+**FAILED SENSOR CPU:** exact 10ms signature, zero variance, n=7
+
+**MULTIPLE SENSOR INSTANCES:** NO (2 registered, only 1 active)
+
+**RETRY STORM:** NO
+
+**ROOT CAUSE:** A Cloudflare-side CPU-time ceiling (most consistent with an inconsistently-applied Workers Paid allowance) is being enforced on a subset of requests across multiple routes on the same Worker, while most requests on the identical Worker/version routinely exceed it without issue.
+
+**CONFIDENCE:** HIGH (platform-side cause, not application bug) / MEDIUM (exact mechanism) / UNKNOWN (plan tier itself)
+
+**RECOMMENDED BRANCH:** B
+
+**CODE CHANGE:** NONE
+
+**D1 MUTATION:** NONE
+
+**DEPLOY:** NONE
+
+**TARYN:** PAUSED
+
+**STOP.**
