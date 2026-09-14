@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   AddExpenseButton,
   AddIncomeButton,
-  AddRevisionButton,
   FinishedVideoButton,
   LogBikeRideButton,
   LogTodayButton,
@@ -51,7 +50,6 @@ export function MobileQuickCapture() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <FinishedVideoButton />
-              <AddRevisionButton />
               <AddIncomeButton />
               <AddExpenseButton />
               <LogTodayButton />

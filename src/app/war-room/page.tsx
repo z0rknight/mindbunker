@@ -122,6 +122,14 @@ export default async function WarRoomPage() {
         <ActiveSignalsSection signals={signals} />
         <DecisionsSection decisions={openDecisions} />
       </div>
+      {/* House Cleaning Wave 2 §12: the research found this 7-day, 5-column
+          table (each cell often packing 2-4 sub-values) too dense for a
+          glanceable, always-open COMANDA screen -- closer to a spreadsheet
+          than a kitchen-display ticket. Collapsed by default, exactly the
+          same disclosure primitive as the BI layers below; every row is
+          still here, nothing was deleted. Sessions stays the real
+          detailed time-history surface -- linked below rather than
+          duplicated. */}
       <DailyLedgerSection rows={dailyLedger} />
 
       {/* Global Health Audit — War Room boundary (Section 8-9): War Room's
@@ -825,10 +833,28 @@ function formatTimeOfDay(iso: string | null): string {
 }
 
 function DailyLedgerSection({ rows }: { rows: DailyLedgerRow[] }) {
+  const today = rows[0] ?? null;
   return (
-    <section className="mb-8">
-      <SectionHeader label="DAILY OPERATIONAL LEDGER · LAST 7 DAYS" icon="📓" />
-      <p className="mb-3 text-xs text-zinc-600">
+    <details className="group mb-8 rounded-2xl border border-zinc-800 bg-zinc-950/30 p-4 sm:p-5">
+      <summary className="cursor-pointer list-none">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-block transition group-open:rotate-90">▸</span>
+            <SectionHeader label="DAILY OPERATIONAL LEDGER · LAST 7 DAYS" icon="📓" />
+          </div>
+          <Link href="/productivity/sessions" className="text-xs font-bold text-cyan-400 hover:text-cyan-300">
+            Full history in Sessions →
+          </Link>
+        </div>
+        {today && (
+          <p className="mt-2 text-xs text-zinc-500">
+            Today: {formatDuration(today.work.trackedSeconds)} tracked
+            {today.work.videosTouched > 0 ? ` · ${today.work.videosTouched} video${today.work.videosTouched === 1 ? "" : "s"}` : ""}
+            {" · "}{today.output.videosDelivered} delivered
+          </p>
+        )}
+      </summary>
+      <p className="mb-3 mt-3 border-t border-zinc-800 pt-3 text-xs text-zinc-600">
         What actually happened each day, derived from evidence already recorded elsewhere. &ldquo;—&rdquo; means no evidence for that day, not zero.
       </p>
       <div className="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900">
@@ -883,6 +909,6 @@ function DailyLedgerSection({ rows }: { rows: DailyLedgerRow[] }) {
           </tbody>
         </table>
       </div>
-    </section>
+    </details>
   );
 }

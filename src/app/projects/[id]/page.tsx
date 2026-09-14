@@ -8,7 +8,6 @@ import { formatDate } from "@/utils/date";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProjectWorkspaceControls } from "./ProjectWorkspaceControls";
-import { AddVideoButton } from "./AddVideoButton";
 import { BulkAddVideosButton } from "./BulkAddVideosButton";
 import { ProjectVideoWorkspace } from "./ProjectVideoWorkspace";
 import { getCommercialTermsForVideo } from "@/modules/quotes/actions";
@@ -173,19 +172,23 @@ export default async function ProjectWorkspacePage({
               Videos <span className="font-mono text-sm text-zinc-600">{project.videos.length}</span>
             </h2>
           </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            <AddVideoButton projectId={project.id} />
+          <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:flex-row sm:items-center">
             <BulkAddVideosButton projectId={project.id} />
-            <div className="w-full sm:w-[180px]">
-              <PlanVideoButton
-                initialProjectId={project.id}
-                projectContext={{
-                  id: project.id,
-                  name: project.name,
-                  clientName: project.clientName,
-                }}
-              />
-            </div>
+            {/* House Cleaning Wave 2 §15: Plan Video means something
+                different (future work, always PLANNED) from registering a
+                video that already exists in some real state -- kept
+                reachable here, but deliberately smaller than the one
+                primary Add Video action, not an equally-weighted third
+                door for the same canonical item. */}
+            <PlanVideoButton
+              initialProjectId={project.id}
+              projectContext={{
+                id: project.id,
+                name: project.name,
+                clientName: project.clientName,
+              }}
+              compact
+            />
           </div>
         </div>
 

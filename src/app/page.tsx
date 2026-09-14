@@ -5,10 +5,8 @@ import {
   LogTodayButton,
   LogBikeRideButton,
   LogWalkButton,
-  AddRevisionButton,
 } from "@/components/ui/QuickActions";
-import { getFinanceSummary, getTodayIncomeByCurrency, getTodayRateEquivalents } from "@/modules/finance/actions";
-import { getVideoStats } from "@/modules/productivity/actions";
+import { getTodayIncomeByCurrency, getTodayRateEquivalents } from "@/modules/finance/actions";
 import {
   getProjectStreaks,
   getTodayWorkSessionStats,
@@ -17,17 +15,13 @@ import {
 import { formatClosedDuration, formatLastActive } from "@/modules/work-sessions/core";
 import { getHealthSummary } from "@/modules/health/actions";
 import { getCaffeineSummary } from "@/modules/caffeine/actions";
-import { getCRMSummary, getRecentBookRequests } from "@/modules/crm/actions";
-import { getSalesThisMonth, getMostRecentSaleThisMonth, getClosedSales } from "@/modules/quotes/actions";
-import { formatQuoteAmount } from "@/modules/quotes/core";
-import { getWarRoomData } from "@/modules/analytics/service";
+import { getRecentBookRequests } from "@/modules/crm/actions";
 import { formatCurrency, currentMonthKey, currentMonthName } from "@/utils/date";
 import Link from "next/link";
 import { HomeTrackingPanel } from "./HomeTrackingPanel";
 import { CoffeeQuickLogButton } from "@/components/ui/HealthQuickActions";
 import { getDashboardOperatorIntelligence } from "@/modules/operator-intelligence/data";
 import { selectDashboardNow, type AttentionReason } from "@/modules/operator-intelligence/core";
-import { EconomicLedgerCard } from "@/components/finance/EconomicLedgerCard";
 import { isInternalClientName, splitIntentionalWork } from "@/lib/client-identity";
 import { getOpenCommitmentsWithContext, rankOpenCommitments } from "@/modules/signals";
 import { ActiveCommitmentCard } from "@/components/commitments/ActiveCommitmentCard";
@@ -35,40 +29,38 @@ import { PixelDivider, PixelIcon } from "@/components/ui/PixelVisuals";
 
 export const dynamic = "force-dynamic";
 
+// House Cleaning Wave 2 §11 (RMEDIA_SYSTEM_SIMPLIFICATION_RESEARCH_2026_09.md):
+// the two collapsed disclosures this page used to end with (a baseline/
+// trend block and a detailed per-domain stats block) were removed
+// outright, not just left collapsed -- every figure in them (Finance
+// monthly totals, Productivity video counts, CRM sales/leads, Health 7-day
+// averages, War Room's momentum/biological correlation) already renders
+// canonically on its own specialist page. The server calls that only fed
+// those two blocks are gone from the query list below too -- removing the
+// fetch, not just the markup, per the mission's explicit "do not keep
+// fetching statistics that no longer render" instruction. Dashboard now
+// fetches only what it still shows: what's active now, the day's
+// attention items, and today's own numbers.
 export default async function DashboardPage() {
   const [
-    finance,
-    video,
     health,
-    crm,
-    warRoom,
     workSessionOverview,
     caffeineSummary,
     projectStreaks,
     todayWorkStats,
     todayRateEquivalents,
     recentBookRequests,
-    salesThisMonth,
-    mostRecentSale,
-    closedSales,
     operatorIntelligence,
     openCommitments,
     todayIncome,
   ] = await Promise.all([
-    getFinanceSummary(),
-    getVideoStats(),
     getHealthSummary(),
-    getCRMSummary(),
-    getWarRoomData(),
     getWorkSessionOverview(),
     getCaffeineSummary(),
     getProjectStreaks(3),
     getTodayWorkSessionStats(),
     getTodayRateEquivalents(),
     getRecentBookRequests(),
-    getSalesThisMonth(),
-    getMostRecentSaleThisMonth(),
-    getClosedSales(),
     getDashboardOperatorIntelligence(),
     getOpenCommitmentsWithContext(),
     getTodayIncomeByCurrency(),
@@ -131,7 +123,6 @@ export default async function DashboardPage() {
           <LogTodayButton />
           <LogBikeRideButton />
           <LogWalkButton />
-          <AddRevisionButton />
           <Link
             href="/productivity/orders/new"
             className="flex flex-col items-center justify-center gap-2 rounded-xl border border-emerald-800/60 bg-black px-6 py-5 font-mono text-sm font-bold text-emerald-400 transition-all hover:border-emerald-500 hover:bg-zinc-950 active:scale-95"
@@ -353,9 +344,8 @@ export default async function DashboardPage() {
       {/* Monday Money Lab P0 §12: +1 Coffee moved back into the Quick
           Actions grid (former secondary quick-action position) rather than
           floating beside the primary Start Work/Finished Video controls
-          above. The coffee *count* stays in its metric/stat surface
-          (Health section of Detailed Statistics below, "Caffeine Today"),
-          not here -- this row is only the sleep readout now. */}
+          above. Health's own page owns the full caffeine breakdown --
+          this row is only the sleep readout. */}
       {health.todayLog?.sleepHours != null && (
         <div className="mb-8">
           <span className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
@@ -364,387 +354,6 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* ── INSIGHTS & CORRELATIONS ───────────────────────────────────────── */}
-      {/* Tuesday Patch Priority 1 (below-the-fold noise): these six cards
-          read the exact same getWarRoomData() call War Room's own Layer
-          II/III/IV cards do -- same numbers, different chrome. Nothing
-          here is deleted (per instruction); it's collapsed by default so
-          Dashboard's own scroll doesn't repeat War Room's job, while the
-          data stays one click away for whoever wants it right here. */}
-      <details className="group mb-8 rounded-2xl border border-zinc-800 bg-zinc-950/30 p-4 sm:p-5">
-        <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-zinc-400 text-xs font-semibold uppercase tracking-widest">
-          <span className="transition group-open:rotate-90">▸</span>
-          Historical context
-          <span className="normal-case text-zinc-600">— baseline evidence, not live state</span>
-        </summary>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Revenue Trend */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">📈</span>
-              <p className="text-zinc-500 text-xs uppercase tracking-wider">Revenue Trend</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <p className={`text-2xl font-black ${
-                warRoom.momentum.revenueGrowthPct !== null && warRoom.momentum.revenueGrowthPct > 0
-                  ? "text-cyan-400"
-                  : warRoom.momentum.revenueGrowthPct !== null && warRoom.momentum.revenueGrowthPct < 0
-                  ? "text-red-400"
-                  : "text-zinc-400"
-              }`}>
-                {warRoom.momentum.revenueGrowthPct !== null
-                  ? `${warRoom.momentum.revenueGrowthPct > 0 ? "+" : ""}${warRoom.momentum.revenueGrowthPct}%`
-                  : "—"}
-              </p>
-              {warRoom.momentum.revenueGrowthPct !== null && (
-                <span className={`text-xl font-black ${
-                  warRoom.momentum.revenueTrend === "up" ? "text-cyan-400" :
-                  warRoom.momentum.revenueTrend === "down" ? "text-red-400" : "text-zinc-400"
-                }`}>
-                  {warRoom.momentum.revenueTrend === "up" ? "↑" :
-                   warRoom.momentum.revenueTrend === "down" ? "↓" : "→"}
-                </span>
-              )}
-            </div>
-            <p className="text-zinc-600 text-xs mt-1">
-              {warRoom.momentum.revenueGrowthPct === null ? `Insufficient comparable sample · N=${warRoom.momentum.comparableDays} days` : `MTD vs same ${warRoom.momentum.comparableDays} days last month`}
-            </p>
-          </div>
-
-          {/* Output Trend */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">🎬</span>
-              <p className="text-zinc-500 text-xs uppercase tracking-wider">Output Trend</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <p className={`text-2xl font-black ${
-                warRoom.momentum.outputGrowthPct !== null && warRoom.momentum.outputGrowthPct > 0
-                  ? "text-cyan-400"
-                  : warRoom.momentum.outputGrowthPct !== null && warRoom.momentum.outputGrowthPct < 0
-                  ? "text-red-400"
-                  : "text-zinc-400"
-              }`}>
-                {warRoom.momentum.outputGrowthPct !== null
-                  ? `${warRoom.momentum.outputGrowthPct > 0 ? "+" : ""}${warRoom.momentum.outputGrowthPct}%`
-                  : "—"}
-              </p>
-              {warRoom.momentum.outputGrowthPct !== null && (
-                <span className={`text-xl font-black ${
-                  warRoom.momentum.outputTrend === "up" ? "text-cyan-400" :
-                  warRoom.momentum.outputTrend === "down" ? "text-red-400" : "text-zinc-400"
-                }`}>
-                  {warRoom.momentum.outputTrend === "up" ? "↑" :
-                   warRoom.momentum.outputTrend === "down" ? "↓" : "→"}
-                </span>
-              )}
-            </div>
-            <p className="text-zinc-600 text-xs mt-1">
-              {warRoom.momentum.outputGrowthPct === null ? `Insufficient comparable sample · N=${warRoom.momentum.comparableDays} days` : `MTD videos vs same ${warRoom.momentum.comparableDays} days`}
-            </p>
-          </div>
-
-          {/* Sleep vs Output */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">😴</span>
-              <p className="text-zinc-500 text-xs uppercase tracking-wider">Output on ≥7h sleep days</p>
-            </div>
-            <p className="text-2xl font-black text-cyan-400">
-              {warRoom.biological.goodSleepSampleCount >= 5 && warRoom.biological.avgVideosGoodSleep !== null
-                ? `${warRoom.biological.avgVideosGoodSleep} videos`
-                : "Insufficient sample"}
-            </p>
-            <p className="text-zinc-600 text-xs mt-1">Recorded days N={warRoom.biological.goodSleepSampleCount} · descriptive, not causal</p>
-          </div>
-
-          {/* Coffees / Video */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">☕</span>
-              <p className="text-zinc-500 text-xs uppercase tracking-wider">Coffees / Video</p>
-            </div>
-            <p className={`text-2xl font-black ${
-              warRoom.biological.coffeesPerVideo !== null ? "text-cyan-400" : "text-zinc-500"
-            }`}>
-              {warRoom.biological.coffeesPerVideo !== null
-                ? `${warRoom.biological.coffeesPerVideo}`
-                : "—"}
-            </p>
-            <p className="text-zinc-600 text-xs mt-1">
-              {warRoom.biological.coffeesPerVideo !== null
-                ? `${warRoom.biological.totalCoffeesMonth} coffees · ${warRoom.efficiency.videosThisMonth} completed videos`
-                : "No completed videos this month yet"}
-            </p>
-          </div>
-        </div>
-
-        {/* Additional Insights Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          {/* Revenue Streak */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">🔥</span>
-              <p className="text-zinc-500 text-xs uppercase tracking-wider">Recorded Income Streak</p>
-            </div>
-            <p className="text-2xl font-black text-orange-400">
-              {warRoom.momentum.revenueStreak}
-              <span className="text-sm font-normal text-zinc-500 ml-1">days</span>
-            </p>
-            <p className="text-zinc-600 text-xs mt-1">Consecutive days with recorded income</p>
-          </div>
-
-          {/* Revision Efficiency */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">⚙️</span>
-              <p className="text-zinc-500 text-xs uppercase tracking-wider">Rework Evidence</p>
-            </div>
-            <p className="text-2xl font-black text-zinc-200">
-              {warRoom.efficiency.totalRevisions} revisions
-            </p>
-            <p className="mt-1 text-xs text-zinc-600">
-              {warRoom.efficiency.videosThisMonth} completed videos
-            </p>
-          </div>
-        </div>
-      </details>
-
-      {/* ── DETAILED STATISTICS ─────────────────────────────────────────────── */}
-      {/* Same demotion rationale: Finance/Productivity/CRM/Health stat
-          grids here largely restate what their own surfaces already show
-          (and, for Finance, what Priority 4's new Overview leads with).
-          Collapsed by default, not deleted. */}
-      <details className="group mb-6">
-        <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-zinc-400 text-xs font-semibold uppercase tracking-widest">
-          <span className="transition group-open:rotate-90">▸</span>
-          📊 Detailed Statistics
-        </summary>
-
-        {/* Finance Section */}
-        <div className="mb-6">
-          <h3 className="text-zinc-500 text-xs font-semibold uppercase tracking-widest mb-3">💰 Finance</h3>
-          <div className="space-y-4">
-            {finance.map((row) => (
-              <div key={row.currency}>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-600">{row.currency}</p>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  <EconomicLedgerCard
-                    amount={row.economicLedgerNet}
-                    currency={row.currency}
-                  />
-                  <StatCard
-                    label="Monthly Revenue"
-                    value={formatCurrency(row.monthlyRevenue, row.currency)}
-                    sub={currentMonthName()}
-                    accent="green"
-                    icon="📈"
-                  />
-                  <StatCard
-                    label="Monthly Expenses"
-                    value={formatCurrency(row.monthlyExpenses, row.currency)}
-                    sub={currentMonthName()}
-                    accent="red"
-                    icon="📉"
-                  />
-                  <StatCard
-                    label="Net This Month"
-                    value={formatCurrency(row.monthlyNet, row.currency)}
-                    accent={row.monthlyNet >= 0 ? "green" : "red"}
-                    icon="⚖️"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Productivity Section */}
-        <div className="mb-6">
-          <h3 className="text-zinc-500 text-xs font-semibold uppercase tracking-widest mb-3">🎬 Productivity</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard
-              label="Videos Today"
-              value={video.today}
-              accent="violet"
-              icon="🎬"
-            />
-            <StatCard
-              label="Videos This Week"
-              value={video.week}
-              accent="violet"
-              icon="📅"
-            />
-            <StatCard
-              label="Videos This Month"
-              value={video.month}
-              sub={currentMonthName()}
-              accent="violet"
-              icon="🗓️"
-            />
-            <StatCard
-              label="Total Revisions · All Time"
-              value={video.totalRevisions}
-              accent="zinc"
-              icon="🔄"
-            />
-          </div>
-        </div>
-
-        {/* CRM Section */}
-        <div className="mb-6">
-          <h3 className="text-zinc-500 text-xs font-semibold uppercase tracking-widest mb-3">👥 CRM</h3>
-
-          {/* Quick Morning Reality Patch §14: small, modest positive
-              feedback -- derived straight from the same canonical
-              approved-quote event §11's Sales stat reads, not a new
-              notification system. Only shows when there's a real sale
-              this month; disappears on its own otherwise. */}
-          {mostRecentSale && (
-            <div className="mb-3 flex items-center gap-3 rounded-xl border border-emerald-700/40 bg-emerald-950/20 px-4 py-3">
-              <span className="text-xl" aria-hidden="true">🎉</span>
-              <div>
-                <p className="text-sm font-bold text-emerald-200">
-                  Sale: {mostRecentSale.clientName}
-                  {mostRecentSale.videoTitle ? ` — ${mostRecentSale.videoTitle}` : ""}
-                </p>
-                <p className="text-xs text-zinc-500">
-                  {formatQuoteAmount(mostRecentSale.amountCents, mostRecentSale.currency)} accepted · not cash by itself
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard
-              label="Active Clients"
-              value={crm.activeClientsCount}
-              accent="blue"
-              icon="✅"
-            />
-            <StatCard
-              label="Leads This Month"
-              value={crm.leadsThisMonth}
-              sub={currentMonthName()}
-              accent="blue"
-              icon="🎯"
-            />
-            <StatCard
-              label="Total Contacts"
-              value={crm.totalClients}
-              accent="zinc"
-              icon="📋"
-            />
-            {/* Quick Morning Reality Patch §11: SALE = approved quote,
-                never cash received -- see computeSalesThisMonth. Grouped
-                by currency, never mixed. */}
-            <StatCard
-              label="Sales This Month"
-              value={salesThisMonth.totalCount}
-              sub={currentMonthName()}
-              accent="green"
-              icon="🤝"
-            />
-            {/* First Sale Economics (26 Aug 2026) §2: an all-time
-                counterpart to Sales This Month -- APPROVED QUOTE = SALE
-                with no time window, so a real closed deal doesn't
-                silently disappear from the dashboard once the month
-                rolls over. Same source (computeClosedSales reuses
-                computeSalesThisMonth's own grouping), never called
-                Revenue or Received, never mutates Finance. */}
-            <StatCard
-              label="Closed Sales"
-              value={closedSales.totalCount}
-              sub="all time"
-              accent="green"
-              icon="🎯"
-            />
-          </div>
-
-          {salesThisMonth.byCurrency.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {salesThisMonth.byCurrency.map((entry) => (
-                <span
-                  key={entry.currency}
-                  className="rounded-full border border-emerald-700/40 bg-emerald-950/20 px-3 py-1.5 text-xs font-bold text-emerald-300"
-                >
-                  Accepted this month ({entry.currency}): {formatQuoteAmount(entry.totalAmountCents, entry.currency)}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {closedSales.byCurrency.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {closedSales.byCurrency.map((entry) => (
-                <span
-                  key={entry.currency}
-                  className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-bold text-zinc-300"
-                >
-                  Value closed · all time ({entry.currency}): {formatQuoteAmount(entry.totalAmountCents, entry.currency)}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Health Section */}
-        <div className="mb-6">
-          <h3 className="text-zinc-500 text-xs font-semibold uppercase tracking-widest mb-3">🫀 Health</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <StatCard
-              label="Avg Sleep (7d)"
-              value={health.avgSleep7Days !== null ? `${health.avgSleep7Days}h` : "—"}
-              accent="blue"
-              icon="😴"
-            />
-            <StatCard
-              label="Caffeine Today"
-              value={
-                health.caffeineToday === null
-                  ? "—"
-                  : health.caffeineTodaySource === "ESTIMATED"
-                    ? `~${health.caffeineToday}mg`
-                    : `${health.caffeineToday}mg`
-              }
-              sub={
-                health.caffeineTodaySource === "ESTIMATED"
-                  ? `${health.coffeeServingsToday} coffees · estimated`
-                  : health.caffeineTodaySource === "MANUAL"
-                    ? "Manual precise entry"
-                    : undefined
-              }
-              accent="amber"
-              icon="☕"
-            />
-            <StatCard
-              label="Screen Time Today"
-              value={health.screenTimeToday !== null ? `${health.screenTimeToday}h` : "—"}
-              accent="zinc"
-              icon="🖥️"
-            />
-            <StatCard
-              label="Cycling Today"
-              value={health.cyclingKmToday !== null ? `${health.cyclingKmToday}km` : "—"}
-              accent="blue"
-              icon="🚴\u200d♂️"
-            />
-            <StatCard
-              label="Walking Today"
-              value={health.walkingMinutesToday !== null ? `${health.walkingMinutesToday}min` : "—"}
-              accent="blue"
-              icon="🚶\u200d♂️"
-            />
-            <StatCard
-              label="Cycling (7d)"
-              value={health.totalCyclingKm7d !== null ? `${health.totalCyclingKm7d}km` : "—"}
-              sub="Total last 7 days"
-              accent="zinc"
-              icon="📊"
-            />
-          </div>
-        </div>
-      </details>
 
     </div>
   );

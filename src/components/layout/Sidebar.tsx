@@ -55,17 +55,23 @@ const navItems = [
   // (previously only one click deep inside /finance). Same
   // desktop-only/mobile-tab-count treatment as Sessions above.
   { href: "/finance/contracts", label: "Contracts", mobileLabel: "Contracts", icon: "🧾", desktopOnly: true, group: "MONEY" },
-  // Reference/reporting surface, not part of daily Productivity execution --
-  // desktop sidebar only, deliberately excluded from the mobile bottom tab
-  // bar so that bar stays at its current 7 destinations.
-  { href: "/all-history", label: "All History", mobileLabel: "History", icon: "🗄️", desktopOnly: true, group: "INTELLIGENCE" },
   { href: "/health", label: "Health", mobileLabel: "Health", icon: "🫀", group: "HEALTH" },
 ];
+
+// House Cleaning Wave 2 §23 (RMEDIA_SYSTEM_SIMPLIFICATION_RESEARCH_2026_09.md):
+// All History (the hist_* one-time reconstruction subsystem -- Upwork/
+// Clockify/ActivityWatch backfill, explicitly "not live MindBunker data")
+// no longer competes with daily navigation. Nothing was deleted: the
+// route, module, tables, and tests are all untouched -- only the sidebar
+// entry is gone, since a one-time reconciliation artifact doesn't belong
+// next to War Room/Productivity/CRM in primary nav. Reachable via the
+// small contextual link on Sessions (see productivity/sessions/page.tsx)
+// if ever needed again.
 
 // Section order is fixed here (not alphabetical, not insertion order of
 // some other list) so it stays stable regardless of how navItems above
 // gets reordered later.
-const GROUP_ORDER = ["OPERATIONS", "COMMERCIAL", "MONEY", "INTELLIGENCE", "HEALTH"];
+const GROUP_ORDER = ["OPERATIONS", "COMMERCIAL", "MONEY", "HEALTH"];
 
 export function Sidebar() {
   const pathname = usePathname();

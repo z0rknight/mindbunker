@@ -10,6 +10,13 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **House Cleaning Wave 2 micro-hardening — local candidate (2026-09-14)**
+  - [x] Distinguished malformed `video` query parameters from an omitted parameter so malformed IDs fail explicitly while numeric nonexistent IDs retain their existing not-found behavior
+  - [x] Unified single, Project-bulk, and LET'S COOK child preparation through one canonical validation/defaulting helper
+  - [x] Restored LET'S COOK order + operational container + child-video atomicity with one D1 batch and retry-safe ingest-key handling
+  - [x] Proved five-child success, injected rollback, retry idempotency, queue exclusion, defaults, and legacy readability against an isolated D1 migration chain
+  - [x] Passed 1055 tests, TypeScript, ESLint (0 errors), Next build, OpenNext build, and diff check; no migration, deploy, or production mutation
+
 - [x] **🧭 Master QA Implementation Wave 1 — local candidate (2026-09-02)**
   - [x] Unified Finance on one currency-safe Economic Ledger Net and made `NOT WISE CASH` visually prominent while leaving observed Wise custody/reconciliation intact
   - [x] Renamed contract/work reconciliation to `getContractReconciliation`, preserving the cash/Wise domain name

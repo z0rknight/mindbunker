@@ -11,23 +11,40 @@ import { createQuote } from "@/modules/quotes/actions";
 const inputClass =
   "rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none";
 
+// House Cleaning Wave 2 §22 (RMEDIA_SYSTEM_SIMPLIFICATION_RESEARCH_2026_09.md):
+// optional pre-fill, carried from Pricing Lab's "Create Quote from this
+// calculation" bridge. Nothing here persists automatically -- the values
+// only seed this form's own local state; the canonical quotes row is
+// still only created when Emmanuel reviews and clicks Save Draft below,
+// same as when he types these values in by hand.
+export type QuoteCreateFormPrefill = {
+  amountDollars?: string;
+  currency?: string;
+  contentTypeLabel?: string;
+  turnaroundLabel?: string;
+  revisionsIncluded?: string;
+  scopeText?: string;
+};
+
 export function QuoteCreateForm({
   clientId,
   onDone,
   onCancel,
+  prefill,
 }: {
   clientId: number;
   onDone: () => void;
   onCancel?: () => void;
+  prefill?: QuoteCreateFormPrefill;
 }) {
   const [isPending, startTransition] = useTransition();
-  const [amountDollars, setAmountDollars] = useState("");
-  const [currency, setCurrency] = useState("USD");
-  const [contentTypeLabel, setContentTypeLabel] = useState("");
-  const [turnaroundLabel, setTurnaroundLabel] = useState("");
-  const [revisionsIncluded, setRevisionsIncluded] = useState("2");
+  const [amountDollars, setAmountDollars] = useState(prefill?.amountDollars ?? "");
+  const [currency, setCurrency] = useState(prefill?.currency ?? "USD");
+  const [contentTypeLabel, setContentTypeLabel] = useState(prefill?.contentTypeLabel ?? "");
+  const [turnaroundLabel, setTurnaroundLabel] = useState(prefill?.turnaroundLabel ?? "");
+  const [revisionsIncluded, setRevisionsIncluded] = useState(prefill?.revisionsIncluded ?? "2");
   const [summary, setSummary] = useState("");
-  const [scopeText, setScopeText] = useState("");
+  const [scopeText, setScopeText] = useState(prefill?.scopeText ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
 

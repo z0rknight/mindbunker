@@ -41,6 +41,7 @@ type VideoRow = {
   visibleToClient: boolean;
   createdAt: Date | null;
   updatedAt: Date | null;
+  batchLabel: string | null;
 };
 
 type VideoOperationsCardProps = {

@@ -74,7 +74,7 @@ export function VideoMemoryPanel({ videoId }: { videoId: number }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-violet-300">
-            Video memory
+            Notes
           </p>
           <h3 className="mt-1 font-black text-white">What happened while making this?</h3>
         </div>
@@ -120,7 +120,7 @@ export function VideoMemoryPanel({ videoId }: { videoId: number }) {
           <p className="text-sm text-zinc-600">Loading memory…</p>
         ) : entries.length === 0 ? (
           <p className="rounded-xl border border-dashed border-zinc-800 px-4 py-5 text-sm text-zinc-600">
-            No operational memory yet. Add the first useful fact.
+            No notes yet. Add the first useful fact.
           </p>
         ) : (
           <>

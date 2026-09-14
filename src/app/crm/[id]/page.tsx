@@ -35,12 +35,38 @@ export default async function ClientDetailPage({
     tab?: string | string[];
     createProject?: string | string[];
     returnTo?: string | string[];
+    // House Cleaning Wave 2 §22: Pricing Lab's "Create Quote from this
+    // calculation" bridge. All plain strings, all optional -- read-only
+    // pre-fill for QuoteCreateForm's own local state; nothing here is
+    // persisted until Emmanuel saves the form.
+    createQuote?: string | string[];
+    amount?: string | string[];
+    currency?: string | string[];
+    contentType?: string | string[];
+    turnaround?: string | string[];
+    revisions?: string | string[];
+    scope?: string | string[];
   }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
   const requestedTab = query.tab;
   const shouldCreateProject = query.createProject === "1";
+  // House Cleaning Wave 2 §22: a string param here only ever seeds
+  // QuoteCreateForm's local state (see QuoteCreateFormPrefill) -- it is
+  // never written to the database directly, so there is no injection or
+  // trust concern in reading it straight from the query string.
+  const shouldCreateQuote = query.createQuote === "1";
+  const quotePrefill = shouldCreateQuote
+    ? {
+        amountDollars: typeof query.amount === "string" ? query.amount : undefined,
+        currency: typeof query.currency === "string" ? query.currency.toUpperCase() : undefined,
+        contentTypeLabel: typeof query.contentType === "string" ? query.contentType : undefined,
+        turnaroundLabel: typeof query.turnaround === "string" ? query.turnaround : undefined,
+        revisionsIncluded: typeof query.revisions === "string" ? query.revisions : undefined,
+        scopeText: typeof query.scope === "string" ? query.scope : undefined,
+      }
+    : undefined;
   const projectReturnTo =
     query.returnTo === "/productivity?planVideo=1"
       ? query.returnTo
@@ -191,9 +217,6 @@ export default async function ClientDetailPage({
         );
       })()}
 
-      {/* Internal production context stays operational and precedes lead/audit surfaces. */}
-      <ClientIntelligencePanel summary={clientIntelligence} weekEstimate={weekEstimateForClient} />
-
       <OpportunityPanel
         client={{
           id: client.id,
@@ -226,11 +249,6 @@ export default async function ClientDetailPage({
         }
       />
 
-      <ClientCommercialValuePanel
-        realizedRevenueByCurrency={clientIntelligence.totalRevenueByCurrency}
-        commercialValue={commercialValue}
-      />
-
       <GeladeiraControl
         clientId={client.id}
         archivalState={client.archivalState}
@@ -243,17 +261,24 @@ export default async function ClientDetailPage({
         hasPortalPassword={Boolean(client.portalPasswordHash)}
       />
 
-      {/* Client Portal Identity (Sprint 1.2.2) -- operator-side setup for
-          the client's persistent /client/dashboard login. */}
-      <div className="mb-6">
-        <PortalAccessPanel
-          clientId={client.id}
-          clientEmail={client.email}
-          portalPasswordSetAt={
-            client.portalPasswordSetAt ? client.portalPasswordSetAt.toISOString() : null
-          }
-        />
-      </div>
+      {/* House Cleaning Wave 2 §21: a portal login is premature for a lead
+          -- there's no production relationship yet for them to check on.
+          Conditionally simplified using the existing client.status field,
+          not a new entity/model. Once a lead converts (status becomes
+          "active"), this section appears with nothing lost -- the
+          underlying portalPasswordHash/setAt fields are untouched either
+          way. */}
+      {client.status !== "lead" && (
+        <div className="mb-6">
+          <PortalAccessPanel
+            clientId={client.id}
+            clientEmail={client.email}
+            portalPasswordSetAt={
+              client.portalPasswordSetAt ? client.portalPasswordSetAt.toISOString() : null
+            }
+          />
+        </div>
+      )}
 
       {/* Quote Approval (Client Service Reality Patch §6) -- log a quote
           from a Pricing Lab calculation, move it DRAFT -> SENT ->
@@ -267,6 +292,8 @@ export default async function ClientDetailPage({
           currentServiceInterest={client.serviceInterest}
           currentQualificationNotes={client.qualificationNotes}
           quotes={serializedQuotes}
+          prefill={quotePrefill}
+          autoOpen={shouldCreateQuote}
         />
       </div>
 
@@ -285,16 +312,30 @@ export default async function ClientDetailPage({
         projectReturnTo={projectReturnTo}
       />
 
-      {custody && (
-        <details className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/35">
-          <summary className="cursor-pointer px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-zinc-400 hover:text-zinc-200">
-            Evidence &amp; Provenance
-          </summary>
-          <div className="border-t border-zinc-800 p-4">
-            <ChainOfCustodyPanel custody={custody} />
-          </div>
-        </details>
-      )}
+      {/* House Cleaning Wave 2 §18 (RMEDIA_SYSTEM_SIMPLIFICATION_RESEARCH_2026_09.md):
+          Client Intelligence, Commercial Truth, and Chain of Custody used
+          to be three separate, always-open panels between Active Projects
+          and the Opportunity panel -- all three are context/evidence an
+          operator checks occasionally, not facts needed to decide what to
+          do next (that's Operational Dossier + Opportunity's Next Action
+          above). Folded into one collapsed "Recent activity" disclosure,
+          closed by default. No data was removed -- every number, note,
+          and evidence row below is exactly what these three panels
+          already showed, just no longer competing for space above the
+          fold. */}
+      <details className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/35">
+        <summary className="cursor-pointer px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-zinc-400 hover:text-zinc-200">
+          Recent activity &amp; history
+        </summary>
+        <div className="space-y-6 border-t border-zinc-800 p-4">
+          <ClientIntelligencePanel summary={clientIntelligence} weekEstimate={weekEstimateForClient} />
+          <ClientCommercialValuePanel
+            realizedRevenueByCurrency={clientIntelligence.totalRevenueByCurrency}
+            commercialValue={commercialValue}
+          />
+          {custody && <ChainOfCustodyPanel custody={custody} />}
+        </div>
+      </details>
     </div>
   );
 }

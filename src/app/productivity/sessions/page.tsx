@@ -224,9 +224,19 @@ export default async function WorkSessionHistoryPage({
           What actually happened, in order — canonical Work Sessions only.
           Nothing here is revenue or billing evidence.
         </p>
-        <Link href="/productivity/sensor" className="mt-3 inline-flex text-xs font-bold text-violet-300 hover:text-violet-200">
-          Open observed Sensor Activity →
-        </Link>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+          <Link href="/productivity/sensor" className="inline-flex text-xs font-bold text-violet-300 hover:text-violet-200">
+            Open observed Sensor Activity →
+          </Link>
+          {/* House Cleaning Wave 2 §23: All History (a one-time Upwork/
+              Clockify/ActivityWatch reconstruction, not live data) is no
+              longer in primary sidebar nav -- this is its one contextual
+              link, right next to the other historical-evidence surface
+              this page already points at. */}
+          <Link href="/all-history" className="inline-flex text-xs font-bold text-zinc-500 hover:text-zinc-300">
+            🗄️ All History (pre-2026 reconstruction) →
+          </Link>
+        </div>
       </div>
 
       <SessionViewSwitcher

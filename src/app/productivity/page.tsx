@@ -81,10 +81,21 @@ export default async function ProductivityPage({
 }) {
   const query = await searchParams;
   const requestedVideo = query.video;
+  // Hardening Round (2026-09): a ?video= value that is PRESENT but does not
+  // parse to a positive integer (malformed string, or the array shape a
+  // repeated query param produces) must not be silently treated the same
+  // as "no video requested" -- that would swallow a broken/garbled link
+  // without telling the operator anything went wrong. `videoParamWasSent`
+  // captures "the operator followed a video link" independently of whether
+  // it parsed, so the render logic below can show an explicit invalid
+  // state instead of quietly falling back to the plain queue.
+  const videoParamWasSent =
+    typeof requestedVideo === "string" || Array.isArray(requestedVideo);
   const initialVideoId =
     typeof requestedVideo === "string" && /^\d+$/u.test(requestedVideo)
       ? Number(requestedVideo)
       : null;
+  const malformedVideoParam = videoParamWasSent && initialVideoId === null;
   const initialProjectId =
     typeof query.projectId === "string" && /^\d+$/u.test(query.projectId)
       ? Number(query.projectId)
@@ -346,13 +357,15 @@ export default async function ProductivityPage({
         </section>
       )}
 
-      {initialVideoId !== null && requestedWorkspaceGroup === null && (
+      {((initialVideoId !== null && requestedWorkspaceGroup === null) || malformedVideoParam) && (
         <section aria-labelledby="video-not-found-title" className="mb-7 rounded-2xl border border-red-900/50 bg-red-950/10 p-6 text-center">
           <h2 id="video-not-found-title" className="text-lg font-black text-red-200">
             Video not found
           </h2>
           <p className="mt-2 text-sm text-zinc-500">
-            This video does not exist, or it is a technical container that has no workspace of its own.
+            {malformedVideoParam
+              ? "That video link is malformed and does not point at a real video."
+              : "This video does not exist, or it is a technical container that has no workspace of its own."}
           </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
             <Link href="/productivity" className="min-h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-black text-zinc-200 hover:border-violet-500/60">

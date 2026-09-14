@@ -6,16 +6,26 @@ const dashboard = readFileSync(
   new URL("../../app/page.tsx", import.meta.url),
   "utf8",
 );
+const financePage = readFileSync(
+  new URL("../../app/finance/page.tsx", import.meta.url),
+  "utf8",
+);
 const ledgerCard = readFileSync(
   new URL("../../components/finance/EconomicLedgerCard.tsx", import.meta.url),
   "utf8",
 );
 
-test("Dashboard labels the finance summary as economic history, never current cash", () => {
-  assert.match(dashboard, /<EconomicLedgerCard/u);
+// House Cleaning Wave 2 §11 (RMEDIA_SYSTEM_SIMPLIFICATION_RESEARCH_2026_09.md):
+// Dashboard no longer restates Finance's own numbers (that whole section
+// was removed, not just collapsed -- see the Dashboard-simplification
+// tests in productivity/master-qa-wave1.integration.test.mjs), so this
+// semantic guard now targets the one place EconomicLedgerCard actually
+// renders: Finance's own page.
+test("Finance labels the economic ledger card as economic history, never current cash", () => {
+  assert.match(financePage, /<EconomicLedgerCard/u);
   assert.match(ledgerCard, /Recorded economic history/u);
   assert.match(ledgerCard, /not Wise cash/iu);
-  assert.doesNotMatch(dashboard, /label="Current Balance"/u);
+  assert.doesNotMatch(financePage, /label="Current Balance"/u);
 });
 
 // Tuesday Patch Priority 5 / metric semantics: the original QA complaint

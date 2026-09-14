@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { getAuthenticatedDb } from "@/db";
 import { clients, commercialContracts, productionOrders, projects, videoLogs } from "@/db/schema";
 import { todayISO } from "@/utils/date";
-import { deliveredForVideoStatus } from "@/modules/productivity/config";
+import { prepareVideoLogInserts } from "@/modules/productivity/creation";
 import {
   canCancelProductionOrderItem,
   isProductionOrderMutable,
@@ -25,24 +25,15 @@ export type ProductionOrderActionResult =
 // of the same submit. This function is safe to call more than once with the
 // same key:
 //
-//  1. Insert the production_orders row with onConflictDoNothing on its
-//     unique ingest_key index (the same atomic "insert or ignore" idiom
-//     already used elsewhere in this repo -- see
-//     modules/quote-intake/actions.ts / modules/booking/actions.ts), then
-//     select the row back by ingest_key. Whether this call created it or
-//     a prior attempt did, `order` below is always the one canonical row.
-//  2. A second, independent idempotency guard covers the items: if this
-//     order already has ANY video_logs rows linked to it (from a prior,
-//     already-completed attempt), item creation is skipped entirely and
-//     the existing order is returned as success. This is what makes a
-//     network retry or a double-click safe even though D1/SQLite cannot
-//     give us one interactive transaction spanning "resolve-or-create the
-//     order" and "create its items" -- each half is independently
-//     idempotent instead.
+//  1. Prepare and validate every ordinary child before any write.
+//  2. If the ingest key already resolves to one complete order, return it.
+//  3. Otherwise, insert-or-ignore the order and insert its container and
+//     children in one atomic D1 batch.
 //
-// The container row and every deliverable are created inside one
-// db.batch() call (§4's required atomicity for the items themselves): all
-// of them land, or none do, on any given attempt.
+// The order row, container, and every deliverable are created inside one
+// db.batch() call. Child rows resolve the auto-generated order id through
+// its unique ingest key, so the application never guesses an id and the
+// full business ingest lands or rolls back as one D1 transaction.
 export async function ingestProductionOrder(
   input: ProductionOrderIngestInput,
 ): Promise<ProductionOrderActionResult> {
@@ -52,7 +43,7 @@ export async function ingestProductionOrder(
   const db = await getAuthenticatedDb();
 
   const [clientRow] = await db
-    .select({ id: clients.id })
+    .select({ id: clients.id, name: clients.name })
     .from(clients)
     .where(eq(clients.id, input.clientId))
     .limit(1);
@@ -82,7 +73,60 @@ export async function ingestProductionOrder(
     if (contractError) return { success: false, error: contractError };
   }
 
-  await db
+  const ingestKey = input.ingestKey.trim();
+  const existingOrder = await db
+    .select({ id: productionOrders.id })
+    .from(productionOrders)
+    .where(eq(productionOrders.ingestKey, ingestKey))
+    .limit(1);
+
+  if (existingOrder[0]) {
+    const existingItems = await db
+      .select({
+        id: videoLogs.id,
+        isOperationalContainer: videoLogs.isOperationalContainer,
+      })
+      .from(videoLogs)
+      .where(eq(videoLogs.productionOrderId, existingOrder[0].id));
+    const containerCount = existingItems.filter((row) => row.isOperationalContainer).length;
+    const childCount = existingItems.length - containerCount;
+    if (containerCount === 1 && childCount === input.items.length) {
+      return { success: true, orderId: existingOrder[0].id };
+    }
+    if (existingItems.length > 0) {
+      return {
+        success: false,
+        error: "This Production Order exists with an incomplete item set. Review it before retrying.",
+      };
+    }
+  }
+
+  const now = new Date();
+  const receivedDate = input.receivedAt || todayISO();
+  const batchLabel = input.label.trim();
+  const orderId = sql<number>`(
+    select ${productionOrders.id}
+    from ${productionOrders}
+    where ${productionOrders.ingestKey} = ${ingestKey}
+    limit 1
+  )`;
+  const preparedChildren = prepareVideoLogInserts({
+    projectId: input.projectId,
+    rows: input.items.map((item) => ({
+      title: item.title,
+      date: receivedDate,
+      status: "PLANNED",
+    })),
+    owner: { clientId: input.clientId, clientName: clientRow.name },
+    batchLabel,
+    productionOrderId: orderId,
+    now,
+  });
+  if (!preparedChildren.success) {
+    return { success: false, error: preparedChildren.error };
+  }
+
+  const orderInsert = db
     .insert(productionOrders)
     .values({
       clientId: input.clientId,
@@ -95,69 +139,73 @@ export async function ingestProductionOrder(
       currency: input.currency?.trim() || null,
       notes: input.notes?.trim() || null,
       receivedAt: input.receivedAt,
-      ingestKey: input.ingestKey.trim(),
+      ingestKey,
     })
     .onConflictDoNothing({ target: productionOrders.ingestKey });
+  // The container remains an explicit order-specific row. Only ordinary
+  // deliverables use prepareVideoLogInserts; this distinction keeps the
+  // queue/output semantics of is_operational_container unchanged.
+  const containerInsert = db.insert(videoLogs).values({
+    date: receivedDate,
+    title: `[Container] ${batchLabel}`,
+    clientId: input.clientId,
+    projectId: input.projectId,
+    status: "PLANNED",
+    delivered: false,
+    batchLabel,
+    videoKind: "CLIENT_WORK",
+    isOperationalContainer: true,
+    productionOrderId: orderId,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  try {
+    const statements = [
+      orderInsert,
+      containerInsert,
+      ...preparedChildren.data.map((row) => db.insert(videoLogs).values(row)),
+    ];
+    // One statement per child stays below D1's bound-parameter ceiling;
+    // db.batch still executes the complete statement list as one atomic
+    // transaction, so this does not relax the business boundary.
+    await db.batch(
+      statements as unknown as [
+        (typeof statements)[number],
+        ...(typeof statements)[number][],
+      ],
+    );
+  } catch {
+    // A simultaneous replay can lose the unique ingest-key race after the
+    // read above. D1 rolls its whole batch back; if the winning request has
+    // now committed a complete order, this request is the same successful
+    // idempotent operation. Any other failure remains a clean zero/previous
+    // state because batch() is atomic.
+    const [resolved] = await db
+      .select({ id: productionOrders.id })
+      .from(productionOrders)
+      .where(eq(productionOrders.ingestKey, ingestKey))
+      .limit(1);
+    if (!resolved) {
+      return { success: false, error: "Could not create the Production Order. Nothing was saved." };
+    }
+    const resolvedItems = await db
+      .select({ isOperationalContainer: videoLogs.isOperationalContainer })
+      .from(videoLogs)
+      .where(eq(videoLogs.productionOrderId, resolved.id));
+    const containerCount = resolvedItems.filter((row) => row.isOperationalContainer).length;
+    if (containerCount !== 1 || resolvedItems.length - containerCount !== input.items.length) {
+      return { success: false, error: "Could not create the complete Production Order. Nothing new was saved." };
+    }
+  }
 
   const [order] = await db
     .select({ id: productionOrders.id })
     .from(productionOrders)
-    .where(eq(productionOrders.ingestKey, input.ingestKey.trim()))
+    .where(eq(productionOrders.ingestKey, ingestKey))
     .limit(1);
   if (!order) {
-    return { success: false, error: "Could not create or resolve the order. Please try again." };
-  }
-
-  const existingItems = await db
-    .select({ id: videoLogs.id })
-    .from(videoLogs)
-    .where(eq(videoLogs.productionOrderId, order.id))
-    .limit(1);
-
-  if (existingItems.length === 0) {
-    const now = new Date();
-    const receivedDate = input.receivedAt || todayISO();
-    const batchLabel = input.label.trim();
-
-    const containerInsert = db.insert(videoLogs).values({
-      date: receivedDate,
-      title: `[Container] ${batchLabel}`,
-      clientId: input.clientId,
-      projectId: input.projectId,
-      status: "PLANNED",
-      delivered: false,
-      batchLabel,
-      videoKind: "CLIENT_WORK",
-      isOperationalContainer: true,
-      productionOrderId: order.id,
-      createdAt: now,
-    });
-
-    const itemInserts = input.items.map((item) =>
-      db.insert(videoLogs).values({
-        date: receivedDate,
-        title: item.title.trim(),
-        clientId: input.clientId,
-        projectId: input.projectId,
-        status: "PLANNED",
-        delivered: deliveredForVideoStatus("PLANNED"),
-        batchLabel,
-        videoKind: "CLIENT_WORK",
-        isOperationalContainer: false,
-        productionOrderId: order.id,
-        createdAt: now,
-      }),
-    );
-
-    // db.batch requires a non-empty tuple type at the TS level (D1's real
-    // transaction primitive; see the identical cast idiom already used in
-    // modules/productivity/actions.ts). containerInsert alone already
-    // guarantees non-emptiness; itemInserts (validated non-empty by
-    // validateProductionOrderIngestInput above) is spread alongside it.
-    const statements = [containerInsert, ...itemInserts];
-    await db.batch(
-      statements as unknown as [(typeof statements)[number], ...(typeof statements)[number][]],
-    );
+    return { success: false, error: "Could not resolve the Production Order after creation." };
   }
 
   revalidatePath("/productivity/orders");

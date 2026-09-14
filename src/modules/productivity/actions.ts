@@ -35,7 +35,6 @@ import {
   validateVideoPriorityInput,
   type VideoCreateInputValues,
   type VideoInputValues,
-  type ValidatedVideoMetadata,
 } from "./core";
 import {
   VIDEO_STATUS_LABELS,
@@ -49,9 +48,13 @@ import {
   VIDEO_OPERATIONAL_NOTE_EVENT_TYPE,
   videoOperationalMemoryBlocksDeletion,
 } from "@/modules/video-memory/core";
-import { resolveVideoKindForClient } from "@/lib/client-identity";
 import { revalidateProductivityViews } from "./revalidation";
 import { isQueueEligible, moveBefore, moveInOrder, resequencePositions, type QueueMoveDirection } from "./queue";
+import {
+  prepareVideoLogInsert,
+  prepareVideoLogInserts,
+  type CreateVideoLogsBulkRow,
+} from "./creation";
 
 type ProductivityActionResult =
   | {
@@ -128,27 +131,14 @@ export async function createVideoLog(
   const now = new Date();
   const inserted = await db
     .insert(videoLogs)
-    .values({
-      date: parsed.data.date ?? todayISO(),
-      title: parsed.data.title,
-      clientId: assignment.clientId,
-      projectId: parsed.data.projectId,
-      status: parsed.data.status,
-      startedAt: null,
-      revisionsCount: 0,
-      delivered: deliveredForVideoStatus(parsed.data.status),
-      deliveryUrl: parsed.data.deliveryUrl,
-      notes: parsed.data.notes,
-      coverUrl: parsed.data.coverUrl,
-      orientation: parsed.data.orientation,
-      contentType: parsed.data.contentType,
-      videoKind: resolveVideoKindForClient(
-        assignment.clientName,
-        values.videoKind,
-      ),
-      createdAt: now,
-      updatedAt: now,
-    })
+    .values(
+      prepareVideoLogInsert({
+        row: parsed.data,
+        owner: assignment,
+        requestedVideoKind: values.videoKind,
+        now,
+      }),
+    )
     .returning({ id: videoLogs.id });
   const videoId = inserted[0]?.id;
   if (!videoId) {
@@ -180,18 +170,7 @@ export type CreateVideoLogsBulkResult =
   | { success: true; videoIds: number[]; message: string }
   | { success: false; error: string };
 
-export type CreateVideoLogsBulkRow = {
-  title: string;
-  date?: string | null;
-  status?: string | null;
-  deliveryUrl?: string | null;
-  reviewUrl?: string | null;
-  // Single Historical Video Ingest Gap round: threaded through so the new
-  // "Add Video" (single-row) entry point can set it -- publishedUrl was
-  // already a fully validated, canonical field on every other create/edit
-  // path (validateVideoInput, VideoEditor), just never wired into this one.
-  publishedUrl?: string | null;
-};
+export type { CreateVideoLogsBulkRow } from "./creation";
 
 // Taryn August Ingest Readiness §6, extended by Brief C ("Final Local
 // Ingest / Live Readiness") §2/§3/§4/§5/§6: "ADD MULTIPLE VIDEOS" on the
@@ -208,9 +187,7 @@ export type CreateVideoLogsBulkRow = {
 // still requires an explicit status string (defaulted to "PLANNED" by the
 // bulk-ingest UI when the operator hasn't chosen a batch default) --
 // absence of a valid status is rejected, never silently treated as
-// completion. D1 has no interactive multi-statement transaction available
-// here (nothing else in this codebase uses db.transaction/db.batch for
-// that reason), so the inserts run sequentially with a best-effort
+// completion. Ordinary project-level bulk inserts run sequentially with a best-effort
 // compensating rollback: if a row fails mid-loop despite passing
 // validation, every video already inserted in this same submission is
 // deleted again rather than left as an ambiguous partial batch.
@@ -229,62 +206,26 @@ export async function createVideoLogsBulk(
     return { success: false, error: "Create at most 50 videos at a time." };
   }
 
-  const cleanBatchLabel =
-    typeof batchLabel === "string" ? batchLabel.trim().slice(0, 160) || null : null;
-
-  const validatedRows: Array<ValidatedVideoMetadata & { status: VideoStatus }> = [];
-  for (let i = 0; i < rows.length; i++) {
-    const parsed = validateVideoCreateInput({
-      title: rows[i].title,
-      projectId,
-      clientId: null,
-      date: rows[i].date ?? null,
-      deliveryUrl: rows[i].deliveryUrl ?? null,
-      reviewUrl: rows[i].reviewUrl ?? null,
-      publishedUrl: rows[i].publishedUrl ?? null,
-      status: (rows[i].status ?? "PLANNED") as VideoStatus,
-      allowExplicitStatus: true,
-    });
-    if (!parsed.success) {
-      return { success: false, error: `Row ${i + 1}: ${parsed.error}` };
-    }
-    validatedRows.push(parsed.data);
-  }
-
   const db = await getAuthenticatedDb();
   const assignment = await resolveVideoAssignment(db, { projectId, clientId: null });
   if (!assignment.success) return assignment;
 
   const now = new Date();
+  const prepared = prepareVideoLogInserts({
+    projectId,
+    rows,
+    owner: assignment,
+    batchLabel,
+    now,
+  });
+  if (!prepared.success) return prepared;
+
   const videoIds: number[] = [];
   try {
-    for (const row of validatedRows) {
+    for (const row of prepared.data) {
       const inserted = await db
         .insert(videoLogs)
-        .values({
-          date: row.date ?? todayISO(),
-          title: row.title,
-          clientId: assignment.clientId,
-          projectId: row.projectId as number,
-          status: row.status,
-          startedAt: null,
-          revisionsCount: 0,
-          delivered: deliveredForVideoStatus(row.status),
-          deliveryUrl: row.deliveryUrl,
-          reviewUrl: row.reviewUrl,
-          publishedUrl: row.publishedUrl,
-          notes: row.notes,
-          coverUrl: row.coverUrl,
-          orientation: row.orientation,
-          contentType: row.contentType,
-          videoKind: resolveVideoKindForClient(
-            assignment.clientName,
-            undefined,
-          ),
-          batchLabel: cleanBatchLabel,
-          createdAt: now,
-          updatedAt: now,
-        })
+        .values(row)
         .returning({ id: videoLogs.id });
       const videoId = inserted[0]?.id;
       if (!videoId) throw new Error("insert did not return an id");
@@ -294,7 +235,7 @@ export async function createVideoLogsBulk(
         videoId,
         type: "video.created",
         actor: "admin",
-        description: `Video created (bulk): ${row.title}`,
+        description: `Video created (bulk): ${row.title ?? "Untitled"}`,
         createdAt: now,
       });
     }
@@ -599,6 +540,11 @@ export async function getAllVideoLogs() {
       queuePosition: videoLogs.queuePosition,
       isOperationalContainer: videoLogs.isOperationalContainer,
       visibleToClient: videoLogs.visibleToClient,
+      // House Cleaning Wave 2 §3: surfaced read-only in the simplified
+      // video workspace's Identity section ("Batch, if relevant") -- was
+      // already written by every video-creation path (LET'S COOK, bulk
+      // add), just never read back here.
+      batchLabel: videoLogs.batchLabel,
     })
     .from(videoLogs)
     .leftJoin(clients, eq(videoLogs.clientId, clients.id))

@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { getProductivityQuickOptions } from "@/modules/productivity/actions";
 import {
   computePackagePricing,
   computeALaCarteHourlyEstimate,
@@ -202,6 +204,7 @@ function ClientPresentationPanel({
   // (computeALaCarteHourlyEstimate in the parent). Isolated in its own
   // component so this interactive state can't perturb
   // ALaCarteHourlyCalculator's existing breakdown memoization.
+  const router = useRouter();
   const [eta, setEta] = useState(ETA_PRESETS[0]);
   const [selectedScope, setSelectedScope] = useState<string[]>([
     DEFAULT_SCOPE_OPTIONS[0],
@@ -210,6 +213,19 @@ function ClientPresentationPanel({
   const [customScopeLine, setCustomScopeLine] = useState("");
   const [customScopeLines, setCustomScopeLines] = useState<string[]>([]);
   const [clientCopied, setClientCopied] = useState<"text" | "markdown" | null>(null);
+  // House Cleaning Wave 2 §22 (RMEDIA_SYSTEM_SIMPLIFICATION_RESEARCH_2026_09.md):
+  // "Create Quote from this calculation" bridge. Pricing Lab itself still
+  // does zero DB reads on page load (see pricing-lab/page.tsx) -- this
+  // client list is only fetched lazily, the moment the operator actually
+  // opens the client picker, the same on-demand pattern PlanVideoButton
+  // already uses elsewhere. No pricing truth is duplicated: this button
+  // only navigates to CRM's own canonical Quote form with the numbers
+  // Pricing Lab already computed pre-filled -- the quote itself is only
+  // created there, when Emmanuel confirms.
+  const [quoteClients, setQuoteClients] = useState<Array<{ id: number; name: string }> | null>(null);
+  const [quoteClientId, setQuoteClientId] = useState("");
+  const [quotePickerOpen, setQuotePickerOpen] = useState(false);
+  const [quoteClientsLoading, setQuoteClientsLoading] = useState(false);
 
   const toggleScopeOption = (option: string) => {
     setSelectedScope((prev) =>
@@ -264,6 +280,33 @@ function ClientPresentationPanel({
       setClientCopied(null);
     }
   };
+
+  async function openQuotePicker() {
+    setQuotePickerOpen(true);
+    if (quoteClients) return;
+    setQuoteClientsLoading(true);
+    try {
+      const options = await getProductivityQuickOptions();
+      setQuoteClients(options.clients);
+      setQuoteClientId((current) => current || options.clients[0]?.id.toString() || "");
+    } finally {
+      setQuoteClientsLoading(false);
+    }
+  }
+
+  function createQuoteFromCalculation() {
+    if (!quoteClientId) return;
+    const params = new URLSearchParams({
+      createQuote: "1",
+      amount: centsToDollarsString(clientPresentation.investmentCents).replace(/[^0-9.]/g, ""),
+      currency: "USD",
+      contentType: clientPresentation.contentTypeLabel,
+      turnaround: clientPresentation.turnaroundLabel,
+      revisions: String(clientPresentation.revisionsIncluded),
+      scope: clientPresentation.scopeLines.join("\n"),
+    });
+    router.push(`/crm/${quoteClientId}?${params.toString()}`);
+  }
 
   return (
     <div className="mt-4 space-y-4">
@@ -382,6 +425,59 @@ function ClientPresentationPanel({
           {clientCopied === "markdown" ? "Copied ✓" : "Copy as Markdown"}
         </button>
       </div>
+
+      {/* House Cleaning Wave 2 §22: bounded bridge into the canonical Quote
+          flow. This never writes a quotes row itself -- it only carries this
+          calculation's numbers over as a pre-fill; the quote is only created
+          when Emmanuel reviews and saves the form on the CRM client page. */}
+      {!quotePickerOpen ? (
+        <button
+          type="button"
+          onClick={openQuotePicker}
+          className="w-full rounded-lg border border-dashed border-zinc-700 px-4 py-2.5 text-sm font-semibold text-zinc-400 hover:border-violet-600 hover:text-violet-300"
+        >
+          + Create quote from this calculation
+        </button>
+      ) : (
+        <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/60 p-3">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            Which client is this for?
+          </label>
+          {quoteClientsLoading ? (
+            <p className="text-xs text-zinc-500">Loading clients…</p>
+          ) : (
+            <select
+              value={quoteClientId}
+              onChange={(e) => setQuoteClientId(e.target.value)}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white focus:border-violet-500 focus:outline-none"
+            >
+              <option value="">Select a client…</option>
+              {(quoteClients ?? []).map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={createQuoteFromCalculation}
+              disabled={!quoteClientId || quoteClientsLoading}
+              className="flex-1 rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white hover:bg-violet-500 disabled:opacity-50"
+            >
+              Continue to quote →
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuotePickerOpen(false)}
+              className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-800"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

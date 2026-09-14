@@ -17,7 +17,6 @@ import {
 import { formatDate, formatCurrency, todayISO } from "@/utils/date";
 import { AddClientButton } from "./AddClientButton";
 import { ClientActions } from "./ClientActions";
-import { ClientWorkbench } from "./ClientWorkbench";
 
 export const dynamic = "force-dynamic";
 
@@ -314,9 +313,6 @@ function ClientRow({ client, showConvert }: { client: ListClient; showConvert: b
         <div className="flex shrink-0 items-center gap-2">
           <ClientActions id={client.id} showConvert={showConvert} />
         </div>
-      </div>
-      <div className="mt-2">
-        <ClientWorkbench client={client} />
       </div>
     </div>
   );

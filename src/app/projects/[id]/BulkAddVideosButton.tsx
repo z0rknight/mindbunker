@@ -13,16 +13,28 @@ type Row = {
   status: VideoStatus | ""; // "" = inherit the batch default
   deliveryUrl: string;
   reviewUrl: string;
+  publishedUrl: string;
   detailsOpen: boolean;
 };
 
 let nextKey = 1;
 function emptyRow(): Row {
-  return { key: nextKey++, title: "", date: "", status: "", deliveryUrl: "", reviewUrl: "", detailsOpen: false };
+  return { key: nextKey++, title: "", date: "", status: "", deliveryUrl: "", reviewUrl: "", publishedUrl: "", detailsOpen: false };
 }
 
 const SEPARATOR_OPTIONS = ["_", " ", "-", "#"] as const;
 
+// House Cleaning Wave 2 §15 (RMEDIA_SYSTEM_SIMPLIFICATION_RESEARCH_2026_09.md):
+// this is now the ONE "Add Video" door on a Project -- it already handled
+// 1-to-50 rows before this patch (manual mode's own remove-row control
+// goes down to a single row), so the merge with the former single-video
+// AddVideoButton only meant: rename the trigger/header copy to welcome
+// one video just as naturally as fifty, and add the one field the
+// single-video form had that this one didn't (Published URL, per row).
+// Plan Video stays a separate, deliberately-smaller link below -- it
+// means something different (future work, always PLANNED) from
+// registering a video that already exists in some real state.
+//
 // Brief C ("Final Local Ingest / Live Readiness") §2/§3/§4/§5/§6: extends
 // the Taryn August "Add Multiple Videos" repeatable-row create with
 // everything real historical ingest needed and the previous round didn't
@@ -69,7 +81,7 @@ export function BulkAddVideosButton({ projectId }: { projectId: number }) {
     setOpen(true);
   }
 
-  function updateRow(key: number, field: "title" | "date" | "status" | "deliveryUrl" | "reviewUrl", value: string) {
+  function updateRow(key: number, field: "title" | "date" | "status" | "deliveryUrl" | "reviewUrl" | "publishedUrl", value: string) {
     setRows((current) => current.map((r) => (r.key === key ? { ...r, [field]: value } : r)));
   }
 
@@ -133,6 +145,7 @@ export function BulkAddVideosButton({ projectId }: { projectId: number }) {
               ? sharedUrl.trim() || null
               : r.deliveryUrl.trim() || null,
           reviewUrl: linkMode === "shared" ? null : r.reviewUrl.trim() || null,
+          publishedUrl: r.publishedUrl.trim() || null,
         })),
         batchLabel.trim() || null,
       );
@@ -154,18 +167,18 @@ export function BulkAddVideosButton({ projectId }: { projectId: number }) {
         onClick={openModal}
         className="rounded-xl border border-violet-700/50 bg-violet-950/30 hover:bg-violet-900/40 px-4 py-2.5 text-sm font-black text-violet-300 transition"
       >
-        + Add Multiple Videos
+        + Add Video
       </button>
 
       {open && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center" onClick={(e) => e.target === e.currentTarget && !isPending && setOpen(false)}>
           <div className="safe-sheet max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl sm:mx-4 sm:max-w-xl sm:rounded-2xl sm:p-6">
             <div className="flex items-center justify-between mb-1">
-              <h2 className="text-white font-bold text-base">Add Multiple Videos</h2>
+              <h2 className="text-white font-bold text-base">Add Video</h2>
               <button type="button" onClick={() => !isPending && setOpen(false)} className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-800 hover:text-white text-xl leading-none cursor-pointer" aria-label="Close">×</button>
             </div>
             <p className="text-zinc-500 text-xs mb-4">
-              Each row becomes one video in this project. Leave date blank to use today ({todayISO()}).
+              Register one video, or several -- already in progress, already delivered, whatever its real state is. Each row becomes one video in this project; leave date blank to use today ({todayISO()}).
             </p>
 
             {/* Mode toggle */}
@@ -323,6 +336,16 @@ export function BulkAddVideosButton({ projectId }: { projectId: number }) {
                                   type="url"
                                   value={row.reviewUrl}
                                   onChange={(e) => updateRow(row.key, "reviewUrl", e.target.value)}
+                                  placeholder="https://…"
+                                  className="w-full min-w-0 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white text-xs focus:outline-none focus:border-violet-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-600">Published URL</label>
+                                <input
+                                  type="url"
+                                  value={row.publishedUrl}
+                                  onChange={(e) => updateRow(row.key, "publishedUrl", e.target.value)}
                                   placeholder="https://…"
                                   className="w-full min-w-0 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white text-xs focus:outline-none focus:border-violet-500"
                                 />

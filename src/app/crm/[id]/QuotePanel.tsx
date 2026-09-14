@@ -7,7 +7,7 @@ import {
   createProductionFromQuote,
   updateQuoteStatus,
 } from "@/modules/quotes/actions";
-import { QuoteCreateForm } from "@/components/crm/QuoteCreateForm";
+import { QuoteCreateForm, type QuoteCreateFormPrefill } from "@/components/crm/QuoteCreateForm";
 import { QuickFollowUpForm } from "@/components/crm/QuickFollowUpForm";
 import { createVideoCommitment } from "@/modules/video-operations/actions";
 
@@ -354,6 +354,8 @@ export function QuotePanel({
   currentServiceInterest,
   currentQualificationNotes,
   quotes,
+  prefill,
+  autoOpen,
 }: {
   clientId: number;
   clientName: string;
@@ -361,9 +363,13 @@ export function QuotePanel({
   currentServiceInterest: string | null;
   currentQualificationNotes: string | null;
   quotes: QuotePanelRow[];
+  // House Cleaning Wave 2 §22: set when arriving from Pricing Lab's
+  // "Create Quote from this calculation" bridge.
+  prefill?: QuoteCreateFormPrefill;
+  autoOpen?: boolean;
 }) {
   const router = useRouter();
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(Boolean(autoOpen));
 
   return (
     <section className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
@@ -382,6 +388,7 @@ export function QuotePanel({
         <div className="mt-3">
           <QuoteCreateForm
             clientId={clientId}
+            prefill={prefill}
             onDone={() => {
               setShowCreateForm(false);
               router.refresh();

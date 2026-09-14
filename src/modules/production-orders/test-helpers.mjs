@@ -10,6 +10,7 @@ import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateVideoCreateInput } from "../productivity/core.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(__dirname, "../../db/migrations");
@@ -61,4 +62,117 @@ export function ingestItemsSql(db, { orderId, clientId, projectId, label, receiv
     itemIds.push(Number(result.lastInsertRowid));
   }
   return { skipped: false, containerVideoId: Number(containerResult.lastInsertRowid), itemIds };
+}
+
+// Transactional SQLite equivalent of ingestProductionOrder's D1 db.batch.
+// Every child is validated before BEGIN; the order's auto-generated ID is
+// then resolved by its unique ingest key inside the transaction, exactly as
+// the real Drizzle statements do with their scalar subquery.
+export function ingestOrderAtomicallySql(
+  db,
+  { clientId, projectId, clientName = "Taryn Dubreuil", label, receivedAt, itemTitles, ingestKey },
+  { failAtChildIndex = null } = {},
+) {
+  const prepared = [];
+  for (let index = 0; index < itemTitles.length; index++) {
+    const parsed = validateVideoCreateInput({
+      title: itemTitles[index],
+      projectId,
+      clientId: null,
+      date: receivedAt,
+      status: "PLANNED",
+      allowExplicitStatus: true,
+    });
+    if (!parsed.success) {
+      return { success: false, error: `Row ${index + 1}: ${parsed.error}` };
+    }
+    prepared.push({
+      ...parsed.data,
+      videoKind: clientName.trim().toUpperCase() === "RMEDIA" ? "INTERNAL" : "CLIENT_WORK",
+    });
+  }
+
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const order = ingestOrderRowSql(db, {
+      clientId,
+      projectId,
+      label,
+      receivedAt,
+      ingestKey,
+    });
+    const existing = db
+      .prepare("SELECT id, is_operational_container FROM video_logs WHERE production_order_id = ?")
+      .all(order.id);
+    if (existing.length > 0) {
+      const containers = existing.filter((row) => row.is_operational_container === 1).length;
+      if (containers !== 1 || existing.length - containers !== prepared.length) {
+        throw new Error("incomplete existing order");
+      }
+      db.exec("COMMIT");
+      return { success: true, orderId: order.id, skipped: true };
+    }
+
+    const insert = db.prepare(
+      `INSERT INTO video_logs
+         (date, title, client_id, project_id, status, started_at,
+          revisions_count, delivered, delivery_url, review_url, published_url,
+          notes, cover_url, orientation, content_type, batch_label, is_priority,
+          video_kind, is_operational_container, production_order_id, cancelled_at,
+          created_at, updated_at, visible_to_client)
+       VALUES (?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, NULL,
+               unixepoch(), unixepoch(), 1)`,
+    );
+    insert.run(
+      receivedAt,
+      `[Container] ${label.trim()}`,
+      clientId,
+      projectId,
+      "PLANNED",
+      0,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      label.trim(),
+      "CLIENT_WORK",
+      1,
+      order.id,
+    );
+    const itemIds = [];
+    for (let index = 0; index < prepared.length; index++) {
+      const row = prepared[index];
+      const result = insert.run(
+        row.date,
+        row.title,
+        clientId,
+        projectId,
+        row.status,
+        row.status === "DONE" ? 1 : 0,
+        row.deliveryUrl,
+        row.reviewUrl,
+        row.publishedUrl,
+        row.notes,
+        row.coverUrl,
+        row.orientation,
+        row.contentType,
+        label.trim(),
+        row.videoKind,
+        0,
+        order.id,
+      );
+      itemIds.push(Number(result.lastInsertRowid));
+      if (failAtChildIndex === index) {
+        throw new Error("injected child persistence failure");
+      }
+    }
+    db.exec("COMMIT");
+    return { success: true, orderId: order.id, skipped: false, itemIds };
+  } catch (error) {
+    db.exec("ROLLBACK");
+    return { success: false, error: error instanceof Error ? error.message : "persistence failure" };
+  }
 }

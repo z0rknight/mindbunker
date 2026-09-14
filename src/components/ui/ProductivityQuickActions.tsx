@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  changeRevisionCount,
   createVideoLog,
   getProductivityQuickOptions,
   transitionVideoStatus,
@@ -68,6 +67,11 @@ export function PlanVideoButton({
   initialProjectId = null,
   initiallyOpen = false,
   projectContext = null,
+  // House Cleaning Wave 2 §15: Project Detail wants Plan Video reachable
+  // but deliberately smaller than the one primary Add Video action --
+  // same trigger logic and form, just a plain link-style trigger instead
+  // of the big tile used on Dashboard/Productivity's Quick Actions grid.
+  compact = false,
 }: {
   initialProjectId?: number | null;
   initiallyOpen?: boolean;
@@ -76,6 +80,7 @@ export function PlanVideoButton({
     name: string;
     clientName: string;
   } | null;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -167,14 +172,24 @@ export function PlanVideoButton({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={handleOpen}
-        className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl bg-cyan-800 px-5 py-5 text-sm font-bold text-white transition-all hover:bg-cyan-700 active:scale-95"
-      >
-        <span className="text-2xl">＋</span>
-        <span>Plan Video</span>
-      </button>
+      {compact ? (
+        <button
+          type="button"
+          onClick={handleOpen}
+          className="min-h-11 rounded-xl border border-zinc-700 px-3 text-xs font-bold text-zinc-400 transition hover:border-cyan-600/60 hover:text-cyan-300"
+        >
+          + Plan a future video
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={handleOpen}
+          className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl bg-cyan-800 px-5 py-5 text-sm font-bold text-white transition-all hover:bg-cyan-700 active:scale-95"
+        >
+          <span className="text-2xl">＋</span>
+          <span>Plan Video</span>
+        </button>
+      )}
 
       {open && (
         <ActionSheet title="Plan a video" onClose={closePlan}>
@@ -698,124 +713,12 @@ export function FinishedVideoButton() {
   );
 }
 
-export function AddRevisionButton() {
-  const [open, setOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const [options, setOptions] = useState<QuickOptions | null>(null);
-  const [videoId, setVideoId] = useState("");
-  const [feedback, setFeedback] = useState("");
-
-  function handleOpen() {
-    setOpen(true);
-    setFeedback("");
-    startTransition(async () => {
-      try {
-        const loaded = await getProductivityQuickOptions();
-        setOptions(loaded);
-        setVideoId(loaded.videos[0]?.id.toString() ?? "");
-      } catch {
-        setFeedback("Could not load your videos.");
-      }
-    });
-  }
-
-  function change(delta: -1 | 1) {
-    if (!videoId) return;
-    setFeedback("");
-    startTransition(async () => {
-      const result = await changeRevisionCount(Number(videoId), delta);
-      if (!result.success) {
-        setFeedback(result.error);
-        return;
-      }
-      setOptions((current) => current
-        ? {
-            ...current,
-            videos: current.videos.map((video) =>
-              video.id === Number(videoId)
-                ? { ...video, revisionsCount: result.revisionsCount ?? video.revisionsCount }
-                : video,
-            ),
-          }
-        : current,
-      );
-      setFeedback(result.message ?? "Saved.");
-    });
-  }
-
-  const selected = options?.videos.find(
-    (video) => video.id === Number(videoId),
-  );
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={handleOpen}
-        className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl bg-amber-800 px-6 py-5 text-sm font-bold text-white transition-all hover:bg-amber-700 active:scale-95"
-      >
-        <span className="text-2xl">🔄</span>
-        <span>Manage Revision</span>
-      </button>
-
-      {open && (
-        <ActionSheet title="Manage revision" onClose={() => setOpen(false)}>
-          <div className="space-y-4">
-            {options && options.videos.length === 0 ? (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm leading-6 text-zinc-400">
-                Log a named video first. Revisions always belong to a video now.
-              </div>
-            ) : (
-              <>
-                <div>
-                  <label htmlFor="revisionVideo" className="mb-1.5 block text-xs font-bold text-zinc-400">
-                    Which video?
-                  </label>
-                  <select
-                    id="revisionVideo"
-                    value={videoId}
-                    onChange={(event) => {
-                      setVideoId(event.target.value);
-                      setFeedback("");
-                    }}
-                    disabled={!options || isPending}
-                    className={fieldClassName}
-                  >
-                    {options?.videos.map((video) => (
-                      <option key={video.id} value={video.id}>
-                        {video.title ?? `Video ${video.date}`} — {VIDEO_STATUS_LABELS[video.status]} — {video.projectName ?? video.clientName ?? "Standalone"}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 text-center">
-                  <p className="text-xs font-bold uppercase tracking-widest text-amber-400">Revisions</p>
-                  <p className="mt-2 text-5xl font-black text-white">{selected?.revisionsCount ?? 0}</p>
-                  <div className="mt-5 grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => change(-1)}
-                      disabled={isPending || !selected || selected.revisionsCount === 0}
-                      className="min-h-12 rounded-xl border border-zinc-700 bg-zinc-900 text-sm font-black text-zinc-200 disabled:opacity-40"
-                    >
-                      − Remove one
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => change(1)}
-                      disabled={isPending || !selected}
-                      className="min-h-12 rounded-xl bg-amber-700 text-sm font-black text-white disabled:opacity-40"
-                    >
-                      + Add one
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-            {feedback && <p aria-live="polite" className="text-sm text-amber-300">{feedback}</p>}
-          </div>
-        </ActionSheet>
-      )}
-    </>
-  );
-}
+// House Cleaning Wave 2 §7: the +1/-1 "Manage Revision" quick action used
+// to be a second, independent write path onto videoLogs.revisionsCount --
+// it never wrote a `revisions` row, which is exactly what let the count
+// and the detailed provenance table drift apart (see the schema comment
+// on `revisions` in db/schema.ts). Retired from operator UI per the
+// research report's explicit recommendation: one canonical action
+// (recordDetailedRevision, reachable from a video's own workspace) now
+// owns revision creation. changeRevisionCount itself is left in
+// modules/productivity/actions.ts -- no server logic was deleted.

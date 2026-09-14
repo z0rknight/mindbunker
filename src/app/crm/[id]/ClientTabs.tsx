@@ -268,6 +268,14 @@ export function ClientTabs({
               </div>
             </section>
 
+            {/* House Cleaning Wave 2 §21 (RMEDIA_SYSTEM_SIMPLIFICATION_RESEARCH_2026_09.md):
+                a lead has no production relationship yet -- portal
+                capabilities and dashboard-layout toggles are meaningless
+                until they convert. Conditional on the existing
+                client.status field only; nothing about these two
+                sections changes once status becomes "active". */}
+            {client.status !== "lead" && (
+            <>
             <section className="rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4">
               <h3 className="text-xs font-black uppercase tracking-wider text-violet-300">Client portal controls</h3>
               <p className="mt-1 text-xs leading-5 text-zinc-500">Explicit capabilities; internal records remain unchanged when access is hidden.</p>
@@ -354,6 +362,8 @@ export function ClientTabs({
                 />
               </div>
             </section>
+            </>
+            )}
 
             <PaymentRequestPanel clientId={client.id} requests={paymentRequests} />
 
@@ -533,16 +543,30 @@ export function ClientTabs({
                       <label htmlFor="metadata-status" className="mb-1 block text-xs text-zinc-500">
                         Status
                       </label>
+                      {/* House Cleaning Wave 2 §20 (RMEDIA_SYSTEM_SIMPLIFICATION_RESEARCH_2026_09.md):
+                          this used to also offer "Lead" here -- a third
+                          place (besides Convert and the Opportunity stage
+                          picker) that could move a client in or out of
+                          lead status, with no clear answer to "which
+                          control really changes it?" Narrowed to what this
+                          control alone should own: toggling an existing
+                          client active/dormant. Lead <-> Active now only
+                          ever happens through the explicit Convert action
+                          -- no capability lost, since setting status back
+                          to "lead" from here was never a real workflow. */}
                       <select
                         id="metadata-status"
-                        value={metadataStatus}
+                        value={metadataStatus === "lead" ? "active" : metadataStatus}
                         onChange={(e) => setMetadataStatus(e.target.value as typeof metadataStatus)}
-                        className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        disabled={client.status === "lead"}
+                        className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50"
                       >
-                        <option value="lead">Lead</option>
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
                       </select>
+                      {client.status === "lead" && (
+                        <p className="mt-1 text-[11px] text-zinc-600">Use Convert (Opportunity, above) to make this a client first.</p>
+                      )}
                     </div>
                     <div>
                       <label htmlFor="metadata-source" className="mb-1 block text-xs text-zinc-500">

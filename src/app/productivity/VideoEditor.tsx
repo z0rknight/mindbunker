@@ -32,7 +32,8 @@ import { VideoMemoryPanel } from "./VideoMemoryPanel";
 import { CommercialTermsPanel } from "./CommercialTermsPanel";
 import { ProjectReferencesPanel } from "./ProjectReferencesPanel";
 import { CoverUploadField } from "@/components/media/CoverUploadField";
-import { OperationalMemoryPanel } from "./OperationalMemoryPanel";
+import { VideoEssentialsPanel } from "./VideoEssentialsPanel";
+import { VideoAdvancedPanel } from "./VideoAdvancedPanel";
 import { PortalControl } from "@/components/client-portal/PortalControl";
 import { setVideoClientVisibility } from "@/modules/client-portal/admin-actions";
 
@@ -43,6 +44,7 @@ type VideoEditorProps = {
     title: string | null;
     clientId: number | null;
     clientName: string | null;
+    batchLabel?: string | null;
     projectId: number | null;
     projectName: string | null;
     projectDeadline: string | null;
@@ -249,6 +251,12 @@ export function VideoEditor({
                       </Link>
                     </>
                   )}
+                  {video.batchLabel && (
+                    <>
+                      <span className="text-zinc-700">·</span>
+                      <span className="text-zinc-500">Batch: {video.batchLabel}</span>
+                    </>
+                  )}
                 </nav>
               </div>
               <button
@@ -339,7 +347,7 @@ export function VideoEditor({
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Revisions</p>
                     <p className="mt-1 text-sm font-black text-zinc-300">{video.revisionsCount}</p>
-                    <p className="mt-1 text-[10px] text-zinc-600">Register Correction below to add one</p>
+                    <p className="mt-1 text-[10px] text-zinc-600">Record one in Revision below</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Deadline</p>
@@ -355,9 +363,10 @@ export function VideoEditor({
               </aside>
 
               <div className="space-y-4">
+                <VideoEssentialsPanel videoId={video.id} revisionsCount={video.revisionsCount} />
                 <CommercialTermsPanel videoId={video.id} />
                 <VideoMemoryPanel videoId={video.id} />
-                <OperationalMemoryPanel videoId={video.id} />
+                <VideoAdvancedPanel videoId={video.id} />
                 <form onSubmit={saveMetadata} className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/25 p-4 sm:p-5">
                 <div className="mb-1">
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Video details</p>

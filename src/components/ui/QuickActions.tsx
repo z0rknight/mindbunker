@@ -10,7 +10,6 @@ import {
 } from "@/modules/finance/categories";
 
 export {
-  AddRevisionButton,
   FinishedVideoButton,
   PlanVideoButton,
 } from "./ProductivityQuickActions";
