@@ -339,6 +339,10 @@ textarea {
   box-shadow: 0 0 0 1px rgba(56, 189, 248, .35), 0 0 22px rgba(56, 189, 248, .28);
 }
 
+.wr-editor-glow-sensor {
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, .35), 0 0 22px rgba(245, 158, 11, .26);
+}
+
 @keyframes wr-editor-pulse {
   0%, 100% { opacity: .85; }
   50% { opacity: 1; }

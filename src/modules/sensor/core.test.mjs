@@ -9,10 +9,88 @@ import {
   parseScopes,
   parseSensorToken,
   resolveSensorConnectivityStatus,
+  selectLongSessionCandidates,
   validateObservationBatch,
   validateSensorSessionInput,
   validateSensorStopInput,
 } from "./core.ts";
+
+const NOW = new Date("2026-09-15T12:00:00Z");
+const NOW_SECONDS = Math.floor(NOW.getTime() / 1_000);
+
+test("long-session review: a staging session under the threshold is not flagged", () => {
+  const candidates = selectLongSessionCandidates(
+    [{ id: 1, videoId: 10, videoTitle: "Short clip", startedAt: NOW_SECONDS - 3 * 3600, endedAt: NOW_SECONDS - 1 * 3600, approvalState: "PENDING" }],
+    [],
+    NOW,
+  );
+  assert.deepEqual(candidates, []);
+});
+
+test("long-session review: a staging session over 6h is flagged, editable while still PENDING and stopped", () => {
+  const candidates = selectLongSessionCandidates(
+    [{ id: 1, videoId: 10, videoTitle: "Forgotten stop", startedAt: NOW_SECONDS - 10 * 3600, endedAt: NOW_SECONDS - 1 * 3600, approvalState: "PENDING" }],
+    [],
+    NOW,
+  );
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].kind, "STAGING");
+  assert.equal(candidates[0].editable, true);
+  assert.equal(candidates[0].approved, false);
+  assert.equal(candidates[0].durationSeconds, 9 * 3600);
+});
+
+test("long-session review: a STILL-OPEN staging session over 6h is flagged but never editable (it's live)", () => {
+  const candidates = selectLongSessionCandidates(
+    [{ id: 1, videoId: 10, videoTitle: "Still running", startedAt: NOW_SECONDS - 10 * 3600, endedAt: null, approvalState: "PENDING" }],
+    [],
+    NOW,
+  );
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].editable, false);
+});
+
+test("long-session review: an already-approved staging row is flagged but not editable, and not double-counted as unapproved", () => {
+  const candidates = selectLongSessionCandidates(
+    [{ id: 1, videoId: 10, videoTitle: "Already handled", startedAt: NOW_SECONDS - 8 * 3600, endedAt: NOW_SECONDS - 1 * 3600, approvalState: "APPROVED" }],
+    [],
+    NOW,
+  );
+  assert.equal(candidates[0].editable, false);
+  assert.equal(candidates[0].approved, true);
+});
+
+test("long-session review: a canonical Work Session over 6h is flagged, editable once stopped, always approved=true", () => {
+  const candidates = selectLongSessionCandidates(
+    [],
+    [{ id: 5, videoId: 20, videoTitle: "Canonical marathon", startedAt: NOW_SECONDS - 12 * 3600, endedAt: NOW_SECONDS - 1 * 3600 }],
+    NOW,
+  );
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].kind, "CANONICAL");
+  assert.equal(candidates[0].editable, true);
+  assert.equal(candidates[0].approved, true);
+});
+
+test("long-session review: staging and canonical candidates are combined and sorted newest-first", () => {
+  const candidates = selectLongSessionCandidates(
+    [{ id: 1, videoId: 10, videoTitle: "Older staging", startedAt: NOW_SECONDS - 20 * 3600, endedAt: NOW_SECONDS - 10 * 3600, approvalState: "PENDING" }],
+    [{ id: 5, videoId: 20, videoTitle: "Newer canonical", startedAt: NOW_SECONDS - 9 * 3600, endedAt: NOW_SECONDS - 1 * 3600 }],
+    NOW,
+  );
+  assert.equal(candidates.length, 2);
+  assert.equal(candidates[0].target, "Newer canonical");
+  assert.equal(candidates[1].target, "Older staging");
+});
+
+test("long-session review is display-only: never mutates, never truncates a duration, never invents an end time", () => {
+  const candidates = selectLongSessionCandidates(
+    [{ id: 1, videoId: 10, videoTitle: "Exact math", startedAt: 0, endedAt: 36_001, approvalState: "PENDING" }],
+    [],
+    new Date(0),
+  );
+  assert.equal(candidates[0].durationSeconds, 36_001);
+});
 
 test("sensor connectivity: no device ever registered is its own distinct state", () => {
   const now = new Date("2026-09-15T12:00:00Z");

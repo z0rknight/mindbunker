@@ -3,7 +3,7 @@
 import "server-only";
 
 import { getAuthenticatedDb } from "@/db";
-import { sensorDevices } from "@/db/schema";
+import { sensorDevices, videoLogs } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
@@ -11,10 +11,12 @@ import {
   SENSOR_SESSION_APPROVE_MARK_SQL,
   SENSOR_SESSION_ARCHIVE_SQL,
   SENSOR_SESSION_DELETE_SQL,
+  SENSOR_SESSION_UPDATE_SQL,
   SENSOR_SCOPES,
   createSensorCredential,
 } from "./core";
 import { getVideoAttribution, revalidateWorkSessionSurfaces } from "../work-sessions/revalidation";
+import { toUnixSeconds, validateSessionCorrection, type WorkSessionActivityType } from "../work-sessions/core";
 
 function validSensorSessionId(id: number) {
   return Number.isSafeInteger(id) && id > 0;
@@ -67,6 +69,63 @@ export async function rotateSensorDevice(id: number) {
   if (!updated[0]) return { success: false as const, error: "Device not found." };
   revalidatePath("/productivity/sensor");
   return { success: true as const, token: credential.token, publicId: credential.publicId };
+}
+
+// Sensor Reality Sync §8: a staged (PENDING, already-stopped) Sensor
+// session -- the "forgot to stop, Mac slept, now it says 10h" case --
+// must be fixable BEFORE it becomes canonical history, not only after.
+// Reuses validateSessionCorrection unchanged (the exact same rule
+// correctWorkSession already applies to canonical rows) so there is
+// only one definition of "a valid session correction" in this app.
+export async function updateSensorSession(
+  id: number,
+  input: {
+    videoId: number;
+    startedAt: string;
+    endedAt: string;
+    activityType: WorkSessionActivityType;
+    note: string | null;
+  },
+) {
+  if (!validSensorSessionId(id)) {
+    return { success: false as const, error: "Invalid Sensor session." };
+  }
+  const validated = validateSessionCorrection({
+    videoId: input.videoId,
+    startedAt: new Date(input.startedAt),
+    endedAt: new Date(input.endedAt),
+    activityType: input.activityType,
+    note: input.note,
+  });
+  if (!validated.success) return validated;
+
+  const db = await getAuthenticatedDb();
+  const video = await db
+    .select({ id: videoLogs.id })
+    .from(videoLogs)
+    .where(eq(videoLogs.id, validated.data.videoId))
+    .limit(1);
+  if (!video[0]) return { success: false as const, error: "Chosen video not found." };
+
+  const now = Math.floor(Date.now() / 1_000);
+  const row = await db.$client
+    .prepare(SENSOR_SESSION_UPDATE_SQL)
+    .bind(
+      id,
+      validated.data.videoId,
+      toUnixSeconds(validated.data.startedAt),
+      toUnixSeconds(validated.data.endedAt),
+      validated.data.activityType,
+      validated.data.note,
+      now,
+    )
+    .first<{ id: number }>();
+  if (!row) {
+    return { success: false as const, error: "Only a completed pending Sensor session can be edited." };
+  }
+  revalidatePath("/productivity/sensor");
+  revalidatePath(`/productivity/sensor/sessions/${id}`);
+  return { success: true as const };
 }
 
 export async function approveSensorSession(id: number) {

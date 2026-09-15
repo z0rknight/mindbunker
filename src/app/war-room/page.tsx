@@ -32,6 +32,7 @@ import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { getProductionOrders } from "@/modules/production-orders/data";
 import { getRestaurantClientCandidates } from "@/modules/war-room/data";
 import { getClientProjectCommercialAttribution } from "@/modules/finance/actions";
+import { getOpenSensorSessionOverview } from "@/modules/sensor/data";
 import { selectRestaurantClients, buildRestaurantViewModel } from "@/modules/war-room/restaurant-core";
 import { WarRoomRestaurantStage } from "./restaurant/WarRoomRestaurantStage";
 
@@ -64,6 +65,7 @@ export default async function WarRoomPage() {
     restaurantClientCandidates,
     productionOrders,
     lastActiveByClient,
+    sensorOverview,
   ] = await Promise.all([
     getWarRoomData(),
     openCommitmentsPromise.then((rows) => getActiveSignals(rows)),
@@ -80,7 +82,9 @@ export default async function WarRoomPage() {
     getRestaurantClientCandidates(),
     getProductionOrders(),
     getLastActiveByClient(),
+    getOpenSensorSessionOverview(),
   ]);
+  const { openSensorSession, openSensorSessionElapsedSeconds } = sensorOverview;
 
   // Restaurant View (War Room Restaurant View V1): select the bounded
   // 6-8 relevant clients first (pure, from data already fetched above --
@@ -106,6 +110,8 @@ export default async function WarRoomPage() {
     openSession: workSessionOverview.openSession,
     openSessionElapsedSeconds: workSessionOverview.openSessionElapsedSeconds,
     openSessionStale: workSessionOverview.openSessionStale,
+    openSensorSession,
+    openSensorSessionElapsedSeconds,
   });
   const { income, efficiency, biological, momentum } = data;
   // Only overdue + due-soon (next 48h) commitments belong here -- War

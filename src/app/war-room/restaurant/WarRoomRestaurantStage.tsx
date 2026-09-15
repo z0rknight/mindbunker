@@ -120,27 +120,45 @@ function CommandaRail({ tickets }: { tickets: RestaurantTicket[] }) {
   );
 }
 
+// Sensor Reality Sync §4: three visually distinct states, not two --
+// idle, a real canonical Work Session (WORKING, cyan -- unchanged from
+// before), and an open but not-yet-approved Sensor recording
+// (SENSOR_RECORDING, amber -- new). The amber state is deliberately a
+// different color and label from WORKING: it is real Sensor activity,
+// but it is not canonical history until Emmanuel approves it, and this
+// stage must never imply otherwise.
 function EditorStation({ session }: { session: RestaurantViewModel["activeSession"] }) {
   const active = session !== null;
+  const isSensorRecording = session?.kind === "SENSOR_RECORDING";
+  const toneClass = isSensorRecording
+    ? "wr-editor-glow-sensor border-amber-500/60 bg-amber-950/30"
+    : active
+      ? "wr-editor-glow border-cyan-500/60 bg-cyan-950/30"
+      : "border-zinc-700/50 bg-zinc-900/50";
+  const iconToneClass = isSensorRecording
+    ? "wr-editor-pulse text-amber-300"
+    : active
+      ? "wr-editor-pulse text-cyan-300"
+      : "text-zinc-600";
   return (
     <div className="pointer-events-none absolute left-1/2 top-[26%] flex -translate-x-1/2 flex-col items-center gap-1">
-      <div
-        className={`grid h-12 w-16 place-items-center rounded-md border sm:h-14 sm:w-20 ${
-          active ? "wr-editor-glow border-cyan-500/60 bg-cyan-950/30" : "border-zinc-700/50 bg-zinc-900/50"
-        }`}
-      >
-        <PixelIcon
-          name="video"
-          className={`h-5 w-5 sm:h-6 sm:w-6 ${active ? "wr-editor-pulse text-cyan-300" : "text-zinc-600"}`}
-        />
+      <div className={`grid h-12 w-16 place-items-center rounded-md border sm:h-14 sm:w-20 ${toneClass}`}>
+        <PixelIcon name="video" className={`h-5 w-5 sm:h-6 sm:w-6 ${iconToneClass}`} />
       </div>
       {active ? (
         <div className="flex flex-col items-center">
-          <LiveIndicator label="EDITING" />
+          <LiveIndicator label={isSensorRecording ? "SENSOR RECORDING" : "EDITING"} />
           <span className="mt-0.5 max-w-[9rem] truncate text-center text-[10px] font-bold text-zinc-300">
             {session.clientName ?? "Unattributed"} · {session.videoTitle}
           </span>
-          <span className="mb-timer text-[9px] text-cyan-300/70">{formatElapsed(session.elapsedSeconds)}</span>
+          <span className={`mb-timer text-[9px] ${isSensorRecording ? "text-amber-300/70" : "text-cyan-300/70"}`}>
+            {formatElapsed(session.elapsedSeconds)}
+          </span>
+          {isSensorRecording && (
+            <span className="mt-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-500/70">
+              Not yet approved
+            </span>
+          )}
         </div>
       ) : (
         <span className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600">Editor idle</span>

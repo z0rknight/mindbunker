@@ -14,6 +14,7 @@ import type { VideoStatus } from "../productivity/config.ts";
 import type { ProductionOrderListRow } from "../production-orders/data.ts";
 import { PRODUCTION_ORDER_PHASE_LABELS, type ProductionOrderPhase } from "../production-orders/config.ts";
 import type { OpenWorkSession } from "../work-sessions/core.ts";
+import type { OpenSensorSession } from "../sensor/core.ts";
 import { isInternalClientName } from "../../lib/client-identity.ts";
 
 export const RESTAURANT_MAX_TABLES = 8;
@@ -217,7 +218,10 @@ export function buildRestaurantTickets(
   }));
 }
 
+export type RestaurantActiveSessionKind = "WORKING" | "SENSOR_RECORDING";
+
 export type RestaurantActiveSession = {
+  kind: RestaurantActiveSessionKind;
   clientId: number | null;
   clientName: string | null;
   videoTitle: string;
@@ -226,23 +230,46 @@ export type RestaurantActiveSession = {
   stale: boolean;
 };
 
-// Work Session stays the one canonical timer -- this never starts a
-// second clock, it only reflects the elapsed value War Room already
-// computes for NowFocusPanel.
+// Sensor Reality Sync §3/§12: War Room now has to reconcile TWO possible
+// live facts -- a canonical open Work Session, and a still-unapproved
+// open sensor_sessions row -- without ever double-counting them. The
+// canonical session always wins the display (it's the one Work Session
+// stays the one clock for): if one is open, that's what shows,
+// regardless of whether the Sensor also happens to be recording
+// something else at the same time. Only when NO canonical session is
+// open does an open Sensor recording surface as its own, clearly
+// different state (never mislabeled as a canonical Work Session before
+// it has been approved into one).
 export function buildRestaurantActiveSession(
-  openSession: OpenWorkSession | null,
-  elapsedSeconds: number,
-  stale: boolean,
+  openWorkSession: OpenWorkSession | null,
+  openWorkSessionElapsedSeconds: number,
+  openWorkSessionStale: boolean,
+  openSensorSession: OpenSensorSession | null,
+  openSensorSessionElapsedSeconds: number,
 ): RestaurantActiveSession | null {
-  if (!openSession) return null;
-  return {
-    clientId: openSession.clientId,
-    clientName: openSession.clientName,
-    videoTitle: openSession.videoTitle,
-    activityType: openSession.activityType,
-    elapsedSeconds,
-    stale,
-  };
+  if (openWorkSession) {
+    return {
+      kind: "WORKING",
+      clientId: openWorkSession.clientId,
+      clientName: openWorkSession.clientName,
+      videoTitle: openWorkSession.videoTitle,
+      activityType: openWorkSession.activityType,
+      elapsedSeconds: openWorkSessionElapsedSeconds,
+      stale: openWorkSessionStale,
+    };
+  }
+  if (openSensorSession) {
+    return {
+      kind: "SENSOR_RECORDING",
+      clientId: openSensorSession.clientId,
+      clientName: openSensorSession.clientName,
+      videoTitle: openSensorSession.videoTitle,
+      activityType: openSensorSession.activityType,
+      elapsedSeconds: openSensorSessionElapsedSeconds,
+      stale: false,
+    };
+  }
+  return null;
 }
 
 export type RestaurantViewModel = {
@@ -258,6 +285,8 @@ export function buildRestaurantViewModel(input: {
   openSession: OpenWorkSession | null;
   openSessionElapsedSeconds: number;
   openSessionStale: boolean;
+  openSensorSession: OpenSensorSession | null;
+  openSensorSessionElapsedSeconds: number;
   maxTickets?: number;
 }): RestaurantViewModel {
   return {
@@ -265,6 +294,8 @@ export function buildRestaurantViewModel(input: {
       input.openSession,
       input.openSessionElapsedSeconds,
       input.openSessionStale,
+      input.openSensorSession,
+      input.openSensorSessionElapsedSeconds,
     ),
     clients: attachRestaurantCommercials(input.selectedClients, input.commercialByClientId),
     tickets: buildRestaurantTickets(input.productionOrders, input.maxTickets ?? RESTAURANT_MAX_TICKETS),

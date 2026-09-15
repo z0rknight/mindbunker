@@ -2,9 +2,14 @@ import Link from "next/link";
 import { formatClosedDuration } from "@/modules/work-sessions/core";
 import {
   getSensorDashboard,
+  getLongSessionCandidates,
   type SensorSessionListRow,
 } from "@/modules/sensor/data";
-import { resolveSensorConnectivityStatus, type SensorConnectivityStatus } from "@/modules/sensor/core";
+import {
+  LONG_SESSION_THRESHOLD_SECONDS,
+  resolveSensorConnectivityStatus,
+  type SensorConnectivityStatus,
+} from "@/modules/sensor/core";
 import { getWorkSessionOverview } from "@/modules/work-sessions/data";
 import { SensorDeviceManager } from "./SensorDeviceManager";
 import { SensorSessionActions } from "./SensorSessionActions";
@@ -96,7 +101,11 @@ function SessionCard({ session, review = false }: { session: SensorSessionListRo
 }
 
 export default async function SensorActivityPage() {
-  const [data, workSessionOverview] = await Promise.all([getSensorDashboard(), getWorkSessionOverview()]);
+  const [data, workSessionOverview, longSessionCandidates] = await Promise.all([
+    getSensorDashboard(),
+    getWorkSessionOverview(),
+    getLongSessionCandidates(),
+  ]);
   const connectivity = resolveSensorConnectivityStatus(
     data.devices.length,
     data.diagnostics.lastSuccessfulUpload,
@@ -144,6 +153,51 @@ export default async function SensorActivityPage() {
           {data.inbox.map((session) => <SessionCard key={session.id} session={session} review />)}
         </div>
       </section>
+
+      {longSessionCandidates.length > 0 && (
+        <section className="mt-6 rounded-2xl border border-amber-800/50 bg-amber-950/10 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-bold text-white">Long session review</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Sessions longer than {formatClosedDuration(LONG_SESSION_THRESHOLD_SECONDS)} — display only, nothing
+                here was auto-stopped, truncated, or deleted. Fix the ones that are wrong; leave the ones that
+                aren&apos;t.
+              </p>
+            </div>
+            <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-300">
+              {longSessionCandidates.length} flagged
+            </span>
+          </div>
+          <div className="mt-4 space-y-2">
+            {longSessionCandidates.map((candidate) => (
+              <div
+                key={`${candidate.kind}-${candidate.id}`}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-black/20 px-3 py-2.5"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-zinc-200">{candidate.target}</p>
+                  <p className="mt-0.5 text-[11px] text-zinc-500">
+                    {candidate.date} · {formatClosedDuration(candidate.durationSeconds)} · {candidate.kind}
+                    {candidate.approved ? " · approved" : ""}
+                    {candidate.editable ? " · editable" : " · not directly editable here"}
+                  </p>
+                </div>
+                <Link
+                  href={
+                    candidate.kind === "STAGING"
+                      ? `/productivity/sensor/sessions/${candidate.id}`
+                      : "/productivity/sessions"
+                  }
+                  className="shrink-0 text-xs font-bold text-amber-300 hover:text-amber-200"
+                >
+                  {candidate.kind === "STAGING" ? "Review Sensor session →" : "Open in Sessions →"}
+                </Link>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5">

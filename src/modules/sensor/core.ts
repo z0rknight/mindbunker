@@ -3,6 +3,22 @@ import {
   type WorkSessionActivityType,
 } from "../work-sessions/core.ts";
 
+// Kept here (not sensor/data.ts, which is server-only) so pure consumers
+// like war-room/restaurant-core.ts can import the shape without pulling
+// in a DB-backed module -- the exact same reason OpenWorkSession lives in
+// work-sessions/core.ts rather than its data.ts.
+export type OpenSensorSession = {
+  id: number;
+  videoId: number;
+  videoTitle: string;
+  clientId: number | null;
+  clientName: string | null;
+  projectName: string | null;
+  activityType: WorkSessionActivityType;
+  startedAt: string;
+  deviceName: string | null;
+};
+
 export const SENSOR_TOKEN_VERSION = "mbs1";
 export const SENSOR_SCOPES = [
   "CATALOG_READ",
@@ -224,6 +240,33 @@ export function validateObservationBatch(
   return { success: true, data };
 }
 
+// Sensor Reality Sync §3: War Room needs to show SENSOR RECORDING the
+// moment a sensor_sessions row is open, without waiting for operator
+// approval -- the activity is real Sensor state even before it becomes
+// canonical history. Mirrors OPEN_WORK_SESSION_SQL's own shape exactly
+// (same joins, same "one open row" assumption) so the two read the same
+// way at the call site.
+export const OPEN_SENSOR_SESSION_SQL = `
+  SELECT
+    ss.id,
+    ss.video_id,
+    COALESCE(v.title, 'Video ' || v.date) AS video_title,
+    v.client_id AS client_id,
+    c.name AS client_name,
+    p.name AS project_name,
+    ss.activity_type,
+    ss.started_at,
+    sd.name AS device_name
+  FROM sensor_sessions ss
+  INNER JOIN video_logs v ON v.id = ss.video_id
+  LEFT JOIN projects p ON p.id = v.project_id
+  LEFT JOIN clients c ON c.id = v.client_id
+  LEFT JOIN sensor_devices sd ON sd.id = ss.sensor_device_id
+  WHERE ss.ended_at IS NULL
+  ORDER BY ss.id DESC
+  LIMIT 1
+`;
+
 export const SENSOR_SESSION_START_SQL = `
   INSERT INTO sensor_sessions
     (video_id, started_at, ended_at, activity_type, note, source, sensor_device_id, local_session_id, approval_state)
@@ -277,6 +320,20 @@ export const SENSOR_SESSION_APPROVE_MARK_SQL = `
   RETURNING approved_work_session_id
 `;
 
+// Sensor Reality Sync: lets Emmanuel fix a forgotten/wrong staged session
+// (the "10h because the Mac slept" case) BEFORE it becomes canonical
+// history, instead of only after. Deliberately mirrors
+// SENSOR_SESSION_APPROVE_INSERT_SQL's own guard (PENDING + already
+// stopped) -- editing a still-open session makes no operational sense
+// (it's live), and an already-approved/archived/deleted one is a
+// canonical-correction or evidence-tombstone concern, not this one.
+export const SENSOR_SESSION_UPDATE_SQL = `
+  UPDATE sensor_sessions
+  SET video_id = ?2, started_at = ?3, ended_at = ?4, activity_type = ?5, note = ?6, updated_at = ?7
+  WHERE id = ?1 AND approval_state = 'PENDING' AND ended_at IS NOT NULL
+  RETURNING id
+`;
+
 export const SENSOR_SESSION_ARCHIVE_SQL = `
   UPDATE sensor_sessions
   SET approval_state = 'ARCHIVED', archived_at = ?2, updated_at = ?2
@@ -290,6 +347,78 @@ export const SENSOR_SESSION_DELETE_SQL = `
   WHERE id = ?1 AND approval_state = 'ARCHIVED'
   RETURNING id
 `;
+
+// Sensor Reality Sync §10/§17: a read-only, display-only assistance
+// list -- never an automatic truncation, deletion, or stop. ">6h" is a
+// UI threshold, not a canonical fact; nothing here writes anything.
+export const LONG_SESSION_THRESHOLD_SECONDS = 6 * 60 * 60;
+
+export type LongSessionSourceRow = {
+  id: number;
+  videoId: number;
+  videoTitle: string;
+  startedAt: number;
+  endedAt: number | null;
+};
+
+export type LongSessionStagingRow = LongSessionSourceRow & {
+  approvalState: "PENDING" | "APPROVED" | "ARCHIVED" | "DELETED";
+};
+
+export type LongSessionCandidate = {
+  id: number;
+  kind: "STAGING" | "CANONICAL";
+  date: string;
+  target: string;
+  durationSeconds: number;
+  editable: boolean;
+  approved: boolean;
+};
+
+export function selectLongSessionCandidates(
+  stagingRows: readonly LongSessionStagingRow[],
+  canonicalRows: readonly LongSessionSourceRow[],
+  now: Date,
+  thresholdSeconds: number = LONG_SESSION_THRESHOLD_SECONDS,
+): LongSessionCandidate[] {
+  const nowSeconds = Math.floor(now.getTime() / 1_000);
+
+  const staging = stagingRows
+    .map((row) => {
+      const durationSeconds = (row.endedAt ?? nowSeconds) - row.startedAt;
+      return {
+        id: row.id,
+        kind: "STAGING" as const,
+        date: new Date(row.startedAt * 1_000).toISOString().slice(0, 10),
+        target: row.videoTitle,
+        durationSeconds,
+        editable: row.approvalState === "PENDING" && row.endedAt !== null,
+        approved: row.approvalState === "APPROVED",
+        startedAt: row.startedAt,
+      };
+    })
+    .filter((row) => row.durationSeconds > thresholdSeconds);
+
+  const canonical = canonicalRows
+    .map((row) => {
+      const durationSeconds = (row.endedAt ?? nowSeconds) - row.startedAt;
+      return {
+        id: row.id,
+        kind: "CANONICAL" as const,
+        date: new Date(row.startedAt * 1_000).toISOString().slice(0, 10),
+        target: row.videoTitle,
+        durationSeconds,
+        editable: row.endedAt !== null,
+        approved: true,
+        startedAt: row.startedAt,
+      };
+    })
+    .filter((row) => row.durationSeconds > thresholdSeconds);
+
+  return [...staging, ...canonical]
+    .sort((a, b) => b.startedAt - a.startedAt)
+    .map(({ startedAt, ...candidate }) => candidate);
+}
 
 export const SENSOR_OBSERVATION_INSERT_SQL = `
   INSERT INTO device_activity_observations

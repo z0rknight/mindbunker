@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import {
+  OPEN_SENSOR_SESSION_SQL,
   SENSOR_OBSERVATION_INSERT_SQL,
   SENSOR_SESSION_APPROVE_INSERT_SQL,
   SENSOR_SESSION_APPROVE_MARK_SQL,
@@ -10,6 +11,7 @@ import {
   SENSOR_SESSION_DELETE_SQL,
   SENSOR_SESSION_START_SQL,
   SENSOR_SESSION_STOP_SQL,
+  SENSOR_SESSION_UPDATE_SQL,
 } from "./core.ts";
 
 function fixture() {
@@ -152,4 +154,100 @@ test("passive apps, NULL counters, and overlap aggregation remain independent", 
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM work_sessions").get().count, 0);
   assert.equal(db.prepare("SELECT approval_state FROM sensor_sessions WHERE id=?").get(sensor.id).approval_state, "PENDING");
   assert.equal(db.prepare("PRAGMA foreign_key_check").all().length, 0);
+});
+
+// Sensor Reality Sync §8: edit a PENDING, already-stopped staging
+// session (the "forgot to stop, Mac slept, now it says 10h" case)
+// BEFORE it becomes canonical history.
+test("editing a PENDING, stopped staging session persists the correction and leaves approval untouched", () => {
+  const db = fixture();
+  const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+  const sensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, 36_100, "EDITING", "forgot to stop", 1, local).id;
+  const updated = db.prepare(SENSOR_SESSION_UPDATE_SQL).get(sensorId, 5, 100, 1_900, "REVIEW", "corrected: actually 30 minutes", 400);
+  assert.equal(updated.id, sensorId);
+  const row = db.prepare("SELECT video_id, started_at, ended_at, activity_type, note, approval_state FROM sensor_sessions WHERE id=?").get(sensorId);
+  assert.equal(row.video_id, 5);
+  assert.equal(row.ended_at, 1_900);
+  assert.equal(row.activity_type, "REVIEW");
+  assert.equal(row.note, "corrected: actually 30 minutes");
+  assert.equal(row.approval_state, "PENDING");
+});
+
+test("editing a still-open staging session is rejected -- it's live, not staged history yet", () => {
+  const db = fixture();
+  const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+  const sensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, null, "EDITING", null, 1, local).id;
+  assert.equal(db.prepare(SENSOR_SESSION_UPDATE_SQL).get(sensorId, 4, 100, 1_000, "EDITING", null, 400), undefined);
+});
+
+test("editing an already-approved staging session is rejected -- it's canonical history now, use correctWorkSession instead", () => {
+  const db = fixture();
+  const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+  const sensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, 200, "EDITING", null, 1, local).id;
+  db.prepare(SENSOR_SESSION_APPROVE_INSERT_SQL).get(sensorId);
+  db.prepare(SENSOR_SESSION_APPROVE_MARK_SQL).get(sensorId, 300);
+  assert.equal(db.prepare(SENSOR_SESSION_UPDATE_SQL).get(sensorId, 4, 100, 5_000, "EDITING", null, 400), undefined);
+});
+
+function fixtureWithClientsAndBilling() {
+  const db = fixture();
+  db.exec(`
+    CREATE TABLE clients (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+    CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+    ALTER TABLE video_logs ADD COLUMN client_id INTEGER REFERENCES clients(id);
+    ALTER TABLE video_logs ADD COLUMN project_id INTEGER REFERENCES projects(id);
+    ALTER TABLE video_logs ADD COLUMN title TEXT;
+    ALTER TABLE video_logs ADD COLUMN date TEXT DEFAULT '2026-09-15';
+    ALTER TABLE sensor_devices ADD COLUMN name TEXT DEFAULT 'device';
+    CREATE TABLE billing_evidence (id INTEGER PRIMARY KEY AUTOINCREMENT);
+    CREATE TABLE billing_allocations (id INTEGER PRIMARY KEY AUTOINCREMENT);
+    CREATE TABLE transactions (id INTEGER PRIMARY KEY AUTOINCREMENT);
+    CREATE TABLE payment_requests (id INTEGER PRIMARY KEY AUTOINCREMENT);
+    INSERT INTO clients VALUES (1, 'Taryn'), (2, 'Dave');
+    UPDATE video_logs SET client_id = 1 WHERE id = 4;
+    UPDATE video_logs SET client_id = 2 WHERE id = 5;
+  `);
+  return db;
+}
+
+test("approving one client's Sensor session never mutates another client's video, session, or billing rows", () => {
+  const db = fixtureWithClientsAndBilling();
+  const tarynLocal = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+  const daveLocal = "63ee7bf9-881f-5d0a-b571-215386bf5ea0";
+  const tarynSensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, 200, "EDITING", null, 1, tarynLocal).id;
+  const daveSensorId = db.prepare(SENSOR_SESSION_START_SQL).get(5, 300, 400, "EDITING", null, 1, daveLocal).id;
+
+  db.prepare(SENSOR_SESSION_APPROVE_INSERT_SQL).get(tarynSensorId);
+  db.prepare(SENSOR_SESSION_APPROVE_MARK_SQL).get(tarynSensorId, 500);
+
+  // Dave's staging row is completely untouched by Taryn's approval.
+  const dave = db.prepare("SELECT approval_state, approved_work_session_id FROM sensor_sessions WHERE id=?").get(daveSensorId);
+  assert.equal(dave.approval_state, "PENDING");
+  assert.equal(dave.approved_work_session_id, null);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM work_sessions WHERE video_id=5").get().n, 0);
+
+  // The one canonical row created belongs to Taryn's video only.
+  const created = db.prepare("SELECT video_id FROM work_sessions").get();
+  assert.equal(created.video_id, 4);
+
+  // No billing-shaped table was touched by an ordinary Sensor approval.
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM billing_evidence").get().n, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM billing_allocations").get().n, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM transactions").get().n, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM payment_requests").get().n, 0);
+});
+
+// Sensor Reality Sync §3: the exact read War Room uses to decide
+// SENSOR RECORDING vs idle -- confirms it only ever returns the one
+// truly-open row, and nothing once it's stopped.
+test("OPEN_SENSOR_SESSION_SQL reflects an open staging session and goes empty the instant it's stopped", () => {
+  const db = fixtureWithClientsAndBilling();
+  const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+  db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, null, "EDITING", null, 1, local);
+  const open = db.prepare(OPEN_SENSOR_SESSION_SQL).get();
+  assert.equal(open.video_id, 4);
+  assert.equal(open.client_id, 1);
+
+  db.prepare(SENSOR_SESSION_STOP_SQL).get(1, local, 200);
+  assert.equal(db.prepare(OPEN_SENSOR_SESSION_SQL).get(), undefined);
 });

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSensorSessionDetail } from "@/modules/sensor/data";
-import { formatClosedDuration } from "@/modules/work-sessions/core";
-import { SensorSessionActions } from "../../SensorSessionActions";
+import { formatClosedDuration, type WorkSessionActivityType } from "@/modules/work-sessions/core";
+import { getVideoOptionsForCorrection } from "@/modules/work-sessions/data";
+import { SensorSessionDetailControls } from "./SensorSessionDetailControls";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,10 @@ export default async function SensorSessionDetailPage({
 }) {
   const { id: rawId } = await params;
   if (!/^\d+$/u.test(rawId)) notFound();
-  const data = await getSensorSessionDetail(Number(rawId));
+  const [data, videoOptions] = await Promise.all([
+    getSensorSessionDetail(Number(rawId)),
+    getVideoOptionsForCorrection(),
+  ]);
   if (!data) notFound();
   const { session, apps, signals } = data;
   const duration = session.ended_at === null
@@ -51,10 +55,16 @@ export default async function SensorSessionDetailPage({
           <h1 className="mt-1 text-2xl font-black text-white">{session.video_title}</h1>
           <p className="mt-1 text-sm text-zinc-500">Raw intentional evidence from the Mac; independent passive observations are correlated below.</p>
         </div>
-        <SensorSessionActions
-          id={session.id}
+        <SensorSessionDetailControls
+          sessionId={session.id}
           state={session.approval_state}
           approvedWorkSessionId={session.approved_work_session_id}
+          videoId={session.video_id}
+          startedAt={session.started_at}
+          endedAt={session.ended_at}
+          activityType={session.activity_type as WorkSessionActivityType}
+          note={session.note}
+          videoOptions={videoOptions}
         />
       </div>
 

@@ -122,17 +122,31 @@ test("production-order ticket mapping excludes delivered/cancelled/closed orders
   assert.deepEqual(tickets.map((t) => t.id), [1, 4]); // REVIEW ranks above IN_PRODUCTION
 });
 
-test("active-session state reflects the canonical open Work Session, idle when none", () => {
-  const active = buildRestaurantActiveSession(
-    { id: 1, videoId: 1, videoTitle: "Bonnie Ad", clientName: "Taryn", clientId: 1, projectName: "Content Waterfall", activityType: "EDITING", startedAt: "2026-09-14T10:00:00.000Z", deviceName: null },
-    600,
-    false,
-  );
+const WORK_SESSION_FIXTURE = { id: 1, videoId: 1, videoTitle: "Bonnie Ad", clientName: "Taryn", clientId: 1, projectName: "Content Waterfall", activityType: "EDITING", startedAt: "2026-09-14T10:00:00.000Z", deviceName: null };
+const SENSOR_SESSION_FIXTURE = { id: 9, videoId: 2, videoTitle: "Dave Ad", clientName: "Dave", clientId: 2, projectName: null, activityType: "EDITING", startedAt: "2026-09-14T10:00:00.000Z", deviceName: "Emmanuel's Mac" };
+
+test("active-session state reflects the canonical open Work Session, idle when neither exists", () => {
+  const active = buildRestaurantActiveSession(WORK_SESSION_FIXTURE, 600, false, null, 0);
+  assert.equal(active.kind, "WORKING");
   assert.equal(active.clientName, "Taryn");
   assert.equal(active.elapsedSeconds, 600);
 
-  const idle = buildRestaurantActiveSession(null, 0, false);
+  const idle = buildRestaurantActiveSession(null, 0, false, null, 0);
   assert.equal(idle, null);
+});
+
+test("an open Sensor recording surfaces as SENSOR_RECORDING when no canonical session is open", () => {
+  const recording = buildRestaurantActiveSession(null, 0, false, SENSOR_SESSION_FIXTURE, 120);
+  assert.equal(recording.kind, "SENSOR_RECORDING");
+  assert.equal(recording.clientName, "Dave");
+  assert.equal(recording.elapsedSeconds, 120);
+});
+
+test("a canonical open Work Session always wins over a simultaneously open Sensor recording -- never double-counted", () => {
+  const both = buildRestaurantActiveSession(WORK_SESSION_FIXTURE, 600, false, SENSOR_SESSION_FIXTURE, 120);
+  assert.equal(both.kind, "WORKING");
+  assert.equal(both.clientName, "Taryn");
+  assert.equal(both.elapsedSeconds, 600);
 });
 
 test("buildRestaurantViewModel composes selection, commercials, tickets and session without cross-contamination", () => {
@@ -146,9 +160,26 @@ test("buildRestaurantViewModel composes selection, commercials, tickets and sess
     openSession: null,
     openSessionElapsedSeconds: 0,
     openSessionStale: false,
+    openSensorSession: null,
+    openSensorSessionElapsedSeconds: 0,
   });
   assert.equal(model.activeSession, null);
   assert.equal(model.clients.length, 1);
   assert.deepEqual(model.clients[0].attributable, [{ currency: "USD", amount: 37.5, minutes: 90 }]);
   assert.deepEqual(model.tickets, []);
+});
+
+test("buildRestaurantViewModel surfaces SENSOR_RECORDING through the full composition when no canonical session is open", () => {
+  const model = buildRestaurantViewModel({
+    selectedClients: [],
+    commercialByClientId: new Map(),
+    productionOrders: [],
+    openSession: null,
+    openSessionElapsedSeconds: 0,
+    openSessionStale: false,
+    openSensorSession: SENSOR_SESSION_FIXTURE,
+    openSensorSessionElapsedSeconds: 45,
+  });
+  assert.equal(model.activeSession.kind, "SENSOR_RECORDING");
+  assert.equal(model.activeSession.elapsedSeconds, 45);
 });
