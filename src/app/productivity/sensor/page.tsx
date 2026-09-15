@@ -63,6 +63,11 @@ function SessionCard({ session, review = false }: { session: SensorSessionListRo
   const duration = session.ended_at === null
     ? null
     : Math.max(0, Number(session.ended_at) - Number(session.started_at));
+  const isClient = session.context_type === "CLIENT";
+  const title = isClient ? (session.video_title ?? "Untitled session") : session.context_type;
+  const subtitle = isClient
+    ? [session.client_name, session.project_name].filter(Boolean).join(" / ")
+    : (session.context_label ?? "No label");
   return (
     <article className="rounded-xl border border-zinc-800 bg-black/20 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -71,10 +76,10 @@ function SessionCard({ session, review = false }: { session: SensorSessionListRo
             href={`/productivity/sensor/sessions/${session.id}`}
             className="font-bold text-zinc-100 hover:text-violet-300"
           >
-            {session.video_title}
+            {title}
           </Link>
           <p className="mt-1 text-xs text-zinc-500">
-            {[session.client_name, session.project_name].filter(Boolean).join(" / ")} · {session.activity_type}
+            {subtitle} · {session.activity_type}
           </p>
           <p className="mt-1 text-[10px] text-zinc-600">
             {formatDateTime(session.started_at)} · {duration === null ? "Open" : formatClosedDuration(duration)} · {session.approval_state}
@@ -92,6 +97,7 @@ function SessionCard({ session, review = false }: { session: SensorSessionListRo
           <SensorSessionActions
             id={session.id}
             state={session.approval_state}
+            contextType={session.context_type}
             approvedWorkSessionId={session.approved_work_session_id}
           />
         </div>

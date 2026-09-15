@@ -123,7 +123,9 @@ test("production-order ticket mapping excludes delivered/cancelled/closed orders
 });
 
 const WORK_SESSION_FIXTURE = { id: 1, videoId: 1, videoTitle: "Bonnie Ad", clientName: "Taryn", clientId: 1, projectName: "Content Waterfall", activityType: "EDITING", startedAt: "2026-09-14T10:00:00.000Z", deviceName: null };
-const SENSOR_SESSION_FIXTURE = { id: 9, videoId: 2, videoTitle: "Dave Ad", clientName: "Dave", clientId: 2, projectName: null, activityType: "EDITING", startedAt: "2026-09-14T10:00:00.000Z", deviceName: "Emmanuel's Mac" };
+const SENSOR_SESSION_FIXTURE = { id: 9, videoId: 2, videoTitle: "Dave Ad", clientName: "Dave", clientId: 2, projectName: null, contextType: "CLIENT", contextLabel: null, activityType: "EDITING", startedAt: "2026-09-14T10:00:00.000Z", deviceName: "Emmanuel's Mac" };
+const ADMIN_SENSOR_SESSION_FIXTURE = { id: 10, videoId: null, videoTitle: null, clientName: null, clientId: null, projectName: null, contextType: "ADMIN", contextLabel: null, activityType: "ADMIN", startedAt: "2026-09-14T10:00:00.000Z", deviceName: "Emmanuel's Mac" };
+const LEAD_SENSOR_SESSION_FIXTURE = { id: 11, videoId: null, videoTitle: null, clientName: null, clientId: null, projectName: null, contextType: "LEAD", contextLabel: "Moritz / Upwork", activityType: "OTHER", startedAt: "2026-09-14T10:00:00.000Z", deviceName: "Emmanuel's Mac" };
 
 test("active-session state reflects the canonical open Work Session, idle when neither exists", () => {
   const active = buildRestaurantActiveSession(WORK_SESSION_FIXTURE, 600, false, null, 0);
@@ -147,6 +149,35 @@ test("a canonical open Work Session always wins over a simultaneously open Senso
   assert.equal(both.kind, "WORKING");
   assert.equal(both.clientName, "Taryn");
   assert.equal(both.elapsedSeconds, 600);
+});
+
+// Operational Context Sync Hotfix: War Room must show ADMIN/INTERNAL/LEAD
+// Sensor recordings too, without ever manufacturing a client table entry
+// for them -- the exact gap the real production QA found (ADMIN recording
+// locally, War Room stuck on EDITOR IDLE because nothing non-client ever
+// reached the server to become an openSensorSession in the first place).
+test("an open ADMIN Sensor recording surfaces as SENSOR_RECORDING with no fabricated client/video attribution", () => {
+  const recording = buildRestaurantActiveSession(null, 0, false, ADMIN_SENSOR_SESSION_FIXTURE, 45);
+  assert.equal(recording.kind, "SENSOR_RECORDING");
+  assert.equal(recording.contextType, "ADMIN");
+  assert.equal(recording.clientId, null);
+  assert.equal(recording.clientName, null);
+  assert.equal(recording.videoTitle, null);
+  assert.equal(recording.elapsedSeconds, 45);
+});
+
+test("an open LEAD Sensor recording carries its counterparty as contextLabel, not a client name", () => {
+  const recording = buildRestaurantActiveSession(null, 0, false, LEAD_SENSOR_SESSION_FIXTURE, 10);
+  assert.equal(recording.kind, "SENSOR_RECORDING");
+  assert.equal(recording.contextType, "LEAD");
+  assert.equal(recording.contextLabel, "Moritz / Upwork");
+  assert.equal(recording.clientName, null);
+});
+
+test("a canonical CLIENT Work Session still wins over a simultaneous ADMIN Sensor recording", () => {
+  const both = buildRestaurantActiveSession(WORK_SESSION_FIXTURE, 600, false, ADMIN_SENSOR_SESSION_FIXTURE, 45);
+  assert.equal(both.kind, "WORKING");
+  assert.equal(both.contextType, "CLIENT");
 });
 
 test("buildRestaurantViewModel composes selection, commercials, tickets and session without cross-contamination", () => {

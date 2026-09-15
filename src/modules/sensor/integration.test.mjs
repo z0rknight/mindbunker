@@ -37,7 +37,9 @@ function fixture() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       sensor_device_id INTEGER NOT NULL REFERENCES sensor_devices(id) ON DELETE RESTRICT,
       local_session_id TEXT NOT NULL,
-      video_id INTEGER NOT NULL REFERENCES video_logs(id) ON DELETE RESTRICT,
+      video_id INTEGER REFERENCES video_logs(id) ON DELETE RESTRICT,
+      context_type TEXT NOT NULL DEFAULT 'CLIENT' CHECK(context_type IN ('CLIENT','LEAD','INTERNAL','ADMIN')),
+      context_label TEXT,
       started_at INTEGER NOT NULL,
       ended_at INTEGER,
       activity_type TEXT NOT NULL,
@@ -49,7 +51,8 @@ function fixture() {
       deleted_at INTEGER,
       source TEXT NOT NULL DEFAULT 'MAC_SENSOR',
       created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      updated_at INTEGER
+      updated_at INTEGER,
+      CHECK (context_type = 'CLIENT' OR video_id IS NULL)
     );
     CREATE UNIQUE INDEX sensor_sessions_device_local_unique ON sensor_sessions (sensor_device_id, local_session_id);
     CREATE UNIQUE INDEX sensor_sessions_approved_work_unique ON sensor_sessions (approved_work_session_id);
@@ -78,17 +81,17 @@ function fixture() {
 test("completed Sensor session enters Inbox but not the canonical Ledger", () => {
   const db = fixture();
   const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
-  const inbox = db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, 200, "EDITING", "offline", 1, local);
+  const inbox = db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, 200, "EDITING", "offline", 1, local);
   assert.equal(inbox.approval_state, "PENDING");
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM sensor_sessions").get().count, 1);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM work_sessions").get().count, 0);
-  assert.equal(db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, 200, "EDITING", "offline", 1, local), undefined);
+  assert.equal(db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, 200, "EDITING", "offline", 1, local), undefined);
 });
 
 test("open Sensor session stops into Inbox and never auto-approves", () => {
   const db = fixture();
   const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
-  assert.equal(db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, null, "EDITING", null, 1, local).ended_at, null);
+  assert.equal(db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, null, "EDITING", null, 1, local).ended_at, null);
   assert.equal(db.prepare(SENSOR_SESSION_STOP_SQL).get(1, local, 200).ended_at, 200);
   assert.equal(db.prepare(SENSOR_SESSION_STOP_SQL).get(1, local, 201), undefined);
   assert.equal(db.prepare("SELECT approval_state FROM sensor_sessions").get().approval_state, "PENDING");
@@ -98,7 +101,7 @@ test("open Sensor session stops into Inbox and never auto-approves", () => {
 test("Approve creates exactly one MAC_SENSOR_APPROVED Work Session", () => {
   const db = fixture();
   const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
-  const sensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, 200, "EDITING", "review me", 1, local).id;
+  const sensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, 200, "EDITING", "review me", 1, local).id;
   const approve = () => {
     db.prepare(SENSOR_SESSION_APPROVE_INSERT_SQL).get(sensorId);
     db.prepare(SENSOR_SESSION_APPROVE_MARK_SQL).get(sensorId, 300);
@@ -116,7 +119,7 @@ test("Approve creates exactly one MAC_SENSOR_APPROVED Work Session", () => {
 
 test("Archive hides review without deleting evidence; Delete requires Archive", () => {
   const db = fixture();
-  const first = db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, 200, "REVIEW", null, 1, "52dd6ad8-770e-4bc9-a200-c453fea749cf");
+  const first = db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, 200, "REVIEW", null, 1, "52dd6ad8-770e-4bc9-a200-c453fea749cf");
   assert.equal(db.prepare(SENSOR_SESSION_DELETE_SQL).get(first.id, 250), undefined);
   assert.equal(db.prepare(SENSOR_SESSION_ARCHIVE_SQL).get(first.id, 250).id, first.id);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM sensor_sessions WHERE approval_state='PENDING'").get().count, 0);
@@ -129,7 +132,7 @@ test("Archive hides review without deleting evidence; Delete requires Archive", 
 
 test("passive apps, NULL counters, and overlap aggregation remain independent", () => {
   const db = fixture();
-  const sensor = db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, 200, "EDITING", null, 1, "52dd6ad8-770e-4bc9-a200-c453fea749cf");
+  const sensor = db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, 200, "EDITING", null, 1, "52dd6ad8-770e-4bc9-a200-c453fea749cf");
   const observation = db.prepare(SENSOR_OBSERVATION_INSERT_SQL);
   observation.run(1, "1e314ee3-5df6-4c95-b460-104275ae4da3", 90, 150, "Notion", "notion.id", null, 0, null, null);
   observation.run(1, "2e314ee3-5df6-4c95-b460-104275ae4da3", 150, 250, "Premiere Pro", "premiere.id", null, 0, 12, 8);
@@ -162,7 +165,7 @@ test("passive apps, NULL counters, and overlap aggregation remain independent", 
 test("editing a PENDING, stopped staging session persists the correction and leaves approval untouched", () => {
   const db = fixture();
   const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
-  const sensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, 36_100, "EDITING", "forgot to stop", 1, local).id;
+  const sensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, 36_100, "EDITING", "forgot to stop", 1, local).id;
   const updated = db.prepare(SENSOR_SESSION_UPDATE_SQL).get(sensorId, 5, 100, 1_900, "REVIEW", "corrected: actually 30 minutes", 400);
   assert.equal(updated.id, sensorId);
   const row = db.prepare("SELECT video_id, started_at, ended_at, activity_type, note, approval_state FROM sensor_sessions WHERE id=?").get(sensorId);
@@ -176,14 +179,14 @@ test("editing a PENDING, stopped staging session persists the correction and lea
 test("editing a still-open staging session is rejected -- it's live, not staged history yet", () => {
   const db = fixture();
   const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
-  const sensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, null, "EDITING", null, 1, local).id;
+  const sensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, null, "EDITING", null, 1, local).id;
   assert.equal(db.prepare(SENSOR_SESSION_UPDATE_SQL).get(sensorId, 4, 100, 1_000, "EDITING", null, 400), undefined);
 });
 
 test("editing an already-approved staging session is rejected -- it's canonical history now, use correctWorkSession instead", () => {
   const db = fixture();
   const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
-  const sensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, 200, "EDITING", null, 1, local).id;
+  const sensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, 200, "EDITING", null, 1, local).id;
   db.prepare(SENSOR_SESSION_APPROVE_INSERT_SQL).get(sensorId);
   db.prepare(SENSOR_SESSION_APPROVE_MARK_SQL).get(sensorId, 300);
   assert.equal(db.prepare(SENSOR_SESSION_UPDATE_SQL).get(sensorId, 4, 100, 5_000, "EDITING", null, 400), undefined);
@@ -214,8 +217,8 @@ test("approving one client's Sensor session never mutates another client's video
   const db = fixtureWithClientsAndBilling();
   const tarynLocal = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
   const daveLocal = "63ee7bf9-881f-5d0a-b571-215386bf5ea0";
-  const tarynSensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, 200, "EDITING", null, 1, tarynLocal).id;
-  const daveSensorId = db.prepare(SENSOR_SESSION_START_SQL).get(5, 300, 400, "EDITING", null, 1, daveLocal).id;
+  const tarynSensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, 200, "EDITING", null, 1, tarynLocal).id;
+  const daveSensorId = db.prepare(SENSOR_SESSION_START_SQL).get(5, "CLIENT", null, 300, 400, "EDITING", null, 1, daveLocal).id;
 
   db.prepare(SENSOR_SESSION_APPROVE_INSERT_SQL).get(tarynSensorId);
   db.prepare(SENSOR_SESSION_APPROVE_MARK_SQL).get(tarynSensorId, 500);
@@ -243,11 +246,79 @@ test("approving one client's Sensor session never mutates another client's video
 test("OPEN_SENSOR_SESSION_SQL reflects an open staging session and goes empty the instant it's stopped", () => {
   const db = fixtureWithClientsAndBilling();
   const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
-  db.prepare(SENSOR_SESSION_START_SQL).get(4, 100, null, "EDITING", null, 1, local);
+  db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, null, "EDITING", null, 1, local);
   const open = db.prepare(OPEN_SENSOR_SESSION_SQL).get();
   assert.equal(open.video_id, 4);
   assert.equal(open.client_id, 1);
 
   db.prepare(SENSOR_SESSION_STOP_SQL).get(1, local, 200);
   assert.equal(db.prepare(OPEN_SENSOR_SESSION_SQL).get(), undefined);
+});
+
+// Operational Context Sync Hotfix: real production QA found ADMIN/INTERNAL/
+// LEAD sessions silently never reaching MindBunker at all -- the sync gate
+// was tied to canonical video attribution, which non-client contexts can
+// never have. These four tests use the actual server SQL, not a native-side
+// simulation, to prove each context now durably reaches sensor_sessions
+// with no video_id and no fake client attribution, while CLIENT is
+// unaffected.
+for (const [contextType, label] of [["LEAD", "Moritz / Upwork"], ["INTERNAL", "MindBunker maintenance"], ["ADMIN", null]]) {
+  test(`${contextType} Start durably enters sensor_sessions with no video_id and its own context_label`, () => {
+    const db = fixture();
+    const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+    const inserted = db.prepare(SENSOR_SESSION_START_SQL).get(null, contextType, label, 100, null, "OTHER", null, 1, local);
+    assert.equal(inserted.video_id, null, `${contextType} must never carry a video_id`);
+    assert.equal(inserted.context_type, contextType);
+    assert.equal(inserted.context_label, label);
+    assert.equal(inserted.approval_state, "PENDING");
+    const stopped = db.prepare(SENSOR_SESSION_STOP_SQL).get(1, local, 200);
+    assert.equal(stopped.ended_at, 200);
+  });
+}
+
+test("a non-CLIENT session (no video_id) can never be approved into a canonical Work Session", () => {
+  const db = fixture();
+  const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+  const sensorId = db.prepare(SENSOR_SESSION_START_SQL).get(null, "ADMIN", null, 100, 200, "ADMIN", null, 1, local).id;
+  const approveInsert = db.prepare(SENSOR_SESSION_APPROVE_INSERT_SQL).get(sensorId);
+  assert.equal(approveInsert, undefined, "the video_id IS NOT NULL guard must reject the insert, not throw a constraint error");
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM work_sessions").get().count, 0);
+  const evidence = db.prepare("SELECT approval_state, approved_work_session_id FROM sensor_sessions WHERE id=?").get(sensorId);
+  assert.equal(evidence.approval_state, "PENDING", "a non-client session stays PENDING/reviewable, never silently vanishes");
+  assert.equal(evidence.approved_work_session_id, null);
+  // Archive remains available as the non-client review outcome.
+  assert.equal(db.prepare(SENSOR_SESSION_ARCHIVE_SQL).get(sensorId, 300).id, sensorId);
+});
+
+test("OPEN_SENSOR_SESSION_SQL surfaces an open non-client session with its context_label, no fabricated client/video", () => {
+  const db = fixtureWithClientsAndBilling();
+  const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+  db.prepare(SENSOR_SESSION_START_SQL).get(null, "LEAD", "Counterparty Inc", 100, null, "OTHER", null, 1, local);
+  const open = db.prepare(OPEN_SENSOR_SESSION_SQL).get();
+  assert.equal(open.video_id, null);
+  assert.equal(open.video_title, null);
+  assert.equal(open.client_id, null);
+  assert.equal(open.client_name, null);
+  assert.equal(open.context_type, "LEAD");
+  assert.equal(open.context_label, "Counterparty Inc");
+});
+
+test("approving a CLIENT session alongside open non-client Sensor activity never touches billing tables", () => {
+  const db = fixtureWithClientsAndBilling();
+  const clientLocal = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+  const adminLocal = "63ee7bf9-881f-5d0a-b571-215386bf5ea0";
+  const clientSensorId = db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, 200, "EDITING", null, 1, clientLocal).id;
+  db.prepare(SENSOR_SESSION_START_SQL).get(null, "ADMIN", null, 300, null, "ADMIN", null, 1, adminLocal);
+
+  db.prepare(SENSOR_SESSION_APPROVE_INSERT_SQL).get(clientSensorId);
+  db.prepare(SENSOR_SESSION_APPROVE_MARK_SQL).get(clientSensorId, 500);
+
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM billing_evidence").get().n, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM billing_allocations").get().n, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM transactions").get().n, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM payment_requests").get().n, 0);
+  // The still-open ADMIN session is untouched by the unrelated CLIENT approval.
+  const admin = db.prepare("SELECT approval_state, ended_at FROM sensor_sessions WHERE local_session_id=?").get(adminLocal);
+  assert.equal(admin.approval_state, "PENDING");
+  assert.equal(admin.ended_at, null);
 });

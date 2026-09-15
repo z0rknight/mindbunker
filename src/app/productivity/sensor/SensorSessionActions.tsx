@@ -12,10 +12,12 @@ export function SensorSessionActions({
   id,
   state,
   approvedWorkSessionId,
+  contextType = "CLIENT",
 }: {
   id: number;
   state: "PENDING" | "APPROVED" | "ARCHIVED" | "DELETED";
   approvedWorkSessionId: number | null;
+  contextType?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -50,14 +52,20 @@ export function SensorSessionActions({
       <div className="flex flex-wrap gap-2">
         {state === "PENDING" && (
           <>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => run(() => approveSensorSession(id))}
-              className="min-h-10 rounded-lg bg-emerald-400 px-3 text-xs font-black text-zinc-950 hover:bg-emerald-300 disabled:opacity-50"
-            >
-              Approve
-            </button>
+            {contextType === "CLIENT" ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => run(() => approveSensorSession(id))}
+                className="min-h-10 rounded-lg bg-emerald-400 px-3 text-xs font-black text-zinc-950 hover:bg-emerald-300 disabled:opacity-50"
+              >
+                Approve
+              </button>
+            ) : (
+              <p className="flex items-center text-xs text-zinc-600">
+                {contextType} work has no canonical Video -- Archive when reviewed.
+              </p>
+            )}
             <button
               type="button"
               disabled={pending}

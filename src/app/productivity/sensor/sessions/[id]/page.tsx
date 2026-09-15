@@ -32,10 +32,14 @@ export default async function SensorSessionDetailPage({
   const duration = session.ended_at === null
     ? Math.max(0, Number(data.now) - Number(session.started_at))
     : Math.max(0, Number(session.ended_at) - Number(session.started_at));
+  const isClient = session.context_type === "CLIENT";
+  const heading = isClient ? (session.video_title ?? "Untitled session") : session.context_type;
   const facts = [
+    ["Context", session.context_type],
     ["Client", session.client_name ?? "—"],
     ["Project", session.project_name ?? "—"],
-    ["Video", session.video_title],
+    ["Video", session.video_title ?? "—"],
+    ["Label", session.context_label ?? "—"],
     ["Activity", session.activity_type],
     ["Start", formatDateTime(session.started_at)],
     ["End", formatDateTime(session.ended_at)],
@@ -52,12 +56,13 @@ export default async function SensorSessionDetailPage({
       <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-400">Sensor session #{session.id}</p>
-          <h1 className="mt-1 text-2xl font-black text-white">{session.video_title}</h1>
+          <h1 className="mt-1 text-2xl font-black text-white">{heading}</h1>
           <p className="mt-1 text-sm text-zinc-500">Raw intentional evidence from the Mac; independent passive observations are correlated below.</p>
         </div>
         <SensorSessionDetailControls
           sessionId={session.id}
           state={session.approval_state}
+          contextType={session.context_type}
           approvedWorkSessionId={session.approved_work_session_id}
           videoId={session.video_id}
           startedAt={session.started_at}
@@ -113,7 +118,9 @@ export default async function SensorSessionDetailPage({
       </section>
 
       <div className="mt-6 flex flex-wrap gap-4 text-xs font-bold">
-        <Link href={`/productivity?video=${session.video_id}`} className="text-cyan-400 hover:text-cyan-300">Open Video workspace →</Link>
+        {session.video_id !== null && (
+          <Link href={`/productivity?video=${session.video_id}`} className="text-cyan-400 hover:text-cyan-300">Open Video workspace →</Link>
+        )}
         {session.approved_work_session_id !== null && (
           <Link href="/productivity/sessions" className="text-emerald-400 hover:text-emerald-300">Open canonical Ledger →</Link>
         )}

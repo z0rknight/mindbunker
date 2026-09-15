@@ -156,6 +156,43 @@ test("sensor session payload accepts canonical timestamps and rejects invalid co
   assert.equal(validateSensorStopInput({ local_session_id: input.local_session_id, ended_at: new Date(now * 1_000).toISOString() }, now).success, true);
 });
 
+test("sensor session payload: non-client contexts never require or accept a video, CLIENT is unaffected", () => {
+  const now = 2_000_000_000;
+  const base = {
+    local_session_id: "52dd6ad8-770e-4bc9-a200-c453fea749cf",
+    activity_type: "OTHER",
+    started_at: new Date((now - 60) * 1_000).toISOString(),
+    ended_at: null,
+    note: null,
+  };
+  const admin = validateSensorSessionInput({ ...base, context_type: "ADMIN" }, now);
+  assert.equal(admin.success, true);
+  assert.equal(admin.data.videoId, null);
+  assert.equal(admin.data.contextType, "ADMIN");
+
+  const internal = validateSensorSessionInput({ ...base, context_type: "INTERNAL", context_label: "MindBunker maintenance" }, now);
+  assert.equal(internal.success, true);
+  assert.equal(internal.data.contextLabel, "MindBunker maintenance");
+
+  const lead = validateSensorSessionInput({ ...base, context_type: "LEAD", context_label: "Moritz / Upwork" }, now);
+  assert.equal(lead.success, true);
+  assert.equal(lead.data.contextLabel, "Moritz / Upwork");
+
+  // Lead requires its label, mirroring the native app's own rule.
+  assert.equal(validateSensorSessionInput({ ...base, context_type: "LEAD" }, now).success, false);
+  assert.equal(validateSensorSessionInput({ ...base, context_type: "LEAD", context_label: "  " }, now).success, false);
+
+  // A non-client context can never smuggle a video_id in.
+  assert.equal(validateSensorSessionInput({ ...base, context_type: "ADMIN", video_id: 4 }, now).success, false);
+
+  // An unknown context string is rejected outright, not silently defaulted.
+  assert.equal(validateSensorSessionInput({ ...base, context_type: "CONTRACTOR" }, now).success, false);
+
+  // CLIENT is completely unaffected: still requires a real positive video_id.
+  assert.equal(validateSensorSessionInput({ ...base, context_type: "CLIENT" }, now).success, false);
+  assert.equal(validateSensorSessionInput({ ...base, context_type: "CLIENT", video_id: 4 }, now).success, true);
+});
+
 test("observation privacy contract accepts aggregates but no raw input fields", () => {
   const now = 2_000_000_000;
   const row = {

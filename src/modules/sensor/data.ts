@@ -7,6 +7,7 @@ import { todayISO } from "@/utils/date";
 import {
   LONG_SESSION_THRESHOLD_SECONDS,
   OPEN_SENSOR_SESSION_SQL,
+  isSensorContextType,
   selectLongSessionCandidates,
   type LongSessionCandidate,
   type LongSessionSourceRow,
@@ -33,10 +34,12 @@ export type SensorAppRow = {
 
 export type SensorSessionListRow = {
   id: number;
-  video_id: number;
-  video_title: string;
+  video_id: number | null;
+  video_title: string | null;
   client_name: string | null;
   project_name: string | null;
+  context_type: string;
+  context_label: string | null;
   activity_type: string;
   started_at: number;
   ended_at: number | null;
@@ -49,25 +52,29 @@ type CountRow = { count: number };
 
 type RawOpenSensorSessionRow = {
   id: number;
-  video_id: number;
-  video_title: string;
+  video_id: number | null;
+  video_title: string | null;
   client_id: number | null;
   client_name: string | null;
   project_name: string | null;
+  context_type: string;
+  context_label: string | null;
   activity_type: string;
   started_at: number;
   device_name: string | null;
 };
 
 function mapOpenSensorSession(row: RawOpenSensorSessionRow | null): OpenSensorSession | null {
-  if (!row || !isWorkSessionActivityType(row.activity_type)) return null;
+  if (!row || !isWorkSessionActivityType(row.activity_type) || !isSensorContextType(row.context_type)) return null;
   return {
     id: Number(row.id),
-    videoId: Number(row.video_id),
+    videoId: row.video_id === null ? null : Number(row.video_id),
     videoTitle: row.video_title,
     clientId: row.client_id === null ? null : Number(row.client_id),
     clientName: row.client_name,
     projectName: row.project_name,
+    contextType: row.context_type,
+    contextLabel: row.context_label,
     activityType: row.activity_type,
     startedAt: new Date(Number(row.started_at) * 1_000).toISOString(),
     deviceName: row.device_name,
@@ -102,11 +109,12 @@ export async function getOpenSensorSessionOverview(): Promise<{
 
 const SENSOR_SESSION_LIST_SQL = `
   SELECT ss.id, ss.video_id, COALESCE(v.title, 'Video ' || v.date) AS video_title,
-    c.name AS client_name, p.name AS project_name, ss.activity_type,
+    c.name AS client_name, p.name AS project_name,
+    ss.context_type, ss.context_label, ss.activity_type,
     ss.started_at, ss.ended_at, ss.source, ss.approval_state,
     ss.approved_work_session_id
   FROM sensor_sessions ss
-  INNER JOIN video_logs v ON v.id = ss.video_id
+  LEFT JOIN video_logs v ON v.id = ss.video_id
   LEFT JOIN projects p ON p.id = v.project_id
   LEFT JOIN clients c ON c.id = v.client_id
 `;
@@ -213,12 +221,13 @@ export async function getSensorSessionDetail(id: number) {
     .prepare(`
       SELECT ss.id, ss.video_id,
         COALESCE(v.title, 'Video ' || v.date) AS video_title,
-        c.name AS client_name, p.name AS project_name, ss.activity_type,
+        c.name AS client_name, p.name AS project_name,
+        ss.context_type, ss.context_label, ss.activity_type,
         ss.started_at, ss.ended_at, ss.source, ss.approval_state,
         ss.approved_work_session_id, ss.sensor_device_id, ss.note,
         ss.approved_at, ss.archived_at, ss.deleted_at
       FROM sensor_sessions ss
-      INNER JOIN video_logs v ON v.id = ss.video_id
+      LEFT JOIN video_logs v ON v.id = ss.video_id
       LEFT JOIN projects p ON p.id = v.project_id
       LEFT JOIN clients c ON c.id = v.client_id
       WHERE ss.id = ?1

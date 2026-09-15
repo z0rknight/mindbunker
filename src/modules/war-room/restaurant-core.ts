@@ -224,7 +224,15 @@ export type RestaurantActiveSession = {
   kind: RestaurantActiveSessionKind;
   clientId: number | null;
   clientName: string | null;
-  videoTitle: string;
+  videoTitle: string | null;
+  // Operational Context Sync Hotfix: WORKING (a canonical Work Session) is
+  // always CLIENT -- work_sessions.video_id stays NOT NULL. A
+  // SENSOR_RECORDING session can be any of the four contexts, so the stage
+  // needs its own contextType/contextLabel to show ADMIN/INTERNAL/LEAD
+  // without ever fabricating a client table for them (see §7 -- no
+  // manufactured client attribution for non-client contexts).
+  contextType: "CLIENT" | "LEAD" | "INTERNAL" | "ADMIN";
+  contextLabel: string | null;
   activityType: string;
   elapsedSeconds: number;
   stale: boolean;
@@ -253,6 +261,8 @@ export function buildRestaurantActiveSession(
       clientId: openWorkSession.clientId,
       clientName: openWorkSession.clientName,
       videoTitle: openWorkSession.videoTitle,
+      contextType: "CLIENT",
+      contextLabel: null,
       activityType: openWorkSession.activityType,
       elapsedSeconds: openWorkSessionElapsedSeconds,
       stale: openWorkSessionStale,
@@ -264,6 +274,8 @@ export function buildRestaurantActiveSession(
       clientId: openSensorSession.clientId,
       clientName: openSensorSession.clientName,
       videoTitle: openSensorSession.videoTitle,
+      contextType: openSensorSession.contextType,
+      contextLabel: openSensorSession.contextLabel,
       activityType: openSensorSession.activityType,
       elapsedSeconds: openSensorSessionElapsedSeconds,
       stale: false,

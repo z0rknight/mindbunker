@@ -7,13 +7,21 @@ import {
 // like war-room/restaurant-core.ts can import the shape without pulling
 // in a DB-backed module -- the exact same reason OpenWorkSession lives in
 // work-sessions/core.ts rather than its data.ts.
+export const SENSOR_CONTEXT_TYPES = ["CLIENT", "LEAD", "INTERNAL", "ADMIN"] as const;
+export type SensorContextType = (typeof SENSOR_CONTEXT_TYPES)[number];
+export function isSensorContextType(value: unknown): value is SensorContextType {
+  return typeof value === "string" && (SENSOR_CONTEXT_TYPES as readonly string[]).includes(value);
+}
+
 export type OpenSensorSession = {
   id: number;
-  videoId: number;
-  videoTitle: string;
+  videoId: number | null;
+  videoTitle: string | null;
   clientId: number | null;
   clientName: string | null;
   projectName: string | null;
+  contextType: SensorContextType;
+  contextLabel: string | null;
   activityType: WorkSessionActivityType;
   startedAt: string;
   deviceName: string | null;
@@ -109,13 +117,22 @@ function unixSeconds(value: unknown) {
 
 export type SensorSessionInput = {
   localSessionId: string;
-  videoId: number;
+  videoId: number | null;
+  contextType: SensorContextType;
+  contextLabel: string | null;
   activityType: WorkSessionActivityType;
   startedAt: number;
   endedAt: number | null;
   note: string | null;
 };
 
+// Operational Context Sync Hotfix: CLIENT is unchanged -- still requires a
+// real, positive video_id (the video-production hot path stays exactly as
+// fast and unambiguous as before). LEAD/INTERNAL/ADMIN must NEVER carry a
+// video_id (no fake attribution, no accidental client cross-linking) and
+// carry contextLabel instead -- required non-empty for LEAD (mirrors the
+// native app's own "Lead work requires a counterparty or lead label" rule),
+// optional for INTERNAL, ignored for ADMIN.
 export function validateSensorSessionInput(
   value: unknown,
   nowSeconds = Math.floor(Date.now() / 1_000),
@@ -124,6 +141,8 @@ export function validateSensorSessionInput(
   const input = value as Record<string, unknown>;
   const localSessionId = input.local_session_id;
   const videoId = input.video_id;
+  const contextTypeRaw = input.context_type ?? "CLIENT";
+  const contextLabel = boundedString(input.context_label ?? null, 200, true);
   const activityType = input.activity_type;
   const startedAt = unixSeconds(input.started_at);
   const endedAt = input.ended_at === null || input.ended_at === undefined
@@ -132,7 +151,16 @@ export function validateSensorSessionInput(
   const note = boundedString(input.note ?? null, 2_000, true);
 
   if (!validUUID(localSessionId)) return { success: false, error: "Invalid local session ID." };
-  if (!positiveInteger(videoId)) return { success: false, error: "Invalid video." };
+  if (!isSensorContextType(contextTypeRaw)) return { success: false, error: "Invalid context." };
+  const contextType = contextTypeRaw;
+  if (contextType === "CLIENT") {
+    if (!positiveInteger(videoId)) return { success: false, error: "Invalid video." };
+  } else if (videoId !== null && videoId !== undefined) {
+    return { success: false, error: "Only Client work may carry a video." };
+  }
+  if (contextType === "LEAD" && (contextLabel === undefined || contextLabel === null)) {
+    return { success: false, error: "Lead work requires a counterparty or lead label." };
+  }
   if (!WORK_SESSION_ACTIVITY_TYPES.includes(activityType as WorkSessionActivityType)) {
     return { success: false, error: "Invalid activity." };
   }
@@ -143,11 +171,14 @@ export function validateSensorSessionInput(
     return { success: false, error: "Invalid session end." };
   }
   if (note === undefined) return { success: false, error: "Invalid note." };
+  if (contextLabel === undefined) return { success: false, error: "Invalid context label." };
   return {
     success: true,
     data: {
       localSessionId,
-      videoId: Number(videoId),
+      videoId: contextType === "CLIENT" ? Number(videoId) : null,
+      contextType,
+      contextLabel,
       activityType: activityType as WorkSessionActivityType,
       startedAt,
       endedAt,
@@ -246,6 +277,9 @@ export function validateObservationBatch(
 // canonical history. Mirrors OPEN_WORK_SESSION_SQL's own shape exactly
 // (same joins, same "one open row" assumption) so the two read the same
 // way at the call site.
+// Operational Context Sync Hotfix: video_id is nullable now (LEFT JOIN, was
+// INNER), and a non-CLIENT session shows its own contextType/contextLabel
+// instead of manufacturing a client/video attribution it never had.
 export const OPEN_SENSOR_SESSION_SQL = `
   SELECT
     ss.id,
@@ -254,11 +288,13 @@ export const OPEN_SENSOR_SESSION_SQL = `
     v.client_id AS client_id,
     c.name AS client_name,
     p.name AS project_name,
+    ss.context_type,
+    ss.context_label,
     ss.activity_type,
     ss.started_at,
     sd.name AS device_name
   FROM sensor_sessions ss
-  INNER JOIN video_logs v ON v.id = ss.video_id
+  LEFT JOIN video_logs v ON v.id = ss.video_id
   LEFT JOIN projects p ON p.id = v.project_id
   LEFT JOIN clients c ON c.id = v.client_id
   LEFT JOIN sensor_devices sd ON sd.id = ss.sensor_device_id
@@ -267,13 +303,18 @@ export const OPEN_SENSOR_SESSION_SQL = `
   LIMIT 1
 `;
 
+// video_id is nullable -- the EXISTS guard only applies when a video_id was
+// actually given (CLIENT context); a non-CLIENT Start passes ?1 = NULL and
+// skips it entirely. validateSensorSessionInput already guarantees video_id
+// is null for every non-CLIENT context, so this can never insert a fake
+// video/client attribution alongside real Lead/Internal/Admin work.
 export const SENSOR_SESSION_START_SQL = `
   INSERT INTO sensor_sessions
-    (video_id, started_at, ended_at, activity_type, note, source, sensor_device_id, local_session_id, approval_state)
-  SELECT ?1, ?2, ?3, ?4, ?5, 'MAC_SENSOR', ?6, ?7, 'PENDING'
-  WHERE EXISTS (SELECT 1 FROM video_logs WHERE id = ?1)
+    (video_id, context_type, context_label, started_at, ended_at, activity_type, note, source, sensor_device_id, local_session_id, approval_state)
+  SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, 'MAC_SENSOR', ?8, ?9, 'PENDING'
+  WHERE ?1 IS NULL OR EXISTS (SELECT 1 FROM video_logs WHERE id = ?1)
   ON CONFLICT DO NOTHING
-  RETURNING id, video_id, started_at, ended_at, activity_type, source, local_session_id, approval_state
+  RETURNING id, video_id, context_type, context_label, started_at, ended_at, activity_type, source, local_session_id, approval_state
 `;
 
 export const SENSOR_SESSION_STOP_SQL = `
@@ -286,6 +327,12 @@ export const SENSOR_SESSION_STOP_SQL = `
   RETURNING id, video_id, started_at, ended_at, activity_type, source, local_session_id, approval_state
 `;
 
+// work_sessions.video_id stays NOT NULL (unchanged, canonical Client Work
+// Sessions are exactly as video-attributed as they always were) -- so a
+// non-CLIENT sensor_sessions row (video_id IS NULL by construction) can
+// never satisfy this insert. Approval into a canonical Work Session remains
+// exclusively a CLIENT-context operation; non-client sessions stay durable
+// Sensor history, reviewable and archivable, never auto-billable.
 export const SENSOR_SESSION_APPROVE_INSERT_SQL = `
   INSERT INTO work_sessions
     (video_id, started_at, ended_at, activity_type, note, source, sensor_device_id, sensor_local_id)
@@ -295,6 +342,7 @@ export const SENSOR_SESSION_APPROVE_INSERT_SQL = `
   WHERE id = ?1
     AND approval_state = 'PENDING'
     AND ended_at IS NOT NULL
+    AND video_id IS NOT NULL
   ON CONFLICT(sensor_device_id, sensor_local_id) DO NOTHING
   RETURNING id
 `;

@@ -1119,6 +1119,15 @@ export const workSessions = sqliteTable(
 // Sensor P1.1 Inbox: durable intentional evidence received from a Mac stays
 // separate from canonical operational Work Sessions until Emmanuel explicitly
 // approves it. Client/project ownership is always derived through video_id.
+//
+// Operational Context Sync Hotfix: video_id is now nullable and contextType
+// distinguishes CLIENT (video-production hot path, unchanged: attribution
+// still flows through video_id, approval into a canonical Work Session still
+// requires it) from LEAD/INTERNAL/ADMIN (operational history with no video,
+// carrying only contextLabel -- a counterparty or initiative name). A
+// non-CLIENT session can never populate video_id (enforced at the API/native
+// validation layer, not by a DB constraint alone), so it can never become
+// canonical, billable Client work.
 export const sensorSessions = sqliteTable(
   "sensor_sessions",
   {
@@ -1127,9 +1136,15 @@ export const sensorSessions = sqliteTable(
       .notNull()
       .references(() => sensorDevices.id, { onDelete: "restrict" }),
     localSessionId: text("local_session_id").notNull(),
-    videoId: integer("video_id")
+    videoId: integer("video_id").references(() => videoLogs.id, {
+      onDelete: "restrict",
+    }),
+    contextType: text("context_type", {
+      enum: ["CLIENT", "LEAD", "INTERNAL", "ADMIN"],
+    })
       .notNull()
-      .references(() => videoLogs.id, { onDelete: "restrict" }),
+      .default("CLIENT"),
+    contextLabel: text("context_label"),
     startedAt: integer("started_at", { mode: "timestamp" }).notNull(),
     endedAt: integer("ended_at", { mode: "timestamp" }),
     activityType: text("activity_type", {
@@ -1191,6 +1206,18 @@ export const sensorSessions = sqliteTable(
     check(
       "sensor_sessions_approval_state_check",
       sql`${table.approvalState} in ('PENDING', 'APPROVED', 'ARCHIVED', 'DELETED')`,
+    ),
+    check(
+      "sensor_sessions_context_type_check",
+      sql`${table.contextType} in ('CLIENT', 'LEAD', 'INTERNAL', 'ADMIN')`,
+    ),
+    // Operational Context Sync Hotfix: DB-level guarantee, not just an API
+    // convention -- a non-CLIENT session can never carry a video_id, so it
+    // can never become canonical Client attribution or billing by any
+    // future write path, even a bug.
+    check(
+      "sensor_sessions_context_video_check",
+      sql`${table.contextType} = 'CLIENT' or ${table.videoId} is null`,
     ),
   ],
 );

@@ -149,7 +149,9 @@ function EditorStation({ session }: { session: RestaurantViewModel["activeSessio
         <div className="flex flex-col items-center">
           <LiveIndicator label={isSensorRecording ? "SENSOR RECORDING" : "EDITING"} />
           <span className="mt-0.5 max-w-[9rem] truncate text-center text-[10px] font-bold text-zinc-300">
-            {session.clientName ?? "Unattributed"} · {session.videoTitle}
+            {session.contextType === "CLIENT"
+              ? `${session.clientName ?? "Unattributed"} · ${session.videoTitle ?? "No video"}`
+              : `${session.contextType}${session.contextLabel ? ` · ${session.contextLabel}` : ""}`}
           </span>
           <span className={`mb-timer text-[9px] ${isSensorRecording ? "text-amber-300/70" : "text-cyan-300/70"}`}>
             {formatElapsed(session.elapsedSeconds)}

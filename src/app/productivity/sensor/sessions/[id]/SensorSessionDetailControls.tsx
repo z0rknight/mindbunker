@@ -9,6 +9,7 @@ import type { WorkSessionVideoOption } from "@/modules/work-sessions/data";
 export function SensorSessionDetailControls({
   sessionId,
   state,
+  contextType,
   approvedWorkSessionId,
   videoId,
   startedAt,
@@ -19,8 +20,9 @@ export function SensorSessionDetailControls({
 }: {
   sessionId: number;
   state: "PENDING" | "APPROVED" | "ARCHIVED" | "DELETED";
+  contextType: string;
   approvedWorkSessionId: number | null;
-  videoId: number;
+  videoId: number | null;
   startedAt: number;
   endedAt: number | null;
   activityType: WorkSessionActivityType;
@@ -28,12 +30,15 @@ export function SensorSessionDetailControls({
   videoOptions: WorkSessionVideoOption[];
 }) {
   const [editing, setEditing] = useState(false);
-  const canEdit = state === "PENDING" && endedAt !== null;
+  // Correcting attribution before approval only makes sense for CLIENT work
+  // -- there is no video to re-pick for Lead/Internal/Admin, and forcing one
+  // would be exactly the "fake video_id" the sync hotfix explicitly forbids.
+  const canEdit = contextType === "CLIENT" && state === "PENDING" && endedAt !== null && videoId !== null;
 
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2">
-        <SensorSessionActions id={sessionId} state={state} approvedWorkSessionId={approvedWorkSessionId} />
+        <SensorSessionActions id={sessionId} state={state} contextType={contextType} approvedWorkSessionId={approvedWorkSessionId} />
         {canEdit && !editing && (
           <button
             type="button"
@@ -44,7 +49,7 @@ export function SensorSessionDetailControls({
           </button>
         )}
       </div>
-      {editing && endedAt !== null && (
+      {editing && endedAt !== null && videoId !== null && (
         <SensorSessionEditForm
           sessionId={sessionId}
           videoId={videoId}
