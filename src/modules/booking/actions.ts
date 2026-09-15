@@ -470,6 +470,14 @@ export async function submitPublicBookingRequest(
   _previousState: PublicBookingRequestActionState,
   formData: FormData,
 ): Promise<PublicBookingRequestActionState> {
+  // Honeypot: a real visitor never sees or fills this field (see
+  // BookingRequestForm.tsx). A non-empty value means a bot filled every
+  // input it found -- report a generic success and write nothing, so the
+  // bot gets no signal it was caught.
+  if (typeof formData.get("company_website") === "string" && (formData.get("company_website") as string).trim() !== "") {
+    return { success: true };
+  }
+
   const idempotencyKey =
     typeof formData.get("idempotencyKey") === "string"
       ? (formData.get("idempotencyKey") as string).slice(0, 100)

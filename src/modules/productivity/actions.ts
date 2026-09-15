@@ -5,6 +5,7 @@ import "server-only";
 import { getAuthenticatedDb, getDb } from "@/db";
 import { isClientAuthenticated } from "@/lib/client-portal-session";
 import {
+  billingAllocations,
   blockers,
   clients,
   commitments,
@@ -35,6 +36,7 @@ import {
   validateVideoInput,
   validateVideoPriorityInput,
   type VideoCreateInputValues,
+  type VideoDeletionDependencyCheck,
   type VideoInputValues,
 } from "./core";
 import {
@@ -1206,13 +1208,13 @@ export async function deleteVideoLog(
   if (!isPositiveId(id)) return { success: false, error: "Invalid video." };
   const db = await getAuthenticatedDb();
   const current = await db
-    .select({ clientId: videoLogs.clientId })
+    .select({ clientId: videoLogs.clientId, isOperationalContainer: videoLogs.isOperationalContainer })
     .from(videoLogs)
     .where(eq(videoLogs.id, id))
     .limit(1);
   if (!current[0]) return { success: false, error: "Video not found." };
 
-  const [trackedWork, operationalMemory, commitmentMemory, frictionMemory, blockerMemory, deliveryMemory, checklistMemory] = await Promise.all([
+  const [trackedWork, operationalMemory, commitmentMemory, frictionMemory, blockerMemory, deliveryMemory, checklistMemory, billingAllocationMemory] = await Promise.all([
     db
       .select({ id: workSessions.id })
       .from(workSessions)
@@ -1233,6 +1235,7 @@ export async function deleteVideoLog(
     db.select({ id: blockers.id }).from(blockers).where(eq(blockers.videoId, id)).limit(1),
     db.select({ id: deliveries.id }).from(deliveries).where(eq(deliveries.videoId, id)).limit(1),
     db.select({ id: productionChecklistItems.id }).from(productionChecklistItems).where(eq(productionChecklistItems.videoId, id)).limit(1),
+    db.select({ id: billingAllocations.id }).from(billingAllocations).where(eq(billingAllocations.videoId, id)).limit(1),
   ]);
   const deletionOutcome = resolveVideoDeletionOutcome({
     hasTrackedWork: Boolean(trackedWork[0]),
@@ -1242,6 +1245,8 @@ export async function deleteVideoLog(
     hasBlockerMemory: Boolean(blockerMemory[0]),
     hasDeliveryMemory: Boolean(deliveryMemory[0]),
     hasChecklistMemory: Boolean(checklistMemory[0]),
+    hasBillingAllocation: Boolean(billingAllocationMemory[0]),
+    isOperationalContainer: current[0].isOperationalContainer,
   });
   if (!deletionOutcome.allowed) {
     return {
@@ -1253,4 +1258,177 @@ export async function deleteVideoLog(
   await db.delete(videoLogs).where(eq(videoLogs.id, id));
   revalidateProductivityViews(current[0].clientId);
   return { success: true, message: "Video removed." };
+}
+
+// ─── Tuesday Reality Patch — Bulk Video Delete ──────────────────────────────
+//
+// Reuses the exact same canonical deletion decision (resolveVideoDeletionOutcome)
+// deleteVideoLog uses above -- there is only ONE definition of "deletable"
+// in this codebase. The only new thing here is gathering that decision's
+// inputs in one batched query per dependency type across every selected
+// video (inArray + GROUP BY-shaped counting in JS) instead of N individual
+// per-video round trips, so a 20-video selection costs 9 queries, not 140.
+
+const BULK_DELETE_MAX_IDS = 200;
+
+async function gatherBulkVideoDeletionChecks(
+  db: Awaited<ReturnType<typeof getAuthenticatedDb>>,
+  ids: number[],
+): Promise<Map<number, VideoDeletionDependencyCheck>> {
+  const [
+    videoRows,
+    trackedWorkRows,
+    operationalMemoryRows,
+    commitmentRows,
+    frictionRows,
+    blockerRows,
+    deliveryRows,
+    checklistRows,
+    billingRows,
+  ] = await Promise.all([
+    db.select({ id: videoLogs.id, isOperationalContainer: videoLogs.isOperationalContainer }).from(videoLogs).where(inArray(videoLogs.id, ids)),
+    db.select({ videoId: workSessions.videoId }).from(workSessions).where(inArray(workSessions.videoId, ids)),
+    db
+      .select({ videoId: crmEvents.videoId })
+      .from(crmEvents)
+      .where(and(inArray(crmEvents.videoId, ids), eq(crmEvents.type, VIDEO_OPERATIONAL_NOTE_EVENT_TYPE))),
+    db.select({ videoId: commitments.videoId }).from(commitments).where(inArray(commitments.videoId, ids)),
+    db.select({ videoId: frictionEvents.videoId }).from(frictionEvents).where(inArray(frictionEvents.videoId, ids)),
+    db.select({ videoId: blockers.videoId }).from(blockers).where(inArray(blockers.videoId, ids)),
+    db.select({ videoId: deliveries.videoId }).from(deliveries).where(inArray(deliveries.videoId, ids)),
+    db.select({ videoId: productionChecklistItems.videoId }).from(productionChecklistItems).where(inArray(productionChecklistItems.videoId, ids)),
+    db.select({ videoId: billingAllocations.videoId }).from(billingAllocations).where(inArray(billingAllocations.videoId, ids)),
+  ]);
+
+  const countByVideo = (rows: Array<{ videoId: number | null }>) => {
+    const counts = new Map<number, number>();
+    for (const row of rows) {
+      if (row.videoId === null) continue;
+      counts.set(row.videoId, (counts.get(row.videoId) ?? 0) + 1);
+    }
+    return counts;
+  };
+  const setOfVideos = (rows: Array<{ videoId: number | null }>) =>
+    new Set(rows.filter((row): row is { videoId: number } => row.videoId !== null).map((row) => row.videoId));
+
+  const trackedWorkSet = setOfVideos(trackedWorkRows);
+  const operationalMemoryCounts = countByVideo(operationalMemoryRows);
+  const commitmentSet = setOfVideos(commitmentRows);
+  const frictionSet = setOfVideos(frictionRows);
+  const blockerSet = setOfVideos(blockerRows);
+  const deliverySet = setOfVideos(deliveryRows);
+  const checklistSet = setOfVideos(checklistRows);
+  const billingSet = setOfVideos(billingRows);
+  const videoById = new Map(videoRows.map((video) => [video.id, video]));
+
+  const checks = new Map<number, VideoDeletionDependencyCheck>();
+  for (const id of ids) {
+    checks.set(id, {
+      hasTrackedWork: trackedWorkSet.has(id),
+      operationalMemoryCount: operationalMemoryCounts.get(id) ?? 0,
+      hasCommitmentMemory: commitmentSet.has(id),
+      hasFrictionMemory: frictionSet.has(id),
+      hasBlockerMemory: blockerSet.has(id),
+      hasDeliveryMemory: deliverySet.has(id),
+      hasChecklistMemory: checklistSet.has(id),
+      hasBillingAllocation: billingSet.has(id),
+      isOperationalContainer: videoById.get(id)?.isOperationalContainer ?? false,
+    });
+  }
+  return checks;
+}
+
+export type BulkVideoDeletionPreflightItem = { id: number; title: string };
+export type BulkVideoDeletionProtectedItem = { id: number; title: string; reason: string };
+
+export type BulkVideoDeletionPreflight = {
+  eligible: BulkVideoDeletionPreflightItem[];
+  protectedItems: BulkVideoDeletionProtectedItem[];
+};
+
+// Read-only: computes CAN DELETE / PROTECTED for a selection without
+// deleting anything, so the UI can show the split before the operator
+// commits. Never infers deletability from filename or title.
+export async function previewVideoLogsBulkDeletion(
+  ids: number[],
+): Promise<{ success: true; result: BulkVideoDeletionPreflight } | { success: false; error: string }> {
+  const validIds = Array.from(new Set(ids)).filter(isPositiveId);
+  if (validIds.length === 0) return { success: false, error: "No videos selected." };
+  if (validIds.length > BULK_DELETE_MAX_IDS) {
+    return { success: false, error: `Select at most ${BULK_DELETE_MAX_IDS} videos at a time.` };
+  }
+
+  const db = await getAuthenticatedDb();
+  const videos = await db
+    .select({ id: videoLogs.id, title: videoLogs.title, date: videoLogs.date })
+    .from(videoLogs)
+    .where(inArray(videoLogs.id, validIds));
+  const checks = await gatherBulkVideoDeletionChecks(db, validIds);
+
+  const eligible: BulkVideoDeletionPreflightItem[] = [];
+  const protectedItems: BulkVideoDeletionProtectedItem[] = [];
+  for (const video of videos) {
+    const title = video.title ?? `Video ${video.date}`;
+    const check = checks.get(video.id);
+    const outcome = check ? resolveVideoDeletionOutcome(check) : { allowed: false as const, reason: "Video not found." };
+    if (outcome.allowed) {
+      eligible.push({ id: video.id, title });
+    } else {
+      protectedItems.push({ id: video.id, title, reason: outcome.reason });
+    }
+  }
+  return { success: true, result: { eligible, protectedItems } };
+}
+
+export type BulkVideoDeletionResult = {
+  deletedCount: number;
+  deletedIds: number[];
+  protectedItems: BulkVideoDeletionProtectedItem[];
+};
+
+// Deletes only the videos that are STILL eligible at the moment of the
+// call (re-checked here, cheap, to close the gap between preflight and
+// confirm rather than trusting a client-supplied "eligible" list) and
+// reports what was protected instead -- one protected video never blocks
+// cleanup of the rest of the selection.
+export async function deleteVideoLogsBulk(
+  ids: number[],
+): Promise<{ success: true; result: BulkVideoDeletionResult } | { success: false; error: string }> {
+  const validIds = Array.from(new Set(ids)).filter(isPositiveId);
+  if (validIds.length === 0) return { success: false, error: "No videos selected." };
+  if (validIds.length > BULK_DELETE_MAX_IDS) {
+    return { success: false, error: `Select at most ${BULK_DELETE_MAX_IDS} videos at a time.` };
+  }
+
+  const db = await getAuthenticatedDb();
+  const videos = await db
+    .select({ id: videoLogs.id, title: videoLogs.title, date: videoLogs.date, clientId: videoLogs.clientId })
+    .from(videoLogs)
+    .where(inArray(videoLogs.id, validIds));
+  const checks = await gatherBulkVideoDeletionChecks(db, validIds);
+
+  const eligibleIds: number[] = [];
+  const protectedItems: BulkVideoDeletionProtectedItem[] = [];
+  const clientIdsTouched = new Set<number>();
+  for (const video of videos) {
+    const title = video.title ?? `Video ${video.date}`;
+    const check = checks.get(video.id);
+    const outcome = check ? resolveVideoDeletionOutcome(check) : { allowed: false as const, reason: "Video not found." };
+    if (outcome.allowed) {
+      eligibleIds.push(video.id);
+      if (video.clientId !== null) clientIdsTouched.add(video.clientId);
+    } else {
+      protectedItems.push({ id: video.id, title, reason: outcome.reason });
+    }
+  }
+
+  if (eligibleIds.length > 0) {
+    await db.delete(videoLogs).where(inArray(videoLogs.id, eligibleIds));
+    for (const clientId of clientIdsTouched) revalidateProductivityViews(clientId);
+  }
+
+  return {
+    success: true,
+    result: { deletedCount: eligibleIds.length, deletedIds: eligibleIds, protectedItems },
+  };
 }

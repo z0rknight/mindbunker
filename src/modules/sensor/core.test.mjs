@@ -8,10 +8,45 @@ import {
   hashSensorToken,
   parseScopes,
   parseSensorToken,
+  resolveSensorConnectivityStatus,
   validateObservationBatch,
   validateSensorSessionInput,
   validateSensorStopInput,
 } from "./core.ts";
+
+test("sensor connectivity: no device ever registered is its own distinct state", () => {
+  const now = new Date("2026-09-15T12:00:00Z");
+  assert.equal(resolveSensorConnectivityStatus(0, null, now), "NO_DEVICE");
+});
+
+test("sensor connectivity: a device that has never phoned home is offline, not idle-but-connected", () => {
+  const now = new Date("2026-09-15T12:00:00Z");
+  assert.equal(resolveSensorConnectivityStatus(1, null, now), "OFFLINE");
+});
+
+test("sensor connectivity: a device seen recently is connected regardless of whether a Work Session is open", () => {
+  const now = new Date("2026-09-15T12:00:00Z");
+  const lastSeen = new Date("2026-09-15T11:58:00Z"); // 2 minutes ago
+  assert.equal(resolveSensorConnectivityStatus(1, lastSeen, now), "CONNECTED");
+});
+
+test("sensor connectivity: a device silent past the staleness window is offline", () => {
+  const now = new Date("2026-09-15T12:00:00Z");
+  const lastSeen = new Date("2026-09-15T11:30:00Z"); // 30 minutes ago
+  assert.equal(resolveSensorConnectivityStatus(1, lastSeen, now), "OFFLINE");
+});
+
+test("sensor connectivity: right at the staleness boundary is still connected", () => {
+  const now = new Date("2026-09-15T12:00:00Z");
+  const lastSeen = new Date("2026-09-15T11:50:00Z"); // exactly 10 minutes ago
+  assert.equal(resolveSensorConnectivityStatus(1, lastSeen, now), "CONNECTED");
+});
+
+test("sensor connectivity: minor clock skew in the future does not read as an error state", () => {
+  const now = new Date("2026-09-15T12:00:00Z");
+  const lastSeen = new Date("2026-09-15T12:00:05Z"); // 5s "ahead" of now
+  assert.equal(resolveSensorConnectivityStatus(1, lastSeen, now), "CONNECTED");
+});
 
 test("device credentials are strong, parseable, hash-only friendly, and scoped", async () => {
   const first = await createSensorCredential();

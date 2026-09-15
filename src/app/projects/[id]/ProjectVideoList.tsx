@@ -5,6 +5,7 @@ import Link from "next/link";
 import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
 import { formatDate } from "@/utils/date";
 import { BulkEditVideosButton } from "./BulkEditVideosButton";
+import { BulkDeleteVideosButton } from "./BulkDeleteVideosButton";
 import type { VideoStatus } from "@/modules/productivity/config";
 import { resolveCoverUrl } from "@/modules/media/core";
 import { videoWorkspaceHref } from "@/modules/productivity/core";
@@ -110,6 +111,10 @@ export function ProjectVideoList({
         </label>
         <BulkEditVideosButton
           projectId={projectId}
+          selectedIds={Array.from(selected)}
+          onDone={() => setSelected(new Set())}
+        />
+        <BulkDeleteVideosButton
           selectedIds={Array.from(selected)}
           onDone={() => setSelected(new Set())}
         />

@@ -694,6 +694,8 @@ function noDependencies() {
     hasBlockerMemory: false,
     hasDeliveryMemory: false,
     hasChecklistMemory: false,
+    hasBillingAllocation: false,
+    isOperationalContainer: false,
   };
 }
 
@@ -728,4 +730,30 @@ test("resolveVideoDeletionOutcome: tracked work is checked first even when other
     hasDeliveryMemory: true,
   });
   assert.match(outcome.reason, /tracked work/i);
+});
+
+// Tuesday Reality Patch (bulk delete wave): billing evidence and
+// operational containers are dependencies the original check never
+// evaluated -- covered here directly since they now gate BOTH the
+// single-video delete button and the new bulk delete flow through this
+// one shared function.
+test("resolveVideoDeletionOutcome: billing allocation evidence blocks deletion", () => {
+  const outcome = resolveVideoDeletionOutcome({ ...noDependencies(), hasBillingAllocation: true });
+  assert.equal(outcome.allowed, false);
+  assert.match(outcome.reason, /billing/i);
+});
+
+test("resolveVideoDeletionOutcome: an operational production container is never deletable, even with no other history", () => {
+  const outcome = resolveVideoDeletionOutcome({ ...noDependencies(), isOperationalContainer: true });
+  assert.equal(outcome.allowed, false);
+  assert.match(outcome.reason, /container/i);
+});
+
+test("resolveVideoDeletionOutcome: operational container is checked before tracked work, so the reason names the real blocker", () => {
+  const outcome = resolveVideoDeletionOutcome({
+    ...noDependencies(),
+    isOperationalContainer: true,
+    hasTrackedWork: true,
+  });
+  assert.match(outcome.reason, /container/i);
 });

@@ -48,6 +48,12 @@ export function BookingRequestForm() {
   return (
     <form action={action} className="space-y-5" noValidate>
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      {/* Honeypot: real visitors never see or fill this; a non-empty
+          submission is silently dropped in submitPublicBookingRequest. */}
+      <div aria-hidden="true" className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden">
+        <label htmlFor="company_website">Leave this field blank</label>
+        <input type="text" id="company_website" name="company_website" tabIndex={-1} autoComplete="off" />
+      </div>
 
       <div>
         <label

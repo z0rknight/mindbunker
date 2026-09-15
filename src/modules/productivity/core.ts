@@ -733,6 +733,17 @@ export type VideoDeletionDependencyCheck = {
   hasBlockerMemory: boolean;
   hasDeliveryMemory: boolean;
   hasChecklistMemory: boolean;
+  // Tuesday Reality Patch (bulk delete wave): two dependencies the
+  // original single-delete check never evaluated. billing_allocations.
+  // video_id is ON DELETE SET NULL -- deleting the video would silently
+  // rewrite canonical commercial evidence into an "unattributed" row
+  // instead of blocking the delete, exactly the silent-history-loss this
+  // check exists to prevent. isOperationalContainer marks a video row
+  // that IS the Production Order's batch context (the Sensor starts
+  // against it, not a normal deliverable) -- it is never a leaf item a
+  // bulk cleanup should be able to sweep away.
+  hasBillingAllocation: boolean;
+  isOperationalContainer: boolean;
 };
 
 export type VideoDeletionOutcome =
@@ -742,8 +753,14 @@ export type VideoDeletionOutcome =
 export function resolveVideoDeletionOutcome(
   check: VideoDeletionDependencyCheck,
 ): VideoDeletionOutcome {
+  if (check.isOperationalContainer) {
+    return { allowed: false, reason: "Operational production containers cannot be deleted." };
+  }
   if (check.hasTrackedWork) {
     return { allowed: false, reason: "Videos with tracked work cannot be deleted." };
+  }
+  if (check.hasBillingAllocation) {
+    return { allowed: false, reason: "Videos with commercial billing evidence cannot be deleted." };
   }
   if (videoOperationalMemoryBlocksDeletion(check.operationalMemoryCount)) {
     return { allowed: false, reason: VIDEO_OPERATIONAL_MEMORY_DELETE_ERROR };

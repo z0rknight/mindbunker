@@ -297,3 +297,28 @@ export const SENSOR_OBSERVATION_INSERT_SQL = `
   VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'MAC_SENSOR')
   ON CONFLICT(sensor_device_id, local_observation_id) DO NOTHING
 `;
+
+// Tuesday Reality Patch A2: "Sensor stays IDLE" turned out to be a
+// presentation gap, not a heartbeat/polling bug -- there was no signal
+// distinguishing "no device ever registered" / "device registered but
+// hasn't phoned home recently" / "device is actively reporting" from
+// each other, and none of that is the same fact as "there is an open
+// canonical Work Session right now" (SENSOR ≠ WORK SESSION, preserved).
+// A device is considered connected if it has reported within this
+// window -- generous relative to the native app's own upload cadence,
+// so this never flaps to OFFLINE between two real uploads.
+export const SENSOR_CONNECTIVITY_STALE_AFTER_SECONDS = 10 * 60;
+
+export type SensorConnectivityStatus = "NO_DEVICE" | "OFFLINE" | "CONNECTED";
+
+export function resolveSensorConnectivityStatus(
+  deviceCount: number,
+  lastSuccessfulUpload: Date | null,
+  now: Date,
+): SensorConnectivityStatus {
+  if (deviceCount === 0) return "NO_DEVICE";
+  if (!lastSuccessfulUpload) return "OFFLINE";
+  const ageSeconds = (now.getTime() - lastSuccessfulUpload.getTime()) / 1_000;
+  if (ageSeconds < 0) return "CONNECTED"; // clock skew -- treat as fresh, not an error state
+  return ageSeconds <= SENSOR_CONNECTIVITY_STALE_AFTER_SECONDS ? "CONNECTED" : "OFFLINE";
+}

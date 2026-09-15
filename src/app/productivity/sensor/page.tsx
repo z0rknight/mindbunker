@@ -4,8 +4,43 @@ import {
   getSensorDashboard,
   type SensorSessionListRow,
 } from "@/modules/sensor/data";
+import { resolveSensorConnectivityStatus, type SensorConnectivityStatus } from "@/modules/sensor/core";
+import { getWorkSessionOverview } from "@/modules/work-sessions/data";
 import { SensorDeviceManager } from "./SensorDeviceManager";
 import { SensorSessionActions } from "./SensorSessionActions";
+
+// Tuesday Reality Patch A2: connectivity (is a device phoning home?) and
+// canonical work state (is a Work Session open?) are two separate facts
+// -- SENSOR ≠ WORK SESSION stays true. This only decides which of four
+// truthful labels to show; it never infers or starts a session.
+function connectivityCopy(status: SensorConnectivityStatus, hasOpenSession: boolean) {
+  if (status === "NO_DEVICE") {
+    return {
+      label: "NO DEVICE REGISTERED",
+      sublabel: "Create a credential below and pair the native app to start monitoring.",
+      className: "border-zinc-700 bg-zinc-900 text-zinc-400",
+    };
+  }
+  if (status === "OFFLINE") {
+    return {
+      label: "SENSOR OFFLINE",
+      sublabel: "No contact from any device in the last 10 minutes.",
+      className: "border-red-800/60 bg-red-950/20 text-red-300",
+    };
+  }
+  if (hasOpenSession) {
+    return {
+      label: "SENSOR CONNECTED · ACTIVE WORK SESSION OPEN",
+      sublabel: "Monitoring, and a Work Session is currently open.",
+      className: "border-emerald-800/60 bg-emerald-950/20 text-emerald-300",
+    };
+  }
+  return {
+    label: "SENSOR CONNECTED · IDLE",
+    sublabel: "Monitoring — no active Work Session right now. That's expected between recordings.",
+    className: "border-emerald-800/60 bg-emerald-950/20 text-emerald-300",
+  };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +96,13 @@ function SessionCard({ session, review = false }: { session: SensorSessionListRo
 }
 
 export default async function SensorActivityPage() {
-  const data = await getSensorDashboard();
+  const [data, workSessionOverview] = await Promise.all([getSensorDashboard(), getWorkSessionOverview()]);
+  const connectivity = resolveSensorConnectivityStatus(
+    data.devices.length,
+    data.diagnostics.lastSuccessfulUpload,
+    new Date(),
+  );
+  const copy = connectivityCopy(connectivity, workSessionOverview.openSession !== null);
   return (
     <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 md:p-8">
       <Link href="/productivity/sessions" className="text-xs font-bold text-cyan-400">← Work Session Ledger</Link>
@@ -69,6 +110,11 @@ export default async function SensorActivityPage() {
       <p className="mt-1 text-sm text-zinc-500">
         Passive observations are evidence. Sensor sessions enter the canonical Ledger only after explicit approval.
       </p>
+
+      <div className={`mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 ${copy.className}`}>
+        <span className="text-xs font-black uppercase tracking-wide">{copy.label}</span>
+        <span className="text-[11px] font-normal opacity-80">{copy.sublabel}</span>
+      </div>
 
       <section className="mt-6 grid gap-3 sm:grid-cols-3">
         {[
