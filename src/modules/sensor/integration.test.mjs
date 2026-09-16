@@ -12,6 +12,7 @@ import {
   SENSOR_SESSION_START_SQL,
   SENSOR_SESSION_STOP_SQL,
   SENSOR_SESSION_UPDATE_SQL,
+  SENSOR_SESSION_UPDATE_NONCLIENT_SQL,
 } from "./core.ts";
 
 function fixture() {
@@ -321,4 +322,79 @@ test("approving a CLIENT session alongside open non-client Sensor activity never
   const admin = db.prepare("SELECT approval_state, ended_at FROM sensor_sessions WHERE local_session_id=?").get(adminLocal);
   assert.equal(admin.approval_state, "PENDING");
   assert.equal(admin.ended_at, null);
+});
+
+// Sensor Operational Ledger Patch: closing a non-CLIENT session must
+// finalize it atomically in the same Stop write -- no separate approval
+// click, no lingering PENDING. CLIENT keeps its exact prior behavior.
+for (const contextType of ["LEAD", "INTERNAL", "ADMIN"]) {
+  test(`${contextType} Stop finalizes to ARCHIVED atomically, with archived_at set, no approval required`, () => {
+    const db = fixture();
+    const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+    const label = contextType === "LEAD" ? "Counterparty Inc" : null;
+    db.prepare(SENSOR_SESSION_START_SQL).get(null, contextType, label, 100, null, "OTHER", null, 1, local);
+    const stopped = db.prepare(SENSOR_SESSION_STOP_SQL).get(1, local, 200);
+    assert.equal(stopped.approval_state, "ARCHIVED");
+    const row = db.prepare("SELECT approval_state, archived_at, video_id FROM sensor_sessions WHERE local_session_id=?").get(local);
+    assert.equal(row.approval_state, "ARCHIVED");
+    assert.equal(row.archived_at, 200);
+    assert.equal(row.video_id, null, "non-CLIENT must never gain a video_id");
+    // Never counted as pending review.
+    assert.equal(
+      db.prepare("SELECT COUNT(*) AS n FROM sensor_sessions WHERE approval_state='PENDING' AND ended_at IS NOT NULL").get().n,
+      0,
+    );
+  });
+}
+
+test("CLIENT Stop is completely unaffected: stays PENDING, still requires explicit approval", () => {
+  const db = fixture();
+  const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+  db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, null, "EDITING", null, 1, local);
+  const stopped = db.prepare(SENSOR_SESSION_STOP_SQL).get(1, local, 200);
+  assert.equal(stopped.approval_state, "PENDING");
+  const row = db.prepare("SELECT approval_state, archived_at FROM sensor_sessions WHERE local_session_id=?").get(local);
+  assert.equal(row.approval_state, "PENDING");
+  assert.equal(row.archived_at, null);
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS n FROM sensor_sessions WHERE approval_state='PENDING' AND ended_at IS NOT NULL").get().n,
+    1,
+  );
+});
+
+test("a finalized non-CLIENT session can be corrected (start/end/context/label) without approval or a fake video", () => {
+  const db = fixture();
+  const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+  const started = db.prepare(SENSOR_SESSION_START_SQL).get(null, "INTERNAL", "old label", 100, null, "OTHER", null, 1, local);
+  db.prepare(SENSOR_SESSION_STOP_SQL).get(1, local, 3_760); // 61 minutes
+  const corrected = db.prepare(SENSOR_SESSION_UPDATE_NONCLIENT_SQL).get(started.id, "ADMIN", "new label", 100, 2_920, 500); // 47 minutes
+  assert.equal(corrected.context_type, "ADMIN");
+  assert.equal(corrected.context_label, "new label");
+  assert.equal(corrected.ended_at, 2_920);
+  const row = db.prepare("SELECT context_type, context_label, ended_at, video_id, approval_state FROM sensor_sessions WHERE id=?").get(started.id);
+  assert.equal(row.context_type, "ADMIN");
+  assert.equal(row.approval_state, "ARCHIVED", "correction must not require re-approval");
+  assert.equal(row.video_id, null);
+});
+
+test("SENSOR_SESSION_UPDATE_NONCLIENT_SQL refuses to touch a CLIENT row or move a row into/out of CLIENT", () => {
+  const db = fixture();
+  const clientLocal = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+  const client = db.prepare(SENSOR_SESSION_START_SQL).get(4, "CLIENT", null, 100, 200, "EDITING", null, 1, clientLocal);
+  // Cannot correct a CLIENT row through the non-client path at all.
+  assert.equal(db.prepare(SENSOR_SESSION_UPDATE_NONCLIENT_SQL).get(client.id, "INTERNAL", null, 100, 200, 500), undefined);
+
+  const internalLocal = "63ee7bf9-881f-5d0a-b571-215386bf5ea0";
+  const internal = db.prepare(SENSOR_SESSION_START_SQL).get(null, "INTERNAL", null, 100, null, "OTHER", null, 1, internalLocal);
+  db.prepare(SENSOR_SESSION_STOP_SQL).get(1, internalLocal, 200);
+  // Cannot use this path to convert a non-client row into CLIENT.
+  assert.equal(db.prepare(SENSOR_SESSION_UPDATE_NONCLIENT_SQL).get(internal.id, "CLIENT", null, 100, 200, 500), undefined);
+  assert.equal(db.prepare("SELECT context_type FROM sensor_sessions WHERE id=?").get(internal.id).context_type, "INTERNAL");
+});
+
+test("a still-open (never stopped) non-CLIENT session cannot be corrected through the finalized-session path", () => {
+  const db = fixture();
+  const local = "52dd6ad8-770e-4bc9-a200-c453fea749cf";
+  const started = db.prepare(SENSOR_SESSION_START_SQL).get(null, "ADMIN", null, 100, null, "ADMIN", null, 1, local);
+  assert.equal(db.prepare(SENSOR_SESSION_UPDATE_NONCLIENT_SQL).get(started.id, "ADMIN", null, 100, 200, 500), undefined);
 });

@@ -1,5 +1,6 @@
 import {
   WORK_SESSION_ACTIVITY_TYPES,
+  dayKeyFor,
   type WorkSessionActivityType,
 } from "../work-sessions/core.ts";
 
@@ -187,6 +188,48 @@ export function validateSensorSessionInput(
   };
 }
 
+export type SensorSessionCorrectionInput = {
+  contextType: "LEAD" | "INTERNAL" | "ADMIN";
+  contextLabel: string | null;
+  startedAt: number;
+  endedAt: number;
+};
+
+// Sensor Operational Ledger Patch (editability): mirrors
+// validateSensorSessionInput's own rules for context/label -- LEAD still
+// requires a label, CLIENT is never an accepted target here (correcting
+// into/out of CLIENT needs a video_id and its own approval path, not this
+// one). endedAt <= startedAt is rejected here for a fast, specific error
+// message; the DB's own CHECK constraint is still the actual source of
+// truth if this is ever bypassed.
+export function validateSensorSessionCorrection(
+  value: unknown,
+  nowSeconds = Math.floor(Date.now() / 1_000),
+): { success: true; data: SensorSessionCorrectionInput } | { success: false; error: string } {
+  if (!value || typeof value !== "object") return { success: false, error: "Invalid correction payload." };
+  const input = value as Record<string, unknown>;
+  const contextTypeRaw = input.context_type;
+  const contextLabel = boundedString(input.context_label ?? null, 200, true);
+  const startedAt = unixSeconds(input.started_at);
+  const endedAt = unixSeconds(input.ended_at);
+
+  if (!isSensorContextType(contextTypeRaw) || contextTypeRaw === "CLIENT") {
+    return { success: false, error: "Invalid context." };
+  }
+  const contextType = contextTypeRaw;
+  if (contextType === "LEAD" && (contextLabel === undefined || contextLabel === null)) {
+    return { success: false, error: "Lead work requires a counterparty or lead label." };
+  }
+  if (contextLabel === undefined) return { success: false, error: "Invalid context label." };
+  if (startedAt === null || startedAt > nowSeconds + 300) {
+    return { success: false, error: "Invalid session start." };
+  }
+  if (endedAt === null || endedAt <= startedAt || endedAt > nowSeconds + 300) {
+    return { success: false, error: "Invalid session end." };
+  }
+  return { success: true, data: { contextType, contextLabel, startedAt, endedAt } };
+}
+
 export type SensorObservationInput = {
   localObservationId: string;
   startedAt: number;
@@ -317,14 +360,30 @@ export const SENSOR_SESSION_START_SQL = `
   RETURNING id, video_id, context_type, context_label, started_at, ended_at, activity_type, source, local_session_id, approval_state
 `;
 
+// Sensor Operational Ledger Patch: closing a non-CLIENT session is not a
+// request for commercial approval -- it is already a complete operational
+// fact (WORK TRUTH != COMMERCIAL TRUTH). CLIENT keeps its exact prior
+// behavior (stays PENDING, awaiting explicit approval into a canonical
+// Work Session). LEAD/INTERNAL/ADMIN finalize atomically in the same
+// UPDATE that sets ended_at -- no second write, no manual click, and
+// nothing here can ever touch a CLIENT row differently than before.
+// ARCHIVED is reused deliberately (see SENSOR_SESSION_ARCHIVE_SQL) rather
+// than adding a new approval_state value: it already means "durable,
+// reviewed, not deleted" for CLIENT evidence today, and extending its
+// meaning to "this is how non-CLIENT operational history is recorded"
+// needs no schema change -- only the user-facing copy for non-CLIENT rows
+// must stop implying disposal (see sensor page copy).
 export const SENSOR_SESSION_STOP_SQL = `
   UPDATE sensor_sessions
-  SET ended_at = ?3, updated_at = ?3
+  SET ended_at = ?3,
+      updated_at = ?3,
+      approval_state = CASE WHEN context_type = 'CLIENT' THEN approval_state ELSE 'ARCHIVED' END,
+      archived_at = CASE WHEN context_type = 'CLIENT' THEN archived_at ELSE ?3 END
   WHERE sensor_device_id = ?1
     AND local_session_id = ?2
     AND ended_at IS NULL
     AND ?3 > started_at
-  RETURNING id, video_id, started_at, ended_at, activity_type, source, local_session_id, approval_state
+  RETURNING id, video_id, context_type, context_label, started_at, ended_at, activity_type, source, local_session_id, approval_state
 `;
 
 // work_sessions.video_id stays NOT NULL (unchanged, canonical Client Work
@@ -380,6 +439,30 @@ export const SENSOR_SESSION_UPDATE_SQL = `
   SET video_id = ?2, started_at = ?3, ended_at = ?4, activity_type = ?5, note = ?6, updated_at = ?7
   WHERE id = ?1 AND approval_state = 'PENDING' AND ended_at IS NOT NULL
   RETURNING id
+`;
+
+// Sensor Operational Ledger Patch (editability): a finalized non-CLIENT
+// session is durable, not immutable -- a wrong label, context, or
+// start/end time must stay correctable without inventing an approval
+// step it structurally cannot go through (it never had a video_id, and
+// this statement never sets one). Deliberately mirrors
+// SENSOR_SESSION_UPDATE_SQL's own guard shape (must already be finalized
+// and closed) but for the ARCHIVED-non-CLIENT state instead of
+// PENDING-CLIENT, and restricts the incoming context_type (?2) to the
+// same non-CLIENT set so this can never be used to smuggle a session
+// into or out of CLIENT (which needs a video_id and its own approval
+// path). The existing ended_at > started_at CHECK constraint is the
+// single source of truth for interval validity -- not re-implemented
+// here.
+export const SENSOR_SESSION_UPDATE_NONCLIENT_SQL = `
+  UPDATE sensor_sessions
+  SET context_type = ?2, context_label = ?3, started_at = ?4, ended_at = ?5, updated_at = ?6
+  WHERE id = ?1
+    AND context_type IN ('LEAD', 'INTERNAL', 'ADMIN')
+    AND ?2 IN ('LEAD', 'INTERNAL', 'ADMIN')
+    AND approval_state = 'ARCHIVED'
+    AND ended_at IS NOT NULL
+  RETURNING id, context_type, context_label, started_at, ended_at
 `;
 
 export const SENSOR_SESSION_ARCHIVE_SQL = `
@@ -466,6 +549,51 @@ export function selectLongSessionCandidates(
   return [...staging, ...canonical]
     .sort((a, b) => b.startedAt - a.startedAt)
     .map(({ startedAt, ...candidate }) => candidate);
+}
+
+export type SensorOperationalRow = {
+  contextType: SensorContextType;
+  startedAt: string; // ISO
+  endedAt: string | null; // ISO; null only for the single currently-open session
+};
+
+export type TodaySensorOperationalStats = {
+  internalSeconds: number;
+  adminSeconds: number;
+  leadSeconds: number;
+};
+
+// Sensor Operational Ledger Patch §10/§11: mirrors
+// computeTodayWorkSessionStats's own dayKeyFor-based, per-row local-day
+// filtering exactly (never a SQL date() boundary) -- "what counts as
+// today" stays the one rule already used everywhere else in this app.
+// CLIENT rows are never passed in here at all (see
+// getTodaySensorOperationalStats' own query) -- this function only ever
+// sees LEAD/INTERNAL/ADMIN, so there is no possibility of a CLIENT Sensor
+// session (later possibly approved into a canonical Work Session, already
+// counted via getTodayWorkSessionStats) being double-counted here. An
+// open session (endedAt null) counts its live elapsed time up to
+// `nowSeconds` only when it started today, matching the identical
+// convention getTodayWorkSessionStats already uses for an open canonical
+// session.
+export function computeTodaySensorOperationalStats(
+  rows: readonly SensorOperationalRow[],
+  todayKey: string,
+  nowSeconds: number,
+): TodaySensorOperationalStats {
+  let internalSeconds = 0;
+  let adminSeconds = 0;
+  let leadSeconds = 0;
+  for (const row of rows) {
+    if (dayKeyFor(row.startedAt) !== todayKey) continue;
+    const startedSeconds = Math.floor(Date.parse(row.startedAt) / 1_000);
+    const endedSeconds = row.endedAt === null ? nowSeconds : Math.floor(Date.parse(row.endedAt) / 1_000);
+    const seconds = Math.max(0, endedSeconds - startedSeconds);
+    if (row.contextType === "INTERNAL") internalSeconds += seconds;
+    else if (row.contextType === "ADMIN") adminSeconds += seconds;
+    else if (row.contextType === "LEAD") leadSeconds += seconds;
+  }
+  return { internalSeconds, adminSeconds, leadSeconds };
 }
 
 export const SENSOR_OBSERVATION_INSERT_SQL = `

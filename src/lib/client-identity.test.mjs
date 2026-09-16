@@ -40,12 +40,35 @@ test("intentional work splits client and internal seconds without double countin
   assert.deepEqual(result, {
     clientProductionSeconds: 3600,
     internalOperationsSeconds: 3600,
+    leadOperationsSeconds: 0,
     totalIntentionalSeconds: 7200,
   });
   assert.equal(
     result.clientProductionSeconds + result.internalOperationsSeconds,
     result.totalIntentionalSeconds,
   );
+});
+
+test("Sensor Operational Ledger Patch: durable non-CLIENT Sensor operational time adds on top, LEAD tracked separately", () => {
+  const result = splitIntentionalWork(
+    {
+      totalSeconds: 3600,
+      byClient: [{ clientName: "Taryn Dubreuil", seconds: 3600 }],
+    },
+    { internalSeconds: 1800, adminSeconds: 600, leadSeconds: 300 },
+  );
+  assert.equal(result.clientProductionSeconds, 3600);
+  // Canonical internal (0, no RMEDIA-attributed Work Session here) + Sensor INTERNAL (1800) + Sensor ADMIN (600).
+  assert.equal(result.internalOperationsSeconds, 2400);
+  assert.equal(result.leadOperationsSeconds, 300);
+  // Total includes everything: canonical (3600) + non-client Sensor (1800+600+300).
+  assert.equal(result.totalIntentionalSeconds, 3600 + 1800 + 600 + 300);
+});
+
+test("splitIntentionalWork defaults to zero Sensor operational time when the second argument is omitted", () => {
+  const result = splitIntentionalWork({ totalSeconds: 100, byClient: [] });
+  assert.equal(result.leadOperationsSeconds, 0);
+  assert.equal(result.totalIntentionalSeconds, 100);
 });
 
 test("isInternalClientName never fuzzy-matches a real external client", () => {

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   SENSOR_SCOPES,
+  computeTodaySensorOperationalStats,
   createSensorCredential,
   extractBearerToken,
   hashSensorToken,
@@ -11,6 +12,7 @@ import {
   resolveSensorConnectivityStatus,
   selectLongSessionCandidates,
   validateObservationBatch,
+  validateSensorSessionCorrection,
   validateSensorSessionInput,
   validateSensorStopInput,
 } from "./core.ts";
@@ -219,4 +221,53 @@ test("observation privacy contract accepts aggregates but no raw input fields", 
   assert.equal(validateObservationBatch({ observations: [{ ...row, coordinates: [10, 20] }] }, now).success, false);
   assert.equal(validateObservationBatch({ observations: [{ ...row, ended_at: new Date((now - 61) * 1_000).toISOString() }] }, now).success, false);
   assert.equal(validateObservationBatch({ observations: [] }, now).success, false);
+});
+
+test("Sensor Operational Ledger: correction validation preserves the same non-CLIENT rules as Start", () => {
+  const now = 2_000_000_000;
+  const base = { started_at: new Date((now - 3_600) * 1_000).toISOString(), ended_at: new Date(now * 1_000).toISOString() };
+  assert.equal(validateSensorSessionCorrection({ ...base, context_type: "INTERNAL", context_label: null }, now).success, true);
+  assert.equal(validateSensorSessionCorrection({ ...base, context_type: "ADMIN", context_label: null }, now).success, true);
+  assert.equal(validateSensorSessionCorrection({ ...base, context_type: "LEAD", context_label: "Counterparty" }, now).success, true);
+  // LEAD still requires its label.
+  assert.equal(validateSensorSessionCorrection({ ...base, context_type: "LEAD", context_label: null }, now).success, false);
+  // CLIENT is never an accepted target for this correction path.
+  assert.equal(validateSensorSessionCorrection({ ...base, context_type: "CLIENT", context_label: null }, now).success, false);
+  // end <= start is rejected.
+  assert.equal(
+    validateSensorSessionCorrection({ context_type: "INTERNAL", context_label: null, started_at: base.ended_at, ended_at: base.started_at }, now).success,
+    false,
+  );
+  assert.equal(
+    validateSensorSessionCorrection({ context_type: "INTERNAL", context_label: null, started_at: base.started_at, ended_at: base.started_at }, now).success,
+    false,
+  );
+});
+
+test("Sensor Operational Ledger Dashboard: Today aggregation sums INTERNAL/ADMIN/LEAD separately, excludes other days, folds in the open session's live elapsed time", () => {
+  const todayKey = "2026-09-16";
+  const rows = [
+    // 30 minutes INTERNAL today
+    { contextType: "INTERNAL", startedAt: "2026-09-16T13:00:00.000Z", endedAt: "2026-09-16T13:30:00.000Z" },
+    // 15 minutes ADMIN today
+    { contextType: "ADMIN", startedAt: "2026-09-16T14:00:00.000Z", endedAt: "2026-09-16T14:15:00.000Z" },
+    // 10 minutes LEAD today
+    { contextType: "LEAD", startedAt: "2026-09-16T15:00:00.000Z", endedAt: "2026-09-16T15:10:00.000Z" },
+    // a whole INTERNAL session yesterday must not leak into today's total
+    { contextType: "INTERNAL", startedAt: "2026-09-14T13:00:00.000Z", endedAt: "2026-09-14T20:00:00.000Z" },
+  ];
+  const stats = computeTodaySensorOperationalStats(rows, todayKey, Math.floor(Date.parse("2026-09-16T16:00:00.000Z") / 1_000));
+  assert.equal(stats.internalSeconds, 30 * 60);
+  assert.equal(stats.adminSeconds, 15 * 60);
+  assert.equal(stats.leadSeconds, 10 * 60);
+
+  // An open (endedAt null) session that started today counts its live
+  // elapsed time up to `nowSeconds` -- the same convention
+  // getTodayWorkSessionStats already uses for an open canonical session.
+  const withOpen = [
+    ...rows,
+    { contextType: "INTERNAL", startedAt: "2026-09-16T15:50:00.000Z", endedAt: null },
+  ];
+  const statsWithOpen = computeTodaySensorOperationalStats(withOpen, todayKey, Math.floor(Date.parse("2026-09-16T16:00:00.000Z") / 1_000));
+  assert.equal(statsWithOpen.internalSeconds, 30 * 60 + 10 * 60); // +10 live minutes
 });

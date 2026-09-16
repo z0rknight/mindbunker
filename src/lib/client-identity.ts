@@ -50,28 +50,52 @@ export function resolveVideoKindForClient(
 export type IntentionalWorkSplit = {
   clientProductionSeconds: number;
   internalOperationsSeconds: number;
+  // Sensor Operational Ledger Patch §10/§11: tracked explicitly, not
+  // silently folded into internalOperationsSeconds -- LEAD is sales/
+  // commercial-pipeline time, a different question from internal
+  // systems/admin work, even though the Dashboard has no dedicated card
+  // for it yet (see totalIntentionalSeconds' own comment). Still included
+  // in totalIntentionalSeconds so "today's real intentional work" stays
+  // truthful.
+  leadOperationsSeconds: number;
   totalIntentionalSeconds: number;
 };
 
 /**
- * Splits one already-deduplicated total. Attributed external-client time is
- * client production; RMEDIA and unattributed intentional time remain internal
- * operations. The remainder-based calculation guarantees the displayed
- * invariant without counting any session twice.
+ * Splits one already-deduplicated canonical total (client production vs.
+ * internal/RMEDIA-attributed Work Sessions), then adds durable non-CLIENT
+ * Sensor operational time on top. `sensorOperational` is additive, not
+ * derived from the remainder the way clientProductionSeconds/internal
+ * split of `input.totalSeconds` is -- it comes from a structurally
+ * disjoint source (sensor_sessions, never work_sessions), so there is no
+ * double-counting risk: a CLIENT Sensor session only ever contributes once
+ * it is approved into a real work_sessions row, which is already inside
+ * `input.totalSeconds`/`input.byClient`.
  */
-export function splitIntentionalWork(input: {
-  totalSeconds: number;
-  byClient: ReadonlyArray<{ clientName: string; seconds: number }>;
-}): IntentionalWorkSplit {
-  const totalIntentionalSeconds = Math.max(0, input.totalSeconds);
+export function splitIntentionalWork(
+  input: {
+    totalSeconds: number;
+    byClient: ReadonlyArray<{ clientName: string; seconds: number }>;
+  },
+  sensorOperational: { internalSeconds: number; adminSeconds: number; leadSeconds: number } = {
+    internalSeconds: 0,
+    adminSeconds: 0,
+    leadSeconds: 0,
+  },
+): IntentionalWorkSplit {
+  const canonicalTotalSeconds = Math.max(0, input.totalSeconds);
   const externalSeconds = input.byClient
     .filter((row) => !isInternalClientName(row.clientName))
     .reduce((sum, row) => sum + Math.max(0, row.seconds), 0);
-  const clientProductionSeconds = Math.min(totalIntentionalSeconds, externalSeconds);
+  const clientProductionSeconds = Math.min(canonicalTotalSeconds, externalSeconds);
+  const canonicalInternalSeconds = canonicalTotalSeconds - clientProductionSeconds;
+  const sensorInternalSeconds = Math.max(0, sensorOperational.internalSeconds) + Math.max(0, sensorOperational.adminSeconds);
+  const leadOperationsSeconds = Math.max(0, sensorOperational.leadSeconds);
   return {
     clientProductionSeconds,
-    internalOperationsSeconds: totalIntentionalSeconds - clientProductionSeconds,
-    totalIntentionalSeconds,
+    internalOperationsSeconds: canonicalInternalSeconds + sensorInternalSeconds,
+    leadOperationsSeconds,
+    totalIntentionalSeconds: canonicalTotalSeconds + sensorInternalSeconds + leadOperationsSeconds,
   };
 }
 

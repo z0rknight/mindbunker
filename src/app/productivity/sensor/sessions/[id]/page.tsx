@@ -45,7 +45,12 @@ export default async function SensorSessionDetailPage({
     ["End", formatDateTime(session.ended_at)],
     ["Duration", formatClosedDuration(duration)],
     ["Source", session.source],
-    ["Approval state", session.approval_state],
+    [
+      "Status",
+      !isClient && session.approval_state === "ARCHIVED"
+        ? "Completed · operational history"
+        : session.approval_state,
+    ],
   ];
 
   return (
@@ -63,6 +68,7 @@ export default async function SensorSessionDetailPage({
           sessionId={session.id}
           state={session.approval_state}
           contextType={session.context_type}
+          contextLabel={session.context_label}
           approvedWorkSessionId={session.approved_work_session_id}
           videoId={session.video_id}
           startedAt={session.started_at}

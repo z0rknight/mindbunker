@@ -12,8 +12,10 @@ import {
   SENSOR_SESSION_ARCHIVE_SQL,
   SENSOR_SESSION_DELETE_SQL,
   SENSOR_SESSION_UPDATE_SQL,
+  SENSOR_SESSION_UPDATE_NONCLIENT_SQL,
   SENSOR_SCOPES,
   createSensorCredential,
+  validateSensorSessionCorrection,
 } from "./core";
 import { getVideoAttribution, revalidateWorkSessionSurfaces } from "../work-sessions/revalidation";
 import { toUnixSeconds, validateSessionCorrection, type WorkSessionActivityType } from "../work-sessions/core";
@@ -125,6 +127,50 @@ export async function updateSensorSession(
   }
   revalidatePath("/productivity/sensor");
   revalidatePath(`/productivity/sensor/sessions/${id}`);
+  return { success: true as const };
+}
+
+// Sensor Operational Ledger Patch §3 (addendum): a finalized non-CLIENT
+// session is durable operational history, not immutable -- correcting a
+// wrong label, context, or start/end time must not require reopening,
+// approving, or fabricating a video/client. Reuses
+// validateSensorSessionCorrection (this module's own equivalent of
+// validateSessionCorrection, deliberately not that function itself since
+// it's built around a required videoId this path must never have) and
+// SENSOR_SESSION_UPDATE_NONCLIENT_SQL's own guard, which already refuses
+// to touch a CLIENT row or move a row into/out of CLIENT.
+export async function correctSensorOperationalSession(
+  id: number,
+  input: {
+    contextType: "LEAD" | "INTERNAL" | "ADMIN";
+    contextLabel: string | null;
+    startedAt: string;
+    endedAt: string;
+  },
+) {
+  if (!validSensorSessionId(id)) {
+    return { success: false as const, error: "Invalid Sensor session." };
+  }
+  const parsed = validateSensorSessionCorrection({
+    context_type: input.contextType,
+    context_label: input.contextLabel,
+    started_at: input.startedAt,
+    ended_at: input.endedAt,
+  });
+  if (!parsed.success) return { success: false as const, error: parsed.error };
+
+  const db = await getAuthenticatedDb();
+  const now = Math.floor(Date.now() / 1_000);
+  const row = await db.$client
+    .prepare(SENSOR_SESSION_UPDATE_NONCLIENT_SQL)
+    .bind(id, parsed.data.contextType, parsed.data.contextLabel, parsed.data.startedAt, parsed.data.endedAt, now)
+    .first<{ id: number }>();
+  if (!row) {
+    return { success: false as const, error: "Only a recorded operational session can be corrected this way." };
+  }
+  revalidatePath("/productivity/sensor");
+  revalidatePath(`/productivity/sensor/sessions/${id}`);
+  revalidatePath("/"); // Dashboard Internal Operations/Total Intentional derive from this table.
   return { success: true as const };
 }
 

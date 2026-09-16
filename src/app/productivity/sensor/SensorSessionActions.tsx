@@ -47,25 +47,29 @@ export function SensorSessionActions({
     );
   }
 
+  // Sensor Operational Ledger Patch: a completed non-CLIENT session is
+  // finalized straight to ARCHIVED by the Stop write itself (see
+  // SENSOR_SESSION_STOP_SQL) -- it is never PENDING once closed, so the
+  // PENDING branch below is exclusively a CLIENT concern in practice now.
+  // ARCHIVED is the durable state for BOTH "an operator explicitly
+  // archived a CLIENT session" and "ordinary completed non-CLIENT
+  // operational history" -- the copy here distinguishes the two so
+  // neither reads as disposal.
+  const isNonClient = contextType !== "CLIENT";
+
   return (
     <div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {state === "PENDING" && (
           <>
-            {contextType === "CLIENT" ? (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => run(() => approveSensorSession(id))}
-                className="min-h-10 rounded-lg bg-emerald-400 px-3 text-xs font-black text-zinc-950 hover:bg-emerald-300 disabled:opacity-50"
-              >
-                Approve
-              </button>
-            ) : (
-              <p className="flex items-center text-xs text-zinc-600">
-                {contextType} work has no canonical Video -- Archive when reviewed.
-              </p>
-            )}
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => run(() => approveSensorSession(id))}
+              className="min-h-10 rounded-lg bg-emerald-400 px-3 text-xs font-black text-zinc-950 hover:bg-emerald-300 disabled:opacity-50"
+            >
+              Approve
+            </button>
             <button
               type="button"
               disabled={pending}
@@ -76,12 +80,15 @@ export function SensorSessionActions({
             </button>
           </>
         )}
+        {state === "ARCHIVED" && isNonClient && (
+          <span className="text-xs font-semibold text-zinc-400">Completed · operational history</span>
+        )}
         {state === "ARCHIVED" && (
           <button
             type="button"
             disabled={pending}
             onClick={() => {
-              if (window.confirm("Delete this archived Sensor session from review? The evidence tombstone is retained.")) {
+              if (window.confirm("Delete this Sensor session from review? The evidence tombstone is retained.")) {
                 run(() => deleteArchivedSensorSession(id));
               }
             }}

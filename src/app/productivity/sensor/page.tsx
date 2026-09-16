@@ -3,6 +3,7 @@ import { formatClosedDuration } from "@/modules/work-sessions/core";
 import {
   getSensorDashboard,
   getLongSessionCandidates,
+  getApplicationUsage,
   type SensorSessionListRow,
 } from "@/modules/sensor/data";
 import {
@@ -10,6 +11,7 @@ import {
   resolveSensorConnectivityStatus,
   type SensorConnectivityStatus,
 } from "@/modules/sensor/core";
+import { APP_KEY_LABELS, type TimeWindowKind } from "@/modules/sensor/app-intelligence";
 import { getWorkSessionOverview } from "@/modules/work-sessions/data";
 import { SensorDeviceManager } from "./SensorDeviceManager";
 import { SensorSessionActions } from "./SensorSessionActions";
@@ -59,6 +61,15 @@ function formatDateTime(seconds: number) {
   });
 }
 
+// Sensor Operational Ledger Patch §24: ARCHIVED is the correct durable DB
+// state for completed non-CLIENT work, but the word itself reads as
+// disposal to a person -- this is display-only, the stored value is
+// unchanged.
+function approvalStateLabel(approvalState: string, isClient: boolean): string {
+  if (!isClient && approvalState === "ARCHIVED") return "Completed · operational history";
+  return approvalState;
+}
+
 function SessionCard({ session, review = false }: { session: SensorSessionListRow; review?: boolean }) {
   const duration = session.ended_at === null
     ? null
@@ -82,7 +93,7 @@ function SessionCard({ session, review = false }: { session: SensorSessionListRo
             {subtitle} · {session.activity_type}
           </p>
           <p className="mt-1 text-[10px] text-zinc-600">
-            {formatDateTime(session.started_at)} · {duration === null ? "Open" : formatClosedDuration(duration)} · {session.approval_state}
+            {formatDateTime(session.started_at)} · {duration === null ? "Open" : formatClosedDuration(duration)} · {approvalStateLabel(session.approval_state, isClient)}
           </p>
         </div>
         <Link
@@ -106,12 +117,42 @@ function SessionCard({ session, review = false }: { session: SensorSessionListRo
   );
 }
 
-export default async function SensorActivityPage() {
-  const [data, workSessionOverview, longSessionCandidates] = await Promise.all([
+const APP_WINDOW_OPTIONS: Array<{ kind: TimeWindowKind; label: string }> = [
+  { kind: "TODAY", label: "Today" },
+  { kind: "LAST_3_DAYS", label: "3D" },
+  { kind: "LAST_7_DAYS", label: "7D" },
+  { kind: "LAST_WEEK", label: "Last week" },
+  { kind: "THIS_MONTH", label: "This month" },
+];
+
+function isTimeWindowKind(value: string | undefined): value is TimeWindowKind {
+  return APP_WINDOW_OPTIONS.some((option) => option.kind === value);
+}
+
+export default async function SensorActivityPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ appWindow?: string; appMetric?: string }>;
+}) {
+  const query = await searchParams;
+  const appWindowKind: TimeWindowKind = isTimeWindowKind(query.appWindow) ? query.appWindow : "TODAY";
+  const appMetric: "ACTIVE" | "INTENTIONAL" = query.appMetric === "INTENTIONAL" ? "INTENTIONAL" : "ACTIVE";
+  const [data, workSessionOverview, longSessionCandidates, applicationUsage] = await Promise.all([
     getSensorDashboard(),
     getWorkSessionOverview(),
     getLongSessionCandidates(),
+    getApplicationUsage(appWindowKind),
   ]);
+  // Sensor Operational Ledger Patch §8: ARCHIVED now means two different
+  // things sharing one durable DB state -- an operator explicitly
+  // archiving a CLIENT session (unchanged), and the automatic final state
+  // every completed Internal/Admin/Lead session reaches on Stop (new).
+  // Splitting the one query's results client-side (no second query, no
+  // new table) keeps "hidden from review, delete if you want" framing
+  // exclusive to CLIENT while giving non-CLIENT operational history its
+  // own honest, non-collapsed section.
+  const clientArchivedHistory = data.archivedHistory.filter((session) => session.context_type === "CLIENT");
+  const operationalHistory = data.archivedHistory.filter((session) => session.context_type !== "CLIENT");
   const connectivity = resolveSensorConnectivityStatus(
     data.devices.length,
     data.diagnostics.lastSuccessfulUpload,
@@ -123,7 +164,9 @@ export default async function SensorActivityPage() {
       <Link href="/productivity/sessions" className="text-xs font-bold text-cyan-400">← Work Session Ledger</Link>
       <h1 className="mt-2 text-2xl font-black text-white">🛰️ Sensor Activity</h1>
       <p className="mt-1 text-sm text-zinc-500">
-        Passive observations are evidence. Sensor sessions enter the canonical Ledger only after explicit approval.
+        Passive observations are evidence. Client Sensor sessions enter the canonical Work Session Ledger only after
+        explicit approval; Internal, Admin, and Lead sessions become operational history automatically when stopped
+        -- completed work, not a request for commercial approval.
       </p>
 
       <div className={`mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 ${copy.className}`}>
@@ -205,6 +248,68 @@ export default async function SensorActivityPage() {
         </section>
       )}
 
+      <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-bold text-white">Application usage</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              {appMetric === "ACTIVE"
+                ? "During active computer use, how much time each app held the foreground."
+                : "Of recorded intentional work (Client, Lead, Internal, Admin), how much time each app held the foreground."}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {APP_WINDOW_OPTIONS.map((option) => (
+              <Link
+                key={option.kind}
+                href={`/productivity/sensor?appWindow=${option.kind}&appMetric=${appMetric}`}
+                className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold ${
+                  option.kind === appWindowKind
+                    ? "bg-violet-500/20 text-violet-300"
+                    : "text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+                }`}
+              >
+                {option.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div className="mt-3 flex gap-1">
+          {(["ACTIVE", "INTENTIONAL"] as const).map((metric) => (
+            <Link
+              key={metric}
+              href={`/productivity/sensor?appWindow=${appWindowKind}&appMetric=${metric}`}
+              className={`rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                metric === appMetric
+                  ? "bg-cyan-500/20 text-cyan-300"
+                  : "text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"
+              }`}
+            >
+              {metric === "ACTIVE" ? "Active" : "Intentional"}
+            </Link>
+          ))}
+        </div>
+        <div className="mt-4 space-y-2">
+          {(appMetric === "ACTIVE" ? applicationUsage.observed : applicationUsage.intentional).length === 0 && (
+            <p className="text-sm text-zinc-600">No observed application activity in this window.</p>
+          )}
+          {(appMetric === "ACTIVE" ? applicationUsage.observed : applicationUsage.intentional).map((row) => (
+            <div key={`${row.appKey}-${row.surface ?? ""}`} className="flex items-center justify-between gap-3 text-sm">
+              <span className="truncate text-zinc-300">
+                {APP_KEY_LABELS[row.appKey]}
+                {row.surface && <span className="ml-1 text-[10px] font-bold text-zinc-600">· {row.surface.replace("_WEB", " web")}</span>}
+              </span>
+              <span className="shrink-0 font-mono text-zinc-400">{formatClosedDuration(row.seconds)}</span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-[10px] leading-4 text-zinc-600">
+          Daily average this window: {formatClosedDuration(Math.round(applicationUsage.dailyAverageSeconds))}/day
+          (includes zero-use days) · Observed during Sensor coverage: {formatClosedDuration(applicationUsage.coverageSeconds)} of{" "}
+          {applicationUsage.window.label.toLowerCase()} — incomplete coverage is never presented as full history.
+        </p>
+      </section>
+
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5">
           <h2 className="font-bold text-white">Top applications today</h2>
@@ -254,14 +359,27 @@ export default async function SensorActivityPage() {
         </section>
       )}
 
-      {data.archivedHistory.length > 0 && (
+      {operationalHistory.length > 0 && (
+        <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5">
+          <h2 className="font-bold text-white">Operational history</h2>
+          <p className="mt-1 text-xs text-zinc-500">
+            Completed Internal, Admin, and Lead work -- recorded automatically when stopped, not awaiting a
+            decision. Corrections are available from each session&apos;s detail page.
+          </p>
+          <div className="mt-4 space-y-3">
+            {operationalHistory.map((session) => <SessionCard key={session.id} session={session} />)}
+          </div>
+        </section>
+      )}
+
+      {clientArchivedHistory.length > 0 && (
         <details className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-5">
           <summary className="cursor-pointer text-sm font-bold text-zinc-500">
-            Archived Sensor evidence ({data.archivedHistory.length})
+            Archived Client Sensor evidence ({clientArchivedHistory.length})
           </summary>
           <p className="mt-2 text-xs text-zinc-600">Hidden from active review. Evidence remains available for explicit inspection or manual deletion.</p>
           <div className="mt-4 space-y-3">
-            {data.archivedHistory.map((session) => <SessionCard key={session.id} session={session} />)}
+            {clientArchivedHistory.map((session) => <SessionCard key={session.id} session={session} />)}
           </div>
         </details>
       )}

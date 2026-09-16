@@ -22,6 +22,7 @@ import Link from "next/link";
 import { HomeTrackingPanel } from "./HomeTrackingPanel";
 import { CoffeeQuickLogButton } from "@/components/ui/HealthQuickActions";
 import { getDashboardOperatorIntelligence } from "@/modules/operator-intelligence/data";
+import { getTodaySensorOperationalStats } from "@/modules/sensor/data";
 import { selectDashboardNow, type AttentionReason } from "@/modules/operator-intelligence/core";
 import { isInternalClientName, splitIntentionalWork } from "@/lib/client-identity";
 import { getOpenCommitmentsWithContext, rankOpenCommitments } from "@/modules/signals";
@@ -54,6 +55,7 @@ export default async function DashboardPage() {
     operatorIntelligence,
     openCommitments,
     todayIncome,
+    todaySensorOperational,
   ] = await Promise.all([
     getHealthSummary(),
     getWorkSessionOverview(),
@@ -65,6 +67,7 @@ export default async function DashboardPage() {
     getDashboardOperatorIntelligence(),
     getOpenCommitmentsWithContext(),
     getTodayIncomeByCurrency(),
+    getTodaySensorOperationalStats(),
   ]);
 
   const now = new Date();
@@ -80,7 +83,7 @@ export default async function DashboardPage() {
     workSessionOverview.openSession,
     operatorIntelligence.recentCurrentTargets,
   );
-  const todayWorkSplit = splitIntentionalWork(todayWorkStats);
+  const todayWorkSplit = splitIntentionalWork(todayWorkStats, todaySensorOperational);
 
   return (
     <div className={OPERATOR_WORKSPACE_CLASS}>

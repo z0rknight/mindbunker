@@ -7,14 +7,31 @@ import { todayISO } from "@/utils/date";
 import {
   LONG_SESSION_THRESHOLD_SECONDS,
   OPEN_SENSOR_SESSION_SQL,
+  computeTodaySensorOperationalStats,
   isSensorContextType,
   selectLongSessionCandidates,
   type LongSessionCandidate,
   type LongSessionSourceRow,
   type LongSessionStagingRow,
   type OpenSensorSession,
+  type SensorOperationalRow,
+  type TodaySensorOperationalStats,
 } from "./core";
-import { isWorkSessionActivityType } from "../work-sessions/core";
+import { dayKeyFor, isWorkSessionActivityType } from "../work-sessions/core";
+import {
+  aggregateIntentionalAppTime,
+  aggregateObservedAppTime,
+  classifyWindowSurface,
+  computeCoverageSeconds,
+  dailyAverageSeconds,
+  normalizeApplication,
+  resolveTimeWindow,
+  type AppIntentionalTotal,
+  type AppObservationRow,
+  type AppTimeTotal,
+  type IntentionalIntervalRow,
+  type TimeWindowKind,
+} from "./app-intelligence";
 
 type TotalsRow = {
   screen_seconds: number;
@@ -105,6 +122,150 @@ export async function getOpenSensorSessionOverview(): Promise<{
     ? Math.max(0, Math.floor((Date.now() - Date.parse(openSensorSession.startedAt)) / 1_000))
     : 0;
   return { openSensorSession, openSensorSessionElapsedSeconds };
+}
+
+type RawSensorOperationalRow = {
+  context_type: string;
+  started_at: number;
+  ended_at: number | null;
+};
+
+// Sensor Operational Ledger Patch §10/§11: the server-side counterpart of
+// getTodayWorkSessionStats' own open-session handling, but for durable
+// non-CLIENT operational history instead of canonical Work Sessions.
+// CLIENT is explicitly excluded from the SQL itself (not just from the
+// pure aggregator) -- a CLIENT Sensor session's time is only ever counted
+// once it becomes a real work_sessions row via approval, already read by
+// getTodayWorkSessionStats; nothing here can double it. A 2-day lookback
+// (mirroring the safety margin, not the 35-day streak window
+// fetchAttributionRows uses) is enough to cover any session whose
+// started_at lands in "today" under America/Sao_Paulo but "yesterday" in
+// UTC storage, without scanning the whole table.
+export async function getTodaySensorOperationalStats(): Promise<TodaySensorOperationalStats> {
+  const db = await getAuthenticatedDb();
+  const cutoff = Math.floor(Date.now() / 1_000) - 2 * 86_400;
+  const [closed, open] = await Promise.all([
+    db.$client
+      .prepare(`
+        SELECT context_type, started_at, ended_at
+        FROM sensor_sessions
+        WHERE context_type IN ('LEAD', 'INTERNAL', 'ADMIN')
+          AND ended_at IS NOT NULL
+          AND started_at >= ?1
+      `)
+      .bind(cutoff)
+      .all<RawSensorOperationalRow>(),
+    db.$client
+      .prepare(`
+        SELECT context_type, started_at, ended_at
+        FROM sensor_sessions
+        WHERE context_type IN ('LEAD', 'INTERNAL', 'ADMIN')
+          AND ended_at IS NULL
+        ORDER BY id DESC
+        LIMIT 1
+      `)
+      .all<RawSensorOperationalRow>(),
+  ]);
+  const rows: SensorOperationalRow[] = [...closed.results, ...open.results]
+    .filter((row): row is RawSensorOperationalRow & { context_type: "LEAD" | "INTERNAL" | "ADMIN" } =>
+      isSensorContextType(row.context_type) && row.context_type !== "CLIENT")
+    .map((row) => ({
+      contextType: row.context_type,
+      startedAt: new Date(Number(row.started_at) * 1_000).toISOString(),
+      endedAt: row.ended_at === null ? null : new Date(Number(row.ended_at) * 1_000).toISOString(),
+    }));
+  const todayKey = dayKeyFor(new Date().toISOString());
+  return computeTodaySensorOperationalStats(rows, todayKey, Math.floor(Date.now() / 1_000));
+}
+
+type RawObservationRow = {
+  app_name: string;
+  bundle_id: string | null;
+  window_title: string | null;
+  started_at: number;
+  ended_at: number;
+  idle: number;
+};
+
+type RawIntentionalIntervalRow = {
+  context_type: "CLIENT" | "LEAD" | "INTERNAL" | "ADMIN";
+  started_at: number;
+  ended_at: number;
+};
+
+export type ApplicationUsage = {
+  window: { label: string; startSeconds: number; endSeconds: number; days: number };
+  observed: AppTimeTotal[];
+  intentional: AppIntentionalTotal[];
+  coverageSeconds: number;
+  dailyAverageSeconds: number; // observed, matching the top-level total the UI leads with
+};
+
+// App/Window Telemetry Intelligence (addendum §6-§22): reuses the exact
+// raw evidence already captured and synced -- device_activity_observations
+// for OBSERVED time, sensor_sessions (all four contexts, any
+// approval_state) for INTENTIONAL overlap. No new telemetry stream, no
+// new table, no native Sensor change. Bounded by the resolved window at
+// the SQL layer (cheap at current row volume -- see Section 30), then
+// normalized/aggregated in pure functions so the actual math is fully
+// unit-tested and independent of D1.
+export async function getApplicationUsage(
+  windowKind: TimeWindowKind,
+  monthKey?: string,
+): Promise<ApplicationUsage> {
+  const db = await getAuthenticatedDb();
+  const window = resolveTimeWindow(windowKind, new Date().toISOString(), monthKey);
+  const [observationRows, sessionRows] = await Promise.all([
+    db.$client
+      .prepare(`
+        SELECT app_name, bundle_id, window_title, started_at, ended_at, idle
+        FROM device_activity_observations
+        WHERE started_at < ?2 AND ended_at > ?1
+      `)
+      .bind(window.startSeconds, window.endSeconds)
+      .all<RawObservationRow>(),
+    db.$client
+      .prepare(`
+        SELECT context_type, started_at, COALESCE(ended_at, ?3) AS ended_at
+        FROM sensor_sessions
+        WHERE started_at < ?2 AND COALESCE(ended_at, ?3) > ?1
+      `)
+      .bind(window.startSeconds, window.endSeconds, Math.floor(Date.now() / 1_000))
+      .all<RawIntentionalIntervalRow>(),
+  ]);
+
+  const observations: AppObservationRow[] = observationRows.results.map((row) => {
+    const appKey = normalizeApplication(row.bundle_id, row.app_name);
+    return {
+      appKey,
+      surface: classifyWindowSurface(appKey, row.window_title),
+      startedAt: Number(row.started_at),
+      endedAt: Number(row.ended_at),
+      idle: Boolean(row.idle),
+    };
+  });
+  const sessions: IntentionalIntervalRow[] = sessionRows.results.map((row) => ({
+    contextType: row.context_type,
+    startedAt: Number(row.started_at),
+    endedAt: Number(row.ended_at),
+  }));
+
+  const observed = aggregateObservedAppTime(observations, window.startSeconds, window.endSeconds);
+  const intentional = aggregateIntentionalAppTime(observations, sessions, window.startSeconds, window.endSeconds);
+  const coverageSeconds = computeCoverageSeconds(
+    observations.map((row) => ({ startedAt: row.startedAt, endedAt: row.endedAt })),
+    window.startSeconds,
+    window.endSeconds,
+  );
+  const totalObservedSeconds = observed.reduce((sum, row) => sum + row.seconds, 0);
+
+  return {
+    window: { label: window.label, startSeconds: window.startSeconds, endSeconds: window.endSeconds, days: window.days },
+    observed,
+    intentional,
+    coverageSeconds,
+    dailyAverageSeconds: dailyAverageSeconds(totalObservedSeconds, window.days),
+  };
 }
 
 const SENSOR_SESSION_LIST_SQL = `

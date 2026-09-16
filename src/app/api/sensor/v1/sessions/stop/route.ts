@@ -11,7 +11,9 @@ import {
 
 type SessionRow = {
   id: number;
-  video_id: number;
+  video_id: number | null;
+  context_type: string;
+  context_label: string | null;
   started_at: number;
   ended_at: number | null;
   activity_type: string;
