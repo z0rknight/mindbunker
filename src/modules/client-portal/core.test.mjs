@@ -766,6 +766,56 @@ test("toCard never leaks internal/financial fields onto the client-facing card",
   assert.equal(card.reviewUrl, "https://frame.io/review/abc");
 });
 
+// Notion Easy Wins: a client-visible title must never fall back to a raw
+// production date ("Video 2026-08-20") -- an existing, human-facing field
+// (the project name) is a strictly better fallback than fabricating
+// anything new, and "Untitled video" is the last resort only when there
+// is truly no project to name either.
+function baseVideoRow(overrides = {}) {
+  return {
+    id: 1,
+    projectId: null,
+    clientId: 2,
+    projectClientId: 2,
+    title: null,
+    date: "2026-08-20",
+    status: "IN_PRODUCTION",
+    deliveryUrl: null,
+    reviewUrl: null,
+    publishedUrl: null,
+    coverUrl: null,
+    projectCoverUrl: null,
+    orientation: null,
+    contentType: null,
+    isPriority: false,
+    createdAt: null,
+    updatedAt: null,
+    ...overrides,
+  };
+}
+
+test("client title fallback prefers a real title, then the project name, never a raw date", () => {
+  const withTitle = toCard(baseVideoRow({ title: "Launch Trailer" }), new Map());
+  assert.equal(withTitle.title, "Launch Trailer");
+
+  const withProjectOnly = toCard(
+    baseVideoRow({ projectId: 10 }),
+    new Map([[10, "Bonnie Content Waterfall"]]),
+  );
+  assert.equal(withProjectOnly.title, "Bonnie Content Waterfall — Untitled");
+  assert.ok(!withProjectOnly.title.includes("2026-08-20"), "must never fall back to the raw date");
+
+  const withNeither = toCard(baseVideoRow(), new Map());
+  assert.equal(withNeither.title, "Untitled video");
+  assert.ok(!withNeither.title.includes("2026-08-20"), "must never fall back to the raw date");
+
+  // Whitespace-only titles are treated the same as no title (existing
+  // .trim() behavior, unchanged -- this just proves it still composes
+  // correctly with the new fallback tier).
+  const whitespaceTitle = toCard(baseVideoRow({ title: "   ", projectId: 10 }), new Map([[10, "Bonnie"]]));
+  assert.equal(whitespaceTitle.title, "Bonnie — Untitled");
+});
+
 // Dave Monday Release §3/§4: searchClientDashboardVideos is now the one
 // search entry point (moved to the top of the dashboard). It is a pure
 // filter over an already-client-safe array -- structurally, it can never

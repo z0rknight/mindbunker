@@ -133,7 +133,7 @@ const REASON_LABEL: Record<AttentionReason, string> = {
   CHANGES_REQUESTED: "Changes requested",
   READY_FOR_REVIEW: "Ready for review",
   DUE_TODAY: "Due today",
-  DUE_NEXT_7_DAYS: "Due this week",
+  DUE_NEXT_7_DAYS: "Due in the next 7 days",
 };
 
 const REASON_RANK: Record<AttentionReason, number> = {

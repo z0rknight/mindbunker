@@ -339,13 +339,22 @@ export function toCard(
   // "No preview yet" placeholder exactly when this is non-null.
   const hasRealCover = coverUrl.success && coverUrl.value !== null;
   const clientLogoUrl = hasRealCover ? null : validateCoverUrl(video.clientLogoUrl);
+  const projectName = video.projectId ? (projectNameById.get(video.projectId) ?? null) : null;
+  // Notion Easy Wins: the old fallback (`Video ${video.date}`) put a raw
+  // production date in front of clients as if it were a title -- exactly
+  // the "timestamp presented as a title" pattern to avoid. The project
+  // name is already a real, existing, human-facing field for this same
+  // video, so it's a strictly better fallback tier than fabricating
+  // anything new; "Untitled video" only when there's truly no project
+  // either, instead of ever falling back to a date.
+  const title = video.title?.trim() || (projectName ? `${projectName} — Untitled` : "Untitled video");
   return {
     id: video.id,
-    title: video.title?.trim() || `Video ${video.date}`,
+    title,
     status: video.status,
     statusLabel: clientVideoStatusLabel(video.status, resolvedDeliveryUrl !== null),
     projectId: video.projectId,
-    projectName: video.projectId ? (projectNameById.get(video.projectId) ?? null) : null,
+    projectName,
     contentType: video.contentType,
     contentTypeLabel: video.contentType
       ? VIDEO_CONTENT_TYPE_LABELS[video.contentType]
