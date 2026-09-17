@@ -648,6 +648,29 @@ export function videoWorkspaceHref(videoId: number, returnTo?: string) {
   return returnTo ? `${base}&returnTo=${encodeURIComponent(returnTo)}` : base;
 }
 
+// Sep 17 Morning Production QA Patch: a Production Order's operational
+// container is a real video_logs row (so bulk status/list actions can
+// reach it), but it is not a deliverable and has no workspace of its own
+// -- opening it via videoWorkspaceHref above lands on the "technical
+// container that has no workspace of its own" dead end (see the
+// Productivity page's own not-found copy), exactly what the operator hit
+// clicking the container from a Project's video grid. The one thing a
+// container row DOES have a real destination for is its own Production
+// Order -- every video sharing a productionOrderId (deliverables and
+// container alike) already carries that id, no new column. A container
+// with no productionOrderId (should not happen, but data can be messy)
+// still falls back to the video workspace's own honest "not found" state
+// rather than a broken/blank link.
+export function projectVideoCardHref(
+  video: { id: number; isOperationalContainer: boolean; productionOrderId: number | null },
+  returnTo?: string,
+): string {
+  if (video.isOperationalContainer && video.productionOrderId != null) {
+    return `/productivity/orders/${video.productionOrderId}`;
+  }
+  return videoWorkspaceHref(video.id, returnTo);
+}
+
 export function getVideoNextAction(status: VideoStatus) {
   const labels: Record<VideoStatus, string> = {
     PLANNED: "Start production",

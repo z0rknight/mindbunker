@@ -194,6 +194,20 @@ export function PlanVideoButton({
       {open && (
         <ActionSheet title="Plan a video" onClose={closePlan}>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Sep 16 Operational Reality Patch: operator-reported
+                confusion, verbatim -- "não sei se cadastro video a video ou
+                se faço um let's cook, porque de qualquer forma eu acabo
+                registrando todo o processo em um unico video." One line,
+                shown every time this sheet opens, at the exact decision
+                point -- not a new flow, not a redesign. */}
+            <Link
+              href="/productivity/orders/new"
+              className="block rounded-xl border border-emerald-900/50 bg-emerald-950/10 p-3 text-xs text-emerald-300 hover:border-emerald-600"
+            >
+              Multiple deliverables from one source (a Content Waterfall batch)? Use{" "}
+              <span className="font-black">LET&apos;S COOK →</span> instead — one shared batch, each video still
+              tracked on its own.
+            </Link>
             <div>
               <label htmlFor="plannedVideoTitle" className="mb-1.5 block text-xs font-bold text-zinc-400">
                 Video name

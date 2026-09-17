@@ -5,7 +5,7 @@ import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
 import { formatDate } from "@/utils/date";
 import type { VideoStatus } from "@/modules/productivity/config";
 import { resolveCoverUrl } from "@/modules/media/core";
-import { videoWorkspaceHref } from "@/modules/productivity/core";
+import { projectVideoCardHref } from "@/modules/productivity/core";
 import type { CommercialTerms } from "@/modules/quotes/actions";
 
 // Quick Morning Reality Patch (26 Aug 2026) §7: "make videos the comandas."
@@ -104,6 +104,10 @@ export type WorkspaceVideoCardData = {
   // this page's own Completed/N count above, and without a marker here an
   // operator scanning this grid can't tell why.
   cancelledAt?: Date | string | null;
+  // Sep 17 Morning Production QA Patch: a container is not a deliverable
+  // and has no video workspace of its own -- see projectVideoCardHref.
+  isOperationalContainer: boolean;
+  productionOrderId: number | null;
 };
 
 export function ProjectVideoCards({
@@ -133,7 +137,12 @@ export function ProjectVideoCards({
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    // Sep 16 Operational Reality Patch: fixed sm/xl step (2/3) never grew
+    // past 3 columns -- operator repro on a real 4K monitor ("sempre
+    // ficam 3 videos por fileira ... torna a visualização bastante
+    // ineficiente"). auto-fill/minmax adds columns as space allows
+    // instead of a hardcoded per-breakpoint count.
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
       {videos.map((video) => {
         const aspectKey = video.orientation ?? "UNKNOWN";
         const coverUrl = resolveCoverUrl(
@@ -142,13 +151,13 @@ export function ProjectVideoCards({
           clientDefaultCoverUrl,
           clientAvatarUrl,
         );
-        const href = videoWorkspaceHref(video.id, returnTo);
+        const href = projectVideoCardHref(video, returnTo);
         return (
           <article
             key={video.id}
             className={`overflow-hidden rounded-2xl border bg-zinc-900/70 transition hover:border-violet-500/40 ${
               video.cancelledAt ? "opacity-60" : ""
-            } ${video.isPriority ? "border-amber-400/50" : "border-zinc-800"}`}
+            } ${video.isOperationalContainer ? "border-emerald-500/40" : video.isPriority ? "border-amber-400/50" : "border-zinc-800"}`}
           >
             <Link href={href} className={`relative block w-full overflow-hidden bg-zinc-950 ${ASPECT_CLASSES[aspectKey]}`}>
               {coverUrl ? (
@@ -165,12 +174,17 @@ export function ProjectVideoCards({
               <span className="absolute left-2.5 top-2.5">
                 <VideoStatusBadge status={video.status} />
               </span>
+              {video.isOperationalContainer && (
+                <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full border border-emerald-400/50 bg-emerald-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-200 backdrop-blur">
+                  📦 Batch container
+                </span>
+              )}
               {video.cancelledAt && (
                 <span className="absolute left-2.5 top-9 inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-red-300 backdrop-blur">
                   Cancelled
                 </span>
               )}
-              {video.isPriority && (
+              {video.isPriority && !video.isOperationalContainer && (
                 <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full border border-amber-400/50 bg-amber-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-200 backdrop-blur">
                   ⭐ Priority
                 </span>
@@ -204,9 +218,11 @@ export function ProjectVideoCards({
 
               <Link
                 href={href}
-                className="mt-1 inline-flex min-h-9 w-full items-center justify-center rounded-xl bg-violet-600 px-3 text-xs font-black text-white transition hover:bg-violet-500"
+                className={`mt-1 inline-flex min-h-9 w-full items-center justify-center rounded-xl px-3 text-xs font-black text-white transition ${
+                  video.isOperationalContainer ? "bg-emerald-600 hover:bg-emerald-500" : "bg-violet-600 hover:bg-violet-500"
+                }`}
               >
-                Open video →
+                {video.isOperationalContainer ? "Open batch →" : "Open video →"}
               </Link>
             </div>
           </article>

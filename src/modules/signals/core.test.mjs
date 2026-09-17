@@ -7,6 +7,7 @@ import {
   computeRevisionDragSignal,
   computeCashReconciliationSignals,
   computeUnattributedRevenueSignals,
+  computeClientPriorityRequestSignals,
   rankOpenCommitments,
 } from "./core.ts";
 
@@ -120,4 +121,33 @@ test("unattributed revenue keeps currencies separate and skips zero/negative amo
   const signals = computeUnattributedRevenueSignals(rows);
   assert.equal(signals.length, 1);
   assert.equal(signals[0].id, "unattributed-revenue-USD");
+});
+
+// Sep 16 Operational Reality Patch: a client's "priority now" flag
+// (videoLogs.isPriority) had no operator-facing surface at all -- this is
+// the request, always WATCH, never ACTION, and never touches queue order.
+test("client priority request is a WATCH-severity signal naming the client and video, never ACTION", () => {
+  const rows = [
+    { videoId: 42, title: "Episode 3", clientName: "Taryn Dubreuil", projectName: "September Content Waterfall" },
+  ];
+  const signals = computeClientPriorityRequestSignals(rows);
+  assert.equal(signals.length, 1);
+  assert.equal(signals[0].id, "client-priority-request-42");
+  assert.equal(signals[0].severity, "WATCH");
+  assert.equal(signals[0].confidence, "HIGH");
+  assert.match(signals[0].statement, /Taryn Dubreuil marked "Episode 3" as priority/);
+  assert.match(signals[0].evidence, /not an operator schedule change/);
+  assert.deepEqual(signals[0].context, { videoId: 42 });
+  assert.equal(signals[0].action.href, "/productivity?video=42");
+});
+
+test("client priority request falls back honestly when client/title are missing, one signal per flagged video", () => {
+  const rows = [
+    { videoId: 7, title: null, clientName: null, projectName: null },
+    { videoId: 8, title: "Trailer", clientName: "Acme", projectName: null },
+  ];
+  const signals = computeClientPriorityRequestSignals(rows);
+  assert.equal(signals.length, 2);
+  assert.match(signals[0].statement, /A client marked "Video 7" as priority/);
+  assert.match(signals[1].statement, /Acme marked "Trailer" as priority/);
 });

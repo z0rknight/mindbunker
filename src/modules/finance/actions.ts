@@ -35,6 +35,7 @@ import {
   CLIENT_OPERATIONAL_SESSIONS_SQL,
   computeClientOperationalMinutes,
   buildBillingEvidenceIdempotencyKey,
+  computeUpworkQuickEntryGrossAmount,
   computeReconciliation,
   computeEconomicLedgerPlanning,
   computeCashReconciliation,
@@ -958,6 +959,89 @@ export async function getBillingEvidenceForContract(contractId: number) {
     .from(billingEvidence)
     .where(eq(billingEvidence.contractId, contractId))
     .orderBy(desc(billingEvidence.periodStart));
+}
+
+// ─── QUICK UPWORK TIME CAPTURE (Sep 16 Operational Reality Patch) ─────────
+//
+// Operator-reported, verbatim: "talvez seja maneiro colocar algo como
+// [REGISTRADO NA UPWORK] pra que eu coloque todo o final do dia quanto eu
+// registrei na Upwork, dessa forma o Sensor vira minha verdade
+// operacional, o registro na Upwork vira log." This is deliberately NOT a
+// new evidence type -- billing_evidence.source already has an
+// "UPWORK_REPORT" value and the whole reconcile-operational-vs-billed
+// engine (getClientOperationalMinutes / getContractReconciliation) already
+// exists below. The only real gap was friction: entering evidence required
+// the full Finance -> Contracts -> record-evidence form (period, rate,
+// gross amount, source, all typed by hand). This wraps recordBillingEvidence
+// with the one thing a HOURLY contract already knows -- its rate and
+// currency -- so the operator only ever types minutes and picks a date.
+// "MANUAL" is the correct source value here (a hand-typed daily total, not
+// an imported CSV/report) -- see the billing_evidence.source check.
+export async function getUpworkQuickEntryContracts(): Promise<
+  Array<{ id: number; clientId: number; clientName: string; platform: string; currency: string }>
+> {
+  const contracts = await getCommercialContracts();
+  return contracts
+    .filter((c) => c.status === "ACTIVE" && c.billingType === "HOURLY" && c.hourlyRate != null)
+    .map((c) => ({ id: c.id, clientId: c.clientId, clientName: c.clientName, platform: c.platform, currency: c.currency }));
+}
+
+export type RecordQuickUpworkTimeResult =
+  | { success: true; id: number; alreadyRegisteredToday: boolean }
+  | { success: false; error: string };
+
+export async function recordQuickUpworkTime(data: {
+  contractId: number;
+  minutes: number;
+  date: string; // ISO date, operator-chosen (defaults to today in the UI)
+  note?: string | null;
+}): Promise<RecordQuickUpworkTimeResult> {
+  if (!Number.isFinite(data.minutes) || data.minutes <= 0) {
+    return { success: false, error: "Minutes must be a positive number." };
+  }
+  const contract = await getCommercialContractById(data.contractId);
+  if (!contract) return { success: false, error: "Contract not found." };
+  if (contract.status !== "ACTIVE") return { success: false, error: "That contract is not active." };
+  if (contract.billingType !== "HOURLY" || contract.hourlyRate == null) {
+    return { success: false, error: "Quick Upwork entry only works for an active hourly contract." };
+  }
+
+  const grossAmount = computeUpworkQuickEntryGrossAmount(data.minutes, contract.hourlyRate);
+  const result = await recordBillingEvidence({
+    contractId: data.contractId,
+    periodStart: data.date,
+    periodEnd: data.date,
+    billableMinutes: data.minutes,
+    rate: contract.hourlyRate,
+    grossAmount,
+    currency: contract.currency,
+    source: "MANUAL",
+    externalReference: data.note ?? null,
+  });
+
+  revalidatePath("/");
+  // recordBillingEvidence is idempotent by (contract, period, source, ref)
+  // -- a second same-day/no-note submission returns the FIRST entry's id
+  // rather than silently double-counting. Surfacing that honestly here
+  // (instead of a generic "Saved") matches this mission's "never silently
+  // collapse or auto-fix a real discrepancy" rule -- the operator can tell
+  // this apart from a genuine new entry and go correct it in Finance ->
+  // Contracts if the number needs to change.
+  return { success: true, id: result.id, alreadyRegisteredToday: !result.created };
+}
+
+// Sum of TODAY's quick-registered Upwork minutes across every contract --
+// deliberately scoped to periodStart = periodEnd = today (the shape every
+// row from recordQuickUpworkTime above has), not "any evidence touching
+// today," so a multi-day CSV import can never inflate this daily figure.
+export async function getTodayUpworkRegisteredMinutes(): Promise<number> {
+  const db = await getAuthenticatedDb();
+  const today = todayISO();
+  const rows = await db
+    .select({ total: sum(billingEvidence.billableMinutes) })
+    .from(billingEvidence)
+    .where(and(eq(billingEvidence.periodStart, today), eq(billingEvidence.periodEnd, today)));
+  return Number(rows[0]?.total ?? 0);
 }
 
 // ─── RECONCILIATION (§6) ─────────────────────────────────────────────────

@@ -67,14 +67,28 @@ export function getProjectGroup(status: ProjectStatus): ProjectGroup {
   return PROJECT_STATUS_GROUPS[status];
 }
 
+// Sep 17 Morning Production QA Patch: reproduced directly from the
+// operator's real "September Content Waterfall" project -- 6/6 videos
+// already done, yet the project still read "3D OVERDUE" because
+// project.status (a separate, operator-set lifecycle field -- see the
+// "video completion != project completion" note on getProjectNextAction
+// below) had not yet been manually moved past "active". That is a real
+// admin lag, not an open obligation: there is nothing left to be late on
+// once every real deliverable is already produced. isProjectOverdue now
+// also asks "is there still a deliverable that isn't done" -- a project
+// with zero videos ever registered stays overdue on a passed deadline
+// (nothing was ever produced, which IS a real miss), and a project with
+// any still-incomplete video stays overdue exactly as before. This does
+// NOT touch project.status or auto-transition it -- "Move to review"
+// (getProjectNextAction) is still the only place that copy is decided.
 export function isProjectOverdue(
-  project: Pick<ProjectOverviewItem, "deadline" | "status">,
+  project: Pick<ProjectOverviewItem, "deadline" | "status" | "totalVideos" | "doneVideos">,
   today: string,
 ) {
-  return (
-    Boolean(project.deadline && project.deadline < today) &&
-    getProjectGroup(project.status) !== "completed"
-  );
+  if (!Boolean(project.deadline && project.deadline < today)) return false;
+  if (getProjectGroup(project.status) === "completed") return false;
+  if (project.totalVideos > 0 && project.doneVideos >= project.totalVideos) return false;
+  return true;
 }
 
 export function getProjectProgress(project: Pick<
@@ -124,7 +138,7 @@ export type ProjectExceptionKind = "OVERDUE" | "BLOCKED" | "PLANNED";
 // badge the brief rejected). Only genuine exceptions and the PLANNED
 // lifecycle state get one, and only one -- overdue outranks blocked.
 export function getProjectException(
-  project: Pick<ProjectOverviewItem, "status" | "deadline" | "openBlockerCount">,
+  project: Pick<ProjectOverviewItem, "status" | "deadline" | "openBlockerCount" | "totalVideos" | "doneVideos">,
   today: string,
 ): ProjectExceptionKind | null {
   if (isProjectOverdue(project, today)) return "OVERDUE";

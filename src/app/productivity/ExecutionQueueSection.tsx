@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { PixelEmptyState, PixelIcon } from "@/components/ui/PixelVisuals";
 import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
+import { resolveCoverUrl } from "@/modules/media/core";
 import { reorderExecutionQueueItem } from "@/modules/productivity/actions";
 import { videoWorkspaceHref } from "@/modules/productivity/core";
 import { stageForQueueItem, type QueueEntry, type QueueEligibleVideo, type QueueMoveDirection } from "@/modules/productivity/queue";
@@ -85,7 +86,15 @@ export function ExecutionQueueSection({ queue, activeVideoId }: { queue: QueueRo
                 {items.length === 0 ? (
                   <div className="grid min-h-24 place-items-center rounded-xl border border-dashed border-zinc-800/80 px-3 text-center text-[11px] text-zinc-700">No videos here</div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  // Sep 16 Operational Reality Patch: the fixed sm/lg/xl
+                  // step (1/2/3/4) never added a column past xl -- on a
+                  // real 4K/fullscreen monitor a batch's video tiles stayed
+                  // capped at the same count as a laptop screen (reported
+                  // directly: "não importa o tamanho da tela sempre ficam 3
+                  // videos por fileira"). auto-fill/minmax fills whatever
+                  // width is actually available instead of a hardcoded
+                  // per-breakpoint column count.
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
                     {items.map((item) => (
                       <QueueTile
                         key={item.id}
@@ -127,14 +136,36 @@ function QueueTile({ item, isFirstExecutable, isActive, isFirst, isLast }: { ite
     });
   }
 
-  const coverStyle = item.coverUrl
-    ? { backgroundImage: `linear-gradient(to top, rgba(0,0,0,.82), rgba(0,0,0,.08)), url("${item.coverUrl.replaceAll('"', "%22")}")`, backgroundSize: "cover", backgroundPosition: "center" }
+  // Sep 16 Operational Reality Patch: same tier order as Projects
+  // (resolveCoverUrl in modules/media/core.ts) -- video's own cover, then
+  // its project's, then the client's chosen default, then the client's
+  // avatar. Operator-reported: without this, every queued/planned video
+  // rendered as an indistinguishable gray tile ("parece tudo um monte de
+  // coisa cinza, acabo nem usando o painel no dia a dia").
+  const resolvedCoverUrl = resolveCoverUrl(
+    item.coverUrl,
+    item.projectCoverUrl,
+    item.clientDefaultCoverUrl,
+    item.clientAvatarUrl,
+  );
+  const coverStyle = resolvedCoverUrl
+    ? { backgroundImage: `linear-gradient(to top, rgba(0,0,0,.82), rgba(0,0,0,.08)), url("${resolvedCoverUrl.replaceAll('"', "%22")}")`, backgroundSize: "cover", backgroundPosition: "center" }
     : undefined;
+  const subtitle = [item.clientName, item.projectName].filter(Boolean).join(" / ") || "Standalone";
 
   return (
     <article data-stage={stageFor(item)} className={`mb-stage-enter pixel-frame overflow-hidden rounded-xl border bg-zinc-950/85 transition-colors ${isFirstExecutable ? "mb-next-marker border-emerald-500/45" : item.isBlocked ? "border-red-900/55" : "border-zinc-800"}`}>
-      <div className="relative aspect-video overflow-hidden border-b border-zinc-800 bg-zinc-900" style={coverStyle}>
-        {!item.coverUrl && <div className="absolute inset-0 grid place-items-center text-zinc-700"><PixelIcon name="video" className="h-8 w-8" /></div>}
+      <div className="relative aspect-video overflow-hidden border-b border-zinc-800 bg-gradient-to-br from-cyan-950 via-zinc-900 to-violet-950" style={coverStyle}>
+        {/* Bottom padding reserves the exact strip the absolutely-positioned
+            status badge below renders into -- without it, a long client/
+            project name here collides with that badge instead of stacking
+            above it. */}
+        {!resolvedCoverUrl && (
+          <div className="absolute inset-0 flex flex-col justify-between p-3 pb-8" aria-hidden="true">
+            <PixelIcon name="video" className="h-5 w-5 text-cyan-400/60" />
+            <p className="line-clamp-2 text-xs font-bold leading-tight text-white/80">{subtitle}</p>
+          </div>
+        )}
         <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
           <VideoStatusBadge status={item.status} />
           {isActive && <span className="mb-live-pulse" aria-label="Active now" />}
@@ -144,7 +175,7 @@ function QueueTile({ item, isFirstExecutable, isActive, isFirst, isLast }: { ite
 
       <div className="p-3">
         <p className="line-clamp-2 min-h-10 text-sm font-black leading-5 text-white">{title}</p>
-        <p className="mt-1 truncate text-[11px] text-zinc-500">{[item.clientName, item.projectName].filter(Boolean).join(" / ") || "Standalone"}</p>
+        <p className="mt-1 truncate text-[11px] text-zinc-500">{subtitle}</p>
         <div className="mt-2 flex min-h-5 flex-wrap gap-1">
           {item.isBlocked && <span className="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase text-red-300">Blocked{item.blockerCategory ? ` · ${item.blockerCategory}` : ""}</span>}
           {commitmentDue && <span className="text-[10px] font-bold text-amber-300">Due {commitmentDue}</span>}

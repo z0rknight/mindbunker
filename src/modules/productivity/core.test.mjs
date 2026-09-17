@@ -21,6 +21,7 @@ import {
   validateVideoInput,
   validateVideoPriorityInput,
   videoWorkspaceHref,
+  projectVideoCardHref,
 } from "./core.ts";
 import { isVideoDirectlyFinishable } from "./config.ts";
 
@@ -175,6 +176,30 @@ test("Project and Productivity links target the canonical individual workspace U
   assert.equal(
     videoWorkspaceHref(27, "/projects/8"),
     "/productivity?video=27&returnTo=%2Fprojects%2F8",
+  );
+});
+
+// Sep 17 Morning Production QA Patch: operator-reported directly --
+// "se eu tento abrir o container como video ele não abre individualmente."
+// A container has no video workspace; it must route to its own Production
+// Order instead of the dead-end videoWorkspaceHref every other card uses.
+test("projectVideoCardHref: an ordinary deliverable still opens its own video workspace", () => {
+  assert.equal(
+    projectVideoCardHref({ id: 27, isOperationalContainer: false, productionOrderId: 9 }, "/projects/8"),
+    "/productivity?video=27&returnTo=%2Fprojects%2F8",
+  );
+});
+
+test("projectVideoCardHref: a container routes to its Production Order, never a video URL", () => {
+  const href = projectVideoCardHref({ id: 41, isOperationalContainer: true, productionOrderId: 9 });
+  assert.equal(href, "/productivity/orders/9");
+  assert.doesNotMatch(href, /video=41/u, "must never resolve to the container's own dead-end video workspace");
+});
+
+test("projectVideoCardHref: a container with no productionOrderId falls back to the honest video-not-found state rather than a broken link", () => {
+  assert.equal(
+    projectVideoCardHref({ id: 41, isOperationalContainer: true, productionOrderId: null }),
+    "/productivity?video=41",
   );
 });
 

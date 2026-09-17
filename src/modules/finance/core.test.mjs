@@ -15,6 +15,7 @@ import {
   validateOwnerPayCorrectionInput,
   validateTransactionCorrectionInput,
   computeClientOperationalMinutes,
+  computeUpworkQuickEntryGrossAmount,
 } from "./core.ts";
 
 test("transaction corrections require positive amounts, real dates, and explicit currencies", () => {
@@ -123,6 +124,21 @@ test("buildBillingEvidenceIdempotencyKey is deterministic and re-import-safe", (
   // Blank vs missing external reference normalize to the same key.
   const key4 = buildBillingEvidenceIdempotencyKey({ ...base, externalReference: "  " });
   assert.equal(key1, key4);
+});
+
+// Sep 16 Operational Reality Patch: "Register Upwork time" only ever asks
+// the operator for minutes -- this is the arithmetic that fills in rate/
+// currency from the contract instead.
+test("computeUpworkQuickEntryGrossAmount applies the contract's own hourly rate and rounds to cents", () => {
+  assert.equal(computeUpworkQuickEntryGrossAmount(60, 25), 25);
+  assert.equal(computeUpworkQuickEntryGrossAmount(30, 25), 12.5);
+  // 130 minutes @ $25/hr = $54.1666... -- must round to cents, not truncate
+  // or carry floating-point noise into a stored currency amount.
+  assert.equal(computeUpworkQuickEntryGrossAmount(130, 25), 54.17);
+});
+
+test("computeUpworkQuickEntryGrossAmount at zero minutes is zero, never negative or NaN", () => {
+  assert.equal(computeUpworkQuickEntryGrossAmount(0, 25), 0);
 });
 
 test("computeEconomicLedgerPlanning projects planning from the canonical Economic Ledger Net", () => {

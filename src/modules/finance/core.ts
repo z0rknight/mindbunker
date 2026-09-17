@@ -158,6 +158,15 @@ export function buildBillingEvidenceIdempotencyKey(input: {
   return [input.contractId, input.periodStart, input.periodEnd, input.source, ref].join("::");
 }
 
+// Sep 16 Operational Reality Patch: the one piece of arithmetic behind
+// "Register Upwork time" (recordQuickUpworkTime in modules/finance/actions.ts)
+// -- an hourly contract already knows its own rate, so the operator only
+// ever types minutes. Pulled out as a pure function so the rounding rule
+// (cents, never more) is unit-testable without a database.
+export function computeUpworkQuickEntryGrossAmount(minutes: number, hourlyRate: number): number {
+  return Math.round((minutes / 60) * hourlyRate * 100) / 100;
+}
+
 // Reconciliation: reads OPERATIONAL TRUTH (already-summed work_sessions
 // minutes for a contract's client + period) and BILLING TRUTH (one
 // billing_evidence row for that period, or null if none has been

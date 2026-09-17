@@ -531,6 +531,15 @@ export async function getAllVideoLogs() {
       publishedUrl: videoLogs.publishedUrl,
       notes: videoLogs.notes,
       coverUrl: videoLogs.coverUrl,
+      // Sep 16 Operational Reality Patch: the same three-tier fallback
+      // chain Projects already resolves through (resolveCoverUrl in
+      // modules/media/core.ts) -- clients/projects are already joined
+      // below for clientName/projectName, so this is columns-only, no new
+      // join. Lets the Video Queue stop rendering a bare gray tile for
+      // every video that has no cover of its own.
+      projectCoverUrl: projects.coverUrl,
+      clientDefaultCoverUrl: clients.defaultCoverUrl,
+      clientAvatarUrl: clients.instagramProfilePictureUrl,
       orientation: videoLogs.orientation,
       contentType: videoLogs.contentType,
       videoKind: videoLogs.videoKind,

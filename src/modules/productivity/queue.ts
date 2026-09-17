@@ -42,6 +42,12 @@ export type QueueEligibleVideo = {
   projectName: string | null;
   projectDeadline: string | null;
   coverUrl: string | null;
+  // Sep 16 Operational Reality Patch: same fallback chain Projects
+  // already uses (resolveCoverUrl) -- see ExecutionQueueSection's
+  // QueueTile, the one place this queue renders a thumbnail.
+  projectCoverUrl: string | null;
+  clientDefaultCoverUrl: string | null;
+  clientAvatarUrl: string | null;
   orientation: VideoOrientation | null;
   isOperationalContainer: boolean;
   queuePosition: number | null;

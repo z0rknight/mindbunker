@@ -28,7 +28,12 @@ export default async function ProductionOrdersPage() {
 
   return (
     <div className="min-h-screen bg-black px-4 py-8 text-zinc-100 sm:px-8">
-      <div className="mx-auto max-w-4xl">
+      {/* Sep 17 Morning Production QA Patch: operator-requested, verbatim
+          "se ficar LEVEMENTE maior ficaria perfeita" -- one Tailwind step
+          wider on all three LET'S COOK pages (list/new/detail), same
+          proportions and typography, just more board footprint on a wide
+          screen. Not a redesign. */}
+      <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-widest text-emerald-500">

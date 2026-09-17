@@ -59,7 +59,11 @@ export function VideoGallery({
       </div>
 
       {filteredVideos.length > 0 ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        // Sep 16 Operational Reality Patch: auto-fill/minmax replaces the
+        // fixed sm/lg/xl step, which never added a column past xl -- see
+        // ExecutionQueueSection.tsx for the same fix and the operator's
+        // 4K repro.
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
           {filteredVideos.map((video) => (
             <VideoCard
               key={video.id}

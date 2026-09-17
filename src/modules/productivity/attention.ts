@@ -14,6 +14,10 @@ const PRODUCTIVITY_SIGNAL_KINDS = [
   "OPEN_BLOCKER",
   "REPEATED_FRICTION",
   "REVISION_DRAG",
+  // Sep 16 Operational Reality Patch: a client's priority request is
+  // exactly "what should change what I work on next" -- the one thing
+  // this whitelist exists to surface.
+  "CLIENT_PRIORITY_REQUEST",
 ] as const;
 
 type ProductivitySignalKind = (typeof PRODUCTIVITY_SIGNAL_KINDS)[number];
@@ -27,6 +31,7 @@ const KIND_LABEL: Record<ProductivitySignalKind, string> = {
   OPEN_BLOCKER: "Blocked",
   REPEATED_FRICTION: "Recurring friction",
   REVISION_DRAG: "Revision rate climbing",
+  CLIENT_PRIORITY_REQUEST: "Client priority requests",
 };
 
 export type ProductivityAttentionGroup = {
@@ -44,12 +49,12 @@ function isProductivitySignalKind(
 
 const SEVERITY_RANK: Record<SignalSeverity, number> = { ACTION: 0, WATCH: 1, INFO: 2 };
 
-// INFO is excluded on purpose, not just deprioritized: for these four kinds
+// INFO is excluded on purpose, not just deprioritized: for these kinds
 // INFO always means "nothing to act on" -- REVISION_DRAG reports INFO both
 // when the sample is too small to responsibly claim a rate AND when the
-// rate is fine (<30%); OVERDUE_PROMISE/OPEN_BLOCKER never emit INFO at all
-// (open-by-construction is already ACTION). A genuine execution exception
-// is never hiding behind INFO here.
+// rate is fine (<30%); OVERDUE_PROMISE/OPEN_BLOCKER/CLIENT_PRIORITY_REQUEST
+// never emit INFO at all. A genuine execution exception is never hiding
+// behind INFO here.
 export function selectProductivityAttention(
   signals: readonly Signal[],
 ): ProductivityAttentionGroup[] {

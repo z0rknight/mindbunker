@@ -39,7 +39,8 @@ export type Signal = {
     | "CASH_RECONCILIATION"
     | "UNATTRIBUTED_REVENUE"
     | "UNRESOLVED_CAPTURES"
-    | "STALE_PRODUCTION_ORDER";
+    | "STALE_PRODUCTION_ORDER"
+    | "CLIENT_PRIORITY_REQUEST";
   severity: SignalSeverity;
   confidence: SignalConfidence;
   statement: string;
@@ -337,6 +338,41 @@ export function computeStaleProductionOrdersSignals(
         context: null,
       };
     });
+}
+
+// ─── I. CLIENT PRIORITY REQUEST (Sep 16 Operational Reality Patch) ─────────
+//
+// videoLogs.isPriority is a client-settable "priority now" flag (Lunch
+// Reality Patch P1 §7) with no operator-facing surface at all -- a client
+// could mark a video priority and the operator would only ever discover it
+// by opening that exact video. This is explicitly a REQUEST, never an
+// override: it never touches queuePosition or execution order (see
+// modules/productivity/queue.ts), it only makes the request visible where
+// the operator already looks for exceptions. Locked decision (Sept 16
+// brief §4/§11): client priority must never silently reorder the real
+// execution queue -- this signal is the entire fix, not a first step
+// toward auto-reordering.
+
+export type ClientPriorityRequestRow = {
+  videoId: number;
+  title: string | null;
+  clientName: string | null;
+  projectName: string | null;
+};
+
+export function computeClientPriorityRequestSignals(
+  rows: readonly ClientPriorityRequestRow[],
+): Signal[] {
+  return rows.map((row) => ({
+    id: `client-priority-request-${row.videoId}`,
+    kind: "CLIENT_PRIORITY_REQUEST" as const,
+    severity: "WATCH" as const,
+    confidence: "HIGH" as const,
+    statement: `${row.clientName ?? "A client"} marked "${row.title ?? `Video ${row.videoId}`}" as priority`,
+    evidence: "Client-set request, not an operator schedule change -- your execution queue order is unchanged.",
+    action: { label: "Open video", href: `/productivity?video=${row.videoId}` },
+    context: { videoId: row.videoId },
+  }));
 }
 
 // ─── ordering ───────────────────────────────────────────────────────────────

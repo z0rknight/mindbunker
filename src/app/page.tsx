@@ -6,8 +6,14 @@ import {
   LogTodayButton,
   LogBikeRideButton,
   LogWalkButton,
+  RegisterUpworkTimeButton,
 } from "@/components/ui/QuickActions";
-import { getTodayIncomeByCurrency, getTodayRateEquivalents } from "@/modules/finance/actions";
+import {
+  getTodayIncomeByCurrency,
+  getTodayRateEquivalents,
+  getUpworkQuickEntryContracts,
+  getTodayUpworkRegisteredMinutes,
+} from "@/modules/finance/actions";
 import {
   getProjectStreaks,
   getTodayWorkSessionStats,
@@ -56,6 +62,8 @@ export default async function DashboardPage() {
     openCommitments,
     todayIncome,
     todaySensorOperational,
+    upworkQuickEntryContracts,
+    todayUpworkRegisteredMinutes,
   ] = await Promise.all([
     getHealthSummary(),
     getWorkSessionOverview(),
@@ -68,6 +76,8 @@ export default async function DashboardPage() {
     getOpenCommitmentsWithContext(),
     getTodayIncomeByCurrency(),
     getTodaySensorOperationalStats(),
+    getUpworkQuickEntryContracts(),
+    getTodayUpworkRegisteredMinutes(),
   ]);
 
   const now = new Date();
@@ -127,6 +137,7 @@ export default async function DashboardPage() {
           <LogTodayButton />
           <LogBikeRideButton />
           <LogWalkButton />
+          <RegisterUpworkTimeButton contracts={upworkQuickEntryContracts} />
           <Link
             href="/productivity/orders/new"
             className="flex flex-col items-center justify-center gap-2 rounded-xl border border-emerald-800/60 bg-black px-6 py-5 font-mono text-sm font-bold text-emerald-400 transition-all hover:border-emerald-500 hover:bg-zinc-950 active:scale-95"
@@ -292,6 +303,21 @@ export default async function DashboardPage() {
                   accent="green"
                   icon="⏱️"
                 />
+                {/* Sep 16 Operational Reality Patch: external, platform-
+                    reported time -- never the same fact as Client
+                    Production above (Sensor/work-session truth). Omitted
+                    entirely when nothing was registered today, matching
+                    this section's own "evidence only when it exists"
+                    convention -- never shown as a fabricated 0m. */}
+                {todayUpworkRegisteredMinutes > 0 && (
+                  <StatCard
+                    label="Registered on Upwork"
+                    value={formatClosedDuration(todayUpworkRegisteredMinutes * 60)}
+                    sub="External platform log, not Sensor truth"
+                    accent="zinc"
+                    icon="🕒"
+                  />
+                )}
               </div>
               {todayRateEquivalents.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">

@@ -71,6 +71,12 @@ export async function getProjectWorkspace(projectId: number) {
       // any future caller) can filter through isDeliverableVideo --
       // see modules/productivity/core.ts.
       isOperationalContainer: videoLogs.isOperationalContainer,
+      // Sep 17 Morning Production QA Patch: every video sharing a batch
+      // (container and deliverables alike) already carries this -- needed
+      // so a container card can route to its Production Order instead of
+      // a video workspace that doesn't exist for it (projectVideoCardHref
+      // in modules/productivity/core.ts).
+      productionOrderId: videoLogs.productionOrderId,
       cancelledAt: videoLogs.cancelledAt,
       // Quick Morning Reality Patch §4/§7: read-only here (priority is
       // client-settable, see PriorityToggle) -- the operator command-card

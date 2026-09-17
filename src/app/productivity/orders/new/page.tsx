@@ -9,7 +9,9 @@ export default async function NewProductionOrderPage() {
 
   return (
     <div className="min-h-screen bg-black px-4 py-8 text-zinc-100 sm:px-8">
-      <div className="mx-auto max-w-2xl">
+      {/* Sep 17 Morning Production QA Patch: see orders/page.tsx's comment
+          -- same one-step width bump, no other change. */}
+      <div className="mx-auto max-w-3xl">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-widest text-emerald-500">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addTransaction } from "@/modules/finance/actions";
+import { addTransaction, recordQuickUpworkTime } from "@/modules/finance/actions";
 import { upsertHealthLog } from "@/modules/health/actions";
 import { todayISO } from "@/utils/date";
 import {
@@ -364,6 +364,179 @@ export function AddExpenseButton() {
               className="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60"
             >
               {isPending ? "Saving..." : "Add Expense"}
+            </button>
+          </form>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+// ─── Register Upwork Time Button (Sep 16 Operational Reality Patch) ───────
+//
+// Operator-reported, verbatim: "[REGISTRADO NA UPWORK] pra que eu coloque
+// todo o final do dia quanto eu registrei na Upwork... Sensor vira minha
+// verdade operacional, o registro na Upwork vira log." Deliberately the
+// same shape as Add Income/Add Expense above -- a client/contract picker
+// and a duration, nothing else. The rate, currency, and "this is billing
+// evidence, source=MANUAL" plumbing are the server action's job
+// (recordQuickUpworkTime in modules/finance/actions.ts), never typed here.
+export function RegisterUpworkTimeButton({
+  contracts = [],
+}: {
+  contracts?: Array<{ id: number; clientId: number; clientName: string; platform: string; currency: string }>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [contractId, setContractId] = useState("");
+  const [hours, setHours] = useState("");
+  const [minutes, setMinutes] = useState("");
+  const [date, setDate] = useState(() => todayISO());
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<string | null>(null);
+
+  const selectedContract = contracts.find((c) => c.id === Number(contractId));
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setConfirmation(null);
+    if (!contractId) {
+      setError("Choose which client this time was for.");
+      return;
+    }
+    const totalMinutes = (Number(hours) || 0) * 60 + (Number(minutes) || 0);
+    if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) {
+      setError("Enter a duration greater than zero.");
+      return;
+    }
+    startTransition(async () => {
+      const result = await recordQuickUpworkTime({
+        contractId: Number(contractId),
+        minutes: totalMinutes,
+        date,
+        note: note.trim() || null,
+      });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      if (result.alreadyRegisteredToday) {
+        setConfirmation(
+          "Already registered for this client on this date -- this entry was not duplicated. Edit it in Finance → Contracts if the number needs to change.",
+        );
+        return;
+      }
+      setHours("");
+      setMinutes("");
+      setNote("");
+      setDate(todayISO());
+      setOpen(false);
+    });
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => {
+          setDate(todayISO());
+          setError(null);
+          setConfirmation(null);
+          setOpen(true);
+        }}
+        disabled={contracts.length === 0}
+        className="flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm bg-teal-800 hover:bg-teal-700 text-white active:scale-95 transition-all w-full cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+        title={contracts.length === 0 ? "No active hourly contract recorded yet" : undefined}
+      >
+        <span className="text-2xl">🕒</span>
+        <span>Upwork Time</span>
+      </button>
+
+      {open && (
+        <Modal title="Register Upwork time" onClose={() => setOpen(false)}>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <p className="text-[11px] leading-4 text-zinc-500">
+              Your intentional work already came from Sensor. This is a separate log of what Upwork itself shows as
+              registered -- the two are compared, never merged.
+            </p>
+            <div>
+              <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Client</label>
+              <select
+                value={contractId}
+                onChange={(e) => setContractId(e.target.value)}
+                required
+                autoFocus
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+              >
+                <option value="">Select a client…</option>
+                {contracts.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.clientName} · {c.platform}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Hours</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  value={hours}
+                  onChange={(e) => setHours(e.target.value)}
+                  placeholder="0"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Minutes</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  max="59"
+                  value={minutes}
+                  onChange={(e) => setMinutes(e.target.value)}
+                  placeholder="0"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+                />
+              </div>
+            </div>
+            {selectedContract && (
+              <p className="text-[11px] text-zinc-600">
+                Recorded as billing evidence at this contract&apos;s existing rate, in {selectedContract.currency}.
+              </p>
+            )}
+            <div>
+              <label className="text-zinc-400 text-xs uppercase tracking-wider block mb-1">Note (optional)</label>
+              <input
+                type="text"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Week 3 screenshots, etc."
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500"
+              />
+            </div>
+            {error && <p className="text-red-400 text-xs">{error}</p>}
+            {confirmation && <p className="text-amber-300 text-xs">{confirmation}</p>}
+            <button
+              type="submit"
+              disabled={isPending}
+              className="w-full bg-teal-700 hover:bg-teal-600 text-white font-bold py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60"
+            >
+              {isPending ? "Saving..." : "Register Upwork time"}
             </button>
           </form>
         </Modal>

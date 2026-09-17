@@ -18,6 +18,7 @@ import { countStaleUnresolvedCaptures } from "@/modules/captures/data";
 import { getOpenProductionOrdersForSignals } from "@/modules/production-orders/data";
 import {
   computeCashReconciliationSignals,
+  computeClientPriorityRequestSignals,
   computeOpenBlockerSignals,
   computeOverduePromiseSignals,
   computeRepeatedFrictionSignals,
@@ -88,6 +89,7 @@ export async function getActiveSignals(prefetchedCommitments?: CommitmentRow[]):
     unattributedRevenueRows,
     staleUnresolvedCaptureCount,
     openProductionOrders,
+    clientPriorityRequestRows,
   ] = await Promise.all([
     prefetchedCommitments ? Promise.resolve(prefetchedCommitments) : getOpenCommitmentsWithContext(),
     db
@@ -130,6 +132,20 @@ export async function getActiveSignals(prefetchedCommitments?: CommitmentRow[]):
     // (a pure function in ./core.ts), not here, so it stays testable
     // without a DB and consistent with every other signal in this file.
     getOpenProductionOrdersForSignals(),
+    // Sep 16 Operational Reality Patch: every client-flagged-priority
+    // video that is still active work -- a DONE video's priority flag is
+    // moot (nothing left to reorder or notice).
+    db
+      .select({
+        videoId: videoLogs.id,
+        title: videoLogs.title,
+        clientName: clients.name,
+        projectName: projects.name,
+      })
+      .from(videoLogs)
+      .leftJoin(clients, eq(clients.id, videoLogs.clientId))
+      .leftJoin(projects, eq(projects.id, videoLogs.projectId))
+      .where(and(eq(videoLogs.isPriority, true), ne(videoLogs.status, "DONE"))),
   ]);
 
   // Unattributed revenue is summed per currency in JS (not SQL GROUP BY)
@@ -154,6 +170,7 @@ export async function getActiveSignals(prefetchedCommitments?: CommitmentRow[]):
     ),
     ...computeStaleProductionOrdersSignals(openProductionOrders, now),
     ...computeUnresolvedCapturesSignal(staleUnresolvedCaptureCount),
+    ...computeClientPriorityRequestSignals(clientPriorityRequestRows),
   ];
 
   return rankSignals(signals);

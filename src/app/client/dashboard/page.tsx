@@ -160,7 +160,7 @@ export default async function ClientDashboardPage() {
                 <h2 className="mb-3 text-sm font-black uppercase tracking-widest text-violet-300">
                   Needs your attention
                 </h2>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
                   {view.readyForReview.map((video) => (
                     <VideoCard
                       key={video.id}
@@ -179,7 +179,7 @@ export default async function ClientDashboardPage() {
                 <h2 className="mb-3 text-sm font-black uppercase tracking-widest text-zinc-400">
                   Current work
                 </h2>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
                   {view.currentWork.map((video) => (
                     <VideoCard key={video.id} video={video} allowPriority={view.permissions.canSetPriority} dateLabel="Updated" />
                   ))}
@@ -192,7 +192,7 @@ export default async function ClientDashboardPage() {
                 <h2 className="mb-3 text-sm font-black uppercase tracking-widest text-zinc-400">
                   Recent deliveries
                 </h2>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
                   {view.recentDeliveries.map((video) => (
                     <VideoCard key={video.id} video={video} allowPriority={view.permissions.canSetPriority} dateLabel="Delivered" />
                   ))}

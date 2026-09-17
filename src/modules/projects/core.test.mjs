@@ -152,6 +152,50 @@ test("overdue is derived from deadline and excludes completed work", () => {
   );
 });
 
+// Sep 17 Morning Production QA Patch: reproduced directly from the
+// operator's real "September Content Waterfall" project -- 6/6 videos
+// already done, still reading "3D OVERDUE" because project.status (a
+// separate, operator-set field) had not yet been manually moved past
+// "active". Acceptance cases from the mission brief §6.
+test("CASE A: an active project with unfinished, overdue work is genuinely overdue", () => {
+  assert.equal(
+    isProjectOverdue(project({ deadline: "2026-09-01", status: "active", totalVideos: 6, doneVideos: 4 }), "2026-09-08"),
+    true,
+  );
+});
+
+test("CASE B: every real deliverable already DONE, deadline passed, status still active -- NOT overdue (this is the reported bug)", () => {
+  assert.equal(
+    isProjectOverdue(project({ deadline: "2026-09-14", status: "active", totalVideos: 6, doneVideos: 6 }), "2026-09-17"),
+    false,
+  );
+  assert.equal(
+    getProjectException(project({ deadline: "2026-09-14", status: "active", totalVideos: 6, doneVideos: 6, openBlockerCount: 0 }), "2026-09-17"),
+    null,
+    "a fully-delivered batch must show no exception badge at all, not a misleading OVERDUE one",
+  );
+});
+
+test("CASE C: a project explicitly marked completed (delivered/archived) is never overdue regardless of video counts", () => {
+  assert.equal(
+    isProjectOverdue(project({ deadline: "2026-09-01", status: "delivered", totalVideos: 6, doneVideos: 6 }), "2026-09-08"),
+    false,
+  );
+  assert.equal(
+    isProjectOverdue(project({ deadline: "2026-09-01", status: "archived", totalVideos: 3, doneVideos: 1 }), "2026-09-08"),
+    false,
+    "archived work stays closed history even if not every video reached DONE",
+  );
+});
+
+test("CASE D: a project with zero videos ever registered stays overdue on a passed deadline -- unknown never becomes healthy by assumption", () => {
+  assert.equal(
+    isProjectOverdue(project({ deadline: "2026-09-01", status: "active", totalVideos: 0, doneVideos: 0 }), "2026-09-08"),
+    true,
+    "nothing was ever produced against a passed deadline -- that is a real miss, not a healthy project",
+  );
+});
+
 // Brief C ("Final Local Ingest / Live Readiness") §9: bulk-generated names
 // like "Bonnie Content Waterfall_1" ... "_9" must not lexically sort as
 // "_1", "_10", "_2" ... -- natural (numeric-aware) sort is required.

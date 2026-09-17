@@ -28,11 +28,24 @@ test("financial/accounting signal kinds never appear in the Productivity project
   assert.deepEqual(selectProductivityAttention(signals), []);
 });
 
-test("INFO severity is excluded even for an execution-relevant kind -- it never means 'act now' for these four kinds", () => {
+test("INFO severity is excluded even for an execution-relevant kind -- it never means 'act now' for these kinds", () => {
   const signals = [
     signal({ id: "revision-drag", kind: "REVISION_DRAG", severity: "INFO" }),
   ];
   assert.deepEqual(selectProductivityAttention(signals), []);
+});
+
+// Sep 16 Operational Reality Patch: a client marking a video priority is
+// exactly "what should change what I work on next" -- it belongs in this
+// execution-relevant projection, not only in War Room.
+test("a client priority request surfaces here with a human label, not the raw signal kind", () => {
+  const signals = [
+    signal({ id: "client-priority-request-42", kind: "CLIENT_PRIORITY_REQUEST", severity: "WATCH" }),
+  ];
+  const groups = selectProductivityAttention(signals);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].kind, "CLIENT_PRIORITY_REQUEST");
+  assert.equal(groups[0].label, "Client priority requests");
 });
 
 test("multiple signals of the same kind are consolidated into one group with a count, not N separate items", () => {

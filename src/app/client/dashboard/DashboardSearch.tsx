@@ -133,7 +133,7 @@ function WorkGroup({
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
         {group.videos.map((video) => (
           <VideoCard key={video.id} video={video} allowPriority={allowPriority} />
         ))}

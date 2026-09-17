@@ -830,7 +830,18 @@ function ActiveSignalsSection({ signals }: { signals: Signal[] }) {
           {signals.map((signal) => (
             <div
               key={signal.id}
-              className={`flex flex-col gap-1 rounded-xl border p-3.5 sm:flex-row sm:items-center sm:justify-between ${severityClass(signal.severity)}`}
+              // Sep 16 Operational Reality Patch: this card renders inside
+              // War Room's narrow right-hand rail (minmax(300px,0.95fr) --
+              // see the command-grid definition above), which is well
+              // under the sm: breakpoint's viewport-width trigger. sm:
+              // media queries respond to the whole VIEWPORT, not this
+              // column's actual rendered width, so on any desktop-width
+              // screen the row layout fired anyway and squeezed statement
+              // + evidence text into a sliver next to the action buttons --
+              // exactly the "aquela quebra no texto" (ugly line-breaking)
+              // reported directly. Always stacking vertically here matches
+              // the column's real, viewport-independent width.
+              className={`flex flex-col gap-2 rounded-xl border p-3.5 ${severityClass(signal.severity)}`}
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -844,7 +855,7 @@ function ActiveSignalsSection({ signals }: { signals: Signal[] }) {
                 <p className="mt-1 text-sm font-bold text-white">{signal.statement}</p>
                 <p className="mt-0.5 text-xs text-zinc-500">{signal.evidence}</p>
               </div>
-              <div className="flex shrink-0 flex-wrap items-start gap-2">
+              <div className="flex flex-wrap items-start gap-2">
                 {signal.action && (
                   <Link
                     href={signal.action.href}

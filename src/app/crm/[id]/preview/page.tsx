@@ -48,10 +48,16 @@ export default async function ClientPreviewPage({
             deliveries) are now gated the same way the real dashboard
             gates them, so toggling them in CRM has a visible effect here
             without redesigning or expanding what this page shows. */}
+        {/* Sep 16 Operational Reality Patch: this preview is the one page
+            proven to render exactly what a client's own VideoGallery/
+            DashboardSearch grids do (see those files for the same fix) --
+            it had its own separate sm:grid-cols-2 cap that never grew past
+            two columns on any screen, caught live while QA'ing this exact
+            page at 1920px. */}
         {view.dashboardSections.showActiveWork && view.readyForReview.length > 0 && (
           <section className="mt-8">
             <h2 className="text-xs font-black uppercase tracking-wider text-violet-300 mb-3">Ready for review</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
               {view.readyForReview.map((v) => (
                 <VideoCard key={v.id} video={v} showReviewActions={false} dateLabel="Ready" />
               ))}
@@ -62,7 +68,7 @@ export default async function ClientPreviewPage({
         {view.dashboardSections.showActiveWork && view.currentWork.length > 0 && (
           <section className="mt-8">
             <h2 className="text-xs font-black uppercase tracking-wider text-cyan-300 mb-3">In production</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
               {view.currentWork.map((v) => (
                 <VideoCard key={v.id} video={v} dateLabel="Updated" />
               ))}
@@ -73,7 +79,7 @@ export default async function ClientPreviewPage({
         {view.dashboardSections.showRecentDeliveries && view.recentDeliveries.length > 0 && (
           <section className="mt-8">
             <h2 className="text-xs font-black uppercase tracking-wider text-emerald-300 mb-3">Recent deliveries</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
               {view.recentDeliveries.map((v) => (
                 <VideoCard key={v.id} video={v} dateLabel="Delivered" />
               ))}

@@ -29,7 +29,9 @@ export default async function ProductionOrderDetailPage({
 
   return (
     <div className="min-h-screen bg-black px-4 py-8 text-zinc-100 sm:px-8">
-      <div className="mx-auto max-w-3xl">
+      {/* Sep 17 Morning Production QA Patch: see orders/page.tsx's comment
+          -- same one-step width bump, no other change. */}
+      <div className="mx-auto max-w-4xl">
         <div className="mb-6">
           <Link href="/productivity/orders" className="font-mono text-xs text-zinc-500 hover:text-emerald-400">
             ← Orders

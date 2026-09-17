@@ -8,7 +8,7 @@ import { BulkEditVideosButton } from "./BulkEditVideosButton";
 import { BulkDeleteVideosButton } from "./BulkDeleteVideosButton";
 import type { VideoStatus } from "@/modules/productivity/config";
 import { resolveCoverUrl } from "@/modules/media/core";
-import { videoWorkspaceHref } from "@/modules/productivity/core";
+import { projectVideoCardHref } from "@/modules/productivity/core";
 
 type WorkspaceVideo = {
   id: number;
@@ -21,6 +21,10 @@ type WorkspaceVideo = {
   // Solo-Operator Health round: see the matching field/comment on
   // WorkspaceVideoCardData in ./ProjectVideoCards.tsx.
   cancelledAt?: Date | string | null;
+  // Sep 17 Morning Production QA Patch: see the matching field/comment on
+  // WorkspaceVideoCardData in ./ProjectVideoCards.tsx.
+  isOperationalContainer: boolean;
+  productionOrderId: number | null;
 };
 
 // Sprint 3 P1 (Project + Video visual covers): a compact 11x11 thumbnail
@@ -144,10 +148,15 @@ export function ProjectVideoList({
               )}
               clientName={clientName}
             />
-            <Link href={videoWorkspaceHref(video.id, returnTo)} className="min-w-0 flex-1">
+            <Link href={projectVideoCardHref(video, returnTo)} className="min-w-0 flex-1">
               <p className="truncate font-black text-white">{video.title ?? `Video ${formatDate(video.date)}`}</p>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-600">
                 <span>{formatDate(video.date)} · {video.revisionsCount} revision{video.revisionsCount === 1 ? "" : "s"}</span>
+                {video.isOperationalContainer && (
+                  <span className="rounded-full border border-emerald-400/50 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-emerald-200">
+                    📦 Batch container
+                  </span>
+                )}
                 {video.batchLabel && (
                   <span className="rounded-full border border-fuchsia-500/25 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-fuchsia-300">
                     {video.batchLabel}
@@ -161,9 +170,11 @@ export function ProjectVideoList({
               </div>
             </Link>
           </div>
-          <Link href={videoWorkspaceHref(video.id, returnTo)} className="flex shrink-0 items-center gap-3">
+          <Link href={projectVideoCardHref(video, returnTo)} className="flex shrink-0 items-center gap-3">
             <VideoStatusBadge status={video.status} />
-            <span className="text-sm font-black text-violet-300">Open video →</span>
+            <span className={`text-sm font-black ${video.isOperationalContainer ? "text-emerald-300" : "text-violet-300"}`}>
+              {video.isOperationalContainer ? "Open batch →" : "Open video →"}
+            </span>
           </Link>
         </div>
       ))}
