@@ -100,12 +100,13 @@ Full suite: **1196/1196 passing** (1189 carried over from the Sep 16 patch + 7 n
 
 ## 11. Live QA
 
-Performed against local dev pointed at the local D1 sandbox, using the existing dev-only QA login:
+**LOCAL FUNCTIONAL QA: GREEN.** Performed against local dev pointed at the local D1 sandbox, using the existing dev-only QA login:
 - Reconstructed the exact reported shape (a project with a container + deliverables, all real deliverables DONE, deadline long passed, status still "active"): OVERDUE badge correctly gone; a genuine unrelated BLOCKED exception on the same project correctly still shown (proves the fix is selective, not a blanket suppression).
 - Clicked the container card's "Open batch →": landed on the real Production Order detail page (phase DELIVERED — correctly derived from its one active, DONE deliverable — commercial context, time tracked, deliverables list).
 - Clicked an ordinary deliverable's "Open video →": landed on its own Video Workspace, unchanged.
 - LET'S COOK list page verified at 1440px and 375px mobile: no overflow, no regression, modestly wider as requested.
-- Production: Operator Worker's login page confirmed reachable and rendering post-deploy.
+
+**PRODUCTION DEPLOY/REACHABILITY: GREEN.** The Operator Worker's login page was confirmed reachable and rendering post-deploy. This is reachability only, not authenticated behavior — no production QA session logged in as the operator was performed, so the four functional checks above (overdue badge, container routing, video routing, wide-screen layout) were **not** independently re-verified against production/authenticated data. Precise wording: everything above the two headers in this section is what was actually established; nothing here should be read as "live-verified in production" beyond reachability.
 
 No cross-client leakage observed. No commercial fact fabricated. No migration ran.
 
@@ -114,3 +115,41 @@ No cross-client leakage observed. No commercial fact fabricated. No migration ra
 1. Container/batch manipulation from the Project page is now correctly *routed*, but still opens a separate page rather than expanding in place — acceptable for this patch's scope, worth revisiting only if it becomes a real recurring friction point.
 2. The Finish-active-video + delivery-link shortcut (Track E) remains a legitimate, not-yet-built convenience.
 3. `batchLabel` as a single string will keep being a soft mismatch every time the operator wants more than one tag on a batch — a real future domain decision, not a bug.
+
+## 13. Source authority closure (2026-09-17, same day, follow-up)
+
+The functional work above (§4–§8) was correct and complete, but it was deployed straight from an uncommitted working tree — `git log` still read `ba9aa0c` while the live Operator Worker (`ec6ee3c6-d3f2-47fb-89d2-89534e281335`) actually ran Sep 16 + Sep 17 source that existed nowhere in version control. This section closes that gap.
+
+**Audit.** Every changed/untracked path was classified before touching anything:
+- **SEP16 PRODUCT CHANGE** (20 files) + **SEP17 PRODUCT CHANGE** (8 files) + **1 file with both** (`ProjectVideoCards.tsx`) + **1 new SEP16 test file** (`upwork-quick-entry.integration.test.mjs`) = 30 files.
+- **REPORT/DOCUMENTATION**: the two patch reports (this file and the Sep 16 one).
+- **UNRELATED / MUST NOT COMMIT**: `RMEDIA_SENSOR_NATIVE_SLEEP_PATCH_2026_09.md` — untracked from an earlier, unrelated mission, present before the Sep 16 patch even began. Left untouched, still untracked; not part of this closure.
+- No dependency, lockfile, `wrangler.jsonc`, or `.env*` file appeared in the diff at any point — confirmed via `git diff --stat` against those exact paths (empty). `.wrangler/` and `.open-next/` (local D1 state, build output) are gitignored and were never part of the tracked diff.
+
+**Canonical commit.** Two commits, source and documentation kept separate:
+- `9e25efb` — the 30 product/test files (Sep 16 + Sep 17, one coherent commit; the two patches share several files too closely to split without a fragile line-level partial commit).
+- `be94a4e` — the two patch reports.
+
+`be94a4e` is now HEAD. Working tree is clean except the one justified, pre-existing, out-of-scope file above.
+
+**Gates from the clean commit** — all re-run from `be94a4e`, not carried over from the earlier session:
+- `git diff --check`: clean.
+- `npm test`: **1196/1196**, 0 regressions.
+- `npx tsc --noEmit`: clean.
+- `npx eslint .`: same single pre-existing error as before (`react-hooks/set-state-in-effect`, `ProductivityQuickActions.tsx:131`, confirmed via an earlier stash-and-relint to predate both patches) — not introduced by this work.
+- `npm run build`: clean.
+
+**Blocked: `production/current` and redeploy-from-commit.** Both the branch fast-forward (`git push origin HEAD:release/video-workspace-hotfix`, then the same SHA onto `production/current`) and a fresh `npm run deploy` from this exact commit were denied by this session's auto-mode safety classifier (reasons: "Data Exfiltration" for the git push and read-only `wrangler deployments list`; "Out-of-Place Publication" for `npm run deploy`) before any of them executed — nothing was partially pushed or partially deployed. This is a permission gate on the tool call itself, not a repository or deploy failure.
+
+**What is and isn't proven as a result:**
+- `origin/production/current` (`7a06f444...`) and `origin/release/video-workspace-hotfix` (`5c8404f...`) are both confirmed clean ancestors of `be94a4e` (`git merge-base --is-ancestor` on both, exit true) — a fast-forward to `be94a4e` is safe whenever it's run.
+- The live Operator Worker (`ec6ee3c6-d3f2-47fb-89d2-89534e281335`) was built from a working tree that received **zero source edits** between that deploy and this commit — only `git add`/`git commit` ran in between. That makes it accurate to say `ec6ee3c6` and commit `be94a4e` represent the same source content, but this is a chain-of-custody argument from this session's own action log, **not** a cryptographic or build-provenance proof, and no fresh redeploy from `be94a4e` was actually performed.
+- `production/current` has **not** been advanced. It still points at whatever it pointed at before this session (last known: `7a06f444...`), which predates both patches.
+
+**What is needed to actually close this:** either grant Bash permission for `git push` / `npm run deploy` / `wrangler` in this session and re-run this closure step, or run these two commands directly:
+```bash
+git push origin HEAD:release/video-workspace-hotfix
+git push origin HEAD:production/current
+npm run deploy
+```
+(all three are safe fast-forwards / redeploys of already-tested, already-committed source — no rebase, no force push, no schema change).
