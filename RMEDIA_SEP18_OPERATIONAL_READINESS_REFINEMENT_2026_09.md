@@ -142,11 +142,16 @@ Two commits: one for the three fixes' source + tests, one for the two reports (t
 
 | | |
 |---|---|
-| Canonical commit (HEAD) | see final output block |
-| `origin/production/current` | matches HEAD |
-| `origin/release/video-workspace-hotfix` | matches HEAD |
-| Operator Worker | see final output block |
-| Client Worker | unchanged (`6a619197-384e-43d4-8eda-ac56c662153d`) — not redeployed, nothing client-facing changed |
+| Canonical commit (HEAD) | `5de71417c58f47f77ea8ede9435a5e11fecd4b93` |
+| `origin/production/current` | `5de71417c58f47f77ea8ede9435a5e11fecd4b93` (confirmed identical) |
+| `origin/release/video-workspace-hotfix` | `5de71417c58f47f77ea8ede9435a5e11fecd4b93` (confirmed identical) |
+| Operator Worker (deployed from this commit) | `7c7996b1-cd34-457b-8383-cf9b8001fc12` |
+| Operator rollback target | `5ec148b4-c51a-40cf-b7f1-fe26325638b3` (this morning's deploy) |
+| Client Worker | unchanged, `6a619197-384e-43d4-8eda-ac56c662153d` — not redeployed, nothing client-facing changed this round |
+
+Commit, both remote branches, and the live Operator Worker all agree. Production reachability confirmed post-deploy.
+
+**SOURCE AUTHORITY: GREEN.**
 
 ## 15. Afternoon QA playbook
 
