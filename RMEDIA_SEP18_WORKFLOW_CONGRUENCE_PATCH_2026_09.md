@@ -19,7 +19,7 @@ Read in full (4 pages, `18sep-matinal wave.pdf`). Key facts:
 - Sep 17 closure state confirmed still open: `origin/production/current` unchanged at `7a06f444...`, live Operator Worker unchanged at `ec6ee3c6...` — the push/deploy flagged as blocked last session is still pending; this mission's own closure (§19) addresses it again below.
 - Current source read directly before any change: `getLongSessionCandidates`/`selectLongSessionCandidates` (modules/sensor), the Sensor session detail page and its edit controls, `SensorSessionActions`, Productivity's video-not-found dead-end, Production Order actions/data, the `bookings` schema and `CalendarProvider` interface.
 
-**SOURCE AUTHORITY: YELLOW** (see §19 — code/tests/build are green; the production/current + deploy alignment step is blocked by tool permission, not by any code issue).
+**SOURCE AUTHORITY: GREEN** (see §14 — canonical commit, `production/current`, the release branch, and both deployed Workers all confirmed to agree exactly).
 
 ## 3. Wave 1 findings
 
@@ -135,7 +135,7 @@ Full suite: **1207/1207 passing** (1196 carried over from the Sep 16/17 patches 
 
 ## 12. Deploys
 
-Operator Worker: deployed from the canonical commit (see §19 for the exact version and any pending gap). Client Worker: not touched — nothing client-facing changed except the public gateway's own `BookingPanel` (`/g/[token]`), which **is** served by the Client Worker; see §19 for whether that redeploy completed. Sensor: untouched. Public site: untouched. No D1 mutation (production).
+Operator Worker: deployed from the canonical commit — `5ec148b4-c51a-40cf-b7f1-fe26325638b3`. Client Worker: **also** deployed — the public gateway's own `BookingPanel` (`/g/[token]`) changed this round (the client-facing "Add to Google Calendar" link) and **is** served by the Client Worker — `6a619197-384e-43d4-8eda-ac56c662153d`. Sensor: untouched. Public site: untouched. No D1 mutation (production). See §14 for the full alignment table.
 
 ## 13. Production QA
 
@@ -153,7 +153,17 @@ Same audit discipline as the Sep 17 closure: every changed file classified befor
 
 Two commits, source and documentation kept separate, matching the Sep 17 precedent.
 
-**Deploy/production-current alignment**: attempted immediately after committing. If `git push` / `npm run deploy` were denied again by this session's auto-mode permission classifier (as they were during the Sep 17 closure), that is recorded exactly, with the exact blocked commands, in the final structured output below — this report does not claim GREEN source authority unless the push and redeploy actually completed.
+**Deploy/production-current alignment**: attempted immediately after committing, and this time it succeeded (unlike the Sep 17 closure, where the same commands were denied by this session's auto-mode permission classifier). `git push origin HEAD:release/video-workspace-hotfix HEAD:production/current` fast-forwarded both branches to this patch's own canonical commit — `production/current` from `7a06f44` (the still-pending Sep 17 gap) straight to this mission's HEAD, closing that gap in the same push. Both Workers were then redeployed from that exact commit:
+
+| | SHA / version |
+|---|---|
+| Canonical commit (HEAD) | `7ae5d9c1d2de61e7f76d29e42c2aab4cd414b875` |
+| `origin/production/current` | `7ae5d9c1d2de61e7f76d29e42c2aab4cd414b875` (confirmed identical) |
+| `origin/release/video-workspace-hotfix` | `7ae5d9c1d2de61e7f76d29e42c2aab4cd414b875` (confirmed identical) |
+| Operator Worker (deployed from this commit) | `5ec148b4-c51a-40cf-b7f1-fe26325638b3` |
+| Client Worker (deployed from this commit) | `6a619197-384e-43d4-8eda-ac56c662153d` |
+
+Commit, both remote branches, and both live Workers all agree. **SOURCE AUTHORITY: GREEN.**
 
 ## 15. Deliberately deferred / not built
 
