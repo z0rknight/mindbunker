@@ -235,8 +235,12 @@ export default async function SensorActivityPage({
                 <Link
                   href={
                     candidate.kind === "STAGING"
-                      ? `/productivity/sensor/sessions/${candidate.id}`
-                      : "/productivity/sessions"
+                      ? `/productivity/sensor/sessions/${candidate.id}?returnTo=${encodeURIComponent("/productivity/sensor")}`
+                      // Sep 18 Morning Congruence Patch: deep-linked to this
+                      // candidate's own video instead of the bare, unfiltered
+                      // ledger -- lands directly on the correction-capable
+                      // row, not a full history the operator has to re-search.
+                      : `/productivity/sessions?video=${candidate.videoId}`
                   }
                   className="shrink-0 text-xs font-bold text-amber-300 hover:text-amber-200"
                 >

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { getAuthenticatedDb } from "@/db";
 import { clients, commercialContracts, productionOrders, projects, videoLogs } from "@/db/schema";
 import { todayISO } from "@/utils/date";
@@ -225,6 +225,94 @@ export async function ingestProductionOrder(
 // history. The item simply stops counting as "active" everywhere
 // activeDeliverableItems (./core.ts) is used: phase derivation, active
 // counts, and the equivalent-per-active-item denominator.
+// ─── Existing-video batch composition (Sep 18 Morning Congruence Patch) ───
+//
+// Operator-reported, verbatim: "seria interessante o let's cook dar a opção
+// de começar a trabalhar em um lote já existente de videos, eu aponto os
+// videos que vão formar o 'pedido' e trabalho no lote todo quando for o
+// caso." This only ever sets videoLogs.productionOrderId -- no video is
+// created, copied, or moved across a client/project boundary; every other
+// fact on the row (status, delivery/review evidence, Work Sessions,
+// billing allocations, the video's own id) is completely untouched.
+//
+// Deliberately narrow, matching the brief's hard walls (§22): a video may
+// only be attached if it (a) belongs to the exact same project the order
+// itself belongs to -- so client integrity is trivially preserved, nothing
+// about "which client/project owns this video" ever changes -- and (b) is
+// not already part of ANY order. Re-parenting a video that's already in a
+// different order is a real, separate decision ("was this batch wrong, or
+// is the video moving on purpose?") this action does not attempt to guess;
+// it fails loudly instead of silently reassigning.
+export async function attachExistingVideosToProductionOrder(
+  orderId: number,
+  videoIds: number[],
+): Promise<ProductionOrderActionResult> {
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return { success: false, error: "Invalid Production Order." };
+  }
+  if (!Array.isArray(videoIds) || videoIds.length === 0) {
+    return { success: false, error: "Select at least one existing video." };
+  }
+  if (videoIds.length > 50) {
+    return { success: false, error: "Attach at most 50 videos at a time." };
+  }
+  for (const id of videoIds) {
+    if (!Number.isInteger(id) || id <= 0) {
+      return { success: false, error: "Invalid video selection." };
+    }
+  }
+
+  const db = await getAuthenticatedDb();
+  const [order] = await db
+    .select({ id: productionOrders.id, projectId: productionOrders.projectId, state: productionOrders.state })
+    .from(productionOrders)
+    .where(eq(productionOrders.id, orderId))
+    .limit(1);
+  if (!order) return { success: false, error: "Production Order not found." };
+  if (!isProductionOrderMutable(order)) return { success: false, error: "This order is no longer open." };
+
+  const rows = await db
+    .select({
+      id: videoLogs.id,
+      projectId: videoLogs.projectId,
+      productionOrderId: videoLogs.productionOrderId,
+      isOperationalContainer: videoLogs.isOperationalContainer,
+      cancelledAt: videoLogs.cancelledAt,
+    })
+    .from(videoLogs)
+    .where(inArray(videoLogs.id, videoIds));
+
+  if (rows.length !== videoIds.length) {
+    return { success: false, error: "One or more selected videos could not be found." };
+  }
+  for (const row of rows) {
+    if (row.isOperationalContainer) {
+      return { success: false, error: "A batch container cannot itself be attached as a deliverable." };
+    }
+    if (row.cancelledAt !== null) {
+      return { success: false, error: "A cancelled video cannot be attached to a batch." };
+    }
+    if (row.projectId !== order.projectId) {
+      return { success: false, error: "Every selected video must already belong to this order's own project." };
+    }
+    if (row.productionOrderId !== null) {
+      return { success: false, error: "One or more selected videos already belong to a different Production Order." };
+    }
+  }
+
+  await db
+    .update(videoLogs)
+    .set({ productionOrderId: orderId })
+    .where(inArray(videoLogs.id, videoIds));
+
+  revalidatePath(`/productivity/orders/${orderId}`);
+  revalidatePath("/productivity/orders");
+  revalidatePath(`/projects/${order.projectId}`);
+  revalidatePath("/war-room");
+
+  return { success: true, orderId };
+}
+
 export async function cancelProductionOrderItem(
   videoId: number,
 ): Promise<ProductionOrderActionResult> {

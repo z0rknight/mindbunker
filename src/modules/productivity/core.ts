@@ -666,7 +666,12 @@ export function projectVideoCardHref(
   returnTo?: string,
 ): string {
   if (video.isOperationalContainer && video.productionOrderId != null) {
-    return `/productivity/orders/${video.productionOrderId}`;
+    // Sep 18 Morning Congruence Patch: without this, "back" from a
+    // container always landed on the generic Orders list regardless of
+    // where the operator actually came from -- see the Production Order
+    // detail page's own returnTo handling.
+    const base = `/productivity/orders/${video.productionOrderId}`;
+    return returnTo ? `${base}?returnTo=${encodeURIComponent(returnTo)}` : base;
   }
   return videoWorkspaceHref(video.id, returnTo);
 }

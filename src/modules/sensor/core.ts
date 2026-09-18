@@ -496,6 +496,25 @@ export type LongSessionStagingRow = LongSessionSourceRow & {
   approvalState: "PENDING" | "APPROVED" | "ARCHIVED" | "DELETED";
 };
 
+// Sep 18 Morning Congruence Patch: a genuinely non-CLIENT (LEAD/INTERNAL/
+// ADMIN) sensor_sessions row can NEVER carry a video_id -- enforced at the
+// DB level by sensor_sessions_context_video_check ("context_type = 'CLIENT'
+// or video_id is null") -- so the staging query's INNER JOIN on video_logs
+// silently drops every one of them, no matter how long. That is the actual
+// root gap behind the operator's own complaint ("fazendo trabalhos internos
+// eu acabei deixando o sensor ligado... 22h e 9h"): these sessions finalize
+// straight to ARCHIVED (see SensorSessionActions.tsx) with no PENDING/Inbox
+// stop either, so nothing anywhere ever flagged them for review. This is a
+// second, separate source feeding the same candidate list below -- never
+// joined to a video, identified by its own context instead.
+export type LongSessionNonClientRow = {
+  id: number;
+  contextType: "LEAD" | "INTERNAL" | "ADMIN";
+  contextLabel: string | null;
+  startedAt: number;
+  endedAt: number | null;
+};
+
 export type LongSessionCandidate = {
   id: number;
   kind: "STAGING" | "CANONICAL";
@@ -504,6 +523,13 @@ export type LongSessionCandidate = {
   durationSeconds: number;
   editable: boolean;
   approved: boolean;
+  // Sep 18 Morning Congruence Patch: needed so the panel can deep-link a
+  // CANONICAL (Work Session) candidate straight to its own video's
+  // correction-capable Session Ledger view (/productivity/sessions?video=)
+  // instead of the bare, unfiltered ledger. null only for a non-CLIENT
+  // STAGING candidate (see LongSessionNonClientRow above), which has no
+  // video to link -- its own session detail page is still reachable by id.
+  videoId: number | null;
 };
 
 export function selectLongSessionCandidates(
@@ -511,6 +537,7 @@ export function selectLongSessionCandidates(
   canonicalRows: readonly LongSessionSourceRow[],
   now: Date,
   thresholdSeconds: number = LONG_SESSION_THRESHOLD_SECONDS,
+  nonClientRows: readonly LongSessionNonClientRow[] = [],
 ): LongSessionCandidate[] {
   const nowSeconds = Math.floor(now.getTime() / 1_000);
 
@@ -525,6 +552,7 @@ export function selectLongSessionCandidates(
         durationSeconds,
         editable: row.approvalState === "PENDING" && row.endedAt !== null,
         approved: row.approvalState === "APPROVED",
+        videoId: row.videoId,
         startedAt: row.startedAt,
       };
     })
@@ -541,12 +569,35 @@ export function selectLongSessionCandidates(
         durationSeconds,
         editable: row.endedAt !== null,
         approved: true,
+        videoId: row.videoId,
         startedAt: row.startedAt,
       };
     })
     .filter((row) => row.durationSeconds > thresholdSeconds);
 
-  return [...staging, ...canonical]
+  // Same durability rule as SensorSessionDetailControls' canEditNonClient:
+  // a finalized (ARCHIVED) non-CLIENT session is directly correctable, no
+  // approval gate. Never "approved" -- that word describes the CLIENT
+  // staging->Work Session path specifically, which this row never went
+  // through.
+  const nonClient = nonClientRows
+    .map((row) => {
+      const durationSeconds = (row.endedAt ?? nowSeconds) - row.startedAt;
+      return {
+        id: row.id,
+        kind: "STAGING" as const,
+        date: new Date(row.startedAt * 1_000).toISOString().slice(0, 10),
+        target: row.contextLabel ? `${row.contextType} · ${row.contextLabel}` : row.contextType,
+        durationSeconds,
+        editable: row.endedAt !== null,
+        approved: false,
+        videoId: null,
+        startedAt: row.startedAt,
+      };
+    })
+    .filter((row) => row.durationSeconds > thresholdSeconds);
+
+  return [...staging, ...canonical, ...nonClient]
     .sort((a, b) => b.startedAt - a.startedAt)
     .map(({ startedAt, ...candidate }) => candidate);
 }

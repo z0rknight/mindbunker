@@ -8,6 +8,7 @@ import {
   getAvailableBookingSlots,
   rescheduleGatewayBooking,
 } from "@/modules/booking/actions";
+import { buildGoogleCalendarUrl } from "@/modules/booking/core";
 
 type Slot = { startsAt: string; endsAt: string };
 type BookingSummary = {
@@ -169,6 +170,23 @@ export function BookingPanel({
         <p className="mt-2 text-sm leading-6 text-zinc-400">
           The time above uses your device timezone. Emmanuel will send the call details separately.
         </p>
+        {/* Sep 18 Morning Congruence Patch: smallest useful calendar
+            behavior for a confirmed client booking -- a plain Google
+            "render" link built from this booking's own real start/end in
+            the visitor's own resolved timezone. No OAuth, nothing stored. */}
+        <a
+          href={buildGoogleCalendarUrl({
+            title: "Call with RMEDIA",
+            startsAt: initialBooking.startsAt,
+            endsAt: initialBooking.endsAt,
+            timezone,
+          })}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex text-sm font-bold text-cyan-300 hover:text-cyan-200"
+        >
+          + Add to Google Calendar →
+        </a>
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
           <button
             type="button"

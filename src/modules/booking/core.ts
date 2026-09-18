@@ -310,3 +310,40 @@ export function isConfirmedBooking(status: BookingStatus) {
   return status === "confirmed";
 }
 
+// ─── Google Calendar link (Sep 18 Morning Congruence Patch) ────────────────
+//
+// Operator-reported, verbatim: "não seria má ideia conectar o mindbunker ao
+// meu calendar do Google." The domain already carries a full CalendarProvider
+// interface + a real "google" entry in CALENDAR_PROVIDERS (modules/booking/
+// provider.ts, config.ts) for a future OAuth connector -- but no
+// GoogleCalendarProvider exists yet, and provisioning OAuth consent, token
+// storage/refresh, calendar selection, and duplicate/update/delete semantics
+// for one link is not justified by today's evidence. This is the "smallest
+// calendar win" the brief prefers instead (§26/§31): a confirmed booking
+// already has real, canonical start/end/timezone -- Google's own "render"
+// URL template needs nothing more than that to open a pre-filled event the
+// operator (or the client) confirms themselves. No OAuth, no server-side
+// event creation, no stored provider_event_id, no D1 write of any kind.
+//
+// Deliberately excludes anything operator-only: no qualification notes, no
+// opportunity stage, no internal pipeline state -- only the two facts a
+// calendar event legitimately needs (who, when).
+export function buildGoogleCalendarUrl(input: {
+  title: string;
+  startsAt: string; // ISO instant
+  endsAt: string; // ISO instant
+  timezone: string;
+  details?: string;
+}): string {
+  const toGoogleDate = (iso: string) =>
+    new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: input.title,
+    dates: `${toGoogleDate(input.startsAt)}/${toGoogleDate(input.endsAt)}`,
+    ctz: input.timezone,
+  });
+  if (input.details) params.set("details", input.details);
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+

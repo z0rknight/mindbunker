@@ -8,24 +8,41 @@ import {
 import { VIDEO_STATUS_LABELS } from "@/modules/productivity/config";
 import { formatClosedDuration } from "@/modules/work-sessions/core";
 import { formatCurrency } from "@/utils/date";
+import { isSafeInternalPath } from "@/utils/navigation";
 import { CancelItemButton, OrderLifecycleActions } from "./OrderDetailActions";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProductionOrderDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ returnTo?: string | string[] }>;
 }) {
   const { id } = await params;
   const orderId = Number(id);
   if (!Number.isInteger(orderId) || orderId <= 0) notFound();
 
-  const order = await getProductionOrderDetail(orderId);
+  const [order, query] = await Promise.all([getProductionOrderDetail(orderId), searchParams]);
   if (!order) notFound();
+
+  // Sep 18 Morning Congruence Patch: a container card on a Project page
+  // (projectVideoCardHref in modules/productivity/core.ts) now routes here
+  // -- without this, "back" always landed on the generic Orders list
+  // regardless of whether the operator actually came from a Project, the
+  // same lost-context pattern reported for Sensor Activity. Same
+  // isSafeInternalPath-validated pattern used throughout Productivity.
+  const rawReturnTo = query.returnTo;
+  const safeReturnTo =
+    typeof rawReturnTo === "string" && isSafeInternalPath(rawReturnTo) ? rawReturnTo : undefined;
 
   const activeItems = order.items.filter((item) => item.cancelledAt === null);
   const cancelledItems = order.items.filter((item) => item.cancelledAt !== null);
+  // This exact order page (its own returnTo preserved) -- so a deliverable
+  // opened from here returns to here, and from there the chain back to
+  // wherever the operator originally started (e.g. a Project) still works.
+  const orderSelfHref = `/productivity/orders/${orderId}${safeReturnTo ? `?returnTo=${encodeURIComponent(safeReturnTo)}` : ""}`;
 
   return (
     <div className="min-h-screen bg-black px-4 py-8 text-zinc-100 sm:px-8">
@@ -33,8 +50,8 @@ export default async function ProductionOrderDetailPage({
           -- same one-step width bump, no other change. */}
       <div className="mx-auto max-w-4xl">
         <div className="mb-6">
-          <Link href="/productivity/orders" className="font-mono text-xs text-zinc-500 hover:text-emerald-400">
-            ← Orders
+          <Link href={safeReturnTo ?? "/productivity/orders"} className="font-mono text-xs text-zinc-500 hover:text-emerald-400">
+            {safeReturnTo ? "← Back" : "← Orders"}
           </Link>
         </div>
 
@@ -151,7 +168,7 @@ export default async function ProductionOrderDetailPage({
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Link
-                    href={`/productivity?video=${item.videoId}`}
+                    href={`/productivity?video=${item.videoId}&returnTo=${encodeURIComponent(orderSelfHref)}`}
                     className="rounded border border-zinc-700 px-2.5 py-1 text-[11px] font-bold text-zinc-300 hover:border-emerald-500 hover:text-emerald-300"
                   >
                     Open →

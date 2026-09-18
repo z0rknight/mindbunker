@@ -203,6 +203,17 @@ test("projectVideoCardHref: a container with no productionOrderId falls back to 
   );
 });
 
+// Sep 18 Morning Congruence Patch: without this, "back" from a container's
+// Production Order always landed on the generic Orders list regardless of
+// which Project the operator actually opened it from -- the same
+// lost-context pattern reported for Sensor Activity.
+test("projectVideoCardHref: a container carries returnTo through to its Production Order", () => {
+  assert.equal(
+    projectVideoCardHref({ id: 41, isOperationalContainer: true, productionOrderId: 9 }, "/projects/8"),
+    "/productivity/orders/9?returnTo=%2Fprojects%2F8",
+  );
+});
+
 test("video input preserves its project and client references", () => {
   const result = validateVideoInput({
     title: "  Launch cut  ",

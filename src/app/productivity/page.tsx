@@ -369,6 +369,19 @@ export default async function ProductivityPage({
               : "This video does not exist, or it is a technical container that has no workspace of its own."}
           </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+            {/* Sep 18 Morning Congruence Patch: this dead-end used to offer
+                only two generic destinations, neither of which was where the
+                operator actually came from (e.g. Sensor Activity / Long
+                Session Review) -- reported directly as "acabei parando em
+                projects, saindo completamente do meu escopo original."
+                safeReturnTo is the same validated origin this page already
+                threads through the working-video path above; when present,
+                it is the one link that actually returns to context. */}
+            {safeReturnTo && (
+              <Link href={safeReturnTo} className="min-h-10 rounded-lg border border-violet-500/60 bg-violet-950/30 px-4 py-2 text-xs font-black text-violet-200 hover:border-violet-400">
+                ← Back to where you came from
+              </Link>
+            )}
             <Link href="/productivity" className="min-h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-black text-zinc-200 hover:border-violet-500/60">
               Back to Productivity
             </Link>

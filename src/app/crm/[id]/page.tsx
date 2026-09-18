@@ -197,6 +197,7 @@ export default async function ClientDetailPage({
       <OpportunityPanel
         client={{
           id: client.id,
+          name: client.name,
           opportunityStage: client.opportunityStage,
           serviceInterest: client.serviceInterest,
           nextAction: client.nextAction,

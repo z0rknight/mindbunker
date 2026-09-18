@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSensorSessionDetail } from "@/modules/sensor/data";
 import { formatClosedDuration, type WorkSessionActivityType } from "@/modules/work-sessions/core";
 import { getVideoOptionsForCorrection } from "@/modules/work-sessions/data";
+import { isSafeInternalPath } from "@/utils/navigation";
 import { SensorSessionDetailControls } from "./SensorSessionDetailControls";
 
 export const dynamic = "force-dynamic";
@@ -18,16 +19,28 @@ function formatDateTime(seconds: number | null) {
 
 export default async function SensorSessionDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ returnTo?: string | string[] }>;
 }) {
   const { id: rawId } = await params;
   if (!/^\d+$/u.test(rawId)) notFound();
-  const [data, videoOptions] = await Promise.all([
+  const [data, videoOptions, query] = await Promise.all([
     getSensorSessionDetail(Number(rawId)),
     getVideoOptionsForCorrection(),
+    searchParams,
   ]);
   if (!data) notFound();
+  // Sep 18 Morning Congruence Patch: carried from wherever this session was
+  // actually opened from (Long Session Review, the Sensor Inbox list) so
+  // the outbound links below -- and the "Video not found" dead-end on
+  // Productivity, if one of them leads there -- can return to that real
+  // origin instead of a generic page. isSafeInternalPath is the same
+  // internal-only, validated gate Productivity's own returnTo already uses.
+  const rawReturnTo = query.returnTo;
+  const safeReturnTo =
+    typeof rawReturnTo === "string" && isSafeInternalPath(rawReturnTo) ? rawReturnTo : undefined;
   const { session, apps, signals } = data;
   const duration = session.ended_at === null
     ? Math.max(0, Number(data.now) - Number(session.started_at))
@@ -125,10 +138,30 @@ export default async function SensorSessionDetailPage({
 
       <div className="mt-6 flex flex-wrap gap-4 text-xs font-bold">
         {session.video_id !== null && (
-          <Link href={`/productivity?video=${session.video_id}`} className="text-cyan-400 hover:text-cyan-300">Open Video workspace →</Link>
+          // Sep 18 Morning Congruence Patch: carries this page's own
+          // returnTo forward -- if that video doesn't resolve (deleted,
+          // or a container id), Productivity's "Video not found" dead-end
+          // can still offer a way back to here instead of only
+          // Productivity/Projects.
+          <Link
+            href={`/productivity?video=${session.video_id}${safeReturnTo ? `&returnTo=${encodeURIComponent(safeReturnTo)}` : ""}`}
+            className="text-cyan-400 hover:text-cyan-300"
+          >
+            Open Video workspace →
+          </Link>
         )}
         {session.approved_work_session_id !== null && (
-          <Link href="/productivity/sessions" className="text-emerald-400 hover:text-emerald-300">Open canonical Ledger →</Link>
+          // Deep-linked to this exact video's own correction-capable table
+          // view (see /productivity/sessions' own ?video= handling) instead
+          // of the bare, unfiltered ledger -- this IS the canonical
+          // Work Session correction path the CLIENT boundary rule (this
+          // mission's brief §7) points to for an already-approved session.
+          <Link
+            href={session.video_id !== null ? `/productivity/sessions?video=${session.video_id}` : "/productivity/sessions"}
+            className="text-emerald-400 hover:text-emerald-300"
+          >
+            Open canonical Ledger →
+          </Link>
         )}
       </div>
     </div>

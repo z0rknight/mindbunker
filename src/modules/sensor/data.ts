@@ -13,6 +13,7 @@ import {
   type LongSessionCandidate,
   type LongSessionSourceRow,
   type LongSessionStagingRow,
+  type LongSessionNonClientRow,
   type OpenSensorSession,
   type SensorOperationalRow,
   type TodaySensorOperationalStats,
@@ -463,12 +464,20 @@ type RawLongCanonicalRow = {
 // into JS to filter -- the pure decision (what counts as "long", how to
 // combine/sort the two sources) still lives entirely in
 // selectLongSessionCandidates.
+type RawLongNonClientRow = {
+  id: number;
+  context_type: "LEAD" | "INTERNAL" | "ADMIN";
+  context_label: string | null;
+  started_at: number;
+  ended_at: number | null;
+};
+
 export async function getLongSessionCandidates(
   thresholdSeconds: number = LONG_SESSION_THRESHOLD_SECONDS,
 ): Promise<LongSessionCandidate[]> {
   const db = await getAuthenticatedDb();
   const nowSeconds = Math.floor(Date.now() / 1_000);
-  const [staging, canonical] = await Promise.all([
+  const [staging, canonical, nonClient] = await Promise.all([
     db.$client
       .prepare(`
         SELECT ss.id, ss.video_id, COALESCE(v.title, 'Video ' || v.date) AS video_title,
@@ -494,6 +503,26 @@ export async function getLongSessionCandidates(
       `)
       .bind(nowSeconds, thresholdSeconds)
       .all<RawLongCanonicalRow>(),
+    // Sep 18 Morning Congruence Patch: a non-CLIENT sensor_sessions row can
+    // never have a video_id (sensor_sessions_context_video_check), so it
+    // can never appear in the staging query above -- this is the separate
+    // source that actually surfaces it. Never DELETED; PENDING is excluded
+    // on purpose (a non-CLIENT session is finalized straight to ARCHIVED by
+    // the Stop write itself, so a still-PENDING one is either mid-session
+    // or a data anomaly worth investigating directly, not a "long session"
+    // to flag here).
+    db.$client
+      .prepare(`
+        SELECT ss.id, ss.context_type, ss.context_label, ss.started_at, ss.ended_at
+        FROM sensor_sessions ss
+        WHERE ss.context_type != 'CLIENT'
+          AND ss.approval_state = 'ARCHIVED'
+          AND (COALESCE(ss.ended_at, ?1) - ss.started_at) > ?2
+        ORDER BY ss.started_at DESC
+        LIMIT 50
+      `)
+      .bind(nowSeconds, thresholdSeconds)
+      .all<RawLongNonClientRow>(),
   ]);
 
   const stagingRows: LongSessionStagingRow[] = staging.results.map((row) => ({
@@ -511,6 +540,13 @@ export async function getLongSessionCandidates(
     startedAt: Number(row.started_at),
     endedAt: row.ended_at === null ? null : Number(row.ended_at),
   }));
+  const nonClientRows: LongSessionNonClientRow[] = nonClient.results.map((row) => ({
+    id: Number(row.id),
+    contextType: row.context_type,
+    contextLabel: row.context_label,
+    startedAt: Number(row.started_at),
+    endedAt: row.ended_at === null ? null : Number(row.ended_at),
+  }));
 
-  return selectLongSessionCandidates(stagingRows, canonicalRows, new Date(), thresholdSeconds);
+  return selectLongSessionCandidates(stagingRows, canonicalRows, new Date(), thresholdSeconds, nonClientRows);
 }

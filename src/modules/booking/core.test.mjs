@@ -10,6 +10,7 @@ import {
   validateAvailabilityWindows,
   validateBookingSettings,
   validatePublicBookingRequestInput,
+  buildGoogleCalendarUrl,
 } from "./core.ts";
 import { getCalendarProvider, MockCalendarProvider } from "./provider.ts";
 
@@ -170,4 +171,33 @@ test("validatePublicBookingRequestInput passes through optional phone/serviceInt
   });
   assert.equal(bogus.success, true);
   assert.equal(bogus.data.serviceInterest, null);
+});
+
+// Sep 18 Morning Congruence Patch: the "smallest calendar win" -- a plain
+// Google "render" URL, no OAuth, built only from a confirmed booking's own
+// real start/end/timezone. Section 40's exact proof requirement: title,
+// date, start/end, timezone present, and nothing operator-private leaks in.
+test("buildGoogleCalendarUrl: contains a correct title, UTC date range, and timezone -- no OAuth, no stored event", () => {
+  const url = buildGoogleCalendarUrl({
+    title: "Call with Taryn Dubreuil",
+    startsAt: "2026-09-22T14:00:00.000Z",
+    endsAt: "2026-09-22T14:30:00.000Z",
+    timezone: "America/Sao_Paulo",
+  });
+  const parsed = new URL(url);
+  assert.equal(parsed.hostname, "calendar.google.com");
+  assert.equal(parsed.searchParams.get("action"), "TEMPLATE");
+  assert.equal(parsed.searchParams.get("text"), "Call with Taryn Dubreuil");
+  assert.equal(parsed.searchParams.get("dates"), "20260922T140000Z/20260922T143000Z");
+  assert.equal(parsed.searchParams.get("ctz"), "America/Sao_Paulo");
+});
+
+test("buildGoogleCalendarUrl: omits details entirely when none is given -- never leaks operator-only notes by accident", () => {
+  const url = buildGoogleCalendarUrl({
+    title: "Call with RMEDIA",
+    startsAt: "2026-09-22T14:00:00.000Z",
+    endsAt: "2026-09-22T14:30:00.000Z",
+    timezone: "UTC",
+  });
+  assert.equal(new URL(url).searchParams.has("details"), false);
 });

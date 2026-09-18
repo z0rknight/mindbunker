@@ -6,9 +6,11 @@ import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
 import { formatDate } from "@/utils/date";
 import { BulkEditVideosButton } from "./BulkEditVideosButton";
 import { BulkDeleteVideosButton } from "./BulkDeleteVideosButton";
+import { AssignToProductionOrderButton } from "./AssignToProductionOrderButton";
 import type { VideoStatus } from "@/modules/productivity/config";
 import { resolveCoverUrl } from "@/modules/media/core";
 import { projectVideoCardHref } from "@/modules/productivity/core";
+import type { ExistingProductionOrderOption } from "@/modules/production-orders/data";
 
 type WorkspaceVideo = {
   id: number;
@@ -66,6 +68,7 @@ export function ProjectVideoList({
   clientDefaultCoverUrl = null,
   clientAvatarUrl = null,
   clientName = "",
+  openProductionOrders = [],
 }: {
   projectId: number;
   videos: WorkspaceVideo[];
@@ -73,6 +76,7 @@ export function ProjectVideoList({
   clientDefaultCoverUrl?: string | null;
   clientAvatarUrl?: string | null;
   clientName?: string;
+  openProductionOrders?: ExistingProductionOrderOption[];
 }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const returnTo = `/projects/${projectId}`;
@@ -116,6 +120,12 @@ export function ProjectVideoList({
         <BulkEditVideosButton
           projectId={projectId}
           selectedIds={Array.from(selected)}
+          onDone={() => setSelected(new Set())}
+        />
+        <AssignToProductionOrderButton
+          projectId={projectId}
+          selectedIds={Array.from(selected)}
+          openProductionOrders={openProductionOrders}
           onDone={() => setSelected(new Set())}
         />
         <BulkDeleteVideosButton

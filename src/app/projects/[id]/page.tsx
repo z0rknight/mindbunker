@@ -18,6 +18,7 @@ import { getAssetsForProject } from "@/modules/assets/actions";
 import { getSourceMediaForProject } from "@/modules/assets/actions";
 import { getClientCustody } from "@/modules/custody/data";
 import { ChainOfCustodyPanel } from "@/components/custody/ChainOfCustodyPanel";
+import { getOpenProductionOrdersForProject } from "@/modules/production-orders/data";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function ProjectWorkspacePage({
   const project = await getProjectWorkspace(Number(id));
   if (!project) notFound();
 
-  const [assets, sourceMediaReferences, commercialTermsByVideoId, custody] = await Promise.all([
+  const [assets, sourceMediaReferences, commercialTermsByVideoId, custody, openProductionOrders] = await Promise.all([
     getAssetsForProject(project.id),
     getSourceMediaForProject(project.id),
     // Quick Morning Reality Patch §7/§9: reuse the exact same commercial-
@@ -44,6 +45,9 @@ export default async function ProjectWorkspacePage({
       project.videos.map(async (video) => [video.id, await getCommercialTermsForVideo(video.id)] as const),
     ).then((entries) => new Map(entries)),
     getClientCustody(project.clientId),
+    // Sep 18 Morning Congruence Patch: this project's own OPEN batches, for
+    // the "assign selected existing videos to a batch" picker below.
+    getOpenProductionOrdersForProject(project.id),
   ]);
 
   const videosWithCommercialTerms = project.videos.map((video) => ({
@@ -200,6 +204,7 @@ export default async function ProjectWorkspacePage({
           clientDefaultCoverUrl={project.clientDefaultCoverUrl}
           clientAvatarUrl={project.clientAvatarUrl}
           clientName={project.clientName}
+          openProductionOrders={openProductionOrders}
         />
       </section>
 

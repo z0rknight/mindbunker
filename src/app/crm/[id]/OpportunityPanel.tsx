@@ -14,6 +14,7 @@ import {
   SERVICE_INTEREST_OPTIONS,
   type OpportunityStage,
 } from "@/modules/gateway/config";
+import { buildGoogleCalendarUrl } from "@/modules/booking/core";
 
 type InvitationSummary = {
   id: number;
@@ -40,6 +41,7 @@ export function OpportunityPanel({
 }: {
   client: {
     id: number;
+    name: string;
     opportunityStage: OpportunityStage;
     serviceInterest: string | null;
     nextAction: string | null;
@@ -329,6 +331,23 @@ export function OpportunityPanel({
                   timeZone: bookingTimezone,
                 }).format(new Date(booking.startsAt))}
               </p>
+              {/* Sep 18 Morning Congruence Patch: the smallest useful
+                  calendar behavior -- a plain Google "render" URL built from
+                  this booking's own real start/end/timezone, no OAuth, no
+                  stored event, nothing beyond who and when. */}
+              <a
+                href={buildGoogleCalendarUrl({
+                  title: `Call with ${client.name}`,
+                  startsAt: booking.startsAt,
+                  endsAt: booking.endsAt,
+                  timezone: bookingTimezone,
+                })}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex text-xs font-bold text-cyan-300 hover:text-cyan-200"
+              >
+                + Add to Google Calendar →
+              </a>
             </div>
           )}
 

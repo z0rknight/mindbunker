@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ProjectVideoCards, type WorkspaceVideoCardData } from "./ProjectVideoCards";
 import { ProjectVideoList } from "./ProjectVideoList";
+import type { ExistingProductionOrderOption } from "@/modules/production-orders/data";
 
 // Quick Morning Reality Patch §7: Cards is the default operating view
 // (production-ticket style); List is kept exactly as-is underneath as the
@@ -15,6 +16,7 @@ export function ProjectVideoWorkspace({
   clientDefaultCoverUrl = null,
   clientAvatarUrl = null,
   clientName = "",
+  openProductionOrders = [],
 }: {
   projectId: number;
   videos: WorkspaceVideoCardData[];
@@ -22,6 +24,7 @@ export function ProjectVideoWorkspace({
   clientDefaultCoverUrl?: string | null;
   clientAvatarUrl?: string | null;
   clientName?: string;
+  openProductionOrders?: ExistingProductionOrderOption[];
 }) {
   const [mode, setMode] = useState<"cards" | "list">("cards");
 
@@ -69,6 +72,7 @@ export function ProjectVideoWorkspace({
           clientDefaultCoverUrl={clientDefaultCoverUrl}
           clientAvatarUrl={clientAvatarUrl}
           clientName={clientName}
+          openProductionOrders={openProductionOrders}
         />
       )}
     </div>

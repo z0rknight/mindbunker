@@ -60,6 +60,11 @@ test("long-session review: an already-approved staging row is flagged but not ed
   );
   assert.equal(candidates[0].editable, false);
   assert.equal(candidates[0].approved, true);
+  // Sep 18 Morning Congruence Patch: not editable here means the operator
+  // must be pointed at the canonical Work Session correction path instead
+  // -- the panel can only build that deep link (/productivity/sessions?
+  // video=) if videoId survives onto the candidate.
+  assert.equal(candidates[0].videoId, 10);
 });
 
 test("long-session review: a canonical Work Session over 6h is flagged, editable once stopped, always approved=true", () => {
@@ -72,6 +77,7 @@ test("long-session review: a canonical Work Session over 6h is flagged, editable
   assert.equal(candidates[0].kind, "CANONICAL");
   assert.equal(candidates[0].editable, true);
   assert.equal(candidates[0].approved, true);
+  assert.equal(candidates[0].videoId, 20, "needed to deep-link this candidate to its own video's Session Ledger, not the bare unfiltered list");
 });
 
 test("long-session review: staging and canonical candidates are combined and sorted newest-first", () => {
@@ -92,6 +98,44 @@ test("long-session review is display-only: never mutates, never truncates a dura
     new Date(0),
   );
   assert.equal(candidates[0].durationSeconds, 36_001);
+});
+
+// Sep 18 Morning Congruence Patch: the actual root gap behind the
+// operator's own complaint -- a genuinely non-CLIENT (LEAD/INTERNAL/ADMIN)
+// session can never carry a video_id (DB check constraint), so the
+// STAGING query's INNER JOIN on video_logs silently dropped every one of
+// them, no matter how long. nonClientRows is the separate source that
+// fixes that.
+test("long-session review: a finalized (ARCHIVED) INTERNAL session over 6h is flagged even with no video attached, and is directly editable", () => {
+  const candidates = selectLongSessionCandidates(
+    [],
+    [],
+    NOW,
+    undefined,
+    [{ id: 9, contextType: "INTERNAL", contextLabel: "overview do site", startedAt: NOW_SECONDS - 22 * 3600, endedAt: NOW_SECONDS - 1 * 3600 }],
+  );
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].kind, "STAGING");
+  assert.equal(candidates[0].videoId, null);
+  assert.equal(candidates[0].target, "INTERNAL · overview do site");
+  assert.equal(candidates[0].editable, true);
+  assert.equal(candidates[0].approved, false, "\"approved\" describes the CLIENT staging path specifically, which this session never went through");
+});
+
+test("long-session review: a non-CLIENT session under the threshold is not flagged, and one with no contextLabel falls back to its bare context type", () => {
+  const candidates = selectLongSessionCandidates(
+    [],
+    [],
+    NOW,
+    undefined,
+    [
+      { id: 10, contextType: "ADMIN", contextLabel: null, startedAt: NOW_SECONDS - 2 * 3600, endedAt: NOW_SECONDS - 1 * 3600 },
+      { id: 11, contextType: "ADMIN", contextLabel: null, startedAt: NOW_SECONDS - 9 * 3600, endedAt: NOW_SECONDS - 1 * 3600 },
+    ],
+  );
+  assert.equal(candidates.length, 1, "only the one actually over threshold is flagged");
+  assert.equal(candidates[0].id, 11);
+  assert.equal(candidates[0].target, "ADMIN");
 });
 
 test("sensor connectivity: no device ever registered is its own distinct state", () => {

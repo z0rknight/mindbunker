@@ -318,6 +318,29 @@ export async function countOpenProductionOrders(): Promise<number> {
   return rows.length;
 }
 
+// ─── Existing-video batch composition (Sep 18 Morning Congruence Patch) ────
+//
+// Operator-reported, verbatim: "seria interessante o let's cook dar a opção
+// de começar a trabalhar em um lote já existente de videos, eu aponto os
+// videos que vão formar o 'pedido'." The picker only ever needs to offer
+// OPEN orders already scoped to the same project the operator is looking
+// at -- same-project is what keeps client integrity trivially true (a
+// video's own project never changes) and is exactly the real shape of the
+// operator's own example (several already-registered PLANNED videos inside
+// one project, not yet grouped into a batch).
+export type ExistingProductionOrderOption = { id: number; label: string };
+
+export async function getOpenProductionOrdersForProject(
+  projectId: number,
+): Promise<ExistingProductionOrderOption[]> {
+  const db = await getAuthenticatedDb();
+  return db
+    .select({ id: productionOrders.id, label: productionOrders.label })
+    .from(productionOrders)
+    .where(and(eq(productionOrders.projectId, projectId), eq(productionOrders.state, "OPEN")))
+    .orderBy(desc(productionOrders.receivedAt));
+}
+
 // ─── Ingest form support ────────────────────────────────────────────────────
 
 export type IngestClientOption = { id: number; name: string };
