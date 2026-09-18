@@ -180,6 +180,7 @@ export default async function WarRoomPage() {
             openSessionElapsedSeconds={workSessionOverview.openSessionElapsedSeconds}
             recommended={recommended}
             variant="dominant"
+            returnTo="/war-room"
           />
           <DecisionsSection decisions={openDecisions} />
         </div>

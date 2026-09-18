@@ -4,8 +4,18 @@ import { IngestForm } from "./IngestForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewProductionOrderPage() {
-  const { clients, projects, contracts } = await getClientsAndProjectsForIngest();
+export default async function NewProductionOrderPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ projectId?: string | string[] }>;
+}) {
+  const [{ clients, projects, contracts }, query] = await Promise.all([
+    getClientsAndProjectsForIngest(),
+    searchParams,
+  ]);
+  const rawProjectId = query.projectId;
+  const initialProjectId =
+    typeof rawProjectId === "string" && /^\d+$/u.test(rawProjectId) ? Number(rawProjectId) : null;
 
   return (
     <div className="min-h-screen bg-black px-4 py-8 text-zinc-100 sm:px-8">
@@ -26,7 +36,7 @@ export default async function NewProductionOrderPage() {
             ← Orders
           </Link>
         </div>
-        <IngestForm clients={clients} projects={projects} contracts={contracts} />
+        <IngestForm clients={clients} projects={projects} contracts={contracts} initialProjectId={initialProjectId} />
       </div>
     </div>
   );

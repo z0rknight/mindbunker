@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { LiveIndicator, PixelIcon } from "@/components/ui/PixelVisuals";
+import { videoWorkspaceHref } from "@/modules/productivity/core";
 import { startWorkSession, stopWorkSession } from "@/modules/work-sessions/actions";
 import {
   DEFAULT_WORK_SESSION_ACTIVITY,
@@ -39,12 +40,25 @@ export function NowFocusPanel({
   openSessionElapsedSeconds,
   recommended = null,
   variant = "dominant",
+  returnTo,
   children,
 }: {
   openSession: OpenWorkSession | null;
   openSessionElapsedSeconds: number;
   recommended?: RecommendedNextItem | null;
   variant?: "dominant" | "compact";
+  // Sep 18 Afternoon Readiness Refinement: this is the one shared "what am
+  // I working on right now" surface -- Dashboard, War Room, and
+  // Productivity all render the same component (see the module comment
+  // above), and none of its own links carried the caller's page back as
+  // returnTo. From War Room specifically, "Open Workspace"/"Start Working"
+  // used to drop the operator into Productivity's generic video-not-found
+  // fallback with no way back to War Room -- the same lost-context pattern
+  // fixed for Sensor/Production-Order navigation earlier today. Each
+  // caller passes its own path; Productivity's own `?video=` deep link
+  // already validates this the same way as every other returnTo in the app
+  // (isSafeInternalPath), so a plain literal here is safe.
+  returnTo?: string;
   // Extra content shown inside the active-session card only (e.g.
   // Dashboard's Quick Note). Ignored in the no-active-work state.
   children?: ReactNode;
@@ -55,23 +69,26 @@ export function NowFocusPanel({
         openSession={openSession}
         initialElapsedSeconds={openSessionElapsedSeconds}
         variant={variant}
+        returnTo={returnTo}
       >
         {children}
       </ActiveSessionCard>
     );
   }
-  return <NoActiveWorkCard recommended={recommended} variant={variant} />;
+  return <NoActiveWorkCard recommended={recommended} variant={variant} returnTo={returnTo} />;
 }
 
 function ActiveSessionCard({
   openSession,
   initialElapsedSeconds,
   variant,
+  returnTo,
   children,
 }: {
   openSession: OpenWorkSession;
   initialElapsedSeconds: number;
   variant: "dominant" | "compact";
+  returnTo?: string;
   children?: ReactNode;
 }) {
   const router = useRouter();
@@ -174,7 +191,7 @@ function ActiveSessionCard({
             {isPending ? "Finishing…" : "Finish Session"}
           </button>
           <Link
-            href={`/productivity?video=${openSession.videoId}`}
+            href={videoWorkspaceHref(openSession.videoId, returnTo)}
             className={`min-h-11 rounded-xl px-4 py-3 text-center text-sm font-black text-zinc-950 ${
               stale ? "bg-amber-500 hover:bg-amber-400" : "bg-emerald-500 hover:bg-emerald-400"
             }`}
@@ -191,9 +208,11 @@ function ActiveSessionCard({
 function NoActiveWorkCard({
   recommended,
   variant,
+  returnTo,
 }: {
   recommended: RecommendedNextItem | null;
   variant: "dominant" | "compact";
+  returnTo?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -209,7 +228,7 @@ function NoActiveWorkCard({
         setError(result.error);
         return;
       }
-      router.push(`/productivity?video=${recommended.id}`);
+      router.push(videoWorkspaceHref(recommended.id, returnTo));
     });
   }
 

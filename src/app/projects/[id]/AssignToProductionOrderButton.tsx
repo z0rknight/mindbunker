@@ -80,7 +80,7 @@ export function AssignToProductionOrderButton({
             {openProductionOrders.length === 0 ? (
               <p className="text-sm text-zinc-400">
                 This project has no open batch yet.{" "}
-                <Link href="/productivity/orders/new" className="font-bold text-emerald-300 hover:text-emerald-200">
+                <Link href={`/productivity/orders/new?projectId=${projectId}`} className="font-bold text-emerald-300 hover:text-emerald-200">
                   Start one with LET&apos;S COOK →
                 </Link>{" "}
                 then come back and add these videos to it.

@@ -323,6 +323,7 @@ export default async function ProductivityPage({
         openSessionElapsedSeconds={openSessionElapsedSeconds}
         recommended={recommended}
         variant="dominant"
+        returnTo="/productivity"
       >
         {workSessionOverview.openSession && (
           <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">

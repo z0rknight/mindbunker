@@ -83,11 +83,21 @@ export function PlanVideoButton({
   compact?: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  // Sep 18 Afternoon Readiness Refinement: this button can start already
+  // open (a ?planVideo=1 deep link) -- both `open` and `projectId` now
+  // derive that straight from props via a lazy initializer instead of a
+  // useEffect that called setOpen/setProjectId synchronously on mount
+  // (the one remaining known ESLint baseline issue, react-hooks/set-state
+  // -in-effect). Behaviorally identical: this mirrors exactly what
+  // handleOpen() below already does when projectContext is present, and
+  // the effect that used to duplicate it was already documented as
+  // "intentionally one-shot" -- it never reacted to a later prop change
+  // anyway.
+  const [open, setOpen] = useState(() => initiallyOpen);
   const [isPending, startTransition] = useTransition();
   const [options, setOptions] = useState<QuickOptions | null>(null);
   const [title, setTitle] = useState("");
-  const [projectId, setProjectId] = useState(
+  const [projectId, setProjectId] = useState(() =>
     projectContext?.id.toString() ?? initialProjectId?.toString() ?? "",
   );
   const [createUnderClientId, setCreateUnderClientId] = useState("");
@@ -127,17 +137,17 @@ export function PlanVideoButton({
   }
 
   useEffect(() => {
-    if (!initiallyOpen) return;
-    setOpen(true);
-    setFeedback("");
-    if (projectContext) {
-      setProjectId(projectContext.id.toString());
-    } else {
+    // `open` and `projectId` are already correct from their own lazy
+    // initializers above (mirroring handleOpen()'s own projectContext
+    // branch) -- the only remaining mount-time work is the actual async
+    // fetch, exactly what handleOpen() does when there is no projectContext
+    // to short-circuit it. Intentionally one-shot: this never reacts to a
+    // later change in initiallyOpen/initialProjectId, same as before.
+    if (initiallyOpen && !projectContext) {
       startTransition(fetchOptions);
     }
-    // The query-driven opening is intentionally one-shot for this mounted button.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initiallyOpen, initialProjectId]);
+  }, []);
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();

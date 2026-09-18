@@ -30,10 +30,21 @@ export function IngestForm({
   clients,
   projects,
   contracts,
+  initialProjectId = null,
 }: {
   clients: IngestClientOption[];
   projects: IngestProjectOption[];
   contracts: IngestContractOption[];
+  // Sep 18 Afternoon Readiness Refinement: when LET'S COOK is opened from a
+  // specific Project (e.g. "no open batch yet -- start one" on
+  // AssignToProductionOrderButton), the operator already told the system
+  // exactly which client/project this batch is for. Re-asking via two
+  // empty dropdowns was a real re-entry of a fact the system already had.
+  // Lazy-initializer only -- this page is always a fresh navigation
+  // (/productivity/orders/new), never a persistent mounted instance a
+  // prop could change under, so there is no "prop changes after mount"
+  // case to handle here.
+  initialProjectId?: number | null;
 }) {
   const router = useRouter();
   const [ingestKey] = useState(() =>
@@ -44,9 +55,18 @@ export function IngestForm({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const [clientId, setClientId] = useState<number | "">("");
-  const [projectId, setProjectId] = useState<number | "">("");
-  const [contractId, setContractId] = useState<number | "">("");
+  const initialProject = initialProjectId
+    ? projects.find((project) => project.id === initialProjectId)
+    : null;
+  const [clientId, setClientId] = useState<number | "">(initialProject?.clientId ?? "");
+  const [projectId, setProjectId] = useState<number | "">(initialProject?.id ?? "");
+  const [contractId, setContractId] = useState<number | "">(() => {
+    if (!initialProject) return "";
+    // Same "only auto-pick when unambiguous" rule the client <select>'s own
+    // onChange already applies below.
+    const matching = contracts.filter((contract) => contract.clientId === initialProject.clientId);
+    return matching.length === 1 ? matching[0].id : "";
+  });
   const [label, setLabel] = useState("");
   const [channel, setChannel] = useState("");
   const [pricingModel, setPricingModel] = useState<"" | "HOURLY" | "FIXED" | "OTHER">("");

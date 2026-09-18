@@ -41,6 +41,7 @@ export function HomeTrackingPanel({
         openSession={openSession}
         openSessionElapsedSeconds={openSessionElapsedSeconds}
         variant="compact"
+        returnTo="/"
       >
         <div className="mt-4 flex flex-wrap gap-2 border-t border-emerald-500/15 pt-4">
           <QuickNote videoId={openSession.videoId} />
