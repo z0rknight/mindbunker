@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Guided Lead Engine — production release closed (2026-09-20)**
+  - [x] Shipped public `/start` and `/start?ref=pdbm` card flow plus narrow same-origin Operator API; GET/page views create zero writes
+  - [x] Added migration `0053_slow_shen.sql` (`crm_events.payload_json`) for immutable schema-versioned intake evidence
+  - [x] Server validates canonical answers, resolves the closed referral allowlist, recomputes the starting path, deduplicates by normalized email and idempotency key, and creates no downstream production/commercial entities
+  - [x] CRM dossier renders the latest Guided Intake as human-readable evidence; production visual QA confirmed the complete projection
+  - [x] Production E2E proved Lead 7, events 267/268, `schemaVersion=1`, `REPEATABLE_PRODUCTION`, `referral:pdbm`, replay idempotency and zero downstream relationships
+  - [x] Guarded cleanup removed exactly the synthetic Lead and two events; baseline restored to 5 clients / 263 CRM events, migration head 0053, zero FK violations
+  - [x] Operator `8a8cb33d-8246-4a14-b0c7-1468ae2dfd4f` and public `2a147edf-87b5-453b-9871-ed7a7f791de9` remain active at 100%; closure performed no redeploy
+
 - [x] **House Cleaning Wave 2 micro-hardening — local candidate (2026-09-14)**
   - [x] Distinguished malformed `video` query parameters from an omitted parameter so malformed IDs fail explicitly while numeric nonexistent IDs retain their existing not-found behavior
   - [x] Unified single, Project-bulk, and LET'S COOK child preparation through one canonical validation/defaulting helper
