@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>RMEDIA OS Interaction Lab</title>
+<!-- DESIGN REFERENCE ONLY (Sep 2026). Standalone: no app import, no route, no API, no network, no writes. All names, numbers, statuses are fake. -->
+<link rel="stylesheet" href="rmedia-os-styleboard.css">
+<link rel="stylesheet" href="rmedia-os-interaction-lab.css">
+</head>
+<body data-intensity="operator">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="ck" viewBox="0 0 16 16"><path d="M3 8.5l3.200 3L13 4.500"/></symbol></svg>
+<div id="announce" class="sr" role="status" aria-live="polite"></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<div class="lab-bar"><div class="in">
+  <span class="lockup"><span class="mark" style="width:24px;height:24px;font-size:10px;border-radius:6px">RM</span><span class="wordmark" style="font-size:.8125rem">INTERACTION LAB</span></span>
+  <button class="btn sm" id="motionToggle" aria-pressed="false">Reduced motion: off</button>
+  <label>Motion intensity <select class="select" id="intensity"><option value="public">Public ×1.25</option><option value="client">Client ×1</option><option value="operator" selected>Operator ×0.8</option></select></label>
+  <label>Server latency <select class="select" id="latency"><option value="60">Instant (60ms)</option><option value="700" selected>Normal (700ms)</option><option value="2200">Slow (2.2s)</option></select></label>
+  <label><input type="checkbox" id="failNext"> Fail next server action</label>
+</div></div>
+
+<div class="lab">
+<header style="padding:48px 0 16px;display:grid;gap:12px">
+  <h1 class="t-page" style="font-size:2rem;line-height:2.5rem">How RMEDIA OS moves.</h1>
+  <p class="t-body muted" style="max-width:70ch">Animation follows truth: a state changes on screen only after the canonical action succeeds. Every scene has a static, non-motion form, a reset, and a trigger. Nothing here calls an API or writes anything; “server” results are simulated by the controls above. All data is fake.</p>
+</header>
+<nav class="lab-toc" aria-label="Scenes" id="toc"></nav>
+
+<!-- 1 -->
+<section class="scene" id="s1" data-title="Client approves video"><header><h2>1 · Client approves a video</h2>
+<p class="q"><b>Answers:</b> did my action work? · where did it change? Real domain: READY_FOR_REVIEW → DONE (the client-facing word is “Approved”). DONE ≠ DELIVERED ≠ PAID. The success state appears only after the server answers.</p>
+<div class="smach">READY → <em>SUBMITTING</em> → APPROVED · failure: SUBMITTING → READY + error (no green, message beside the buttons)</div></header>
+<div class="stage two" data-intensity="client">
+  <div class="card" data-density="client" id="s1card" data-state="ready">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px"><div><div class="t-card">Spring launch — cut 2</div><div class="t-meta">Sent Tuesday · 9:16 · 01:32</div></div><span class="st" id="s1st" data-status="review"><span class="lbl">Your review</span></span></div>
+    <div class="frame" data-tc="01:32" style="margin-bottom:14px"></div>
+    <div class="steps" aria-hidden="true" style="margin-bottom:14px"><span class="dot" data-done="true"></span><span class="stp" data-done="true"></span><span class="dot" data-done="true"></span><span class="stp" id="s1s2" data-done="false"></span><span class="dot" id="s1d3" data-done="false"></span></div>
+    <div class="row"><button class="btn primary act" id="s1ok" data-do="s1.approve"><span class="ok"><svg class="ck draw"><use href="#ck"/></svg></span><span class="lbl">Approve</span></button><button class="btn act" data-do="s1.changes"><span class="lbl">Request changes</span></button><span class="savemsg" id="s1msg" role="status"></span></div>
+    <p class="errline" id="s1err" role="alert"></p>
+    <p class="t-small" id="s1foot" style="margin-top:12px">Your approval registers as soon as it is saved. Delivery is a separate step.</p>
+  </div>
+  <div class="panel" data-density="operator"><div class="t-system"><span>Operator view</span><span class="tag">later, on next refresh</span></div>
+    <table class="table tbl"><tbody><tr id="s1op" data-flash-target><td>Spring launch — cut 2</td><td><span class="st" id="s1opst" data-status="review"><span class="lbl">Ready for review</span></span></td><td class="num t-meta" id="s1optime">waiting on client</td></tr></tbody></table>
+    <div class="reveal" id="s1ev" data-open="false"><div class="in"><p class="t-small" style="padding-top:10px"><span class="newmark">New</span> · Client approved · status DONE · delivery link: not recorded</p></div></div>
+    <div class="controls"><button class="btn sm" data-reset="s1">Reset</button></div>
+  </div>
+</div></section>
+
+<!-- 2 -->
+<section class="scene" id="s2" data-title="Payment becomes paid"><header><h2>2 · Payment becomes PAID</h2>
+<p class="q"><b>Answers:</b> is money actually confirmed? A payment <i>request</i> is what is being asked; PAID is operator-set and the real proof lives in transactions. Request sent, link opened and billing evidence never animate success. The amount stays still; only status, a check and the timeline change.</p>
+<div class="smach">OPEN → <em>PROCESSING</em> → PAID · failure: PROCESSING → OPEN + error · non-events: request sent, link opened</div></header>
+<div class="stage two">
+  <div class="card" data-density="client" id="s2card"><div class="row" style="justify-content:space-between"><div><div class="tag">Payment request</div><div class="readout"><span class="v" style="font-size:2rem;line-height:2.5rem">$250.00</span></div></div><span class="st" id="s2st" data-status="open" style="background:var(--os-surface-3)"><span class="lbl">Open</span></span></div>
+    <div class="rail thick" style="margin:16px 0 6px"><i id="s2bar" style="--v:40"></i></div><div class="t-meta" id="s2meter">Paid $100.00 of $250.00 requested · recorded payments only</div>
+    <ul class="t-small" id="s2tl" style="list-style:none;padding:0;margin:14px 0 0;display:grid;gap:6px"><li>Request sent · Sep 18</li></ul>
+    <div class="controls"><button class="btn sm" data-do="s2.link">Client opens Wise link</button><button class="btn primary act sm" id="s2rec" data-do="s2.record"><span class="ok"><svg class="ck draw"><use href="#ck"/></svg></span><span class="lbl">Operator records payment</span></button><button class="btn sm" data-reset="s2">Reset</button></div><p class="errline" id="s2err" role="alert"></p></div>
+  <div class="note" style="align-self:center">Feedback closest to the changed object: the pill, then one timeline line. No count-up on the amount, no full-panel success colour. Approval (scene 1) reassures and shows continuity; payment confirms finality — different feedback on purpose.</div>
+</div></section>
+
+<!-- 3 -->
+<section class="scene" id="s3" data-title="Production Order progress"><header><h2>3 · Production Order progress + progress-bar recipes</h2>
+<p class="q"><b>Answers:</b> what is the composition? A segmented bar shows 2 done · 1 in review · 1 in progress · 1 planned; a single “40%” would call review-waiting work done or hide it. Initial render is stable; only a real change animates, from the previous value.</p>
+<div class="smach">segment: planned → <em>progress</em> → review → done · anti-pattern toggle: draw-from-0 on load</div></header>
+<div class="stage two">
+  <div class="card"><div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="t-card">Batch 01 · 5 deliverables</div><span class="t-readout" id="s3sum">2 of 5 done</span></div>
+    <div class="segbar" id="s3bar" role="img" aria-label="Batch composition"></div>
+    <div class="legend" style="margin-top:12px"><span><i data-status="done"></i>Done</span><span><i data-status="review"></i>Ready for review (not done)</span><span><i data-status="progress"></i>In progress</span><span><i data-status="planned"></i>Planned</span></div>
+    <p class="t-meta" id="s3txt" style="margin-top:10px"></p>
+    <div class="controls"><button class="btn sm" data-do="s3.advance">Advance one</button><button class="btn sm" data-do="s3.replay">Replay initial render</button><label class="check" style="font-size:.75rem"><input type="checkbox" id="s3anti"> Anti-pattern: draw from 0</label><button class="btn sm" data-reset="s3">Reset</button></div>
+    <div style="margin-top:16px"><div class="tag" style="margin-bottom:6px">Same batch as a single rail (lossy)</div><div class="rail" role="img" aria-label="40 percent"><i id="s3rail" style="--v:40"></i></div></div></div>
+  <div class="card" style="display:grid;gap:18px"><div class="tag">Recipes by case</div>
+    <div><div class="t-label">B · Upload / process (only real progress)</div><div class="rail thick" style="margin:6px 0"><i id="s3up" style="--v:0"></i></div><div class="row"><span class="t-readout" id="s3upt">Not started</span><button class="btn sm" data-do="s3.upload">Simulate chunks</button></div></div>
+    <div><div class="t-label">C · Guided intake (step markers)</div><div class="steps" id="s3steps" style="margin:8px 0"></div><button class="btn sm" data-do="s3.step">Next step</button></div>
+    <div><div class="t-label">D · Commercial (only recorded payments)</div><div class="stack exact" style="margin:6px 0"><span data-source="fact" style="--w:40"></span><span data-source="unknown" style="--w:60"></span></div><div class="t-meta">Paid $100.00 · Not yet paid $150.00 (dashed = not paid, not “lost”)</div></div>
+    <div><div class="t-label">E · Sensor coverage (thin rail + exact figure)</div><div class="rail" style="margin:8px 0"><i style="--v:87;background:var(--bar)"></i></div><div class="t-meta">87% telemetry coverage · 13% unobserved (unknown, not zero)</div></div>
+  </div>
+</div></section>
+
+<!-- 4 -->
+<section class="scene" id="s4" data-title="Table row update"><header><h2>4 · Table row update</h2>
+<p class="q"><b>Answers:</b> what changed, where? Row tint + 2px edge + changed-cell highlight + a “Saved” word, then back to neutral. No bounce. Error reverts the value and says so; the reverted state is a real state, not just colour.</p>
+<div class="smach">idle → <em>flash(success|warning|error)</em> → idle (marker held ~1.4s, then transitions off)</div></header>
+<div class="panel" style="padding:0;overflow:auto"><table class="table tbl" data-density="operator"><thead><tr><th>Item</th><th>Change</th><th class="num">Value</th><th>State</th></tr></thead><tbody id="s4b"></tbody></table></div>
+<div class="controls"><button class="btn sm" data-do="s4.success">Allocation added (success)</button><button class="btn sm" data-do="s4.warning">Session exceeds 12h (warning)</button><button class="btn sm" data-do="s4.error">Save fails → reverted (error)</button><button class="btn sm" data-reset="s4">Reset</button></div></section>
+
+<!-- 5 -->
+<section class="scene" id="s5" data-title="Metric value change"><header><h2>5 · Metric value change</h2>
+<p class="q"><b>Answers:</b> what changed? Four treatments compared. Recommendation: <b>counts</b> use crossfade + a quiet delta; <b>money</b> uses crossfade only (no direction colour, no count-up). The slide (4px) is allowed in operator only; flash is for rows, not numbers.</p>
+<div class="smach">value: old <em>fades out 120</em> · new fades in 180 · width reserved (tabular numerals) · delta fades in, stays</div></header>
+<div class="stage three"><div class="card"><div class="readout"><span class="t-system">Active jobs</span><span class="v"><span class="vc" id="m1"><span>4</span></span><span class="delta" id="m1d"></span></span></div></div>
+<div class="card"><div class="readout"><span class="t-system">Unallocated</span><span class="v"><span class="vc" id="m2"><span>6h 00m</span></span><span class="delta" id="m2d"></span></span></div></div>
+<div class="card"><div class="readout"><span class="t-system">Paid</span><span class="v"><span class="vc" id="m3"><span>$100.00</span></span><span class="delta" id="m3d"></span></span></div></div></div>
+<div class="controls"><div class="seg2" role="group" aria-label="Treatment" id="m-treat"><button aria-pressed="true" data-vc="crossfade">Crossfade</button><button aria-pressed="false" data-vc="slide">Slide 4px</button><button aria-pressed="false" data-vc="flash">Flash</button></div><button class="btn sm" data-do="s5.change">Change all three</button><button class="btn sm" data-reset="s5">Reset</button></div></section>
+
+<!-- 6 -->
+<section class="scene" id="s6" data-title="Application / time bar chart"><header><h2>6 · Application / time bar chart</h2>
+<p class="q"><b>Answers:</b> where did the time go, and how sure are we? Neutral bars, violet only for the selected row, exact values, coverage line, “Unknown” shown as a dashed empty bar (not zero). Window changes animate width from the previous value and keep row order stable unless sort changes (then rows glide, 180ms).</p>
+<div class="smach">window: Today | 3D | 7D | Month · empty → data · series toggle</div></header>
+<div class="card"><div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="seg2" role="group" aria-label="Window" id="s6win"><button aria-pressed="true" data-w="today">Today</button><button aria-pressed="false" data-w="3d">3D</button><button aria-pressed="false" data-w="7d">7D</button><button aria-pressed="false" data-w="month">Month</button></div><div class="row"><label class="check" style="font-size:.75rem"><input type="checkbox" id="s6unk" checked> Show Unknown</label><label class="check" style="font-size:.75rem"><input type="checkbox" id="s6sort"> Sort by time</label></div></div>
+<div class="hb" id="s6hb" role="group" aria-label="Application usage"></div>
+<p class="t-meta" id="s6cov" style="margin-top:12px"></p><p class="t-small" id="s6sel" style="margin-top:6px" aria-live="polite"></p>
+<div class="controls"><button class="btn sm" data-do="s6.empty">Empty state</button><button class="btn sm" data-do="s6.load">Load data</button><button class="btn sm" data-reset="s6">Reset</button></div></div></section>
+
+<!-- 7 -->
+<section class="scene" id="s7" data-title="Source fact vs derived vs unknown"><header><h2>7 · SOURCE FACT vs DERIVED vs UNKNOWN</h2>
+<p class="q"><b>Answers:</b> how much of this can I trust? Solid = source fact · hatched = derived (also labelled) · dashed empty = unknown / unallocated (a valid state, never “missing money”). Encoded with pattern and label, so it survives greyscale — toggle below to prove it.</p></header>
+<div class="stage two"><div class="card"><div class="tag" style="margin-bottom:10px">Registered time by week (fake)</div><div class="vb" id="s7vb"></div><div class="vlab" id="s7lab"></div>
+  <div class="legend" style="margin-top:12px"><span><i data-source="fact"></i>Source fact (attributed by operator)</span><span><i data-source="derived"></i>Derived (historical estimate)</span><span><i data-source="unknown"></i>Unallocated / not recorded</span></div></div>
+<div class="card"><div class="tag" style="margin-bottom:10px">One week, exact</div><div class="stack" id="s7st" role="img" aria-label="6h registered, 4h attributed, 2h unallocated"></div><div class="row" style="justify-content:space-between;margin-top:10px"><span class="t-readout" id="s7txt">6h registered · 4h attributed · 2h unallocated</span></div>
+<p class="t-meta" style="margin-top:8px">Attribution moves time from “unallocated” to “attributed”; registered never changes and nothing is spread across videos.</p>
+<div class="controls"><button class="btn sm" data-do="s7.attr">Attribute 2h to the batch</button><label class="check" style="font-size:.75rem"><input type="checkbox" id="s7gray"> Greyscale check</label><button class="btn sm" data-reset="s7">Reset</button></div></div></div></section>
+
+<!-- 8 -->
+<section class="scene" id="s8" data-title="Live Sensor state"><header><h2>8 · Live Sensor state</h2>
+<p class="q"><b>Answers:</b> is something currently live? A ring pulses only while the session is actually open. Stop → static. Observed time is not a Work Session, and the panel says so. Reduced motion swaps the pulse for a static ring.</p>
+<div class="smach">CLOSED → <em>LIVE</em> (data-live=true) → CLOSED</div></header>
+<div class="card" style="max-width:560px"><div class="row" style="justify-content:space-between"><div class="row" style="gap:12px"><span class="live" id="s8dot" data-live="false"></span><div><div class="t-card" id="s8app">Sensor idle</div><div class="t-meta" id="s8sub">No open observation</div></div></div><div class="timer" id="s8t">00:00:00</div></div>
+<div class="panel" style="margin-top:14px;padding:10px 14px"><span class="tag">Work Session</span> <span class="t-small" id="s8ws">Not created — observed activity is not a Work Session.</span></div>
+<div class="controls"><button class="btn primary sm" data-do="s8.toggle" id="s8btn">Start observation</button><button class="btn sm" data-reset="s8">Reset</button></div></div></section>
+
+<!-- 9 -->
+<section class="scene" id="s9" data-title="Exception resolved"><header><h2>9 · Exception resolved</h2>
+<p class="q"><b>Answers:</b> did my fix work, and where did it go? The row confirms in place (“Corrected · counted”), the counter updates, and only then does the row collapse — so the layout never teleports. The breadcrumb keeps the origin (returnTo).</p>
+<div class="smach">OPEN → EDITING → <em>SAVING</em> → RESOLVED (hold 1.4s) → COLLAPSED · failure: SAVING → EDITING + error</div></header>
+<div class="card"><div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="crumbs"><span>Sensor</span><span class="sep">/</span><span class="here">Long session review</span></div><span class="t-readout">Needs attention: <span class="vc" id="s9n" data-vc="crossfade"><span>2</span></span></span></div>
+<div id="s9list"></div><div class="empty reveal" id="s9empty" data-open="false" style="display:none"><div class="in"><div class="t-card">Nothing needs attention</div><p class="t-small">Both exceptions were resolved and recalculated.</p></div></div>
+<div class="controls"><button class="btn sm" data-reset="s9">Reset</button></div></div></section>
+
+<!-- 10 -->
+<section class="scene" id="s10" data-title="Modal"><header><h2>10 · Modal</h2>
+<p class="q"><b>Answers:</b> where did this come from? Backdrop fades, panel rises 8px (no scale), 240ms in / 140ms out; focus is trapped natively and returns to the trigger. Error stays inside the modal; success closes it and marks the changed object.</p></header>
+<div class="card"><div class="row"><button class="btn" id="s10open" data-do="s10.open">Open modal</button><span id="s10res" class="savemsg" role="status"></span></div></div>
+<dialog class="osm" id="s10m" aria-labelledby="s10t"><div class="sheet"><h3 class="t-section" id="s10t">Mark delivery link as sent?</h3><p class="t-small" style="margin:8px 0 14px">This records that the link was sent to the client. It does not change payment or approval.</p><p class="errline" id="s10err" role="alert"></p>
+<div class="row" style="justify-content:flex-end"><button class="btn ghost" data-do="s10.cancel">Cancel</button><button class="btn primary act" id="s10ok" data-do="s10.confirm"><span class="lbl">Confirm</span></button></div></div></dialog></section>
+
+<!-- 11 -->
+<section class="scene" id="s11" data-title="Disclosure"><header><h2>11 · Disclosure</h2>
+<p class="q"><b>Answers:</b> what is inside, and did it open? Two recipes: native <code class="k">&lt;details&gt;</code> (progressive, current stack has 23) and a button + <code class="k">aria-expanded</code> + grid-rows reveal for controlled cases. Height animation without measuring: <code class="k">grid-template-rows 0fr→1fr</code>.</p></header>
+<div class="two stage"><div><div class="tag" style="margin-bottom:8px">Button + grid-rows (controlled)</div><div id="s11c"></div></div>
+<div><div class="tag" style="margin-bottom:8px">Native details (with ::details-content where supported)</div><details class="disc"><summary>Production Memory · 3 formats</summary><div class="body">Content Waterfall · Lecture Format · Client Success Format (fake).</div></details><details class="disc" style="margin-top:8px"><summary>History</summary><div class="body">Older evidence rows are here, collapsed by default.</div></details></div></div></section>
+
+<!-- 12 -->
+<section class="scene" id="s12" data-title="Tabs"><header><h2>12 · Tabs &amp; segmented controls</h2>
+<p class="q"><b>Answers:</b> which view am I in? Rule: <b>big tables → move the rule only, swap content instantly</b>; small panels → 120ms fade with 4px; segmented control → background swap only. Arrow keys / Home / End move and activate; focus stays on the tab.</p></header>
+<div class="two stage"><div class="card"><div class="tag" style="margin-bottom:8px">Rule indicator, instant content (large data)</div><div class="tabs2" role="tablist" id="s12a" aria-label="Sample A"><button role="tab" aria-selected="true" aria-controls="s12pa" tabindex="0">Overview</button><button role="tab" aria-selected="false" aria-controls="s12pa" tabindex="-1">Videos</button><button role="tab" aria-selected="false" aria-controls="s12pa" tabindex="-1">Evidence</button><span class="rule"></span></div><div class="tp" id="s12pa" role="tabpanel"><span class="t-small">Overview panel</span></div></div>
+<div class="card"><div class="tag" style="margin-bottom:8px">Rule + 120ms fade (small panel)</div><div class="tabs2" role="tablist" id="s12b" aria-label="Sample B"><button role="tab" aria-selected="true" aria-controls="s12pb" tabindex="0">Notes</button><button role="tab" aria-selected="false" aria-controls="s12pb" tabindex="-1">Links</button><button role="tab" aria-selected="false" aria-controls="s12pb" tabindex="-1">Format</button><span class="rule"></span></div><div class="tp" id="s12pb" role="tabpanel"><span class="t-small">Notes panel</span></div></div></div></section>
+
+<!-- 13 -->
+<section class="scene" id="s13" data-title="Guided intake"><header><h2>13 · Guided-intake choice cards</h2>
+<p class="q"><b>Answers:</b> did my choice register, and where am I? Single-select holds the selected state 240ms so the choice is seen, then advances (8px slide, direction-aware); Back reverses. Progress = thin rail with step markers. Summary lines reveal with a 30ms stagger. No business logic; nothing is sent. (The separate <code class="k">docs/prototypes/guided-intake</code> prototype owns the real questions.)</p></header>
+<div class="gi card" id="s13box" data-density="client" data-dir="fwd"><div class="steps" id="s13steps" style="margin-bottom:6px"></div><div class="row" style="justify-content:space-between;margin-bottom:14px"><span class="t-system" id="s13lab"></span><label class="check" style="font-size:.75rem"><input type="checkbox" id="s13ref"> Referral context: PDBM</label></div>
+<div class="ref"><span class="tag" style="color:var(--os-violet-text)">Referral</span> Introduced by PDBM — Emmanuel will know where you came from.</div>
+<div class="view" id="s13v"></div></div>
+<div class="controls"><button class="btn sm" data-reset="s13">Reset</button></div></section>
+
+<!-- 14 -->
+<section class="scene" id="s14" data-title="Client delivery available"><header><h2>14 · Client delivery available</h2>
+<p class="q"><b>Answers:</b> what is new for me? Production, review and delivery are separate facts. Approval already happened; the delivery link arriving reveals a Download row in place. “New version” returns the review state and marks v2 as NEW for 8 seconds, then it stops being louder than the rest.</p></header>
+<div class="card" data-density="client" data-intensity="client"><div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="t-card">Landing page hero <span class="ver" id="s14v">v1</span> <span class="newmark" id="s14new" style="opacity:0;transition:opacity 240ms">New</span></div></div>
+<div class="facts"><div class="fact"><span class="tag">Production</span><span class="st" data-status="done"><span class="lbl">Done</span></span></div><div class="fact"><span class="tag">Review</span><span class="st" id="s14rv" data-status="approved"><span class="lbl">Approved</span></span></div><div class="fact"><span class="tag">Delivery</span><span class="st" id="s14dl" data-status="planned"><span class="lbl">Not yet available</span></span></div></div>
+<div class="reveal" id="s14dw" data-open="false"><div class="in"><div class="panel" style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap" id="s14row"><span class="t-small">Delivery link added by Emmanuel</span><a class="btn primary" href="#s14" onclick="return false">Download</a></div></div></div>
+<div class="controls"><span class="savemsg" id="s14m" role="status"></span><button class="btn sm" data-do="s14.deliver">Operator adds delivery link</button><button class="btn sm" data-do="s14.version">New version arrives</button><button class="btn sm" data-reset="s14">Reset</button></div></div></section>
+
+<!-- 15 -->
+<section class="scene" id="s15" data-title="New item arrival"><header><h2>15 · New item arrival (+ empty → first)</h2>
+<p class="q"><b>Answers:</b> what arrived, without shouting? Row opens in place (grid-rows, 240ms) so neighbours slide instead of jumping; a 2px edge + “NEW” + timestamp; after 8s it becomes an ordinary row. The empty state simply yields to the first item.</p></header>
+<div class="card"><div class="row" style="margin-bottom:10px"><label class="row t-label">Kind <select class="select" id="s15k" style="width:auto"><option>Lead</option><option>Sensor session</option><option>Quick note</option><option>Client approval</option><option>Review feedback</option><option>Production Memory record</option><option>Deliverable</option></select></label></div>
+<div class="feed panel" style="padding:0" id="s15f"><div class="empty reveal" id="s15e" data-open="true"><div class="in"><div class="t-card">Nothing here yet</div><p class="t-small">New items appear here as they arrive.</p></div></div><div id="s15l"></div></div>
+<div class="controls"><button class="btn sm" data-do="s15.add">Simulate arrival</button><button class="btn sm" data-reset="s15">Reset (empty)</button></div></div></section>
+
+<!-- 16 -->
+<section class="scene" id="s16" data-title="Action states + save feedback"><header><h2>16 · Action states &amp; save feedback</h2>
+<p class="q"><b>Answers:</b> did it work? Loading appears only if the action takes &gt;150ms and then stays ≥300ms (no 50ms flicker). Success appears closest to the changed thing: inline text, a state dot, a border tint, or a row tint — chosen by object, not by mood.</p>
+<div class="smach">idle → hover → pressed → <em>loading (after 150ms)</em> → success | error → idle</div></header>
+<div class="stage two"><div class="card"><div class="tag" style="margin-bottom:10px">Button states</div><div class="row"><button class="btn primary act" data-do="s16.btn"><span class="ok"><svg class="ck draw"><use href="#ck"/></svg></span><span class="lbl">Save changes</span></button><button class="btn" disabled>Disabled</button><button class="btn danger act" data-do="s16.del"><span class="lbl">Remove link</span></button></div><p class="errline" id="s16err" role="alert"></p><p class="note" style="margin-top:10px">Fast actions never show a spinner. Slow ones show “…” on the label and a 2px sweep; the button width does not change.</p></div>
+<div class="card"><div class="tag" style="margin-bottom:10px">Where saved feedback fits</div><div style="display:grid;gap:14px">
+<label class="field"><span class="t-label">Field · <b style="color:var(--os-text-2)">inline text + border tint</b></span><input class="input" id="s16f" value="Spring launch" data-do-change="s16.field"><span class="savemsg" id="s16m"></span></label>
+<div class="row"><span class="t-label">Setting · <b>state dot</b></span><label class="check"><input type="checkbox" id="s16c" data-do-change="s16.dot">Show captions</label><span class="live" id="s16d" data-live="false" style="background:var(--os-text-3)"></span></div>
+<div class="t-label">List row · <b>row tint</b> (scene 4) · Object · <b>pill change</b> (scene 1)</div></div></div></div></section>
+
+<!-- 17 -->
+<section class="scene" id="s17" data-title="Errors, loading, toasts"><header><h2>17 · Errors, loading strategy, toasts</h2>
+<p class="q"><b>Answers:</b> what went wrong, what now? Error language is plain and local; focus moves to the first invalid field; no shake. Toasts only when the changed object is off-screen or context changed; never for saves, clicks or status updates.</p></header>
+<div class="stage two"><div class="card"><div class="tag" style="margin-bottom:10px">Validation · server · permission · conflict</div>
+<form id="s17f" novalidate class="field" style="gap:10px"><label class="field"><span class="t-label">Client email</span><input class="input" id="s17e" type="email" aria-describedby="s17ee" placeholder="name@company.com"><span class="err" id="s17ee" role="alert"></span></label><div class="row"><button class="btn primary" type="submit">Submit</button><button class="btn sm" type="button" data-do="s17.perm">Permission</button><button class="btn sm" type="button" data-do="s17.conflict">Conflict</button></div><p class="errline" id="s17m" role="alert"></p><span class="savemsg" id="s17ok" role="status"></span></form></div>
+<div class="card"><div class="tag" style="margin-bottom:10px">Loading thresholds</div><table class="table" data-density="operator"><thead><tr><th>Wait</th><th>Show</th></tr></thead><tbody><tr><td>&lt;150ms</td><td>Nothing</td></tr><tr><td>150ms–1s</td><td>Pending label (…) + 2px sweep, ≥300ms</td></tr><tr><td>1–3s</td><td>Skeleton for regions (never tiny controls)</td></tr><tr><td>Real progress</td><td>Progress bar with true value</td></tr><tr><td>Unknown &gt;3s</td><td>Inline status text + cancel</td></tr></tbody></table>
+<div class="controls"><button class="btn sm" data-do="s17.toast">Off-screen change → toast</button></div></div></div></section>
+
+<!-- 18 -->
+<section class="scene" id="s18" data-title="Drawer / inspector"><header><h2>18 · Drawer / inspector / sheet</h2>
+<p class="q"><b>Answers:</b> where did this come from? The origin row stays marked while the inspector slides 24px from the right (desktop) or a sheet rises from the bottom (narrow). Focus moves in; Esc or Close returns focus to the row. Use inspector for inspect-and-continue, sheet for narrow screens, in-place expansion when detail is short.</p></header>
+<div class="insp-wrap" id="s18w"><div style="padding:10px"><table class="table tbl" data-density="operator"><thead><tr><th>Session</th><th class="num">Length</th><th>State</th></tr></thead><tbody id="s18b"></tbody></table></div>
+<aside class="insp" id="s18i" data-open="false" tabindex="-1" aria-label="Session details"><div class="row" style="justify-content:space-between"><h3 class="t-card" id="s18t" tabindex="-1">Session</h3><button class="btn ghost sm" data-do="s18.close">Close</button></div><p class="t-small" id="s18d" style="margin-top:10px"></p></aside></div>
+<div class="controls"><div class="seg2" role="group" aria-label="Mode" id="s18m"><button aria-pressed="true" data-m="auto">Auto</button><button aria-pressed="false" data-m="inspector">Inspector</button><button aria-pressed="false" data-m="sheet">Sheet</button><button aria-pressed="false" data-m="inplace">In place</button></div><button class="btn sm" data-reset="s18">Reset</button></div></section>
+
+<!-- 19 -->
+<section class="scene" id="s19" data-title="War Room lanes"><header><h2>19 · War Room · lane moves</h2>
+<p class="q"><b>Answers:</b> which item moved state? A ticket glides between lanes (FLIP, 240ms); the lane counts crossfade; BLOCKED gets a static red edge — no pulse, no flicker. No lamps, no ambient loops. Conceptual only; the architecture is unchanged.</p></header>
+<div class="lanes" id="s19l"></div>
+<div class="controls"><span class="savemsg" id="s19m" role="status"></span><button class="btn sm" data-do="s19.start">Start next</button><button class="btn sm" data-do="s19.block">Block active</button><button class="btn sm" data-do="s19.review">Active → review</button><button class="btn sm" data-do="s19.done">Client approves review</button><button class="btn sm" data-reset="s19">Reset</button></div></section>
+
+<!-- 20 -->
+<section class="scene" id="s20" data-title="Chart recipes"><header><h2>20 · Chart recipes</h2>
+<p class="q"><b>Answers:</b> compare accurately. Bars, a sparkline, a timeline strip and a distribution; no donuts (they earned no space here). New points enter quietly; range changes keep the axis and animate values from previous.</p></header>
+<div class="stage two"><div class="card"><div class="tag" style="margin-bottom:8px">Vertical bar · hours per day</div><div class="vb" id="s20v"></div><div class="vlab" id="s20vl"></div><div class="controls"><button class="btn sm" data-do="s20.point">Add today</button></div></div>
+<div class="card"><div class="tag" style="margin-bottom:8px">Sparkline · daily hours</div><svg class="spark" id="s20s" viewBox="0 0 240 64" preserveAspectRatio="none" role="img" aria-label="Daily hours sparkline"></svg><div class="t-meta" id="s20st"></div><div class="controls"><button class="btn sm" data-do="s20.spark">Add point</button></div></div>
+<div class="card"><div class="tag" style="margin-bottom:8px">Timeline strip · 08:00–20:00</div><div class="strip" id="s20t" role="img" aria-label="Session timeline"></div><div class="vlab" style="margin-top:4px"><span>08</span><span>11</span><span>14</span><span>17</span><span>20</span></div><div class="legend" style="margin-top:8px"><span><i data-source="fact"></i>Observed</span><span><i data-source="derived"></i>Derived</span><span><i data-source="unknown"></i>Not observed</span></div></div>
+<div class="card"><div class="tag" style="margin-bottom:8px">Distribution · session length</div><div class="vb" id="s20d" style="height:110px"></div><div class="vlab" id="s20dl"></div><div class="controls"><div class="seg2" role="group" aria-label="Range" id="s20r"><button aria-pressed="true" data-r="all">All</button><button aria-pressed="false" data-r="client">Client work</button></div></div></div></div></section>
+
+<!-- 21 -->
+<section class="scene" id="s21" data-title="Public motion + real work"><header><h2>21 · Public motion &amp; real-work frames</h2>
+<p class="q"><b>Answers:</b> polished, disciplined, expensive. Nav underline (120ms), CTA press (0.98), poster → hover/focus metadata (touch: tap toggles), click → light preview dialog (no autoplay), before/after as a keyboard-operable range, section reveal once (fade + 8px). No parallax, no idle float, no cinematic loader.</p></header>
+<div class="card" data-density="public" data-intensity="public"><div class="row" style="gap:24px;margin-bottom:20px"><a class="navlink" href="#s21" onclick="return false">Work</a><a class="navlink" href="#s21" onclick="return false">Process</a><a class="navlink" href="#s21" onclick="return false">Client path</a><button class="btn primary" style="margin-left:auto">Start a project</button></div>
+<div class="grid three" id="s21f"><button class="wf" data-touchable><div class="frame" data-tc="00:00:12:04"></div><div class="meta"><div class="t-card">Placeholder title</div><div class="t-meta">Client · 0:48 · captions</div></div></button><button class="wf" data-touchable><div class="frame v" style="aspect-ratio:16/9" data-tc="00:01:03:18"></div><div class="meta"><div class="t-card">Placeholder title</div><div class="t-meta">Client · 1:32 · vertical</div></div></button><button class="wf" data-touchable><div class="frame" data-tc="00:02:40:00"></div><div class="meta"><div class="t-card">Placeholder title</div><div class="t-meta">Client · 2:40 · story</div></div></button></div>
+<div class="grid two" style="margin-top:16px"><div><div class="tag" style="margin-bottom:6px">Before / after (drag or arrow keys)</div><div class="cmp2" id="s21c" style="--p:50"><div class="a">BEFORE · RAW</div><div class="b">AFTER · EDIT</div><span class="hd"></span><input type="range" min="0" max="100" value="50" aria-label="Before and after position"></div></div>
+<div><div class="tag" style="margin-bottom:6px">Section reveal (once)</div><div class="rv panel" id="s21r"><p class="t-body muted">Placeholder section content revealed once as it enters view.</p></div><div class="controls"><button class="btn sm" data-do="s21.replay">Replay reveal</button></div></div></div></div>
+<dialog class="osm" id="s21m" aria-labelledby="s21t"><div class="sheet"><h3 class="t-section" id="s21t">Preview · placeholder</h3><div class="frame" style="margin:12px 0" data-tc="preview"></div><div class="rail" style="margin-bottom:8px"><i id="s21p" style="--v:0"></i></div><p class="t-small" id="s21s">Loading poster…</p><div class="row" style="justify-content:flex-end"><button class="btn" data-do="s21.close">Close</button></div></div></dialog></section>
+
+</div>
+<script src="rmedia-os-interaction-lab.js"></script>
+</body>
+</html>
