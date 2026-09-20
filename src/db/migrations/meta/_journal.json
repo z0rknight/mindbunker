@@ -372,6 +372,13 @@
       "when": 1789898879596,
       "tag": "0052_worried_mandarin",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "6",
+      "when": 1789929643229,
+      "tag": "0053_slow_shen",
+      "breakpoints": true
     }
   ]
 }

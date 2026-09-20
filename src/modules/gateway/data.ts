@@ -18,6 +18,21 @@ import {
   getCurrentBookingForClient,
   getLatestBookingForClient,
 } from "@/modules/booking/data";
+import {
+  GUIDED_INTAKE_EVENT_TYPE,
+  isGuidedIntakePayload,
+  projectGuidedIntakePayload,
+} from "@/modules/guided-intake/core";
+
+function guidedIntakeProjection(type: string, payloadJson: string | null) {
+  if (type !== GUIDED_INTAKE_EVENT_TYPE || !payloadJson) return null;
+  try {
+    const payload: unknown = JSON.parse(payloadJson);
+    return isGuidedIntakePayload(payload) ? projectGuidedIntakePayload(payload) : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function getGatewayContext(rawToken: string) {
   if (!isGatewayToken(rawToken)) {
@@ -143,6 +158,7 @@ export async function getAdminGatewayWorkspace(clientId: number) {
         type: crmEvents.type,
         actor: crmEvents.actor,
         description: crmEvents.description,
+        payloadJson: crmEvents.payloadJson,
         createdAt: crmEvents.createdAt,
       })
       .from(crmEvents)
@@ -163,7 +179,10 @@ export async function getAdminGatewayWorkspace(clientId: number) {
       : null,
     briefing: briefingRows[0] ?? null,
     booking,
-    events: eventRows,
+    events: eventRows.map(({ payloadJson, ...event }) => ({
+      ...event,
+      guidedIntake: guidedIntakeProjection(event.type, payloadJson),
+    })),
   };
 }
 

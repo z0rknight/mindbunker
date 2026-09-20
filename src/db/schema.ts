@@ -354,6 +354,10 @@ export const crmEvents = sqliteTable(
       .notNull()
       .default("system"),
     description: text("description").notNull(),
+    // Guided Lead Engine (Sep 2026): optional immutable structured evidence
+    // attached to one CRM event. Existing timeline events remain valid with
+    // NULL; current Lead state continues to live on `clients`, never here.
+    payloadJson: text("payload_json"),
     createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
       () => new Date(),
     ),

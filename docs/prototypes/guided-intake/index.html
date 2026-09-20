@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="Local RMEDIA guided lead intake prototype." />
+    <title>Start with RMEDIA — local prototype</title>
+    <link rel="stylesheet" href="../../design/rmedia-os-styleboard.css" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="prototype-bar">
+      <span>LOCAL PROTOTYPE</span>
+      <span>No information is sent or saved to MindBunker</span>
+    </header>
+    <main class="intake-shell" id="main">
+      <div class="brand-row" aria-label="RMEDIA">
+        <span class="brand-mark" aria-hidden="true">R</span>
+        <span>RMEDIA</span>
+        <span class="brand-context">Start</span>
+      </div>
+
+      <section class="intake-panel" aria-labelledby="step-title">
+        <div class="progress-row">
+          <span id="progress-label">Step 1</span>
+          <span id="progress-percent">0%</span>
+        </div>
+        <div class="progress" aria-hidden="true"><span id="progress-fill"></span></div>
+        <div id="referral-note" class="referral-note" hidden></div>
+        <form id="intake-form" novalidate>
+          <div id="step-root"></div>
+          <p id="form-error" class="form-error" role="alert" hidden></p>
+          <div class="actions">
+            <button class="btn btn-secondary" type="button" id="back-button">Back</button>
+            <button class="btn btn-primary" type="submit" id="continue-button">Continue</button>
+          </div>
+        </form>
+      </section>
+
+      <p class="privacy-line">A calmer way to clarify the work before discussing scope, timing, or price.</p>
+    </main>
+    <script type="module" src="./app.mjs"></script>
+  </body>
+</html>

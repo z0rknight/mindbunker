@@ -1,0 +1,1 @@
+ALTER TABLE `crm_events` ADD `payload_json` text;

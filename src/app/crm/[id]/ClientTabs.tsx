@@ -60,6 +60,17 @@ interface ClientTabsProps {
     actor: "admin" | "gateway" | "system" | "client";
     description: string;
     createdAt: Date | null;
+    guidedIntake: {
+      whatTheyWant: string;
+      volume: string;
+      recurrence: string;
+      readiness: string;
+      definition: string;
+      timing: string;
+      startingPath: string;
+      referralSource: string | null;
+      freeformContext: string | null;
+    } | null;
   }>;
   projects: ClientProjectView[];
   instagramImportConfigured: boolean;
@@ -134,6 +145,7 @@ export function ClientTabs({
   const [metadataSource, setMetadataSource] = useState(client.source ?? "");
   const [metadataPending, setMetadataPending] = useState(false);
   const [defaultCoverUrl, setDefaultCoverUrl] = useState(client.defaultCoverUrl ?? "");
+  const latestGuidedIntake = events.find((event) => event.guidedIntake)?.guidedIntake ?? null;
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: "overview", label: "Overview", icon: "📊" },
@@ -274,6 +286,37 @@ export function ClientTabs({
                 this tab. */}
 
             <PaymentRequestPanel clientId={client.id} requests={paymentRequests} />
+
+            {latestGuidedIntake && (
+              <section aria-labelledby="guided-intake-heading">
+                <div className="mb-3 flex items-end justify-between gap-3">
+                  <div>
+                    <h3 id="guided-intake-heading" className="text-xs font-semibold uppercase tracking-wider text-violet-300">
+                      Latest guided intake
+                    </h3>
+                    <p className="mt-1 text-xs text-zinc-600">
+                      What this person submitted before Emmanuel&apos;s review.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-violet-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-violet-300">
+                    Evidence
+                  </span>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <BriefingField label="What they want" value={latestGuidedIntake.whatTheyWant} />
+                  <BriefingField label="Volume" value={latestGuidedIntake.volume} />
+                  <BriefingField label="Recurrence" value={latestGuidedIntake.recurrence} />
+                  <BriefingField label="What is ready" value={latestGuidedIntake.readiness} />
+                  <BriefingField label="How defined the work is" value={latestGuidedIntake.definition} />
+                  <BriefingField label="Timing" value={latestGuidedIntake.timing} />
+                  <BriefingField label="Recommended starting path" value={latestGuidedIntake.startingPath} />
+                  <BriefingField label="Referral source" value={latestGuidedIntake.referralSource} />
+                  <div className="md:col-span-2">
+                    <BriefingField label="Additional context" value={latestGuidedIntake.freeformContext} />
+                  </div>
+                </div>
+              </section>
+            )}
 
             {briefing && (
               <div>
