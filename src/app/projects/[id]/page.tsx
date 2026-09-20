@@ -1,3 +1,5 @@
+import { FormatsForClient } from "@/components/production-memory/FormatsForClient";
+import { getProductionMemoryForClient } from "@/modules/production-memory/data";
 import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { PlanVideoButton } from "@/components/ui/QuickActions";
 import { ProjectStatusBadge } from "@/components/ui/ProjectStatusBadge";
@@ -33,7 +35,7 @@ export default async function ProjectWorkspacePage({
   const project = await getProjectWorkspace(Number(id));
   if (!project) notFound();
 
-  const [assets, sourceMediaReferences, commercialTermsByVideoId, custody, openProductionOrders] = await Promise.all([
+  const [assets, sourceMediaReferences, commercialTermsByVideoId, custody, openProductionOrders, productionMemories] = await Promise.all([
     getAssetsForProject(project.id),
     getSourceMediaForProject(project.id),
     // Quick Morning Reality Patch §7/§9: reuse the exact same commercial-
@@ -48,6 +50,8 @@ export default async function ProjectWorkspacePage({
     // Sep 18 Morning Congruence Patch: this project's own OPEN batches, for
     // the "assign selected existing videos to a batch" picker below.
     getOpenProductionOrdersForProject(project.id),
+    // Wave 3: the client's reusable formats, read in place (never copied).
+    getProductionMemoryForClient(project.clientId),
   ]);
 
   const videosWithCommercialTerms = project.videos.map((video) => ({
@@ -109,6 +113,8 @@ export default async function ProjectWorkspacePage({
           <ProjectWorkspaceControls project={project} />
         </div>
       </header>
+
+      <FormatsForClient clientId={project.clientId} clientName={project.clientName} memories={productionMemories} />
 
       <section className="mb-7 grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">

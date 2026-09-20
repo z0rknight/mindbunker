@@ -8,6 +8,8 @@ import { formatClosedDuration } from "@/modules/work-sessions/core";
 import { formatCurrency } from "@/utils/date";
 import { isSafeInternalPath } from "@/utils/navigation";
 import { CancelItemButton, OrderLifecycleActions } from "./OrderDetailActions";
+import { FormatsForClient } from "@/components/production-memory/FormatsForClient";
+import { getProductionMemoryForClient } from "@/modules/production-memory/data";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,7 @@ export default async function ProductionOrderDetailPage({
   const safeReturnTo =
     typeof rawReturnTo === "string" && isSafeInternalPath(rawReturnTo) ? rawReturnTo : undefined;
 
+  const productionMemories = await getProductionMemoryForClient(order.clientId);
   const activeItems = order.items.filter((item) => item.cancelledAt === null);
   const status = describeProductionOrderStatus({
     state: order.state,
@@ -82,6 +85,8 @@ export default async function ProductionOrderDetailPage({
           </div>
           {order.state === "OPEN" && <OrderLifecycleActions orderId={order.id} />}
         </div>
+
+        <FormatsForClient clientId={order.clientId} clientName={order.clientName} memories={productionMemories} />
 
         {/* Commercial */}
         <section className="mb-6 rounded-xl border border-zinc-800 bg-zinc-950 p-5 font-mono">

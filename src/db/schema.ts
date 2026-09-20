@@ -30,6 +30,7 @@ import {
   VIDEO_STATUSES,
 } from "../modules/productivity/config";
 import { ASSET_TYPES, ASSET_STATUSES } from "../modules/assets/config";
+import { PRODUCTION_MEMORY_STATUSES } from "../modules/production-memory/config";
 import {
   EQUIPMENT_ACQUISITION_PRIORITIES,
   EQUIPMENT_ACQUISITION_STAGES,
@@ -2815,6 +2816,51 @@ export const captures = sqliteTable(
     check(
       "captures_ended_after_started_check",
       sql`${table.endedAt} is null or ${table.startedAt} is null or ${table.endedAt} >= ${table.startedAt}`,
+    ),
+  ],
+);
+
+// Client Production Memory V1 (Wave 3): a named, reusable, client-scoped
+// production format ("Lecture Format", "Content Waterfall"). The CLIENT owns
+// it; Project and Production Order pages only READ it (by clientId), so a
+// format is never copied into batch/video rows. Three fact types are kept
+// apart on purpose: preference_notes (what the client likes), recipe_notes
+// (how the work is done), template_location (where the canonical file lives
+// -- a pointer only, MindBunker never stores the file). Every descriptive
+// column is optional: unknown stays NULL, never a placeholder.
+// reference_video_id is the approved EXAMPLE, by reference to an existing
+// video (its URLs are derived, not copied); the same-client rule is enforced
+// in application code (production-memory/core.ts), and SET NULL on delete
+// keeps the memory if the video row ever goes away.
+export const clientProductionMemory = sqliteTable(
+  "client_production_memory",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    useCase: text("use_case"),
+    status: text("status", { enum: PRODUCTION_MEMORY_STATUSES }),
+    approvalEvidence: text("approval_evidence"),
+    preferenceNotes: text("preference_notes"),
+    recipeNotes: text("recipe_notes"),
+    templateLocation: text("template_location"),
+    referenceVideoId: integer("reference_video_id").references(() => videoLogs.id, {
+      onDelete: "set null",
+    }),
+    referenceUrl: text("reference_url"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    uniqueIndex("client_production_memory_client_name_unique").on(table.clientId, table.name),
+    index("client_production_memory_client_idx").on(table.clientId),
+    check(
+      "client_production_memory_status_check",
+      sql`${table.status} is null or ${table.status} in ('OBSERVED', 'OPERATOR_CONVENTION', 'CLIENT_APPROVED', 'HISTORICAL')`,
     ),
   ],
 );

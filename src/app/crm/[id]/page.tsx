@@ -8,6 +8,8 @@ import { getClientProjectCommercialAttribution, getCommercialContracts } from "@
 import { notFound } from "next/navigation";
 import { ClientIntelligencePanel } from "./ClientIntelligencePanel";
 import { ClientTabs } from "./ClientTabs";
+import { ProductionMemoryPanel } from "./ProductionMemoryPanel";
+import { getProductionMemoryForClient, getReferenceVideoOptions } from "@/modules/production-memory/data";
 import { GeladeiraControl } from "./GeladeiraControl";
 import { OpportunityPanel } from "./OpportunityPanel";
 import { QuotePanel } from "./QuotePanel";
@@ -98,6 +100,8 @@ export default async function ClientDetailPage({
     allUnassignedVideos,
     allContracts,
     commercialAttribution,
+    productionMemories,
+    referenceVideoOptions,
   ] = await Promise.all([
     getAdminGatewayWorkspace(clientId),
     getAdminBookingConfiguration(),
@@ -123,6 +127,9 @@ export default async function ClientDetailPage({
     // (unlike the two global queries above), so no client-side filter
     // needed -- this is the one new query this page adds.
     getClientProjectCommercialAttribution(clientId),
+    // Wave 3: client-owned production memory (operator-only).
+    getProductionMemoryForClient(clientId),
+    getReferenceVideoOptions(clientId),
   ]);
   const weekEstimateForClient = weekEstimates.find((row) => row.clientId === clientId) ?? null;
   const unassignedVideos = filterVideosForClient(allUnassignedVideos, clientId);
@@ -281,6 +288,17 @@ export default async function ClientDetailPage({
             portalShowVideoLibrary={client.portalShowVideoLibrary}
           />
         </div>
+      )}
+
+      {/* Wave 3 Client Production Memory: the client OWNS its reusable
+          formats; managed here, read contextually from Project and
+          Production Order pages. Hidden for a lead with none recorded. */}
+      {(client.status !== "lead" || productionMemories.length > 0) && (
+        <ProductionMemoryPanel
+          clientId={client.id}
+          memories={productionMemories}
+          videoOptions={referenceVideoOptions}
+        />
       )}
 
       {/* Client Tabs */}
