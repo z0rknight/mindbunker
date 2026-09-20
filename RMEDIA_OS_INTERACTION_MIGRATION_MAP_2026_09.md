@@ -1,6 +1,6 @@
 # RMEDIA OS — Interaction Migration Map (2026-09-20)
 
-Companion to `RMEDIA_OS_INTERACTION_AND_MOTION_SYSTEM_2026_09.md` and the lab (`docs/design/rmedia-os-interaction-lab.*`). Line references are from source at `21cc20b`. **Status: M1, M2 and M3 IMPLEMENTED (2026-09-20); M4–M6 are planning only.**
+Companion to `RMEDIA_OS_INTERACTION_AND_MOTION_SYSTEM_2026_09.md` and the lab (`docs/design/rmedia-os-interaction-lab.*`). Line references are from source at `21cc20b`. **Status: M1–M4 IMPLEMENTED (2026-09-20); M5–M6 are planning only.**
 
 ## 1. Legacy → future map
 | Legacy (source) | Future | Lab scene |
@@ -45,7 +45,14 @@ Companion to `RMEDIA_OS_INTERACTION_AND_MOTION_SYSTEM_2026_09.md` and the lab (`
 - Not adopted (by design): War Room ambient `wr-*` loops remain (M6); Finance/CRM rows, payment states, StatusTransition on operator pills beyond the comanda phase label; no toast system was added.
 - **M4 dependencies:** none blocking. Progress rails/segments exist (`BatchProgress`), the value/flash/arrival primitives are ready; charts and the source/derived/unknown encodings are the M4 work.
 
-**M4 — Data viz / progress (P1-P2, low-medium).** Files: `src/components/ui/PerformanceStats.tsx`, `src/app/projects/page.tsx`, `src/app/war-room/page.tsx`, `src/app/equipment/page.tsx`, `src/app/productivity/sessions/SessionWeekCalendar.tsx`, `src/app/all-history/AllHistoryVisuals.tsx`, `src/app/productivity/sensor/page.tsx` (Application usage), Production Order batch bar. Components: DataBar, SegmentedProgress, ProgressRail, ValueChange, provenance legend (fact/derived/unknown). No new analytics domain.
+**M4 — Data viz / progress — IMPLEMENTED 2026-09-20 (operator `e9ebcccb`; client not redeployed).** Files: `src/components/ui/PerformanceStats.tsx`, `src/app/projects/page.tsx`, `src/app/war-room/page.tsx`, `src/app/equipment/page.tsx`, `src/app/productivity/sessions/SessionWeekCalendar.tsx`, `src/app/all-history/AllHistoryVisuals.tsx`, `src/app/productivity/sensor/page.tsx` (Application usage), Production Order batch bar. Components: DataBar, SegmentedProgress, ProgressRail, ValueChange, provenance legend (fact/derived/unknown). No new analytics domain.
+### M4 as built
+- Components/logic: `DataBar`, `EvidenceRail` (server components, no state), `lib/os/evidence-rail.ts`, operator wording/cancelled note for `BatchProgress`, CSS `.os-databar*` / `.os-rail*` (transitions on width only; nothing plays on mount; hatch = derived, dashed = unknown, `data-tone="muted"` = quieter known fact such as idle).
+- Adopted: Sensor Application usage bars + intentional coverage rail; Finance `AttributionPanel` rail; `BatchEvidenceBlock` weekly rails + `ValueChange` counts; operator order rail wording.
+- Findings: (1) Application-usage window switches are soft navigations, so keyed rows keep their DOM nodes and the width transition runs for free (no JS); (2) coverage reconciles exactly (active + idle + no-telemetry = intentional session time) and the unknown part stays a first-class dashed segment; (3) "elsewhere" in the batch weeks mixes explicit and derived attribution, so it is labelled neutral and never as billed/paid.
+- Not built (no current question): sparkline, timeline strip, ACTIVE-view coverage rail, donut/pie. The lab keeps those recipes.
+- **M5/M6 dependencies:** none blocking.
+
 **M5 — Public + guided intake motion (P1-P2, medium; separate public Worker).** Files: `rmedia-public-site/public/assets/css/{animations,components,variables,responsive}.css`, `index.html`/`onboarding.html`, the guided-intake prototype (`docs/prototypes/guided-intake/*`, owned by another track) once it is approved for production, `src/app/quoteavideo/*`, `src/app/book/*`, `src/app/g/[token]/*`. Components: ChoiceCard, nav/CTA states, poster frame, before/after range, one-time reveal.
 **M6 — Legacy loop removal + final cleanup (P2, low).** Files: `globals.css` (`wr-*`, glow markers), `WarRoomRestaurantStage.tsx`, `projects/ProjectCover.tsx`, `components/health/ActivityTimeline.tsx`, public `animations.css` idle-bob, emoji feedback glyphs. War Room lane FLIP lands here or in M3 depending on scope. QA: visual regression + reduced motion.
 Reorder rationale: M1 unblocks everything and is invisible; M2 moves before M3 because the client sees motion once and trust matters most; M4 waits for M1 primitives; M5 waits for the separately-owned intake prototype; M6 is deletions.
