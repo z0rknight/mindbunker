@@ -10,8 +10,16 @@ import { summarizeBatchProgress } from "@/modules/client-portal/batch-progress";
  * id) transitions from its previous look. The text carries the meaning; the
  * rail is decorative (`aria-hidden`). READY_FOR_REVIEW is never drawn as done.
  */
-export function BatchProgress({ items }: { items: ReadonlyArray<{ id: number; status: VideoStatus }> }) {
-  const progress = summarizeBatchProgress(items);
+export function BatchProgress({
+  items,
+  wording,
+  cancelled,
+}: {
+  items: ReadonlyArray<{ id: number; status: VideoStatus }>;
+  wording?: "client" | "operator";
+  cancelled?: number;
+}) {
+  const progress = summarizeBatchProgress(items, { wording, cancelled });
   if (progress.total < 2) return null;
   return (
     <div className="mt-4">

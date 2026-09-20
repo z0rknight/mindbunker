@@ -206,7 +206,11 @@ export default async function ProductionOrderDetailPage({
           </p>
           {/* M3: the same truthful composition rail the client sees (review is never drawn as done);
               segments keep stable keys, so a child changing state elsewhere transitions in place. */}
-          <BatchProgress items={activeItems.map((item) => ({ id: item.videoId, status: item.status }))} />
+          <BatchProgress
+            items={activeItems.map((item) => ({ id: item.videoId, status: item.status }))}
+            wording="operator"
+            cancelled={cancelledItems.length}
+          />
           <div className="mt-3 space-y-2">
             {activeItems.map((item) => (
               <div

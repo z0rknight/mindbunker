@@ -24,9 +24,18 @@ export type BatchProgressSummary = {
   summary: string;
 };
 
+export type BatchProgressOptions = {
+  /** "client" (default): "completed"/"in production". "operator": the operator's own words, "done"/"in progress". */
+  wording?: "client" | "operator";
+  /** Cancelled deliverables are NOT part of the rail; when given they are named in the text so nothing is hidden. */
+  cancelled?: number;
+};
+
 export function summarizeBatchProgress(
   items: ReadonlyArray<{ id: number; status: VideoStatus }>,
+  options: BatchProgressOptions = {},
 ): BatchProgressSummary {
+  const operator = options.wording === "operator";
   const counts = { done: 0, review: 0, inProduction: 0, updates: 0, planned: 0 };
   for (const item of items) {
     if (item.status === "DONE") counts.done += 1;
@@ -35,11 +44,12 @@ export function summarizeBatchProgress(
     else if (item.status === "CHANGES_REQUESTED") counts.updates += 1;
     else counts.planned += 1;
   }
-  const parts = [`${counts.done} of ${items.length} completed`];
+  const parts = [`${counts.done} of ${items.length} ${operator ? "done" : "completed"}`];
   if (counts.review) parts.push(`${counts.review} in review`);
-  if (counts.inProduction) parts.push(`${counts.inProduction} in production`);
-  if (counts.updates) parts.push(`${counts.updates} with updates in progress`);
+  if (counts.inProduction) parts.push(`${counts.inProduction} ${operator ? "in progress" : "in production"}`);
+  if (counts.updates) parts.push(`${counts.updates} ${operator ? "changes requested" : "with updates in progress"}`);
   if (counts.planned) parts.push(`${counts.planned} planned`);
+  if (options.cancelled && options.cancelled > 0) parts.push(`${options.cancelled} cancelled (not in the rail)`);
   return {
     total: items.length,
     counts,

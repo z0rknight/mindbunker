@@ -16,7 +16,8 @@ import { APP_KEY_LABELS, sessionCoveragePercent, type TimeWindowKind } from "@/m
 import { getWorkSessionOverview } from "@/modules/work-sessions/data";
 import { SensorDeviceManager } from "./SensorDeviceManager";
 import { SensorSessionActions } from "./SensorSessionActions";
-import { DepartureNotice, ValueChange } from "@/components/os";
+import { DataBar, DepartureNotice, EvidenceRail, ValueChange } from "@/components/os";
+import { buildRail, coverageParts } from "@/lib/os/evidence-rail";
 
 // Tuesday Reality Patch A2: connectivity (is a device phoning home?) and
 // canonical work state (is a Work Session open?) are two separate facts
@@ -162,6 +163,23 @@ export default async function SensorActivityPage({
   );
   const copy = connectivityCopy(connectivity, workSessionOverview.openSession !== null);
   const indicator = sensorIndicator(connectivity, workSessionOverview.openSession !== null);
+  // M4 (presentation only): the same rows the page already listed, plus the scale for their bars.
+  const usageRows = appMetric === "ACTIVE" ? applicationUsage.observed : applicationUsage.intentional;
+  const usageMaxSeconds = Math.max(0, ...usageRows.map((row) => row.seconds));
+  // Intentional session time = active + idle + NO telemetry (unknown). Never normalised to 100%.
+  const coverage = applicationUsage.sessionCoverage;
+  const coveragePct = sessionCoveragePercent(coverage);
+  const parts = coverageParts(coverage);
+  const coverageRail = buildRail(
+    [
+      { key: "active", label: "Active app time", value: parts.active, source: "fact", display: formatClosedDuration(parts.active) },
+      { key: "idle", label: "Idle while a session was open", value: parts.idle, source: "fact", tone: "muted", display: formatClosedDuration(parts.idle) },
+      { key: "unknown", label: "No telemetry", value: parts.unknown, source: "unknown", display: formatClosedDuration(parts.unknown) },
+    ],
+    coverage.sessionSeconds,
+    `of intentional sessions${coveragePct !== null ? ` (${coveragePct}% telemetry coverage)` : ""}`,
+    formatClosedDuration(coverage.sessionSeconds),
+  );
   return (
     <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 md:p-8">
       <Link href="/productivity/sessions" className="text-xs font-bold text-cyan-400">← Work Session Ledger</Link>
@@ -306,24 +324,34 @@ export default async function SensorActivityPage({
             </Link>
           ))}
         </div>
-        <div className="mt-4 space-y-2">
-          {(appMetric === "ACTIVE" ? applicationUsage.observed : applicationUsage.intentional).length === 0 && (
+        {/* M4: exact time per app as a neutral bar (length is relative to the longest app in this view;
+            the exact value is always printed, so the bar is never the only carrier). Rows keep stable keys,
+            so switching the window moves the existing bars instead of redrawing them. */}
+        <div className="mt-4 space-y-2" data-testid="application-usage-bars">
+          {usageRows.length === 0 && (
             <p className="text-sm text-zinc-600">No observed application activity in this window.</p>
           )}
-          {(appMetric === "ACTIVE" ? applicationUsage.observed : applicationUsage.intentional).map((row) => (
-            <div key={`${row.appKey}-${row.surface ?? ""}`} className="flex items-center justify-between gap-3 text-sm">
-              <span className="truncate text-zinc-300">
-                {APP_KEY_LABELS[row.appKey]}
-                {row.surface && <span className="ml-1 text-[10px] font-bold text-zinc-600">· {row.surface.replace("_WEB", " web")}</span>}
-              </span>
-              <span className="shrink-0 font-mono text-zinc-400">{formatClosedDuration(row.seconds)}</span>
-            </div>
+          {usageRows.map((row) => (
+            <DataBar
+              key={`${row.appKey}-${row.surface ?? ""}`}
+              label={APP_KEY_LABELS[row.appKey]}
+              detail={row.surface ? row.surface.replace("_WEB", " web") : undefined}
+              value={row.seconds}
+              max={usageMaxSeconds}
+              display={formatClosedDuration(row.seconds)}
+            />
           ))}
+          {usageRows.length > 0 && (
+            <p className="text-[10px] leading-4 text-zinc-600">Bars are scaled to the longest app in this view; exact time on the right.</p>
+          )}
         </div>
         {appMetric === "INTENTIONAL" && (
           <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3 text-[11px] leading-5 text-zinc-500" data-testid="intentional-coverage">
             {applicationUsage.sessionCoverage.sessionSeconds > 0 ? (
               <>
+                <div className="mb-3" data-testid="coverage-rail">
+                  <EvidenceRail rail={coverageRail} />
+                </div>
                 <p>
                   Intentional sessions: <span className="font-mono text-zinc-300">{formatClosedDuration(applicationUsage.sessionCoverage.sessionSeconds)}</span>
                   {" · "}Sensor telemetry covers{" "}

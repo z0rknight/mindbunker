@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { attributeRegisteredTime, removeAttribution } from "@/modules/finance/attribution-actions";
 import { formatMinutesAsHours } from "@/modules/finance/core";
 import type { EvidenceAttributionView } from "@/modules/finance/attribution-data";
+import { EvidenceRail, ValueChange } from "@/components/os";
+import { attributionParts, buildRail } from "@/lib/os/evidence-rail";
 
 // External registered time -> work attribution. Deliberately quiet: no
 // required action, no reconciliation workflow, no nagging. "Unallocated" is a
@@ -19,7 +21,9 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   return (
     <div>
       <dt className="text-[10px] uppercase tracking-widest text-zinc-500">{label}</dt>
-      <dd className="mt-0.5 font-mono text-sm text-white">{value}</dd>
+      <dd className="mt-0.5 font-mono text-sm text-white">
+        <ValueChange value={value} />
+      </dd>
       {hint && <dd className="text-[10px] text-zinc-600">{hint}</dd>}
     </div>
   );
@@ -30,6 +34,20 @@ export function AttributionPanel({ view }: { view: EvidenceAttributionView }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const { summary } = view;
+  // M4: how the registered time splits -- attributed by you (source fact), historical derived
+  // (hatched + labelled), unallocated (a valid state: dashed, never "missing money"). Not billing,
+  // not payment: the same numbers as the exact stats below, drawn.
+  const parts = attributionParts(summary);
+  const rail = buildRail(
+    [
+      { key: "explicit", label: "Attributed by you", value: parts.explicit, source: "fact", display: formatMinutesAsHours(parts.explicit) },
+      { key: "derived", label: "Historical", value: parts.derived, source: "derived", display: formatMinutesAsHours(parts.derived) },
+      { key: "unallocated", label: "Unallocated", value: parts.unallocated, source: "unknown", display: formatMinutesAsHours(parts.unallocated) },
+    ],
+    summary.registeredMinutes,
+    "registered",
+    formatMinutesAsHours(summary.registeredMinutes),
+  );
 
   function submit(formData: FormData) {
     setError("");
@@ -70,6 +88,9 @@ export function AttributionPanel({ view }: { view: EvidenceAttributionView }) {
         />
         <Stat label="Unallocated" value={formatMinutesAsHours(summary.unallocatedMinutes)} />
       </dl>
+      <div className="mt-3" data-testid="attribution-rail">
+        <EvidenceRail rail={rail} />
+      </div>
       {summary.amountOnlyRows > 0 && (
         <p className="mt-2 text-[10px] text-zinc-600">
           {summary.amountOnlyRows} allocation(s) carry an amount but no minutes, so they don&apos;t reduce the unallocated time.

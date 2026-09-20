@@ -1,6 +1,8 @@
 export { ActionButton } from "./ActionButton";
 export { ArrivalItem, ArrivalScope, useIsNew } from "./Arrivals";
+export { DataBar } from "./DataBar";
 export { DepartureNotice } from "./DepartureNotice";
+export { EvidenceRail } from "./EvidenceRail";
 export { NewBadge } from "./NewBadge";
 export { StatusTransition } from "./StatusTransition";
 export { UpdateFlash } from "./UpdateFlash";

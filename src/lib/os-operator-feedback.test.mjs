@@ -101,7 +101,7 @@ test("BatchProgress is shared by the client dashboard and the operator order pag
   const html = renderToStaticMarkup(createElement(BatchProgress, { items }));
   assert.match(html, /1 of 3 completed · 1 in review · 1 planned/);
   assert.match(read("../app/client/dashboard/page.tsx"), /@\/components\/os\/BatchProgress/);
-  assert.match(read("../app/productivity/orders/[id]/page.tsx"), /<BatchProgress items=\{activeItems\.map/);
+  assert.match(read("../app/productivity/orders/[id]/page.tsx"), /<BatchProgress\s+items=\{activeItems\.map/);
 });
 
 test("Needs Attention keeps its server-rendered data and links; first paint has no NEW marker", async () => {

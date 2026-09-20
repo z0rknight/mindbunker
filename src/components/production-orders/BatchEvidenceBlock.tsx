@@ -2,6 +2,8 @@ import type { BatchEvidence } from "@/modules/production-orders/evidence";
 import { formatClosedDuration } from "@/modules/work-sessions/core";
 import { formatMinutesAsHours } from "@/modules/finance/core";
 import { formatCurrency, formatDate } from "@/utils/date";
+import { EvidenceRail, ValueChange } from "@/components/os";
+import { buildRail } from "@/lib/os/evidence-rail";
 
 // Read-only "Evidence for this batch": what is known, and what is not.
 // Presentational only (no hooks/state/writes). Answers one operator question:
@@ -29,7 +31,7 @@ export function BatchEvidenceBlock({ evidence }: { evidence: BatchEvidence }) {
       <p className="mb-3 text-[10px] uppercase tracking-widest text-zinc-600">EVIDENCE FOR THIS BATCH</p>
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Row label="Deliverables">
-          {evidence.deliverables.active} active · {evidence.deliverables.done} done
+          <ValueChange value={evidence.deliverables.active} /> active · <ValueChange value={evidence.deliverables.done} /> done
         </Row>
 
         <Row label="Tracked work">
@@ -78,9 +80,27 @@ export function BatchEvidenceBlock({ evidence }: { evidence: BatchEvidence }) {
                 {evidence.externalRegisteredTime.derivedHereMinutes > 0 &&
                   ` (+ ${formatMinutesAsHours(evidence.externalRegisteredTime.derivedHereMinutes)} historical, derived)`}
               </span>
-              <ul className="mt-1 space-y-0.5 text-zinc-500">
+              <ul className="mt-1 space-y-2 text-zinc-500">
                 {evidence.externalRegisteredTime.weeks.map((week) => (
                   <li key={week.evidenceId}>
+                    {/* M4: one registered week split into what is attributed HERE (the subject: violet, plus
+                        historical derived hatched), attributed elsewhere, and unallocated (dashed, unknown). */}
+                    <div className="mb-1">
+                      <EvidenceRail
+                        legend={false}
+                        rail={buildRail(
+                          [
+                            { key: "here", label: "Attributed here", value: week.explicitHereMinutes, source: "fact", emphasis: true, display: formatMinutesAsHours(week.explicitHereMinutes) },
+                            { key: "derived", label: "Derived here", value: week.derivedHereMinutes, source: "derived", display: formatMinutesAsHours(week.derivedHereMinutes) },
+                            { key: "elsewhere", label: "Attributed elsewhere", value: week.elsewhereMinutes, source: "fact", display: formatMinutesAsHours(week.elsewhereMinutes) },
+                            { key: "unallocated", label: "Unallocated", value: week.unallocatedMinutes, source: "unknown", display: formatMinutesAsHours(week.unallocatedMinutes) },
+                          ],
+                          week.registeredMinutes,
+                          "registered",
+                          formatMinutesAsHours(week.registeredMinutes),
+                        )}
+                      />
+                    </div>
                     {formatDate(week.periodStart)} – {formatDate(week.periodEnd)}: registered {formatMinutesAsHours(week.registeredMinutes)}
                     {" · "}here {formatMinutesAsHours(week.explicitHereMinutes + week.derivedHereMinutes)}
                     {" · "}elsewhere {formatMinutesAsHours(week.elsewhereMinutes)}
