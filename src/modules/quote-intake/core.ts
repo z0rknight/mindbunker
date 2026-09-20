@@ -8,6 +8,7 @@
 // than inventing a parallel one.
 
 import { cleanEmail } from "../booking/core.ts";
+import { referralDescriptionPrefix, type ReferralProgram } from "../referrals/core.ts";
 import { SERVICE_INTEREST_OPTIONS, type ServiceInterest } from "../gateway/config.ts";
 
 // No isServiceInterest guard exists on the gateway module (it only exports
@@ -102,7 +103,10 @@ export const QUOTE_REQUEST_EVENT_TYPE = "quote.requested";
 // request as crm_events.description" pattern /book's public intake
 // already uses (see submitPublicBookingRequest), rather than a new table
 // for evidence that's read, not queried structurally.
-export function buildQuoteRequestDescription(data: QuoteRequestInput): string {
+export function buildQuoteRequestDescription(
+  data: QuoteRequestInput,
+  referral: ReferralProgram | null = null,
+): string {
   const parts = [
     `Video quote request from ${data.name} (${data.email})`,
     data.company ? `Company: ${data.company}` : null,
@@ -114,5 +118,5 @@ export function buildQuoteRequestDescription(data: QuoteRequestInput): string {
     data.referencesContext ? `References/context: ${data.referencesContext}` : null,
     data.notes ? `Notes: ${data.notes}` : null,
   ].filter(Boolean);
-  return parts.join(" — ").slice(0, 4_000);
+  return (referralDescriptionPrefix(referral) + parts.join(" — ")).slice(0, 4_000);
 }

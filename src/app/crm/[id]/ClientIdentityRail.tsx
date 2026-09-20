@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { describeLeadSource } from "@/modules/referrals/core";
 import { RenameClientButton } from "./RenameClientButton";
 
 export function ClientIdentityRail({
@@ -62,7 +63,7 @@ export function ClientIdentityRail({
         >
           {client.status}
         </span>
-        {client.source && <span className="text-[11px] text-zinc-500">via {client.source}</span>}
+        {client.source && <span className="text-[11px] text-zinc-500">via {describeLeadSource(client.source)}</span>}
       </div>
 
       <dl className="mt-4 space-y-3 border-t border-zinc-800 pt-3">

@@ -21,7 +21,7 @@ function FieldError({ message }: { message?: string }) {
 const inputClassName =
   "w-full rounded-xl border border-zinc-700 bg-zinc-950/80 px-4 py-3 text-base text-white outline-none transition placeholder:text-zinc-700 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10";
 
-export function BookingRequestForm() {
+export function BookingRequestForm({ referralKey }: { referralKey?: string }) {
   const [state, action, pending] = useActionState(
     submitPublicBookingRequest,
     initialState,
@@ -48,6 +48,7 @@ export function BookingRequestForm() {
   return (
     <form action={action} className="space-y-5" noValidate>
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      {referralKey && <input type="hidden" name="ref" value={referralKey} />}
       {/* Honeypot: real visitors never see or fill this; a non-empty
           submission is silently dropped in submitPublicBookingRequest. */}
       <div aria-hidden="true" className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden">

@@ -13,6 +13,7 @@ import {
   type WorkbenchQuote,
 } from "@/modules/crm/core";
 import { formatDate, formatCurrency, todayISO } from "@/utils/date";
+import { describeLeadSource, isReferralSource } from "@/modules/referrals/core";
 import { AddClientButton } from "./AddClientButton";
 import { ClientActions } from "./ClientActions";
 import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
@@ -246,6 +247,11 @@ function ClientRow({ client, showConvert }: { client: ListClient; showConvert: b
               {client.source === "book" && (
                 <span className="rounded border border-violet-800/60 px-1 py-0.5 text-[9px] font-black uppercase tracking-wide text-violet-400">
                   via /book
+                </span>
+              )}
+              {isReferralSource(client.source) && (
+                <span className="rounded border border-emerald-800/60 px-1 py-0.5 text-[9px] font-black uppercase tracking-wide text-emerald-400">
+                  {describeLeadSource(client.source)}
                 </span>
               )}
             </div>

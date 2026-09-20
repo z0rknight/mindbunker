@@ -22,7 +22,7 @@ function FieldError({ message }: { message?: string }) {
 const inputClassName =
   "w-full rounded-xl border border-zinc-700 bg-zinc-950/80 px-4 py-3 text-base text-white outline-none transition placeholder:text-zinc-700 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10";
 
-export function QuoteRequestForm() {
+export function QuoteRequestForm({ referralKey }: { referralKey?: string }) {
   const [state, action, pending] = useActionState(submitQuoteRequest, initialState);
   // Minted once per page load, not per render/retry, so a double-submit of
   // the same visit is recognized server-side as the same request -- see
@@ -47,6 +47,7 @@ export function QuoteRequestForm() {
     <>
       <form action={action} className="space-y-5" noValidate>
         <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+        {referralKey && <input type="hidden" name="ref" value={referralKey} />}
         {/* Honeypot: real visitors never see or fill this; a non-empty
             submission is silently dropped in submitQuoteRequest. */}
         <div aria-hidden="true" className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden">
@@ -249,7 +250,7 @@ export function QuoteRequestForm() {
           <p className="mb-4 text-sm leading-6 text-zinc-400">
             Prefer a quick call before sending details? Request contact instead.
           </p>
-          <BookingRequestForm />
+          <BookingRequestForm referralKey={referralKey} />
         </div>
       </details>
     </>

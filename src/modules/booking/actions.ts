@@ -33,6 +33,12 @@ import {
 import { getCalendarProvider } from "./provider";
 import { PUBLIC_SLOT_LIMIT } from "./config";
 import { BOOK_REQUEST_EVENT_TYPE } from "./core";
+import {
+  referralDescriptionPrefix,
+  resolveReferral,
+  shouldAdoptReferralSource,
+  sourceForNewLead,
+} from "@/modules/referrals/core";
 import { getGatewayContext } from "@/modules/gateway/data";
 import { isGatewayToken } from "@/modules/gateway/core";
 
@@ -494,6 +500,9 @@ export async function submitPublicBookingRequest(
     return { errors: validation.errors, message: "Check the highlighted fields." };
   }
 
+  // Untrusted `ref` -> closed allowlist; unknown values are simply ignored.
+  const referral = resolveReferral(formData.get("ref"));
+
   const db = await getDb();
 
   if (idempotencyKey) {
@@ -515,10 +524,10 @@ export async function submitPublicBookingRequest(
     data.serviceInterest ? `Interested in: ${data.serviceInterest}` : null,
     data.message ? `Message: ${data.message}` : null,
   ].filter(Boolean);
-  const description = descriptionParts.join(" — ").slice(0, 4_000);
+  const description = (referralDescriptionPrefix(referral) + descriptionParts.join(" — ")).slice(0, 4_000);
 
   const existingClient = await db
-    .select({ id: clients.id })
+    .select({ id: clients.id, source: clients.source })
     .from(clients)
     .where(sql`lower(${clients.email}) = ${data.email}`)
     .limit(1);
@@ -526,9 +535,15 @@ export async function submitPublicBookingRequest(
   let clientId: number;
   if (existingClient[0]) {
     clientId = existingClient[0].id;
+    // Existing acquisition origin is never overwritten; see submitQuoteRequest.
     await db
       .update(clients)
-      .set({ lastInteractionAt: now })
+      .set({
+        lastInteractionAt: now,
+        ...(referral && shouldAdoptReferralSource(existingClient[0].source)
+          ? { source: referral.source }
+          : {}),
+      })
       .where(eq(clients.id, clientId));
   } else {
     const inserted = await db
@@ -540,7 +555,7 @@ export async function submitPublicBookingRequest(
         email: data.email,
         phone: data.phone,
         serviceInterest: data.serviceInterest,
-        source: "book",
+        source: sourceForNewLead("book", referral),
         contacted: false,
         converted: false,
         lastInteractionAt: now,
@@ -554,7 +569,7 @@ export async function submitPublicBookingRequest(
       clientId,
       type: "lead_created",
       actor: "gateway",
-      description: `Lead created from /book: ${data.name}`,
+      description: `${referralDescriptionPrefix(referral)}Lead created from /book: ${data.name}`,
     });
   }
 

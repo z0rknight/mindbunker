@@ -11,6 +11,12 @@ import {
   QUOTE_REQUEST_EVENT_TYPE,
   validateQuoteRequestInput,
 } from "./core";
+import {
+  referralDescriptionPrefix,
+  resolveReferral,
+  shouldAdoptReferralSource,
+  sourceForNewLead,
+} from "../referrals/core";
 
 // /quoteavideo public intake (Client Service Reality Patch, 25 Aug 2026).
 //
@@ -63,6 +69,9 @@ export async function submitQuoteRequest(
     return { errors: validation.errors, message: "Check the highlighted fields." };
   }
 
+  // Untrusted `ref` -> closed allowlist; unknown values are simply ignored.
+  const referral = resolveReferral(formData.get("ref"));
+
   const db = await getDb();
 
   if (idempotencyKey) {
@@ -78,10 +87,10 @@ export async function submitQuoteRequest(
 
   const data = validation.data;
   const now = new Date();
-  const description = buildQuoteRequestDescription(data);
+  const description = buildQuoteRequestDescription(data, referral);
 
   const existingClient = await db
-    .select({ id: clients.id })
+    .select({ id: clients.id, source: clients.source })
     .from(clients)
     .where(sql`lower(${clients.email}) = ${data.email}`)
     .limit(1);
@@ -89,9 +98,18 @@ export async function submitQuoteRequest(
   let clientId: number;
   if (existingClient[0]) {
     clientId = existingClient[0].id;
+    // Existing acquisition origin is never overwritten (a later visit via a
+    // generic page must not erase PDBM, nor the reverse); it is only filled
+    // when nothing was recorded. The referral is still preserved in the
+    // immutable quote.requested event below.
     await db
       .update(clients)
-      .set({ lastInteractionAt: now })
+      .set({
+        lastInteractionAt: now,
+        ...(referral && shouldAdoptReferralSource(existingClient[0].source)
+          ? { source: referral.source }
+          : {}),
+      })
       .where(eq(clients.id, clientId));
   } else {
     const inserted = await db
@@ -102,7 +120,7 @@ export async function submitQuoteRequest(
         opportunityStage: "new",
         email: data.email,
         serviceInterest: data.contentType,
-        source: "quoteavideo",
+        source: sourceForNewLead("quoteavideo", referral),
         contacted: false,
         converted: false,
         lastInteractionAt: now,
@@ -116,7 +134,7 @@ export async function submitQuoteRequest(
       clientId,
       type: "lead_created",
       actor: "gateway",
-      description: `Lead created from /quoteavideo: ${data.name}`,
+      description: `${referralDescriptionPrefix(referral)}Lead created from /quoteavideo: ${data.name}`,
     });
   }
 
