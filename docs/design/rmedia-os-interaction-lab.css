@@ -334,3 +334,7 @@ html[data-motion="reduced"] .rv { opacity: 1; transform: none; }
 .detail-row .in { padding: 10px 12px; color: var(--os-text-2); }
 
 .btn[aria-disabled="true"]:not([aria-busy="true"]) { opacity: .5; cursor: not-allowed; }
+
+/* M1 finding: a transition declared only on [data-flash] snaps when the attribute is removed.
+   The fade-out needs the transition on the element itself (production uses the always-present .os-flash class). */
+.tbl tr, .tk, .exc, .card, .panel, .row-i, .fact { transition: background-color var(--os-motion-panel) var(--os-ease), box-shadow var(--os-motion-panel) var(--os-ease), border-color var(--os-motion-standard) var(--os-ease); }
