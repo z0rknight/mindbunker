@@ -31,6 +31,7 @@ import {
 } from "../modules/productivity/config";
 import { ASSET_TYPES, ASSET_STATUSES } from "../modules/assets/config";
 import { PRODUCTION_MEMORY_STATUSES } from "../modules/production-memory/config";
+import { PROTECTED_TERM_KINDS } from "../modules/client-qa/config";
 import {
   EQUIPMENT_ACQUISITION_PRIORITIES,
   EQUIPMENT_ACQUISITION_STAGES,
@@ -2862,5 +2863,58 @@ export const clientProductionMemory = sqliteTable(
       "client_production_memory_status_check",
       sql`${table.status} is null or ${table.status} in ('OBSERVED', 'OPERATOR_CONVENTION', 'CLIENT_APPROVED', 'HISTORICAL')`,
     ),
+  ],
+);
+
+// Wave 4 Client Protected Terms: durable, client-scoped exact wording (a
+// person, program, brand or phrase whose spelling/casing must not drift).
+// `term` IS the correct form -- there are no aliases, fuzzy matching or
+// normalisation infrastructure. kind is optional (unknown stays NULL).
+// Operator-only; never read by the Client Portal.
+export const clientProtectedTerms = sqliteTable(
+  "client_protected_terms",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    term: text("term").notNull(),
+    kind: text("kind", { enum: PROTECTED_TERM_KINDS }),
+    note: text("note"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    uniqueIndex("client_protected_terms_client_term_unique").on(table.clientId, table.term),
+    index("client_protected_terms_client_idx").on(table.clientId),
+    check(
+      "client_protected_terms_kind_check",
+      sql`${table.kind} is null or ${table.kind} in ('PERSON', 'PROGRAM', 'BRAND', 'PHRASE')`,
+    ),
+  ],
+);
+
+// Wave 4 Client Export Reminders: a short, client-scoped line shown read-only
+// before an export. Deliberately NO completion/checked/required/severity
+// columns -- this is a reminder, not a checklist or a QA ledger, and it never
+// affects any video status. Operator-only.
+export const clientExportReminders = sqliteTable(
+  "client_export_reminders",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    uniqueIndex("client_export_reminders_client_text_unique").on(table.clientId, table.text),
+    index("client_export_reminders_client_idx").on(table.clientId),
   ],
 );

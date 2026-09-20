@@ -9,6 +9,8 @@ import { notFound } from "next/navigation";
 import { ClientIntelligencePanel } from "./ClientIntelligencePanel";
 import { ClientTabs } from "./ClientTabs";
 import { ProductionMemoryPanel } from "./ProductionMemoryPanel";
+import { ClientQaPanel } from "./ClientQaPanel";
+import { getClientQaForClient } from "@/modules/client-qa/data";
 import { getProductionMemoryForClient, getReferenceVideoOptions } from "@/modules/production-memory/data";
 import { GeladeiraControl } from "./GeladeiraControl";
 import { OpportunityPanel } from "./OpportunityPanel";
@@ -102,6 +104,7 @@ export default async function ClientDetailPage({
     commercialAttribution,
     productionMemories,
     referenceVideoOptions,
+    clientQa,
   ] = await Promise.all([
     getAdminGatewayWorkspace(clientId),
     getAdminBookingConfiguration(),
@@ -130,6 +133,8 @@ export default async function ClientDetailPage({
     // Wave 3: client-owned production memory (operator-only).
     getProductionMemoryForClient(clientId),
     getReferenceVideoOptions(clientId),
+    // Wave 4: client-owned protected terms + export reminders (operator-only).
+    getClientQaForClient(clientId),
   ]);
   const weekEstimateForClient = weekEstimates.find((row) => row.clientId === clientId) ?? null;
   const unassignedVideos = filterVideosForClient(allUnassignedVideos, clientId);
@@ -299,6 +304,12 @@ export default async function ClientDetailPage({
           memories={productionMemories}
           videoOptions={referenceVideoOptions}
         />
+      )}
+
+      {/* Wave 4: protected terms + export reminders, managed beside
+          Production Memory; shown read-only in the Video Workspace. */}
+      {(client.status !== "lead" || clientQa.terms.length > 0 || clientQa.reminders.length > 0) && (
+        <ClientQaPanel clientId={client.id} terms={clientQa.terms} reminders={clientQa.reminders} />
       )}
 
       {/* Client Tabs */}

@@ -35,6 +35,7 @@ import { ProjectReferencesPanel } from "./ProjectReferencesPanel";
 import { CoverUploadField } from "@/components/media/CoverUploadField";
 import { VideoEssentialsPanel } from "./VideoEssentialsPanel";
 import { VideoAdvancedPanel } from "./VideoAdvancedPanel";
+import { BeforeYouExport } from "@/components/client-qa/BeforeYouExport";
 import { PortalControl } from "@/components/client-portal/PortalControl";
 import { setVideoClientVisibility } from "@/modules/client-portal/admin-actions";
 
@@ -356,6 +357,9 @@ export function VideoEditor({
                     </div>
                   </div>
                 </section>
+
+                {/* Wave 4: read-only pre-export reminder. Never gates a status. */}
+                <BeforeYouExport videoId={video.id} active={open} />
 
                 <PortalControl
                   label="Client portal"
