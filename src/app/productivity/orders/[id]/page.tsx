@@ -10,6 +10,8 @@ import { isSafeInternalPath } from "@/utils/navigation";
 import { CancelItemButton, OrderLifecycleActions } from "./OrderDetailActions";
 import { FormatsForClient } from "@/components/production-memory/FormatsForClient";
 import { getProductionMemoryForClient } from "@/modules/production-memory/data";
+import { ProductionContextBlock } from "@/components/production-context/ProductionContextBlock";
+import { getProductionContextForOrder } from "@/modules/production-context/data";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +39,10 @@ export default async function ProductionOrderDetailPage({
   const safeReturnTo =
     typeof rawReturnTo === "string" && isSafeInternalPath(rawReturnTo) ? rawReturnTo : undefined;
 
-  const productionMemories = await getProductionMemoryForClient(order.clientId);
+  const [productionMemories, productionContext] = await Promise.all([
+    getProductionMemoryForClient(order.clientId),
+    getProductionContextForOrder(orderId),
+  ]);
   const activeItems = order.items.filter((item) => item.cancelledAt === null);
   const status = describeProductionOrderStatus({
     state: order.state,
@@ -76,7 +81,11 @@ export default async function ProductionOrderDetailPage({
             </div>
             <h1 className="mt-2 text-xl font-black text-emerald-100">{order.label}</h1>
             <p className="mt-1 text-xs text-zinc-500">
-              {order.clientName} · {order.projectName} · Received {order.receivedAt}
+              {/* Containment links up the hierarchy (client -> project). */}
+              <Link href={`/crm/${order.clientId}`} className="hover:text-cyan-300">{order.clientName}</Link>
+              {" · "}
+              <Link href={`/projects/${order.projectId}`} className="hover:text-cyan-300">{order.projectName}</Link>
+              {" · "}Received {order.receivedAt}
               {order.channel ? ` · ${order.channel}` : ""}
             </p>
             <p className={`mt-2 text-xs font-bold ${order.contractLabel ? "text-cyan-300" : "text-zinc-600"}`}>
@@ -85,6 +94,15 @@ export default async function ProductionOrderDetailPage({
           </div>
           {order.state === "OPEN" && <OrderLifecycleActions orderId={order.id} />}
         </div>
+
+        {/* Production Operations Consolidation: batch notes, project notes,
+            project source media and the client's format names in one read-only
+            block (replaces the notes that used to sit at the page bottom). */}
+        {productionContext && (
+          <div className="mb-6">
+            <ProductionContextBlock context={productionContext} />
+          </div>
+        )}
 
         <FormatsForClient clientId={order.clientId} clientName={order.clientName} memories={productionMemories} />
 
@@ -175,7 +193,21 @@ export default async function ProductionOrderDetailPage({
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold text-zinc-100">{item.title ?? `Video #${item.videoId}`}</p>
-                  <p className="text-xs text-zinc-500">{VIDEO_STATUS_LABELS[item.status]}</p>
+                  <p className="text-xs text-zinc-500">
+                    {VIDEO_STATUS_LABELS[item.status]}
+                    {item.reviewUrl && (
+                      <>
+                        {" · "}
+                        <a href={item.reviewUrl} target="_blank" rel="noopener noreferrer" className="text-cyan-500 hover:text-cyan-300">Review ↗</a>
+                      </>
+                    )}
+                    {item.deliveryUrl && (
+                      <>
+                        {" · "}
+                        <a href={item.deliveryUrl} target="_blank" rel="noopener noreferrer" className="text-cyan-500 hover:text-cyan-300">Delivery ↗</a>
+                      </>
+                    )}
+                  </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Link
@@ -204,11 +236,6 @@ export default async function ProductionOrderDetailPage({
           </div>
         </section>
 
-        {order.notes && (
-          <section className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-sm text-zinc-400">
-            {order.notes}
-          </section>
-        )}
       </div>
     </div>
   );

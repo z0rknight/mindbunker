@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { SignalSeverity } from "@/modules/signals/core";
+import { signalActionHref, type SignalSeverity } from "@/modules/signals/core";
 import type { ProductivityAttentionGroup } from "@/modules/productivity/attention";
 
 // P0.2: renders the Productivity projection of modules/signals (see
@@ -59,7 +59,7 @@ export function NeedsAttentionSection({ groups }: { groups: ProductivityAttentio
                       </div>
                       {signal.action && (
                         <Link
-                          href={signal.action.href}
+                          href={signalActionHref(signal.action.href, "/productivity")}
                           className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-1.5 text-center text-xs font-bold text-zinc-200 hover:border-violet-500 hover:text-violet-200"
                         >
                           {signal.action.label} →

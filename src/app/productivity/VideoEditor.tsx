@@ -31,11 +31,11 @@ import { useState, useTransition } from "react";
 import { WorkSessionPanel } from "./WorkSessionPanel";
 import { VideoMemoryPanel } from "./VideoMemoryPanel";
 import { CommercialTermsPanel } from "./CommercialTermsPanel";
-import { ProjectReferencesPanel } from "./ProjectReferencesPanel";
 import { CoverUploadField } from "@/components/media/CoverUploadField";
 import { VideoEssentialsPanel } from "./VideoEssentialsPanel";
 import { VideoAdvancedPanel } from "./VideoAdvancedPanel";
 import { BeforeYouExport } from "@/components/client-qa/BeforeYouExport";
+import { VideoProductionContext } from "@/components/production-context/VideoProductionContext";
 import { PortalControl } from "@/components/client-portal/PortalControl";
 import { setVideoClientVisibility } from "@/modules/client-portal/admin-actions";
 
@@ -388,9 +388,14 @@ export function VideoEditor({
                   </div>
                 </section>
 
-                {video.projectId && (
-                  <ProjectReferencesPanel projectId={video.projectId} active={open} />
-                )}
+                {/* Production Operations Consolidation: batch/project context
+                    this video inherits (incl. the project's source media
+                    references -- this replaces the old standalone "Project
+                    source references" panel, same canonical table, shown
+                    once) + its own review/delivery facts, plus the origin-
+                    preserving link up to its Production Order. */}
+                <VideoProductionContext videoId={video.id} active={open} returnTo={returnTo} />
+
               </aside>
 
               <div className="space-y-4">

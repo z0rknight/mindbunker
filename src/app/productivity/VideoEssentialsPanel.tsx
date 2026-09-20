@@ -26,6 +26,7 @@ import {
   type VideoOperationalSnapshot,
 } from "@/modules/video-operations/actions";
 import { operatorLocalDateTimeToIso } from "@/modules/video-operations/core";
+import { REVISION_CAUSES, REVISION_CAUSE_LABELS, type RevisionCause } from "@/modules/video-operations/config";
 import { QuickBlock } from "@/components/work-sessions/QuickVideoActions";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
@@ -61,6 +62,8 @@ export function VideoEssentialsPanel({ videoId, revisionsCount }: { videoId: num
   const [deadlineDue, setDeadlineDue] = useState("");
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [revisionNote, setRevisionNote] = useState("");
+  // Optional provenance; "Not sure" (UNKNOWN) is the default and never blocks saving.
+  const [revisionCause, setRevisionCause] = useState<RevisionCause>("UNKNOWN");
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [deliveryUrl, setDeliveryUrl] = useState("");
   const [deliveryNote, setDeliveryNote] = useState("");
@@ -208,23 +211,36 @@ export function VideoEssentialsPanel({ videoId, revisionsCount }: { videoId: num
         {revisionOpen ? (
           <div className="mt-2 space-y-2">
             <input value={revisionNote} onChange={(event) => setRevisionNote(event.target.value)} placeholder="What did the client ask to change?" maxLength={1_000} className={inputClass} autoFocus />
+            <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-600">
+              Cause <span className="font-normal normal-case text-zinc-600">(optional)</span>
+              <select
+                value={revisionCause}
+                onChange={(event) => setRevisionCause(event.target.value as RevisionCause)}
+                className={`${inputClass} mt-1`}
+                aria-label="Revision cause (optional)"
+              >
+                {REVISION_CAUSES.map((cause) => (
+                  <option key={cause} value={cause}>{REVISION_CAUSE_LABELS[cause]}</option>
+                ))}
+              </select>
+            </label>
             <div className="flex gap-2">
               <button
                 disabled={pending || !revisionNote.trim()}
                 onClick={() => run(
-                  // Default cause/category/minutes -- the research found
-                  // this taxonomy was never exercised daily. The one
-                  // canonical action (recordDetailedRevision) still owns
-                  // creation, so revisionsCount and the revisions table
-                  // never drift apart, per §7's explicit instruction.
-                  () => recordDetailedRevision({ videoId, causedBy: "UNKNOWN", category: "", minutesRework: "", note: revisionNote }),
-                  () => { setRevisionNote(""); setRevisionOpen(false); },
+                  // Cause is OPTIONAL and defaults to UNKNOWN; category and
+                  // minutes stay unset (that taxonomy was never exercised
+                  // daily). The one canonical action (recordDetailedRevision)
+                  // still owns creation, so revisionsCount and the revisions
+                  // table never drift apart, per §7's explicit instruction.
+                  () => recordDetailedRevision({ videoId, causedBy: revisionCause, category: "", minutesRework: "", note: revisionNote }),
+                  () => { setRevisionNote(""); setRevisionCause("UNKNOWN"); setRevisionOpen(false); },
                 )}
                 className={smallButton}
               >
                 Record revision
               </button>
-              <button disabled={pending} onClick={() => setRevisionOpen(false)} className={smallButton}>Cancel</button>
+              <button disabled={pending} onClick={() => { setRevisionCause("UNKNOWN"); setRevisionOpen(false); }} className={smallButton}>Cancel</button>
             </div>
           </div>
         ) : (

@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { videoWorkspaceHref } from "@/modules/productivity/core";
 import {
   setCommitmentStatus,
   updateVideoCommitmentDue,
@@ -48,10 +49,14 @@ export function ActiveCommitmentCard({
   commitment,
   nowIso,
   compact = false,
+  returnTo,
 }: {
   commitment: ActiveCommitmentData;
   nowIso: string;
   compact?: boolean;
+  // The page this card is shown on, so "Open workspace" returns there
+  // (same origin-preserving rule as signal actions).
+  returnTo?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -123,7 +128,7 @@ export function ActiveCommitmentCard({
             Cancel
           </button>
           <Link
-            href={`/productivity?video=${commitment.videoId}`}
+            href={videoWorkspaceHref(commitment.videoId, returnTo)}
             className="ml-auto min-h-8 rounded-lg px-2.5 text-[11px] font-black text-cyan-300 hover:text-cyan-200"
           >
             Open workspace →

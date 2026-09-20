@@ -49,6 +49,16 @@ export const REVISION_CAUSES = [
 ] as const;
 export type RevisionCause = (typeof REVISION_CAUSES)[number];
 
+// Optional provenance shown where a revision is recorded. UNKNOWN is the
+// default and means "not classified" -- never a required choice. (OUR_ERROR
+// feeds the existing REVISION_DRAG signal in modules/signals.)
+export const REVISION_CAUSE_LABELS: Record<RevisionCause, string> = {
+  UNKNOWN: "Not sure",
+  CLIENT_CHANGE: "Client changed something",
+  SCOPE_CHANGE: "Scope changed",
+  OUR_ERROR: "Our error",
+};
+
 export const REVISION_CATEGORIES = [
   "CONTENT",
   "PACING",

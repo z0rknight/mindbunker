@@ -6,6 +6,7 @@ import {
   type Signal,
   type SignalConfidence,
   type SignalSeverity,
+  signalActionHref,
 } from "@/modules/signals";
 import { getDailyLedger, type DailyLedgerRow } from "@/modules/daily-ledger";
 import { listOpenDecisions, type OpenDecisionRow } from "@/modules/decisions/actions";
@@ -806,6 +807,7 @@ function ActiveCommitmentsSection({
             key={commitment.id}
             commitment={{ ...commitment, dueAt: commitment.dueAt.toISOString() }}
             nowIso={nowIso}
+            returnTo="/war-room"
           />
         ))}
       </div>
@@ -859,7 +861,7 @@ function ActiveSignalsSection({ signals }: { signals: Signal[] }) {
               <div className="flex flex-wrap items-start gap-2">
                 {signal.action && (
                   <Link
-                    href={signal.action.href}
+                    href={signalActionHref(signal.action.href, "/war-room")}
                     className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-center text-xs font-bold text-zinc-200 hover:border-violet-500 hover:text-violet-200"
                   >
                     {signal.action.label} →

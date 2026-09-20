@@ -1,4 +1,5 @@
 import { isStaleProductionOrder, type StaleProductionOrderRow } from "../production-orders/core.ts";
+import { isSafeInternalPath } from "../../utils/navigation.ts";
 
 // Operator Intelligence Patch Phase 2: WAR ROOM ACTIVE SIGNALS.
 //
@@ -383,4 +384,19 @@ export function rankSignals(signals: readonly Signal[]): Signal[] {
   return signals
     .slice()
     .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
+}
+
+// Production Operations Consolidation (Sep 19): a signal's "Open video" /
+// "Open order" action used to be rendered as its raw href, so from War Room
+// or Needs Attention the destination's own back/close fell through to its
+// default and the operator lost where they were working. Only destinations
+// that actually honour a validated `returnTo` (the video workspace and a
+// Production Order) get it appended; every other action is returned
+// untouched, and an unsafe returnTo is ignored rather than trusted.
+const ORIGIN_AWARE_ACTION_HREFS = [/^\/productivity\?video=\d+$/u, /^\/productivity\/orders\/\d+$/u];
+
+export function signalActionHref(href: string, returnTo: string): string {
+  if (!isSafeInternalPath(returnTo)) return href;
+  if (!ORIGIN_AWARE_ACTION_HREFS.some((pattern) => pattern.test(href))) return href;
+  return `${href}${href.includes("?") ? "&" : "?"}returnTo=${encodeURIComponent(returnTo)}`;
 }
