@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>RMEDIA OS Styleboard</title>
+<!-- DESIGN REFERENCE ONLY (Sep 2026). Standalone: no app import, no route, no API, no network. Fake data throughout. -->
+<link rel="stylesheet" href="rmedia-os-styleboard.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-radar" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2.5"/><path d="M8 8l4-3"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></symbol>
+  <symbol id="i-film" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 3v10M11 3v10M2 8h12"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 16 16"><path d="M8 14c-2.5 0-4-1.7-4-3.8 0-2.2 2-3.4 2.5-5.7C8 5 9 5.6 9.5 7c.6-.6.9-1.4.8-2.3 1.2 1 1.7 2.500 1.700 3.500C12 12.500 10.500 14 8 14z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 16 16"><circle cx="6" cy="6" r="2.5"/><path d="M1.5 13c.4-2.400 2.200-3.500 4.500-3.500s4.100 1.100 4.500 3.500M11 4.500a2.200 2.200 0 010 4.300M12 9.700c1.400.4 2.300 1.500 2.500 3.300"/></symbol>
+  <symbol id="i-coin" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 4.500v7M9.800 6.200C9.500 5.600 8.900 5.400 8 5.400c-1 0-1.800.5-1.800 1.300 0 1.900 3.800.9 3.800 2.800 0 .8-.8 1.400-2 1.400-.9 0-1.600-.3-1.900-1"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11" rx="1.500"/><path d="M2 6.500h12M5.500 1.500v3M10.500 1.500v3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.500l3.200 3L13 4.500"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.500v9l7.500-4.500z"/></symbol>
+</svg>
+
+<div class="sb">
+<header class="sb-head">
+  <div class="lockup"><span class="mark">RM</span><span class="wordmark">RMEDIA</span><span class="sub">OS · Styleboard</span></div>
+  <h1 class="t-display">One system.<br><span style="color:var(--os-violet-text)">Three densities.</span></h1>
+  <p class="t-body muted" style="max-width:62ch">Visual foundation reference for RMEDIA OS, September 2026. Isolated design artifact: not imported, routed or deployed. All names, numbers and frames are fake placeholders.</p>
+  <div class="row">
+    <button class="btn" id="motionToggle" aria-pressed="false">Simulate reduced motion: off</button>
+    <span class="t-meta">Also follows your OS <code class="k">prefers-reduced-motion</code>.</span>
+  </div>
+</header>
+<nav class="sb-toc" aria-label="Sections">
+  <a href="#brand">01 Brand</a><a href="#type">02 Type</a><a href="#colour">03 Colour</a><a href="#geometry">04 Space &amp; geometry</a><a href="#controls">05 Controls</a><a href="#surfaces">06 Surfaces</a><a href="#status">07 Status</a><a href="#overlays">08 Overlays &amp; nav</a><a href="#density">09 Densities</a><a href="#intake">10 Lead choices</a><a href="#motion">11 Motion</a><a href="#compare">12 Old vs new</a><a href="#shells">13 Shells</a>
+</nav>
+
+<!-- 01 BRAND -->
+<section class="sb-sec" id="brand">
+  <header><span class="t-system">01 · Brand mark direction</span><h2 class="t-page">RM monogram + RMEDIA wordmark</h2><p class="t-small" style="max-width:70ch">No logo system. One monogram tile, one tracked wordmark, and a mono qualifier that says which surface you are in. The tile is the only large field of violet on most screens.</p></header>
+  <div class="grid g3">
+    <div class="card"><div class="t-system" style="margin-bottom:16px">Master lockup</div><div class="lockup"><span class="mark">RM</span><span class="wordmark">RMEDIA</span></div></div>
+    <div class="card"><div class="t-system" style="margin-bottom:16px">Surface qualifiers</div><div class="grid" style="gap:14px">
+      <div class="lockup"><span class="mark">RM</span><span class="wordmark">RMEDIA</span><span class="sub">Client Portal</span></div>
+      <div class="lockup"><span class="mark">RM</span><span class="wordmark">RMEDIA</span><span class="sub">MindBunker</span></div>
+      <div class="lockup"><span class="mark">RM</span><span class="wordmark">RMEDIA</span><span class="sub">emmanueldarosa.com</span></div></div></div>
+    <div class="card"><div class="t-system" style="margin-bottom:16px">Monogram scale</div><div class="row" style="align-items:flex-end"><span class="mark lg">RM</span><span class="mark">RM</span><span class="mark" style="width:20px;height:20px;border-radius:5px;font-size:9px">RM</span></div><p class="t-meta" style="margin-top:12px">Min size 20px. Favicon uses the tile only.</p></div>
+  </div>
+</section>
+
+<!-- 02 TYPE -->
+<section class="sb-sec" id="type">
+  <header><span class="t-system">02 · Typography</span><h2 class="t-page">Inter for everything you read, mono for everything the system says</h2><p class="t-small">9 roles · weights 400 / 500 / 600 only · mono is the system stack (no download).</p></header>
+  <div class="card" style="display:grid;gap:22px">
+    <div class="grid trow"><span class="t-system">Display</span><div class="t-display" style="font-size:clamp(2rem,1.4rem + 3vw,4rem)">Real work, edited to hold.</div></div>
+    <div class="grid trow"><span class="t-system">Page title</span><div class="t-page">Production Orders</div></div>
+    <div class="grid trow"><span class="t-system">Section title</span><div class="t-section">This week's batch</div></div>
+    <div class="grid trow"><span class="t-system">Card title</span><div class="t-card">Landing page — rough cut</div></div>
+    <div class="grid trow"><span class="t-system">Body</span><p class="t-body" style="max-width:64ch">Videos are edited in batches so review stays predictable. You always see what is ready, what is waiting on you, and what comes next.</p></div>
+    <div class="grid trow"><span class="t-system">Small body</span><p class="t-small">Secondary explanation, helper copy and table cells.</p></div>
+    <div class="grid trow"><span class="t-system">Label</span><span class="t-label">Video title</span></div>
+    <div class="grid trow"><span class="t-system">System / mono</span><div class="row"><span class="t-system">Source fact</span><span class="t-readout">04:12:33</span><span class="t-readout">1,372.50</span></div></div>
+    <div class="grid trow"><span class="t-system">Metadata</span><span class="t-meta">Updated Sep 20 · 2 min ago</span></div>
+  </div>
+</section>
+
+<!-- 03 COLOUR -->
+<section class="sb-sec" id="colour">
+  <header><span class="t-system">03 · Colour tokens</span><h2 class="t-page">Neutral structure, a little violet, rare semantic colour</h2><p class="t-small">Contrast values are measured against the stated surface. Zinc-500 (#71717A) fails AA on surfaces 2–3 and is replaced by muted #8C8C96.</p></header>
+  <div class="grid g6" id="sw-neutral"></div>
+  <div class="grid g6" id="sw-text" style="margin-top:16px"></div>
+  <div class="grid g6" id="sw-brand" style="margin-top:16px"></div>
+  <div class="grid g6" id="sw-sem" style="margin-top:16px"></div>
+  <div class="card" style="margin-top:24px"><div class="t-system" style="margin-bottom:12px">Typical screen budget (of visible non-text area)</div>
+    <div class="bar" role="img" aria-label="Neutral 92 percent, violet 6 percent, semantic 2 percent"><i style="width:92%;background:var(--os-surface-3)"></i><i style="width:6%;background:var(--os-violet)"></i><i style="width:2%;background:var(--os-success)"></i></div>
+    <p class="t-meta" style="margin-top:8px">≈92% neutrals · ≈6% violet · ≈2% semantic (operator can reach ≈4–5% semantic on a War Room with live signals; client and public stay ≤1%).</p></div>
+</section>
+
+<!-- 04 GEOMETRY -->
+<section class="sb-sec" id="geometry">
+  <header><span class="t-system">04 · Space &amp; geometry</span><h2 class="t-page">Precise, architectural, hairline</h2></header>
+  <div class="grid g2">
+    <div class="card"><div class="t-system" style="margin-bottom:14px">Spacing scale (4px base)</div><div class="grid" style="gap:8px" id="spaces"></div></div>
+    <div class="card"><div class="t-system" style="margin-bottom:14px">Radii + borders</div>
+      <div class="row" style="gap:20px">
+        <div style="width:64px;height:64px;border:1px solid var(--os-border-strong);border-radius:4px;display:grid;place-items:center" class="t-meta">4</div>
+        <div style="width:64px;height:64px;border:1px solid var(--os-border-strong);border-radius:8px;display:grid;place-items:center" class="t-meta">8</div>
+        <div style="width:64px;height:64px;border:1px solid var(--os-border-strong);border-radius:12px;display:grid;place-items:center" class="t-meta">12</div>
+        <div style="width:64px;height:64px;border:1px solid var(--os-border-strong);border-radius:16px;display:grid;place-items:center" class="t-meta">16</div>
+      </div>
+      <p class="t-small" style="margin-top:14px">4 = badges · 8 = controls · 12 = cards/panels · 16 = modals, public/client cards · pill radius only for tiny status dots and avatars. 1px borders carry structure; shadows only on overlays. No glass, no blur, no gradient fills except the CTA tint.</p></div>
+  </div>
+</section>
+
+<!-- 05 CONTROLS -->
+<section class="sb-sec" id="controls">
+  <header><span class="t-system">05 · Buttons &amp; inputs</span><h2 class="t-page">Controls</h2></header>
+  <div class="grid g2">
+    <div class="card"><div class="t-system" style="margin-bottom:14px">Buttons</div>
+      <div class="row" style="margin-bottom:14px"><button class="btn primary">Primary</button><button class="btn">Secondary</button><button class="btn ghost">Ghost</button><button class="btn danger">Delete draft</button><button class="btn" disabled>Disabled</button></div>
+      <div class="row"><button class="btn primary lg">Start a project <svg class="ico" style="stroke-width:1.75"><use href="#i-arrow"/></svg></button><button class="btn"><svg class="ico"><use href="#i-play"/></svg>Watch reel</button></div>
+      <p class="t-meta" style="margin-top:12px">Violet fill is #6E49E6 (white text 5.6:1). Hover #7C5CEE. Press scales to 0.98. One primary per view.</p></div>
+    <div class="card"><div class="t-system" style="margin-bottom:14px">Fields</div>
+      <div class="grid" style="gap:14px">
+        <label class="field"><span class="t-label">Project name</span><input class="input" placeholder="e.g. Spring launch"><span class="help">Only you and the editor see this.</span></label>
+        <label class="field"><span class="t-label">Email</span><input class="input" value="not-an-email" aria-invalid="true"><span class="err">Enter a valid email address.</span></label>
+        <label class="field"><span class="t-label">Format</span><select class="select"><option>Vertical 9:16</option><option>Horizontal 16:9</option></select></label>
+        <label class="field"><span class="t-label">Notes</span><textarea class="textarea" placeholder="Anything the editor should know"></textarea></label>
+        <div class="grid" style="gap:10px"><label class="check"><input type="checkbox" checked>Include captions</label><label class="check"><input type="checkbox">Include B-roll</label><label class="check"><input type="radio" name="r" checked>Standard delivery</label><label class="check"><input type="radio" name="r">Rush delivery</label></div>
+      </div></div>
+  </div>
+</section>
+
+<!-- 06 SURFACES -->
+<section class="sb-sec" id="surfaces">
+  <header><span class="t-system">06 · Surfaces</span><h2 class="t-page">Card, system panel, readout, table, empty state, CTA</h2></header>
+  <div class="grid g3">
+    <div class="card hover"><h3 class="t-card">Card</h3><p class="t-small" style="margin-top:6px">Surface 2, hairline border. Hover strengthens the border only; nothing moves.</p></div>
+    <div class="panel marked"><div class="t-system"><span>System panel</span><span class="pill success plain">Live</span></div><p class="t-small">Surface 1 with the OS corner marker (operator-only motif).</p></div>
+    <div class="card"><div class="grid g3" style="gap:12px"><div class="readout"><span class="t-system">Batches</span><span class="v">3</span></div><div class="readout"><span class="t-system">Ready</span><span class="v">12</span></div><div class="readout"><span class="t-system">Hours</span><span class="v">68.0</span></div></div></div>
+  </div>
+  <div class="panel" style="margin-top:16px;padding:0;overflow:auto"><table class="table" data-density="operator">
+    <thead><tr><th>Video</th><th>Stage</th><th>Evidence</th><th class="num">Duration</th><th class="num">Reg. h</th></tr></thead>
+    <tbody>
+      <tr><td>Landing page hero</td><td><span class="pill success">Delivered</span></td><td><span class="chip-src">Source fact</span></td><td class="num">00:48</td><td class="num">4.0</td></tr>
+      <tr><td>Client success story</td><td><span class="pill warning">Waiting on client</span></td><td><span class="chip-src derived">Derived</span></td><td class="num">01:32</td><td class="num">2.5</td></tr>
+      <tr><td>Lecture format cut 2</td><td><span class="pill violet">In edit</span></td><td><span class="chip-src">Source fact</span></td><td class="num">12:04</td><td class="num">—</td></tr>
+    </tbody></table></div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="empty"><div class="t-card">Nothing waiting on you</div><p class="t-small">Empty states say what this space is for, not how sad it is. No illustration.</p></div>
+    <div class="cta"><div><div class="t-section">Ready when you are</div><p class="t-small">Tell us about the video. We reply within a day.</p></div><button class="btn primary lg">Start a project</button></div>
+  </div>
+</section>
+
+<!-- 07 STATUS -->
+<section class="sb-sec" id="status">
+  <header><span class="t-system">07 · Status semantics</span><h2 class="t-page">Pills, dots, evidence chips</h2></header>
+  <div class="card"><div class="row" style="margin-bottom:16px">
+    <span class="pill">Draft</span><span class="pill violet">In edit</span><span class="pill info">Review link sent</span><span class="pill success">Approved</span><span class="pill warning">Overdue promise</span><span class="pill danger">Blocked</span>
+    <span class="row" style="gap:8px"><span class="dot os-rec"></span><span class="t-system" style="color:var(--os-rec)">REC</span></span>
+    <span class="row" style="gap:8px"><span class="dot os-live"></span><span class="t-system" style="color:var(--os-success)">Sensor live</span></span>
+  </div>
+  <p class="t-small">Every status pairs a colour with a text label and a dot: colour is never the only signal. Red is reserved for destructive, critical and REC; brand violet never means “error”, and red never means “brand”.</p></div>
+</section>
+
+<!-- 08 OVERLAYS & NAV -->
+<section class="sb-sec" id="overlays">
+  <header><span class="t-system">08 · Overlays &amp; navigation</span><h2 class="t-page">Modal, tabs, disclosure, tooltip, breadcrumb, nav</h2></header>
+  <div class="grid g2">
+    <div class="card" style="display:grid;gap:18px">
+      <div><div class="t-system" style="margin-bottom:8px">Tabs (thumb slides 180ms)</div>
+        <div class="tabs" role="tablist" id="tabs"><span class="thumb"></span><button role="tab" aria-selected="true">Overview</button><button role="tab" aria-selected="false">Videos</button><button role="tab" aria-selected="false">Evidence</button></div></div>
+      <div><div class="t-system" style="margin-bottom:8px">Disclosure</div>
+        <details class="disc"><summary>What happens after I submit?</summary><div class="body">You get a confirmation, then a short call to confirm scope. Nothing is charged at this step.</div></details></div>
+      <div><div class="t-system" style="margin-bottom:8px">Tooltip + breadcrumb</div>
+        <div class="row" style="gap:20px"><span class="tip"><button class="btn">Hover or focus me</button><span class="bubble" role="tooltip">Copy review link</span></span>
+        <div class="crumbs"><span>Orders</span><span class="sep">/</span><span>Batch 01</span><span class="sep">/</span><span class="here">Landing page</span></div></div></div>
+      <div><div class="t-system" style="margin-bottom:8px">Modal (native dialog, 240ms rise 8px)</div><button class="btn" id="openModal">Open modal</button></div>
+    </div>
+    <div class="panel" style="padding:12px;max-width:320px" data-density="operator"><div class="lockup" style="padding:6px 8px 10px"><span class="mark">RM</span><span class="wordmark">RMEDIA</span></div>
+      <nav class="nav" aria-label="Sample nav"><div class="grp">Now</div>
+        <a href="#overlays" aria-current="page"><svg class="ico"><use href="#i-radar"/></svg>War Room</a><a href="#overlays"><svg class="ico"><use href="#i-grid"/></svg>Dashboard</a>
+        <div class="grp">Production</div><a href="#overlays"><svg class="ico"><use href="#i-film"/></svg>Productivity</a><a href="#overlays"><svg class="ico"><use href="#i-flame"/></svg>LET'S COOK</a>
+        <div class="grp">Business</div><a href="#overlays"><svg class="ico"><use href="#i-users"/></svg>CRM</a><a href="#overlays"><svg class="ico"><use href="#i-coin"/></svg>Finance</a></nav></div>
+  </div>
+  <dialog class="modal" id="modal" aria-labelledby="mt"><div class="sheet"><h3 class="t-section" id="mt">Approve this cut?</h3><p class="t-small" style="margin:8px 0 20px">Approving tells the editor this version is final. You can still leave a note afterwards.</p><div class="row" style="justify-content:flex-end"><button class="btn ghost" id="closeModal">Not yet</button><button class="btn primary" id="okModal">Approve</button></div></div></dialog>
+</section>
+
+<!-- 09 DENSITIES -->
+<section class="sb-sec" id="density">
+  <header><span class="t-system">09 · Three densities</span><h2 class="t-page">Same tokens, different air</h2></header>
+  <div class="grid g3">
+    <div class="card" data-density="public" style="background:var(--os-bg)"><span class="t-system">Public</span><h3 class="t-section" style="margin:10px 0 8px;font-size:1.5rem;line-height:2rem">Video editing for people who ship weekly.</h3><p class="t-body muted">Editorial, spacious, sharp. Content leads; chrome recedes.</p><p style="margin-top:20px"><button class="btn primary lg">Start a project</button></p></div>
+    <div class="card" data-density="client"><span class="t-system">Client · Portal</span><h3 class="t-section" style="margin:10px 0 8px">Your videos</h3><p class="t-body muted">Calm, simple, safe.</p><div class="panel" style="margin-top:14px"><div class="row" style="justify-content:space-between"><span class="t-card">Spring launch</span><span class="pill warning">Your review</span></div><p class="t-small" style="margin-top:6px">Waiting for your feedback since Tue.</p><p style="margin-top:14px"><button class="btn primary">Open review</button></p></div></div>
+    <div class="panel" data-density="operator"><div class="t-system"><span>Operator · Batch 01</span><span class="pill violet plain">Open</span></div>
+      <table class="table"><tbody><tr><td>Hero</td><td class="num">00:48</td><td><span class="pill success plain">DONE</span></td></tr><tr><td>Story</td><td class="num">01:32</td><td><span class="pill warning plain">WAIT</span></td></tr><tr><td>Lecture</td><td class="num">12:04</td><td><span class="pill violet plain">EDIT</span></td></tr></tbody></table><p class="t-meta" style="margin-top:8px">Dense, technical, instrumented.</p></div>
+  </div>
+</section>
+
+<!-- 10 INTAKE -->
+<section class="sb-sec" id="intake">
+  <header><span class="t-system">10 · Lead choice cards</span><h2 class="t-page">Guided-intake visual grammar</h2><p class="t-small" style="max-width:66ch">Visual only. Choices are plain descriptive statements, selection is a filled radio plus a violet-tinted border, progress is a 2px rule. No avatars, XP, classes, scores or recommendation. Placeholder copy.</p></header>
+  <div class="card" data-density="client" style="max-width:720px"><div class="progress" style="margin-bottom:20px"><i id="prog"></i></div>
+    <span class="t-system">Step 1 of 3</span><h3 class="t-section" style="margin:8px 0 6px">What are you looking to make?</h3><p class="t-small" style="margin-bottom:18px">Pick the closest one. You can add detail next.</p>
+    <div class="grid" role="radiogroup" aria-label="Project kind" id="choices">
+      <button class="choice" role="radio" aria-checked="true"><span class="h">Short-form clips</span><span class="d">Vertical edits from longer recordings.</span></button>
+      <button class="choice" role="radio" aria-checked="false"><span class="h">A single polished video</span><span class="d">One landing, brand or story video.</span></button>
+      <button class="choice" role="radio" aria-checked="false"><span class="h">Something ongoing</span><span class="d">A weekly or monthly batch.</span></button>
+    </div><div class="row" style="justify-content:space-between;margin-top:20px"><button class="btn ghost">Back</button><button class="btn primary">Continue</button></div></div>
+</section>
+
+<!-- 11 MOTION -->
+<section class="sb-sec" id="motion">
+  <header><span class="t-system">11 · Motion</span><h2 class="t-page">State is communicated, never performed</h2><p class="t-small">Tokens: instant 120 · standard 180 · panel 240 · exit 140 ms · ease-out cubic-bezier(.2,0,0,1) · max lift 8px. No bounce, idle loop, flicker, parallax or scroll-jacking.</p></header>
+  <div class="grid g3">
+    <div class="card"><div class="t-system" style="margin-bottom:10px">Fade (240ms)</div><div id="m1" class="demo fx-fade">Panel content</div><p style="margin-top:12px"><button class="btn" data-replay="m1,fx-fade">Replay</button></p></div>
+    <div class="card"><div class="t-system" style="margin-bottom:10px">Rise 8px (240ms)</div><div id="m2" class="demo fx-rise">Toast / drawer</div><p style="margin-top:12px"><button class="btn" data-replay="m2,fx-rise">Replay</button></p></div>
+    <div class="card"><div class="t-system" style="margin-bottom:10px">Saved tint (600ms)</div><div id="m3" class="demo fx-tint">Row just updated</div><p style="margin-top:12px"><button class="btn" data-replay="m3,fx-tint">Replay</button></p></div>
+  </div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><div class="t-system" style="margin-bottom:10px">Live ring (state only)</div><div class="row"><span class="dot os-live"></span><span class="t-small">Only while Sensor is actually live</span></div></div>
+    <div class="card"><div class="t-system" style="margin-bottom:10px">Press (120ms)</div><button class="btn primary">Press me</button></div>
+    <div class="card"><div class="t-system" style="margin-bottom:10px">Top 5 microinteractions</div><ol class="t-small" style="margin:0;padding-left:18px"><li>Button press + focus ring</li><li>Saved-row tint</li><li>Modal/drawer rise</li><li>Tab thumb slide</li><li>Choice select</li></ol></div>
+  </div>
+</section>
+
+<!-- 12 COMPARE -->
+<section class="sb-sec" id="compare">
+  <header><span class="t-system">12 · Old vs new</span><h2 class="t-page">Legacy language, retired</h2><p class="t-small">Legacy samples are re-drawn approximations, only to show contrast. The new direction gets the larger column.</p></header>
+  <div class="grid cmp" id="cmp">
+    <div style="display:grid;gap:12px">
+      <div class="old card" style="background:#0b0b0b;border:2px solid #333;border-radius:0"><div style="font:400 10px/1.7 'Courier New',monospace;color:#fff;letter-spacing:.06em">LOBBY // PLAYER HUD</div><div class="old-hud" style="margin:8px 0">XP ▮▮▮▮▯ · CLASS: EDITOR</div><button class="old-btn">▶ START GAME</button></div>
+      <div class="old card" style="background:#0b0b0b"><div class="row" style="gap:8px"><span style="font-size:22px">🎬</span><span style="font-size:22px">🔥</span><span style="font-size:22px">💰</span><span style="font-size:22px">🫀</span></div><p class="t-meta" style="margin-top:8px">Emoji as icons: three icon systems mixed.</p></div>
+      <div class="old card" style="background:#0b0b0b"><div class="old-tile" style="background:#FF0000">RED = BRAND, ERROR AND CTA</div></div>
+    </div>
+    <div style="display:grid;gap:12px">
+      <div class="card" data-density="public"><span class="t-system">Public · replaces lobby / HUD</span><h3 class="t-section" style="margin:8px 0 12px">Start with what you need edited.</h3><button class="btn primary lg">Start a project</button></div>
+      <div class="card"><div class="row" style="gap:18px"><svg class="ico" style="width:20px;height:20px"><use href="#i-film"/></svg><svg class="ico" style="width:20px;height:20px"><use href="#i-flame"/></svg><svg class="ico" style="width:20px;height:20px"><use href="#i-coin"/></svg><svg class="ico" style="width:20px;height:20px"><use href="#i-users"/></svg></div><p class="t-meta" style="margin-top:8px">One stroke icon family: 1.5px, rounded, currentColor.</p></div>
+      <div class="card"><div class="row"><span class="pill violet">Brand / selected</span><span class="pill danger">Critical</span><span class="pill success">Confirmed</span><span class="dot os-rec"></span><span class="t-system" style="color:var(--os-rec)">REC</span></div><p class="t-meta" style="margin-top:8px">Violet = identity. Red = only danger and REC.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 13 SHELLS -->
+<section class="sb-sec" id="shells">
+  <header><span class="t-system">13 · Shell mocks (fake data)</span><h2 class="t-page">Do they feel like one family?</h2></header>
+  <div class="grid" style="gap:28px">
+    <!-- PUBLIC -->
+    <div class="mock" data-density="public">
+      <div class="bar-top"><div class="lockup"><span class="mark">RM</span><span class="wordmark">RMEDIA</span></div><div class="row" style="gap:20px"><a href="#shells" class="t-small muted">Work</a><a href="#shells" class="t-small muted">Process</a><a href="#shells" class="t-small muted">Client path</a><button class="btn primary" style="height:36px">Start a project</button></div></div>
+      <div style="padding:clamp(32px,6vw,88px) clamp(20px,5vw,64px) 40px;display:grid;gap:40px">
+        <div style="max-width:780px"><span class="t-system">Video editing · placeholder</span><h3 class="t-display" style="margin:14px 0 18px">Placeholder headline for the hero statement.</h3><p class="t-body muted" style="max-width:56ch">Placeholder support text. One or two sentences about the editing service, written last.</p><p class="row" style="margin-top:28px"><button class="btn primary lg">Start a project</button><button class="btn lg"><svg class="ico"><use href="#i-play"/></svg>Watch the reel</button></p></div>
+        <div class="grid g3"><div class="frame" data-tc="00:00:12:04"></div><div class="frame" data-tc="00:01:03:18"></div><div class="frame" data-tc="00:02:40:00"></div></div>
+        <div class="grid g3" style="gap:24px"><div><div class="t-system">01 Proof</div><p class="t-body muted" style="margin-top:6px">Placeholder proof line with a real number and a real name later.</p></div><div><div class="t-system">02 Process</div><p class="t-body muted" style="margin-top:6px">Placeholder process line: send, edit, review, deliver.</p></div><div><div class="t-system">03 Your path</div><p class="t-body muted" style="margin-top:6px">Placeholder pointer to a client-specific route or intake.</p></div></div>
+      </div></div>
+    <!-- CLIENT -->
+    <div class="mock" data-density="client">
+      <div class="bar-top"><div class="lockup"><span class="mark">RM</span><span class="wordmark">RMEDIA</span><span class="sub">Client Portal</span></div><span class="t-small">Alex Sample</span></div>
+      <div style="padding:32px clamp(20px,5vw,48px) 40px;max-width:880px;margin:0 auto;display:grid;gap:24px">
+        <div><h3 class="t-page">Your videos</h3><p class="t-small" style="margin-top:4px">1 waiting for your review</p></div>
+        <div class="card prow"><div class="frame" data-tc="01:32"></div><div><div class="t-card">Spring launch — cut 2</div><p class="t-small" style="margin-top:4px">Sent Tuesday · vertical 9:16</p><span class="pill warning" style="margin-top:10px">Your review</span></div><button class="btn primary">Review</button></div>
+        <div class="card prow"><div class="frame" data-tc="00:48"></div><div><div class="t-card">Landing page hero</div><p class="t-small" style="margin-top:4px">Delivered Sep 12</p><span class="pill success" style="margin-top:10px">Delivered</span></div><button class="btn">Download</button></div>
+      </div></div>
+    <!-- OPERATOR -->
+    <div class="mock opshell" data-density="operator">
+      <aside class="opside"><div class="lockup" style="padding:6px 8px 10px"><span class="mark">RM</span><span class="wordmark">RMEDIA</span></div><nav class="nav"><a aria-current="page" href="#shells"><svg class="ico"><use href="#i-radar"/></svg>War Room</a><a href="#shells"><svg class="ico"><use href="#i-flame"/></svg>LET'S COOK</a><a href="#shells"><svg class="ico"><use href="#i-users"/></svg>CRM</a><a href="#shells"><svg class="ico"><use href="#i-coin"/></svg>Finance</a></nav></aside>
+      <main style="padding:16px 20px 20px;display:grid;gap:14px;min-width:0"><div class="row" style="justify-content:space-between"><div><div class="crumbs"><span>War Room</span></div><h3 class="t-page" style="margin-top:6px">Kitchen · today</h3></div><div class="row"><span class="dot os-live"></span><span class="t-system" style="color:var(--os-success)">Sensor live</span></div></div>
+        <div class="grid g4 rd" style="gap:10px"><div class="panel"><div class="readout"><span class="t-system">Active</span><span class="v">2</span></div></div><div class="panel"><div class="readout"><span class="t-system">Blocked</span><span class="v" style="color:var(--os-danger)">1</span></div></div><div class="panel"><div class="readout"><span class="t-system">Waiting</span><span class="v" style="color:var(--os-warning)">3</span></div></div><div class="panel"><div class="readout"><span class="t-system">Registered h</span><span class="v">68.0</span></div></div></div>
+        <div class="panel marked" style="padding:0;overflow:auto"><table class="table"><thead><tr><th>Ticket</th><th>Lane</th><th>State</th><th>Basis</th><th class="num">Age</th></tr></thead><tbody><tr><td>Hero cut</td><td>Edit</td><td><span class="pill violet plain">Active</span></td><td><span class="chip-src">Source fact</span></td><td class="num">1h 12m</td></tr><tr><td>Story cut 2</td><td>Review</td><td><span class="pill warning plain">Waiting</span></td><td><span class="chip-src derived">Derived</span></td><td class="num">2d</td></tr><tr><td>Lecture cut</td><td>Edit</td><td><span class="pill danger plain">Blocked</span></td><td><span class="chip-src">Source fact</span></td><td class="num">4d</td></tr></tbody></table></div></main></div>
+  </div>
+</section>
+</div>
+
+<script>
+(function(){
+  var $=function(s,r){return (r||document).querySelector(s)}, $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
+  // swatches (values mirror the CSS tokens; contrast measured for the stated pairing)
+  var sw={
+    'sw-neutral':[['Background','--os-bg','#09090B','base'],['Surface 1','--os-surface-1','#101013','panels'],['Surface 2','--os-surface-2','#16161A','cards, inputs'],['Surface 3','--os-surface-3','#1E1E24','elevated'],['Border','--os-border','rgba(255,255,255,.08)','1.2:1 hairline'],['Border strong','--os-border-strong','rgba(255,255,255,.16)','1.6:1 emphasis']],
+    'sw-text':[['Text','--os-text','#F4F4F5','18.1:1 on bg'],['Text 2','--os-text-2','#A1A1AA','7.8:1 on bg'],['Text muted','--os-text-3','#8C8C96','6.0:1 on bg / 5.0 on s3'],['Disabled','--os-text-disabled','#55555D','exempt, ~2.7:1'],['Control border','--os-border-control','#6A6A73','3:1+ for inputs'],['Focus','--os-focus','#B9AEFB','10:1 on bg']],
+    'sw-brand':[['Violet fill','--os-violet','#6E49E6','white text 5.6:1'],['Violet hover','--os-violet-hover','#7C5CEE','white text 4.5:1'],['Violet press','--os-violet-press','#5F3FD3','pressed'],['Violet text','--os-violet-text','#A99BFA','8.3:1 on bg'],['Violet tint','--os-violet-tint','rgba(110,73,230,.16)','selected fill'],['Info','--os-info','#7CB7F4','9.0:1; use rarely']],
+    'sw-sem':[['Success','--os-success','#3DD68C','10.1:1'],['Warning','--os-warning','#F2B33D','10.2:1'],['Danger','--os-danger','#F26D6D','6.5:1 destructive'],['REC','--os-rec','#FF5A52','6.2:1 live capture only'],['Success tint','--os-success-tint','rgba(61,214,140,.14)','pill bg'],['Danger tint','--os-danger-tint','rgba(242,109,109,.14)','pill bg']]
+  };
+  Object.keys(sw).forEach(function(id){ $('#'+id).innerHTML=sw[id].map(function(s){return '<div class="swatch"><div class="chip" style="background:var('+s[1]+')"></div><div class="meta"><b>'+s[0]+'</b><code>'+s[2]+'</code><span>'+s[3]+'</span></div></div>'}).join(''); });
+  $('#spaces').innerHTML=[2,4,8,12,16,24,32,48,64,96,128].map(function(n){return '<div class="sp"><span style="width:44px">'+n+'</span><i style="width:'+Math.min(n,128)*1.6+'px"></i></div>'}).join('');
+  // motion toggle
+  var mt=$('#motionToggle');
+  mt.addEventListener('click',function(){var on=document.documentElement.getAttribute('data-motion')!=='reduced'; if(on) document.documentElement.setAttribute('data-motion','reduced'); else document.documentElement.removeAttribute('data-motion'); mt.setAttribute('aria-pressed',on); mt.textContent='Simulate reduced motion: '+(on?'on':'off');});
+  // replay
+  $$('[data-replay]').forEach(function(b){b.addEventListener('click',function(){var p=b.getAttribute('data-replay').split(','),el=document.getElementById(p[0]);el.classList.remove(p[1]);void el.offsetWidth;el.classList.add(p[1]);});});
+  // tabs
+  var tabs=$('#tabs'),thumb=$('.thumb',tabs),btns=$$('button',tabs);
+  function place(b){thumb.style.width=b.offsetWidth+'px';thumb.style.transform='translateX('+(b.offsetLeft-3)+'px)';}
+  btns.forEach(function(b){b.addEventListener('click',function(){btns.forEach(function(x){x.setAttribute('aria-selected',x===b)});place(b);});});
+  place(btns[0]); window.addEventListener('resize',function(){place($('[aria-selected="true"]',tabs))});
+  // choice cards
+  var ch=$$('#choices .choice');
+  ch.forEach(function(c,i){c.addEventListener('click',function(){ch.forEach(function(x){x.setAttribute('aria-checked',x===c)});$('#prog').style.width=(40+i*0)+'%';});});
+  // modal
+  var m=$('#modal');$('#openModal').addEventListener('click',function(){m.showModal()});
+  ['closeModal','okModal'].forEach(function(id){$('#'+id).addEventListener('click',function(){m.close()})});
+  m.addEventListener('click',function(e){if(e.target===m)m.close()});
+})();
+</script>
+</body>
+</html>
