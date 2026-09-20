@@ -1,51 +1,48 @@
-# RMEDIA OS — Current Handoff
-**Date:** 2026-09-16 · **Status: current operational truth, supersedes conflicting statements in older reports.**
+# RMEDIA OS / MindBunker — Current Handoff
+**Updated:** 2026-09-20 · Supersedes every earlier handoff and wave narrative. Read this plus the current source; everything else is historical evidence.
 
-This document is not a wave report. It states what is true right now. Older reports remain as historical evidence of their own moment — see "Superseded Report Conclusions" below for the specific claims this handoff overrides.
+## 1. What this is
+A single-operator system for Emmanuel's freelance video-editing business (RMEDIA). One operator app (**MindBunker**, private) plus a public **Client Portal** and a public marketing site. The operator is an editor, not a marketing/BI person: the system must reduce reconstruction (Slack archaeology, folder hunting, status interpretation), never add data-clerk work. During production it should be quiet; **the next information should come from real work**, not new features.
 
----
-
-## Source Authority
-
-| Surface | Source / Version |
+## 2. Source and deploy authority (verify fresh; live reality wins)
+| Surface | Truth |
 |---|---|
-| **Operator (MindBunker) repo** | `mindbunker-video-workspace-hotfix`, branch `codex/p0-video-workspace-hotfix`, HEAD `7a82a8a176f4f01f7e12399a23a022ff53b64f06` |
-| **Operator Worker deploy** | `mindbunker`, version `43125aa8-63f1-44b9-97cb-e0d17a9e1e57`, 100% traffic, route `emmanueldarosa.com/mindbunker*` |
-| **Client Worker deploy** | `white-wave-1af9`, version `29505ac7-1f8a-452a-911e-b128942c8fa5`, route `emmanueldarosa.com/client*` |
-| **Public site repo** | `rmedia-public-site`, HEAD `aa04b1e5ab4540c855f8a7ba186d9579c131582c`, clean |
-| **Public site deploy** | version `d5304a2d-c472-4623-8b52-a86846dab514` |
-| **D1 database** | `mindbunker` (`d6ada5db-1f36-4ee9-9a05-01d131abf219`) — the only real D1 resource in the account; `mindbunker-local` is a local-dev label only, not a separate database |
-| **D1 migration head** | `0050_spooky_vampiro.sql` — fully applied, `wrangler d1 migrations list --remote` reports "No migrations to apply!" |
-| **Sensor source repo** | `mindbunker-sensor-release` (isolated worktree of `mindbunker-sensor`), branch `fix/sensor-sleep-session-close`, HEAD `798ff57374b422d55831e7e141ab12db419340b0` |
-| **Sensor build/install** | Installed at `~/Applications/RMEDIA Sensor.app`, binary SHA-256 `231d0ef4f7758672a6e05ec30af018716bdf6adbc753ddcc4a8c9ae217c054a5`, ad-hoc signed, running |
-| **Sensor sync state** | 0 pending outbox entries — fully synced as of this writing |
-| **Original `mindbunker-sensor` working tree** | Still separately dirty with the pre-canonicalization "operational contexts" WIP superseded by the isolated worktree's canonicalized version; untouched, byte-identical to its state when last verified |
+| Operator repo | `mindbunker-video-workspace-hotfix` (git worktree), branch `codex/p0-video-workspace-hotfix`, remote `origin` = `github.com/z0rknight/mindbunker`. **`HEAD = origin/release/video-workspace-hotfix = origin/production/current`** (push both with `git push origin HEAD:release/video-workspace-hotfix HEAD:production/current`). Last product commit `eb568bb`; a later docs-only commit holds this file. `main` is an old unrelated branch: ignore. |
+| Operator Worker | `mindbunker`, version **`b7130cac-b455-4d85-9bc6-8a3c224f024e`**, route `emmanueldarosa.com/mindbunker*` (rollback `51dc1808-da15-42b4-b50a-8b6f0cb30118`). Deploy: `npm run deploy` |
+| Client Worker | `white-wave-1af9`, version **`6a619197-384e-43d4-8eda-ac56c662153d`**, `emmanueldarosa.com/client*`. Deploy: `npm run deploy:client` (only if client-facing code changes) |
+| D1 | database `mindbunker` (`d6ada5db-…`), **migration head 0052**, none pending. Local `--local` is a sandbox with fixtures. Migrations: edit `src/db/schema.ts`, `npx drizzle-kit generate`, `npm run db:migrate:remote`. |
+| Public site | `rmedia-public-site` @ `aa04b1e` (untouched since Sep 16; it only links to `/mindbunker/quoteavideo`) |
+| Sensor | separate repo/worktree `mindbunker-sensor-release` @ `798ff57`, branch `release/sensor-consolidation-2026-09`; native macOS menu-bar app. Nothing native changed in the recent trains. |
+Gates before any release: `git diff --check`, `npm test` (node:test, `*.test.mjs` under `src/modules|lib|utils`), `npx tsc --noEmit`, `npx eslint .` (**0 errors, 3 known pre-existing warnings**), `npm run build`. Last run: **1385/1385**. Stage files by explicit name (never `git add -A`); never bare `git stash`; one untracked `RMEDIA_SENSOR_NATIVE_SLEEP_PATCH_2026_09.md` is deliberately not committed.
 
-## Current Green Flows
+## 3. Product-role map (one primary question each)
+Dashboard → general state today · **War Room** → what is happening now/next/blocked/active · **Productivity** → what is moving, Sensor Activity, Video Workspace · **Projects** → job context · **LET'S COOK** (Production Orders) → batches and what they contain · **Sessions** → what work actually happened (canonical Work Sessions) · **CRM** → lead/client relationship (owns client-level knowledge) · **Finance** → commercial/cash evidence and external-time attribution · **Client Portal** → only what the client may see · **Pricing Lab** → experimental, waiting for evidence. Known collisions (documented, not bugs): Dashboard/War Room both show "current work"; Productivity/Projects/Order pages all list videos; Sessions (canonical) vs Sensor Activity (observed).
 
-- **War Room** — canonical Work Session (WORKING) takes precedence over an open Sensor recording (SENSOR RECORDING); non-client contexts (ADMIN/LEAD/INTERNAL) render with their own label, no fabricated client attribution.
-- **Sensor** — native Start/Stop syncs for all four contexts (CLIENT/LEAD/INTERNAL/ADMIN); sleep correctly closes the intentional session at the true sleep timestamp; production confirms 62 CLIENT + 14 INTERNAL `sensor_sessions` rows synced successfully after the operational-context sync hotfix.
-- **Sessions** — Week/Month landing, timeline, and correction flows verified in prior waves, unaffected by this wave.
-- **CRM** — commercial attribution, contracts, rate equivalents render on `/crm/[id]`; already reachable directly from a Project's breadcrumb.
-- **Projects** — production-order phase derivation (`RECEIVED`/`IN_PRODUCTION`/`REVIEW`/`DELIVERED`) correctly excludes DONE deliverables from every open/pending signal, including when a video skips REVIEW entirely (reproduced and confirmed this wave).
-- **Client Portal** — video listing/detail render with a human-facing title in every case, including the untitled fallback (fixed this wave).
-- **Public site** — source-recovered and deployed; out of scope for this wave, not touched.
-- **Lead intake** — unaffected by this wave; last verified in an earlier round.
+## 4. Semantic invariants (do not break)
+Sensor observed time ≠ Work Session ≠ external registered time ≠ billing evidence ≠ payment; allocation ≠ revenue; derived rate-equivalent ≠ transaction truth. READY_FOR_REVIEW ≠ APPROVED; DONE ≠ DELIVERED ≠ PAID. A Production Order has persisted `state` (OPEN/CLOSED/CANCELLED) and a derived `phase` (from active children, excluding the operational container and cancelled items); a closed order never claims completion. Production Order time ≠ per-video time (a batch-equivalent average is labelled and never written to a video). Observed app time ≠ intentional app time; Safari + ChatGPT page = APP Safari with an optional web surface, never native ChatGPT. **No automatic proportional spread** of external time across videos; "unallocated" is valid; unknown beats invented precision. Page views never create Leads. Production Memory, protected terms, export reminders, production context, attribution and evidence are **operator-only** (pinned by tests: nothing under `client-portal`, `app/client`, `app/g` may reference them). Health is protected from business-performance judgment; no personal scores. `returnTo` is always validated with `isSafeInternalPath`.
 
-## Current Real Gaps
+## 5. What is live (major features)
+Production Order truth (shared status headline) · **PDBM referral**: `https://emmanueldarosa.com/mindbunker/quoteavideo?ref=pdbm` (closed allowlist in `modules/referrals`; source stored as `clients.source = 'referral:pdbm'`; CRM label "Referral · PDBM (Taryn / CEO Clubhouse)"; dedup/idempotency/honeypot unchanged; existing source never overwritten) · **Client Production Memory** (`client_production_memory`, managed in the CRM dossier, read-only "Formats for <client>" on Project/Order pages) · **Before-you-export** card in the Video Workspace (client protected terms + export reminders + a static two-line generic baseline; read-only, never gates a status) · **Production Context** block (batch notes, project notes with clickable links, project source media, review/delivery, format names) on Order and Video Workspace · origin-preserving navigation (signals, commitments, video↔order, Dashboard/CRM notes/Sessions carry `returnTo`) · optional revision cause (`revisions.caused_by`, default UNKNOWN) · **Application usage** on Sensor Activity (observed vs intentional, coverage disclosure, DELETED sessions excluded, overlaps not double-counted) · stale-timer re-sync on focus · **Batch evidence** block and **explicit external-time attribution** (Finance → Contracts → selected evidence; to a Production Order via its container, or a single video; least precise true level; only `MANUAL_MINUTES` written; same-client and over-allocation checks; one shared definition of "unallocated") · one-way "Add to Google Calendar" link (CRM and gateway booking).
 
-- **Sensor ad-hoc signing** — no stable local codesigning identity is configured. Every native rebuild produces a new ad-hoc signature, which invalidates the previous Keychain "Always Allow" grant for the device credential and requires a fresh manual approval before sync resumes. This is a known, documented (in `scripts/build-app.sh`) one-time setup gap, not a bug.
-- **Sensor real sleep test / live GUI context QA** — the Operational Context Sync Hotfix mission's live acceptance steps (Start/Stop through the actual menu-bar UI across all four contexts, and a real Mac-sleep test on a disposable session) were never completed — this environment has no way to drive the Sensor's menu-bar UI (it doesn't register as an automatable application) and this agent's own process would be suspended by an actual system sleep. The underlying sync mechanism is proven working via real overnight production sync instead (14 real INTERNAL sessions delivered), which is strong but not identical evidence to a live end-to-end click-through.
-- **Authenticated live-smoke for this wave's two changes** (Due label copy, client title fallback) — not performed; this dev environment has no session credentials for the private Operator/Client login. Both Workers were confirmed healthy post-deploy (pages load, no errors), and both changes are covered by exact-string unit tests plus a read-through of their rendering context (flex-wrap label, already-truncated title) to rule out overflow.
+## 6. Current production facts worth preserving
+**Taryn (client id 2):** Production Memory = Content Waterfall (OPERATOR_CONVENTION), Lecture Format (CLIENT_APPROVED; black treatment, white text box with black bold text, rounded corners; Taryn asked to keep it "in the vault as the lecture format"), Client Success Format (OBSERVED; teal, rounded corners). Template locations, approved references and most use-cases are NULL (human input). Protected terms: CEO Clubhouse, Perfect Day Business Mentorship, PDBM. Export reminders: correct person in B-roll; natural skin tone; horizontals fill the frame, no black bars. Deliberately omitted terms: Jannalee, 100 Lead Game, Buy Line (spelling unverified), CEO Strong (Bonnie's program), "Taryn".
+**Commercial:** Taryn external registered time 69.5 h (Upwork, Jul 27–Sep 13, $25/h); explicit attribution 0 h; historical derived allocation 1.5 h; **unallocated 68.0 h (97.8%)**; billing evidence ≈$1,812; income transactions $1,372.50 (client level); Production Orders: 1; revisions recorded: 0. `billing_evidence` rows from Upwork are semantically EXTERNAL REGISTERED TIME (table name is historical). Dave "Landing Page" (video 25) `delivery_url` was canonicalized from Quick Note #75 (the only production write of that train).
+**Sensor:** 1 device, 11k+ observations since Aug 24, **0 window titles** (browser surface unsupported until the operator enables titles); intentional sessions ≈240 h, ≈87% telemetry coverage; 4 sessions > 12 h await operator review; 6 legacy Aug 24–25 approved sessions lack a back-link but each has a matching Work Session. **PDBM:** 0 real leads so far. **Quick Notes:** 37, none actionable (1 unknown: 4K-detail observation).
 
-## Superseded Report Conclusions
+## 7. Waiting for evidence (do not build yet)
+Video↔memory association · project-level external attribution · work-phase data · automated pre-export QA · PDBM conversion learning · Pricing Lab (**NOT READY**) · outbound marketing · Markdown notes · Sensor-native container labeling. Triggers are in `RMEDIA_BACKLOG_ARCHAEOLOGY_AND_CLOSURE_RELEASE_TRAIN_2026_09.md` §15.
 
-| Old conclusion | Superseded by |
-|---|---|
-| "Public site source unavailable" | Public Site Source Recovery + Reality Patch release |
-| "Sensor non-client (LEAD/INTERNAL/ADMIN) work stays LOCAL_ONLY" | Operational Context Sync Hotfix (commit `798ff57` native, `e6a69a2` server, migration `0050`) |
-| "Native sleep fix identified but deliberately not applied" (Sensor Reality Sync report §8) | Native Sleep Patch (commit `96010bb` onward) |
-| "Due this week" label reflects a calendar week | Notion Easy Wins Patch — copy corrected to "Due in the next 7 days"; the underlying window was always today+1 through today+7, never touched |
-| Client-facing untitled videos show a raw production date | Notion Easy Wins Patch — fallback now prefers the project name, "Untitled video" only as a last resort |
+## 8. Needs the operator (human input)
+Template locations / approved reference videos / use-cases for the Taryn formats · spellings for the omitted terms · decide on enabling Sensor window titles (privacy) · whether the 4K-detail note still matters · Sensor stable signing identity and live GUI/sleep QA (the rebuilt ad-hoc signature resets Keychain/Accessibility grants) · comma-separated tags (domain decision).
 
-Older wave reports are left unmodified as historical evidence of their own moment; nothing above deletes or rewrites them.
+## 9. Migration candidates — NOT approved
+Nullable `billing_allocations.project_id` (at most one of video/project) · first-class cut-sheet/audio field · video→Production Memory FK · work-phase tag. None is justified today.
+
+## 10. Explicitly do not build now
+Pricing Lab / Offer Generator, BI dashboards, productivity/focus/sleep scores, OCR/transcription/computer-vision QA, Premiere integration, Google OAuth/two-way calendar, client-visible recipes, version history, DAM, a Quick Notes manager, more generic QA checks or terms without repeated real errors, referral platform/multi-referrer schema (until multiple referrers exist).
+
+## 11. Working conventions
+Authenticated production UI has usually NOT been observable by the assistant (no operator session; it never types the password); verification = local sandbox QA + read-only D1 (`wrangler d1 execute mindbunker --remote --command "SELECT …"`) + reachability. Local sandbox login: `/mindbunker/qa-login?token=…` (dev only; token in `.env.local`); restore fixtures after QA. D1 rejects large `UNION` chains and `PRAGMA foreign_key_list`. Prefer one release train per topic: one archaeology pass, targeted tests, one full gate, one deploy, one report.
+
+## 12. Next
+**REAL OPERATOR USE.** Observation targets (max 3): (1) the next real PDBM lead → confirm source, CRM label and the quote/book handoff; (2) the next real Taryn batch → record revision causes where revisions happen and, when known, attribute that week's Upwork time to the batch; (3) review the 4 long Sensor sessions and decide about window titles.
