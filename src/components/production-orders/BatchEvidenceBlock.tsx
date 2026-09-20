@@ -1,6 +1,7 @@
 import type { BatchEvidence } from "@/modules/production-orders/evidence";
 import { formatClosedDuration } from "@/modules/work-sessions/core";
-import { formatCurrency } from "@/utils/date";
+import { formatMinutesAsHours } from "@/modules/finance/core";
+import { formatCurrency, formatDate } from "@/utils/date";
 
 // Read-only "Evidence for this batch": what is known, and what is not.
 // Presentational only (no hooks/state/writes). Answers one operator question:
@@ -68,7 +69,28 @@ export function BatchEvidenceBlock({ evidence }: { evidence: BatchEvidence }) {
         </Row>
 
         <Row label="External registered time">
-          <Unknown>Not attributed to this batch (Upwork time is reported weekly per contract).</Unknown>
+          {evidence.externalRegisteredTime.attribution === "NONE" ? (
+            <Unknown>None attributed to this batch. Upwork time is reported weekly per contract; attribute it in Finance → Contracts when you know which work it was for.</Unknown>
+          ) : (
+            <div data-testid="batch-external-time">
+              <span className="block">
+                Attributed to this batch: {formatMinutesAsHours(evidence.externalRegisteredTime.explicitHereMinutes)}
+                {evidence.externalRegisteredTime.derivedHereMinutes > 0 &&
+                  ` (+ ${formatMinutesAsHours(evidence.externalRegisteredTime.derivedHereMinutes)} historical, derived)`}
+              </span>
+              <ul className="mt-1 space-y-0.5 text-zinc-500">
+                {evidence.externalRegisteredTime.weeks.map((week) => (
+                  <li key={week.evidenceId}>
+                    {formatDate(week.periodStart)} – {formatDate(week.periodEnd)}: registered {formatMinutesAsHours(week.registeredMinutes)}
+                    {" · "}here {formatMinutesAsHours(week.explicitHereMinutes + week.derivedHereMinutes)}
+                    {" · "}elsewhere {formatMinutesAsHours(week.elsewhereMinutes)}
+                    {" · "}unallocated {formatMinutesAsHours(week.unallocatedMinutes)}
+                  </li>
+                ))}
+              </ul>
+              <span className="mt-1 block text-zinc-600">Registered time assigned to this batch: not billed revenue, not paid.</span>
+            </div>
+          )}
         </Row>
 
         <Row label="Paid">
@@ -76,7 +98,7 @@ export function BatchEvidenceBlock({ evidence }: { evidence: BatchEvidence }) {
         </Row>
       </dl>
       <p className="mt-3 text-[10px] leading-4 text-zinc-600">
-        No profit figure is shown: registered time, billing and payment are not attributed to individual batches.
+        No profit figure is shown: payment is not tracked per batch, and registered time counts here only where you attributed it.
       </p>
     </section>
   );

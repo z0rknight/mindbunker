@@ -15,7 +15,8 @@ test("nothing tracked: NONE, no average, everything external stays unattributed"
   assert.equal(e.batchLevel, null);
   assert.equal(e.perVideo, null);
   assert.equal(e.batchEquivalentAverageSeconds, null);
-  assert.equal(e.externalRegisteredTime, "NOT_ATTRIBUTED");
+  assert.equal(e.externalRegisteredTime.attribution, "NONE");
+  assert.deepEqual(e.externalRegisteredTime.weeks, []);
   assert.equal(e.paid, "NOT_TRACKED_PER_BATCH");
 });
 
@@ -112,7 +113,7 @@ test("the evidence block is read-only, labels the average, and never shows a pro
   assert.match(ui, /Batch-equivalent average/u);
   assert.match(ui, /Not the time spent on any one video; never written to a video/u);
   assert.match(ui, /No profit figure is shown/u);
-  assert.match(ui, /Not attributed to this batch/u);
+  assert.match(ui, /None attributed to this batch/u);
   assert.match(ui, /Not tracked per batch/u);
   const code = (text) => text.replace(/\/\/.*$/gmu, "");
   assert.doesNotMatch(code(ui), /<button|<form|onChange|profit\s*[:=]|margin|per hour|\/h\b|hourly/iu);

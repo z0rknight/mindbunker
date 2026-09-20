@@ -1287,6 +1287,23 @@ export async function recordBillingAllocation(data: {
   if (validationError) return { success: false, error: validationError };
 
   const db = await getAuthenticatedDb();
+  // Ownership: an allocation may only point at a video of the SAME client as
+  // the evidence's contract (Commercial Evidence train). Historical/valid
+  // callers always satisfied this; it just makes cross-client attribution
+  // impossible instead of merely unlikely.
+  if (data.videoId !== null) {
+    const owner = await db
+      .select({ evidenceClientId: commercialContracts.clientId, videoClientId: videoLogs.clientId })
+      .from(billingEvidence)
+      .innerJoin(commercialContracts, eq(commercialContracts.id, billingEvidence.contractId))
+      .innerJoin(videoLogs, eq(videoLogs.id, data.videoId))
+      .where(eq(billingEvidence.id, data.billingEvidenceId))
+      .limit(1);
+    if (!owner[0]) return { success: false, error: "Evidence or video not found." };
+    if (owner[0].evidenceClientId !== owner[0].videoClientId) {
+      return { success: false, error: "That video belongs to a different client than this evidence." };
+    }
+  }
   await db.insert(billingAllocations).values({
     billingEvidenceId: data.billingEvidenceId,
     videoId: data.videoId,

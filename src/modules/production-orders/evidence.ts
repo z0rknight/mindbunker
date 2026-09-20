@@ -13,6 +13,8 @@
 // exists. The one per-video number offered is a BATCH-EQUIVALENT AVERAGE and
 // says so.
 
+import type { EvidenceAllocationForOrder } from "../finance/attribution.ts";
+
 export type BatchEvidenceInput = {
   activeDeliverables: number;
   doneDeliverables: number;
@@ -24,6 +26,18 @@ export type BatchEvidenceInput = {
   containerSensorSeconds: number;
   itemSensorSeconds: number;
   billedByCurrency: ReadonlyArray<{ currency: string; amount: number }>;
+  /** Evidence rows with any attribution touching this batch, seen from the batch (see finance/attribution). */
+  externalTime?: ReadonlyArray<EvidenceAllocationForOrder>;
+};
+
+export type ExternalTimeEvidence = {
+  /** NONE = nothing attributed to this batch (the normal starting state). */
+  attribution: "NONE" | "ATTRIBUTED";
+  weeks: EvidenceAllocationForOrder[];
+  /** Minutes the operator explicitly attributed to this batch, across all weeks. */
+  explicitHereMinutes: number;
+  /** Historical derived-proportion minutes that landed on this batch's videos (history, not a method). */
+  derivedHereMinutes: number;
 };
 
 export type TrackingShape = "NONE" | "BATCH_LEVEL" | "PER_VIDEO" | "MIXED";
@@ -36,8 +50,8 @@ export type BatchEvidence = {
   /** batchLevel seconds / active deliverables; ONLY when time is tracked at batch level alone. */
   batchEquivalentAverageSeconds: number | null;
   billingAllocated: Array<{ currency: string; amount: number }>;
-  /** Registered time is reported weekly per contract, never per batch. */
-  externalRegisteredTime: "NOT_ATTRIBUTED";
+  /** Registered time is reported weekly per contract; only what the operator attributed shows here. */
+  externalRegisteredTime: ExternalTimeEvidence;
   /** No per-batch payment link exists in the model. */
   paid: "NOT_TRACKED_PER_BATCH";
 };
@@ -45,6 +59,7 @@ export type BatchEvidence = {
 const clampSensor = (sensor: number, total: number) => Math.max(0, Math.min(sensor, total));
 
 export function computeBatchEvidence(input: BatchEvidenceInput): BatchEvidence {
+  const weeks = (input.externalTime ?? []).filter((w) => w.explicitHereMinutes > 0 || w.derivedHereMinutes > 0).map((w) => ({ ...w }));
   const containerSeconds = Math.max(0, input.containerSeconds);
   const itemSeconds = Math.max(0, input.itemSeconds);
 
@@ -72,7 +87,12 @@ export function computeBatchEvidence(input: BatchEvidenceInput): BatchEvidence {
     perVideo,
     batchEquivalentAverageSeconds,
     billingAllocated: input.billedByCurrency.filter((row) => row.amount > 0).map((row) => ({ ...row })),
-    externalRegisteredTime: "NOT_ATTRIBUTED",
+    externalRegisteredTime: {
+      attribution: weeks.length > 0 ? "ATTRIBUTED" : "NONE",
+      weeks,
+      explicitHereMinutes: weeks.reduce((sum, w) => sum + w.explicitHereMinutes, 0),
+      derivedHereMinutes: weeks.reduce((sum, w) => sum + w.derivedHereMinutes, 0),
+    },
     paid: "NOT_TRACKED_PER_BATCH",
   };
 }

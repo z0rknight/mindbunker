@@ -15,6 +15,7 @@ import { getProductionContextForOrder } from "@/modules/production-context/data"
 import { BatchEvidenceBlock } from "@/components/production-orders/BatchEvidenceBlock";
 import { computeBatchEvidence } from "@/modules/production-orders/evidence";
 import { getProductionOrderSensorSeconds } from "@/modules/production-orders/evidence-data";
+import { getOrderExternalTimeEvidence } from "@/modules/finance/attribution-data";
 
 export const dynamic = "force-dynamic";
 
@@ -42,10 +43,11 @@ export default async function ProductionOrderDetailPage({
   const safeReturnTo =
     typeof rawReturnTo === "string" && isSafeInternalPath(rawReturnTo) ? rawReturnTo : undefined;
 
-  const [productionMemories, productionContext, sensorSeconds] = await Promise.all([
+  const [productionMemories, productionContext, sensorSeconds, externalTime] = await Promise.all([
     getProductionMemoryForClient(order.clientId),
     getProductionContextForOrder(orderId),
     getProductionOrderSensorSeconds(orderId),
+    getOrderExternalTimeEvidence(orderId),
   ]);
   const activeItems = order.items.filter((item) => item.cancelledAt === null);
   const status = describeProductionOrderStatus({
@@ -62,6 +64,7 @@ export default async function ProductionOrderDetailPage({
     containerSensorSeconds: sensorSeconds.containerSensorSeconds,
     itemSensorSeconds: sensorSeconds.itemSensorSeconds,
     billedByCurrency: order.billedByCurrency,
+    externalTime,
   });
   const cancelledItems = order.items.filter((item) => item.cancelledAt !== null);
   // This exact order page (its own returnTo preserved) -- so a deliverable

@@ -11,6 +11,8 @@ import { formatCurrency, formatDate } from "@/utils/date";
 import { RecordBillingEvidenceButton } from "../RecordBillingEvidenceButton";
 import { LinkIncomeButton } from "../LinkIncomeButton";
 import { parseHttpsExternalReference } from "@/modules/custody/core";
+import { getEvidenceAttributionView } from "@/modules/finance/attribution-data";
+import { AttributionPanel } from "./AttributionPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +58,8 @@ export default async function ContractDetailPage({
   const reconciliation = selectedEvidence
     ? await getContractReconciliation(contractId, selectedEvidence.periodStart, selectedEvidence.periodEnd)
     : null;
+
+  const attributionView = selectedEvidence ? await getEvidenceAttributionView(selectedEvidence.id) : null;
 
   return (
     <div className={`${OPERATOR_WORKSPACE_CLASS} max-w-4xl`}>
@@ -200,6 +204,14 @@ export default async function ContractDetailPage({
           </div>
         )}
       </div>
+
+      {/* Commercial Evidence train: which work the selected registered time
+          belonged to (optional; unallocated is a valid state). */}
+      {attributionView && (
+        <div className="mb-8">
+          <AttributionPanel view={attributionView} />
+        </div>
+      )}
 
       {/* Billing Evidence list */}
       <div>
