@@ -142,6 +142,7 @@ export function Sidebar() {
                     <Link
                       key={item.href}
                       href={item.href}
+                      aria-current={isActive ? "page" : undefined}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                         isActive && isWarRoom
                           ? "bg-cyan-900/40 text-cyan-300 border border-cyan-700/50"
@@ -196,6 +197,7 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               aria-label={item.label}
+              aria-current={isActive ? "page" : undefined}
               className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[9px] font-semibold transition-colors ${
                 isActive ? "text-violet-300" : "text-zinc-500 active:bg-zinc-800 active:text-white"
               }`}

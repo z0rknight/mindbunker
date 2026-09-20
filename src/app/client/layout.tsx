@@ -44,5 +44,11 @@ export default function ClientPortalLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  // Client surfaces consume the same RMEDIA OS motion tokens at the calmer
+  // "client" intensity (see globals.css). `contents` keeps layout untouched.
+  return (
+    <div data-intensity="client" className="contents">
+      {children}
+    </div>
+  );
 }

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { ActionButton, usePendingGate } from "@/components/os";
 import { formatOperatorTime } from "@/utils/date";
 
 const REFRESH_INTERVAL_MS = 30_000;
@@ -11,6 +12,9 @@ export function WarRoomRefreshControl({ generatedAt }: { generatedAt: string }) 
   const [isPending, startTransition] = useTransition();
   const [lastRefreshAt, setLastRefreshAt] = useState(generatedAt);
   const refreshing = useRef(false);
+  // RMEDIA OS M1 proof surface: "Refreshing" only shows for waits that are
+  // actually noticeable (>~150ms), so the 30s auto-refresh stays silent.
+  const showRefreshing = usePendingGate(isPending);
 
   const refresh = useCallback(() => {
     if (refreshing.current || document.visibilityState !== "visible") return;
@@ -38,7 +42,7 @@ export function WarRoomRefreshControl({ generatedAt }: { generatedAt: string }) 
     <div className="flex items-center gap-2 text-right">
       <div>
         <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-600">
-          {isPending ? "Refreshing" : "Live · 30s"}
+          {showRefreshing ? "Refreshing" : "Live · 30s"}
         </p>
         <p className="font-mono text-xs text-zinc-400">
           {/* Global Health Audit — War Room hydration P0 root cause: this
@@ -54,16 +58,15 @@ export function WarRoomRefreshControl({ generatedAt }: { generatedAt: string }) 
           {formatOperatorTime(lastRefreshAt)}
         </p>
       </div>
-      <button
-        type="button"
+      <ActionButton
         onClick={refresh}
-        disabled={isPending}
+        pending={isPending}
         className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-300 transition hover:border-cyan-600 hover:text-cyan-300 disabled:opacity-50"
         aria-label="Refresh War Room"
         title="Refresh now"
       >
         ↻
-      </button>
+      </ActionButton>
     </div>
   );
 }
