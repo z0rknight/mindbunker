@@ -36,7 +36,7 @@ Read-only `--remote` queries. Exactly **1** real false-state order: id 1, CLOSED
 `core.test.mjs`: 11 new tests (A–G, closed-regression, closed+all-done, cancelled, empty, page-wiring source check). Targeted 32/32; full `npm test` 1222/1222; `tsc` clean; `eslint` 0 errors (3 pre-existing warnings); `next build` OK; `git diff --check` clean.
 
 ## 9. Deploy
-Operator Worker only. Rollback version `7c7996b1-cd34-457b-8383-cf9b8001fc12`. Client, Sensor and public site untouched; no D1 mutation.
+Operator Worker only, deployed from `42b7415` as version `4263be80-c688-45b0-8765-d15b470359e7`. Unauthenticated production check: `/mindbunker/productivity/orders` → 307 to login (reachable). Rollback version `7c7996b1-cd34-457b-8383-cf9b8001fc12`. Client, Sensor and public site untouched; no D1 mutation.
 
 ## 10. Functional QA
 Local sandbox D1 (order 1: 5 active + 1 cancelled + container), list and detail, then restored:
