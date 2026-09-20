@@ -13,7 +13,7 @@ import {
   sourceForNewLead,
 } from "./core.ts";
 
-// Wave 2 (Sep 20) -- PDBM referral intake. Same convention as
+// Wave 2 (Sep 19) -- PDBM referral intake. Same convention as
 // quote-intake/public-intake.integration.test.mjs: submitQuoteRequest is a
 // "use server" action needing a Next/Cloudflare context this runner lacks,
 // so submitSql mirrors its SQL against the REAL migration chain but calls
