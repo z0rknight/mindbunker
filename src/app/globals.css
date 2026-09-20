@@ -502,3 +502,40 @@ html[data-motion="reduced"] .os-ck path { animation: none !important; }
 .os-ck { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .os-ck path { stroke-dasharray: 16; animation: os-check-draw var(--os-motion-standard) var(--os-ease) both; }
 @keyframes os-check-draw { from { stroke-dashoffset: 16; } to { stroke-dashoffset: 0; } }
+
+/* ---- M2: client review / delivery (uses the M1 tokens; client intensity) ---- */
+.os-color-fade {
+  transition: color var(--os-motion-standard) var(--os-ease), background-color var(--os-motion-standard) var(--os-ease), border-color var(--os-motion-standard) var(--os-ease);
+}
+.os-enter[data-enter] { animation: os-label-in var(--os-motion-panel) var(--os-ease) both; }
+@media (prefers-reduced-motion: reduce) { .os-enter[data-enter] { animation: none; } }
+html[data-motion="reduced"] .os-enter[data-enter] { animation: none; }
+
+/* Batch composition rail: each segment is one canonical status. Transitions run only
+   when the server later sends a different status (no animation on first render). */
+.os-segbar { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+.os-seg {
+  position: relative;
+  height: 8px;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid #6a6a73;
+  transition: border-color var(--os-motion-standard) var(--os-ease);
+}
+.os-seg::before,
+.os-seg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  transition: transform var(--os-motion-panel) var(--os-ease), opacity var(--os-motion-standard) var(--os-ease);
+}
+.os-seg::before { background: var(--os-success); transform: scaleX(0); }
+.os-seg::after { opacity: 0; transform: scaleX(0); }
+.os-seg[data-status="planned"] { border-style: dashed; }
+.os-seg[data-status="progress"] { border-color: var(--os-violet-text); }
+.os-seg[data-status="progress"]::after { background: var(--os-violet-tint); opacity: 1; transform: scaleX(.5); }
+.os-seg[data-status="review"] { border-color: var(--os-warning); }
+.os-seg[data-status="review"]::after { background: repeating-linear-gradient(135deg, var(--os-warning) 0 2px, transparent 2px 6px); opacity: .7; transform: scaleX(1); }
+.os-seg[data-status="done"] { border-color: var(--os-success); }
+.os-seg[data-status="done"]::before { transform: scaleX(1); }

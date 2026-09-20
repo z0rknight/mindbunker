@@ -15,11 +15,13 @@ import { getGatewayContext } from "@/modules/gateway/data";
 import { and, eq, desc, inArray, isNull } from "drizzle-orm";
 import { deriveProductionOrderPhase, sumBilledByCurrency } from "@/modules/production-orders/core";
 import type { VideoStatus } from "@/modules/productivity/config";
+import { validateDeliveryUrl } from "@/modules/productivity/core";
 import {
   buildClientBillingSummary,
   buildClientDashboard,
   buildClientPortalProjects,
   buildClientVideoDetail,
+  clientVideoStatusLabel,
   resolveDashboardSections,
   type ClientBillingSummary,
   type ClientDashboard,
@@ -185,7 +187,7 @@ export type ClientBatchView = {
   projectName: string;
   receivedAt: string;
   closedAt: string | null;
-  items: Array<{ id: number; title: string; status: VideoStatus }>;
+  items: Array<{ id: number; title: string; status: VideoStatus; statusLabel: string }>;
   expectedValue: { amount: number; currency: string } | null;
   billed: Array<{ amount: number; currency: string }>;
 };
@@ -218,6 +220,7 @@ async function getClientBatchViews(clientId: number): Promise<ClientBatchView[]>
         title: videoLogs.title,
         date: videoLogs.date,
         status: videoLogs.status,
+        deliveryUrl: videoLogs.deliveryUrl,
         cancelledAt: videoLogs.cancelledAt,
         isOperationalContainer: videoLogs.isOperationalContainer,
       })
@@ -268,6 +271,14 @@ async function getClientBatchViews(clientId: number): Promise<ClientBatchView[]>
         id: item.id,
         title: item.title?.trim() || `Video ${item.date}`,
         status: item.status,
+        // Same rule as the video cards: DONE reads "Delivered" only with a real delivery link.
+        statusLabel: clientVideoStatusLabel(
+          item.status,
+          (() => {
+            const delivery = validateDeliveryUrl(item.deliveryUrl);
+            return delivery.success && delivery.value !== null;
+          })(),
+        ),
       })),
       expectedValue: order.expectedValueCents != null && order.currency
         ? { amount: order.expectedValueCents / 100, currency: order.currency }

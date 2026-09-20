@@ -10,8 +10,8 @@ import { LogoutButton } from "./LogoutButton";
 import { StatTile } from "./StatTile";
 import { VideoCard } from "./VideoCard";
 import { VideoGallery } from "./VideoGallery";
+import { BatchProgress } from "./BatchProgress";
 import { PixelEmptyState, PixelIcon } from "@/components/ui/PixelVisuals";
-import { CLIENT_VIDEO_STATUS_LABELS } from "@/modules/client-portal/core";
 import { formatCurrency } from "@/utils/date";
 
 // Renders one authenticated client's private data. Next.js's automatic
@@ -95,11 +95,12 @@ export default async function ClientDashboardPage() {
                 {activeBatch.phase.replaceAll("_", " ")}
               </span>
             </div>
+            <BatchProgress items={activeBatch.items} />
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {activeBatch.items.map((item) => (
                 <Link key={item.id} href={`/client/dashboard/videos/${item.id}`} className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-black/30 px-3 py-2 text-sm hover:border-violet-500/40">
                   <span className="truncate font-bold text-zinc-200">{item.title}</span>
-                  <span className="shrink-0 text-[10px] font-black uppercase text-zinc-500">{CLIENT_VIDEO_STATUS_LABELS[item.status]}</span>
+                  <span className="shrink-0 text-[10px] font-black uppercase text-zinc-500">{item.statusLabel}</span>
                 </Link>
               ))}
             </div>

@@ -1,57 +1,88 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useReducer, useRef, useTransition } from "react";
+import { useAction } from "@/components/os";
 import { transitionVideoStatusAsClient } from "@/modules/productivity/actions";
+import type { VideoStatus } from "@/modules/productivity/config";
+import {
+  INITIAL_REVIEW_STATE,
+  REVIEW_ERROR_FALLBACK,
+  isAcknowledged,
+  reviewReducer,
+  type ReviewTarget,
+} from "@/modules/client-portal/review-flow";
+import { ReviewActionsView } from "./ReviewActionsView";
 
-export function ReviewActions({ videoId }: { videoId: number }) {
+/**
+ * Client review controls (M2). The canonical mutation is unchanged:
+ * `transitionVideoStatusAsClient` (READY_FOR_REVIEW -> DONE / CHANGES_REQUESTED).
+ * The UI never shows an outcome before the server answers: `submitting` is a
+ * pending state only, "Approved" appears from `result.success`, and a failure
+ * returns to the ready state with the server's message beside the buttons.
+ * Renders nothing unless the SERVER says the video is READY_FOR_REVIEW, or this
+ * component already holds a server-confirmed outcome (so the acknowledgement
+ * survives the revalidation that turns the video DONE).
+ *
+ * `holdRefreshMs`: dashboard cards leave the "Needs your attention" list once
+ * revalidated, so they hold the refresh briefly to let the acknowledgement be
+ * seen; the detail page refreshes immediately.
+ */
+export function ReviewActions({
+  videoId,
+  status,
+  holdRefreshMs = 0,
+  showHint = false,
+}: {
+  videoId: number;
+  status: VideoStatus;
+  holdRefreshMs?: number;
+  showHint?: boolean;
+}) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState("");
-  const [done, setDone] = useState<"approved" | "changes" | null>(null);
+  const [, startRefresh] = useTransition();
+  const [state, dispatch] = useReducer(reviewReducer, INITIAL_REVIEW_STATE);
+  const decide = useAction((target: ReviewTarget) => transitionVideoStatusAsClient(videoId, target));
+  const ackRef = useRef<HTMLDivElement>(null);
+  const busy = useRef(false);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const acknowledged = isAcknowledged(state);
 
-  function act(target: "DONE" | "CHANGES_REQUESTED") {
-    setError("");
-    startTransition(async () => {
-      const result = await transitionVideoStatusAsClient(videoId, target);
-      if (!result.success) {
-        setError(result.error);
-        return;
-      }
-      setDone(target === "DONE" ? "approved" : "changes");
-      router.refresh();
-    });
-  }
-
-  if (done) {
-    return (
-      <p className="mt-1 rounded-xl border border-emerald-900/70 bg-emerald-950/30 px-3 py-2.5 text-center text-xs font-bold text-emerald-200">
-        {done === "approved" ? "Approved — thank you!" : "Changes requested."}
-      </p>
-    );
-  }
-
-  return (
-    <div className="mt-1 space-y-1.5">
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => act("DONE")}
-          disabled={isPending}
-          className="min-h-10 flex-1 rounded-xl bg-emerald-600 px-3 text-xs font-black text-white transition hover:bg-emerald-500 disabled:opacity-50"
-        >
-          Approve
-        </button>
-        <button
-          type="button"
-          onClick={() => act("CHANGES_REQUESTED")}
-          disabled={isPending}
-          className="min-h-10 flex-1 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 text-xs font-black text-amber-200 transition hover:bg-amber-500/20 disabled:opacity-50"
-        >
-          Request changes
-        </button>
-      </div>
-      {error && <p role="alert" className="text-[11px] text-red-300">{error}</p>}
-    </div>
+  useEffect(
+    () => () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    },
+    [],
   );
+
+  // The buttons unmount on success: move focus to the acknowledgement instead of dropping it.
+  useEffect(() => {
+    if (acknowledged) ackRef.current?.focus({ preventScroll: true });
+  }, [acknowledged]);
+
+  async function onDecide(target: ReviewTarget) {
+    if (busy.current || state.phase !== "ready") return;
+    busy.current = true;
+    dispatch({ type: "submit", target });
+    let result: Awaited<ReturnType<typeof transitionVideoStatusAsClient>>;
+    try {
+      result = await decide.run(target);
+    } catch {
+      busy.current = false;
+      dispatch({ type: "failed", error: REVIEW_ERROR_FALLBACK });
+      return;
+    }
+    if (!result.success) {
+      busy.current = false;
+      dispatch({ type: "failed", error: result.error || REVIEW_ERROR_FALLBACK });
+      return;
+    }
+    dispatch({ type: "succeeded" });
+    const refresh = () => startRefresh(() => router.refresh());
+    if (holdRefreshMs > 0) refreshTimer.current = setTimeout(refresh, holdRefreshMs);
+    else refresh();
+  }
+
+  if (!acknowledged && status !== "READY_FOR_REVIEW") return null;
+  return <ReviewActionsView state={state} showHint={showHint} onDecide={onDecide} ackRef={ackRef} />;
 }

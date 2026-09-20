@@ -2,10 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireClientAuth } from "@/lib/client-portal-session";
+import { deliveryPanelState } from "@/modules/client-portal/delivery-state";
 import { getClientVideoDetailView } from "@/modules/client-portal/data";
 import { CoverImage } from "../../CoverImage";
 import { ReviewActions } from "../../ReviewActions";
 import { PriorityToggle } from "../../PriorityToggle";
+import { ClientStatusBadge } from "../../ClientStatusBadge";
+import { DeliveryAvailability } from "../../DeliveryAvailability";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +71,15 @@ export default async function ClientVideoDetailPage({
   const { video } = view;
   const aspectKey = video.orientation ?? "UNKNOWN";
   const link = primaryLink(video);
+  // Delivery is its own fact. For a completed video whose primary link IS the
+  // delivery link, the delivery panel owns that link (and states plainly when
+  // it is not available yet); otherwise the generic link below is unchanged.
+  const delivery = deliveryPanelState({
+    status: video.status,
+    publishedUrl: video.publishedUrl,
+    primaryHref: link?.href ?? null,
+    deliveryUrl: video.deliveryUrl,
+  });
 
   return (
     <main className="min-h-dvh bg-zinc-950 pb-16 text-white">
@@ -92,11 +104,11 @@ export default async function ClientVideoDetailPage({
               <span className="text-[10px] font-bold uppercase tracking-widest">No preview yet</span>
             </div>
           )}
-          <span
+          <ClientStatusBadge
+            status={video.status}
+            label={video.statusLabel}
             className={`absolute left-3 top-3 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide backdrop-blur ${STATUS_CLASSES[video.status] ?? STATUS_CLASSES.PLANNED}`}
-          >
-            {video.statusLabel}
-          </span>
+          />
           {video.isPriority && (
             <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-amber-400/50 bg-amber-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-200 backdrop-blur">
               ⭐ Priority
@@ -122,7 +134,7 @@ export default async function ClientVideoDetailPage({
           )}
         </div>
 
-        {link && (
+        {link && !delivery.show && (
           <a
             href={link.href}
             target="_blank"
@@ -133,7 +145,8 @@ export default async function ClientVideoDetailPage({
           </a>
         )}
 
-        {video.canReview && video.status === "READY_FOR_REVIEW" && <ReviewActions videoId={video.id} />}
+        {video.canReview && <ReviewActions videoId={video.id} status={video.status} showHint />}
+        {delivery.show && <DeliveryAvailability href={delivery.href} label={link?.label} />}
         {video.canSetPriority && video.projectId !== null && (
           <PriorityToggle
             videoId={video.id}

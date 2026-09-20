@@ -3,6 +3,7 @@ import type { VideoStatus } from "@/modules/productivity/config";
 import { CoverImage } from "./CoverImage";
 import { BrandedCoverFallback } from "./BrandedCoverFallback";
 import { ReviewActions } from "./ReviewActions";
+import { ClientStatusBadge } from "./ClientStatusBadge";
 import { PriorityToggle } from "./PriorityToggle";
 
 type CardData = {
@@ -98,11 +99,11 @@ export function VideoCard({
             <span className="text-[10px] font-bold uppercase tracking-widest">No preview yet</span>
           </div>
         )}
-        <span
+        <ClientStatusBadge
+          status={video.status}
+          label={video.statusLabel}
           className={`pixel-badge absolute left-2.5 top-2.5 inline-flex border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide backdrop-blur ${STATUS_CLASSES[video.status]}`}
-        >
-          {video.statusLabel}
-        </span>
+        />
         {video.isPriority && (
           <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full border border-amber-400/50 bg-amber-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-200 backdrop-blur">
             ⭐ Priority
@@ -149,7 +150,7 @@ export function VideoCard({
           </a>
         )}
 
-        {showReviewActions && <ReviewActions videoId={video.id} />}
+        {showReviewActions && <ReviewActions videoId={video.id} status={video.status} holdRefreshMs={1400} />}
         {allowPriority && video.projectId !== null && (
           <PriorityToggle
             videoId={video.id}
