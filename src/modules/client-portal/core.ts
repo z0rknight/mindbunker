@@ -451,8 +451,15 @@ export function buildClientDashboard(
   );
 
   const videoById = new Map(ownedVideos.map((video) => [video.id, video]));
+  // "Recent deliveries" renders one VIDEO card per entry, so it is a list of
+  // videos ordered by their newest completion event -- not a list of events.
+  // A video completed more than once (reopened, then DONE again) has several
+  // events; keep only the newest per video BEFORE the top-5 cap so it neither
+  // repeats nor crowds out other videos (duplicate React keys). Events are not
+  // deleted or changed; this is a read-model fix only.
   const recentDeliveries = relevantCompletionEvents
     .toSorted((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+    .filter((event, index, sorted) => sorted.findIndex((other) => other.videoId === event.videoId) === index)
     .slice(0, 5)
     .map((event) => {
       const video = event.videoId !== null ? videoById.get(event.videoId) : undefined;

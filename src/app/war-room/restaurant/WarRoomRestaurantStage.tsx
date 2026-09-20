@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { formatCurrency } from "@/utils/date";
 import { PixelIcon, LiveIndicator } from "@/components/ui/PixelVisuals";
+import { ArrivalScope, NewBadge, StatusTransition, useIsNew, useUpdateFlash } from "@/components/os";
 import { assignTableSlots, type TableSlot } from "./table-layout";
 import type {
   RestaurantViewModel,
@@ -100,22 +101,38 @@ function CommandaRail({ tickets }: { tickets: RestaurantTicket[] }) {
   }
   return (
     <div className="absolute inset-x-0 top-0 flex h-[20%] items-center gap-2 overflow-x-auto border-b border-amber-900/20 bg-black/20 px-3 py-2">
-      {tickets.map((ticket) => (
-        <div
-          key={ticket.id}
-          className={`wr-ticket flex shrink-0 flex-col gap-0.5 rounded-md border border-amber-800/40 bg-zinc-950/70 px-2.5 py-1.5 text-left ${
-            ticket.phase === "REVIEW" ? "wr-ticket-review" : ""
-          }`}
-        >
-          <span className="max-w-[9rem] truncate text-[10px] font-black uppercase tracking-wide text-amber-200">
-            {ticket.clientName}
-          </span>
-          <span className="max-w-[9rem] truncate text-[10px] text-zinc-400">{ticket.projectName || ticket.label}</span>
-          <span className="text-[9px] font-bold text-zinc-500">
-            {ticket.itemCount} item{ticket.itemCount === 1 ? "" : "s"} · {ticket.phaseLabel}
-          </span>
-        </div>
-      ))}
+      <ArrivalScope ids={tickets.map((ticket) => `ticket:${ticket.id}`)}>
+        {tickets.map((ticket) => (
+          <CommandaTicket key={ticket.id} ticket={ticket} />
+        ))}
+      </ArrivalScope>
+    </div>
+  );
+}
+
+// RMEDIA OS M3: a comanda that ARRIVES after mount gets a brief NEW word + edge;
+// a comanda whose phase or item count changes gets a brief changed marker; both
+// return to neutral by themselves. Presentation over the same server view model.
+function CommandaTicket({ ticket }: { ticket: RestaurantTicket }) {
+  const isNew = useIsNew(`ticket:${ticket.id}`);
+  const changed = useUpdateFlash(`${ticket.phase}|${ticket.itemCount}`, { tone: "brand" });
+  return (
+    <div
+      className={`os-flash os-arrive wr-ticket flex shrink-0 flex-col gap-0.5 rounded-md border border-amber-800/40 bg-zinc-950/70 px-2.5 py-1.5 text-left ${
+        ticket.phase === "REVIEW" ? "wr-ticket-review" : ""
+      }`}
+      data-flash={isNew ? "brand" : changed}
+      data-enter={isNew ? "true" : undefined}
+    >
+      <span className="max-w-[9rem] truncate text-[10px] font-black uppercase tracking-wide text-amber-200">
+        {isNew && <NewBadge className="mr-1.5" />}
+        {ticket.clientName}
+      </span>
+      <span className="max-w-[9rem] truncate text-[10px] text-zinc-400">{ticket.projectName || ticket.label}</span>
+      <span className="text-[9px] font-bold text-zinc-500">
+        {ticket.itemCount} item{ticket.itemCount === 1 ? "" : "s"} ·{" "}
+        <StatusTransition variant="inline" marker="none" label={ticket.phaseLabel} />
+      </span>
     </div>
   );
 }
@@ -135,6 +152,16 @@ function EditorStation({ session }: { session: RestaurantViewModel["activeSessio
     : active
       ? "wr-editor-glow border-cyan-500/60 bg-cyan-950/30"
       : "border-zinc-700/50 bg-zinc-900/50";
+  // RMEDIA OS M3: a change of the open session (started, switched, ended) marks the
+  // station briefly and is announced once; elapsed time is deliberately NOT part of
+  // the key, so the periodic refresh stays silent. Idle stays static.
+  const stationKey = session
+    ? `${session.kind}|${session.contextType}|${session.clientName ?? ""}|${session.videoTitle ?? ""}|${session.contextLabel ?? ""}`
+    : "idle";
+  const stationFlash = useUpdateFlash(stationKey, { tone: "brand" });
+  const announcement = session
+    ? `${isSensorRecording ? "Sensor recording" : "Editing"} started`
+    : "Editor idle";
   const iconToneClass = isSensorRecording
     ? "wr-editor-pulse text-amber-300"
     : active
@@ -142,7 +169,13 @@ function EditorStation({ session }: { session: RestaurantViewModel["activeSessio
       : "text-zinc-600";
   return (
     <div className="pointer-events-none absolute left-1/2 top-[26%] flex -translate-x-1/2 flex-col items-center gap-1">
-      <div className={`grid h-12 w-16 place-items-center rounded-md border sm:h-14 sm:w-20 ${toneClass}`}>
+      <span className="sr-only" role="status" aria-live="polite">
+        {stationFlash ? announcement : ""}
+      </span>
+      <div
+        className={`os-flash grid h-12 w-16 place-items-center rounded-md border sm:h-14 sm:w-20 ${toneClass}`}
+        data-flash={stationFlash}
+      >
         <PixelIcon name="video" className={`h-5 w-5 sm:h-6 sm:w-6 ${iconToneClass}`} />
       </div>
       {active ? (
@@ -182,6 +215,10 @@ function ClientTableMarker({
 }) {
   const primaryAttributable = client.attributable[0] ?? null;
   const workCount = client.activeCount + client.reviewCount;
+  // A change of the client's health marks the table briefly. BLOCKED stays static
+  // (critical is a state, not an animation); nothing fires on the periodic refresh
+  // unless the canonical health actually changed.
+  const healthFlash = useUpdateFlash(client.health, { tone: "brand" });
   return (
     <button
       type="button"
@@ -189,7 +226,8 @@ function ClientTableMarker({
       aria-pressed={selected}
       aria-label={`${client.name}, ${HEALTH_LABEL[client.health]}`}
       style={{ left: `${slot.xPct}%`, top: `${slot.yPct}%` }}
-      className={`wr-table-button absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-lg border px-2 py-1.5 text-center backdrop-blur-sm sm:px-2.5 sm:py-2 ${
+      data-flash={client.health === "BLOCKED" ? undefined : healthFlash}
+      className={`os-flash wr-table-button absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-lg border px-2 py-1.5 text-center backdrop-blur-sm sm:px-2.5 sm:py-2 ${
         selected ? "border-cyan-400/70 bg-cyan-950/40" : "border-amber-900/30 bg-black/40 hover:border-amber-700/50"
       }`}
     >

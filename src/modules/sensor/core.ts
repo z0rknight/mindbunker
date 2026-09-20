@@ -667,6 +667,25 @@ export const SENSOR_CONNECTIVITY_STALE_AFTER_SECONDS = 10 * 60;
 
 export type SensorConnectivityStatus = "NO_DEVICE" | "OFFLINE" | "CONNECTED";
 
+/**
+ * The four truthful Sensor presentation states (RMEDIA OS M3). Connectivity
+ * (is a device phoning home?) and canonical work state (is a Work Session open?)
+ * stay separate facts; only CONNECTED + an open Work Session is "live". Idle,
+ * offline and no-device are static by definition.
+ */
+export type SensorIndicatorState = "NO_DEVICE" | "OFFLINE" | "CONNECTED_IDLE" | "CONNECTED_ACTIVE";
+
+export function sensorIndicator(
+  status: SensorConnectivityStatus,
+  hasOpenSession: boolean,
+): { state: SensorIndicatorState; live: boolean } {
+  if (status === "NO_DEVICE") return { state: "NO_DEVICE", live: false };
+  if (status === "OFFLINE") return { state: "OFFLINE", live: false };
+  return hasOpenSession
+    ? { state: "CONNECTED_ACTIVE", live: true }
+    : { state: "CONNECTED_IDLE", live: false };
+}
+
 export function resolveSensorConnectivityStatus(
   deviceCount: number,
   lastSuccessfulUpload: Date | null,

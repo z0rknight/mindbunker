@@ -10,7 +10,7 @@ import { LogoutButton } from "./LogoutButton";
 import { StatTile } from "./StatTile";
 import { VideoCard } from "./VideoCard";
 import { VideoGallery } from "./VideoGallery";
-import { BatchProgress } from "./BatchProgress";
+import { BatchProgress } from "@/components/os/BatchProgress";
 import { PixelEmptyState, PixelIcon } from "@/components/ui/PixelVisuals";
 import { formatCurrency } from "@/utils/date";
 

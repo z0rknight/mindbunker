@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrivalItem, ArrivalScope, DepartureNotice, ValueChange } from "@/components/os";
 import { signalActionHref, type SignalSeverity } from "@/modules/signals/core";
 import type { ProductivityAttentionGroup } from "@/modules/productivity/attention";
 
@@ -6,6 +7,9 @@ import type { ProductivityAttentionGroup } from "@/modules/productivity/attentio
 // modules/productivity/attention.ts for the selection/grouping rule).
 // Deliberately server-rendered, no client state -- every item here is a
 // link into this same page (?video=…), never a separate mutation surface.
+// RMEDIA OS M3: two tiny client islands add presentation only -- a group count
+// that changes in place (ValueChange) and a brief NEW marker for signals that
+// arrive after mount (ArrivalScope/ArrivalItem). Data and links are unchanged.
 const MAX_ROWS_PER_GROUP = 4;
 
 function severityDotClass(severity: SignalSeverity) {
@@ -31,7 +35,9 @@ export function NeedsAttentionSection({ groups }: { groups: ProductivityAttentio
       {groups.length === 0 ? (
         <p className="text-sm text-zinc-600">No operational exceptions right now.</p>
       ) : (
-        <div className="space-y-3">
+        <ArrivalScope ids={groups.flatMap((group) => group.signals.map((signal) => signal.id))}>
+        <DepartureNotice ids={groups.flatMap((group) => group.signals.map((signal) => signal.id))} noun="item" />
+        <div className="mt-3 space-y-3">
           {groups.map((group) => {
             const visible = group.signals.slice(0, MAX_ROWS_PER_GROUP);
             const hiddenCount = group.signals.length - visible.length;
@@ -44,14 +50,17 @@ export function NeedsAttentionSection({ groups }: { groups: ProductivityAttentio
                   <span className={`h-2 w-2 rounded-full ${severityDotClass(group.severity)}`} />
                   <p className="text-sm font-black text-white">{group.label}</p>
                   {group.signals.length > 1 && (
-                    <span className="font-mono text-xs text-zinc-500">{group.signals.length}</span>
+                    <span className="font-mono text-xs text-zinc-500">
+                      <ValueChange value={group.signals.length} />
+                    </span>
                   )}
                 </div>
                 <div className="mt-2 space-y-2">
                   {visible.map((signal) => (
-                    <div
+                    <ArrivalItem
                       key={signal.id}
-                      className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"
+                      id={signal.id}
+                      className="-mx-2 flex flex-col gap-1 rounded-md px-2 py-1 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0">
                         <p className="text-sm text-zinc-200">{signal.statement}</p>
@@ -65,7 +74,7 @@ export function NeedsAttentionSection({ groups }: { groups: ProductivityAttentio
                           {signal.action.label} →
                         </Link>
                       )}
-                    </div>
+                    </ArrivalItem>
                   ))}
                   {hiddenCount > 0 && (
                     <p className="text-xs text-zinc-500">+{hiddenCount} more {group.label.toLowerCase()}</p>
@@ -75,6 +84,7 @@ export function NeedsAttentionSection({ groups }: { groups: ProductivityAttentio
             );
           })}
         </div>
+        </ArrivalScope>
       )}
     </section>
   );

@@ -5,6 +5,8 @@ import { videoWorkspaceHref } from "@/modules/productivity/core";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { useChangedKeys } from "@/components/os";
+import { flashTarget } from "@/lib/os/change";
 import { correctWorkSession } from "@/modules/work-sessions/actions";
 import {
   WORK_SESSION_ACTIVITY_LABELS,
@@ -213,6 +215,25 @@ function SessionRow({
   // notes in practice.
   const [narrativeOpen, setNarrativeOpen] = useState(false);
 
+  // RMEDIA OS M3 (row update): when the server later sends different canonical
+  // values (after a correction, or a running session closing) mark the SMALLEST
+  // truthful target: one changed field -> that cell, several -> the row. It
+  // fires only on a change after mount and returns to neutral by itself.
+  const changedFields = useChangedKeys({
+    start: session.startedAt,
+    end: session.endedAt,
+    duration: session.durationSeconds,
+    client: session.clientName,
+    project: session.projectName,
+    video: session.videoId,
+    activity: session.activityType,
+    note: session.note,
+  });
+  const target = flashTarget(changedFields);
+  const rowFlash = target.kind === "row" ? "brand" : undefined;
+  const cellFlash = (...keys: string[]) =>
+    target.kind === "cell" && keys.includes(target.key) ? "brand" : undefined;
+
   if (editing) {
     return (
       <SessionEditForm
@@ -226,23 +247,23 @@ function SessionRow({
 
   return (
     <>
-    <tr className="border-b border-zinc-800/50">
-      <td className="px-4 py-3 text-white">
+    <tr className="os-flash border-b border-zinc-800/50" data-flash={rowFlash}>
+      <td className="os-flash px-4 py-3 text-white" data-flash={cellFlash("start", "end")}>
         {formatTime(session.startedAt)}
         {session.endedAt && (
           <span className="text-zinc-500"> – {formatTime(session.endedAt)}</span>
         )}
       </td>
-      <td className="px-4 py-3 text-zinc-300">
+      <td className="os-flash px-4 py-3 text-zinc-300" data-flash={cellFlash("duration")}>
         {session.durationSeconds !== null ? (
           formatClosedDuration(session.durationSeconds)
         ) : (
           <span className="font-semibold text-emerald-400">running…</span>
         )}
       </td>
-      <td className="px-4 py-3 text-zinc-300">{session.clientName ?? "—"}</td>
-      <td className="px-4 py-3 text-zinc-300">{session.projectName ?? "—"}</td>
-      <td className="px-4 py-3 text-zinc-300">
+      <td className="os-flash px-4 py-3 text-zinc-300" data-flash={cellFlash("client")}>{session.clientName ?? "—"}</td>
+      <td className="os-flash px-4 py-3 text-zinc-300" data-flash={cellFlash("project")}>{session.projectName ?? "—"}</td>
+      <td className="os-flash px-4 py-3 text-zinc-300" data-flash={cellFlash("video")}>
         <Link
           href={videoWorkspaceHref(session.videoId, origin)}
           className="text-cyan-400 hover:text-cyan-300"
@@ -250,10 +271,10 @@ function SessionRow({
           {session.videoTitle}
         </Link>
       </td>
-      <td className="px-4 py-3 text-zinc-400">
+      <td className="os-flash px-4 py-3 text-zinc-400" data-flash={cellFlash("activity")}>
         {WORK_SESSION_ACTIVITY_LABELS[session.activityType]}
       </td>
-      <td className="max-w-[220px] px-4 py-3 text-zinc-500" title={session.note ?? undefined}>
+      <td className="os-flash max-w-[220px] px-4 py-3 text-zinc-500" title={session.note ?? undefined} data-flash={cellFlash("note")}>
         {session.note ? (
           <span className="line-clamp-2 text-xs leading-4">{session.note}</span>
         ) : (

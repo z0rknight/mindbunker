@@ -9,12 +9,14 @@ import {
 import {
   LONG_SESSION_THRESHOLD_SECONDS,
   resolveSensorConnectivityStatus,
+  sensorIndicator,
   type SensorConnectivityStatus,
 } from "@/modules/sensor/core";
 import { APP_KEY_LABELS, sessionCoveragePercent, type TimeWindowKind } from "@/modules/sensor/app-intelligence";
 import { getWorkSessionOverview } from "@/modules/work-sessions/data";
 import { SensorDeviceManager } from "./SensorDeviceManager";
 import { SensorSessionActions } from "./SensorSessionActions";
+import { DepartureNotice, ValueChange } from "@/components/os";
 
 // Tuesday Reality Patch A2: connectivity (is a device phoning home?) and
 // canonical work state (is a Work Session open?) are two separate facts
@@ -159,6 +161,7 @@ export default async function SensorActivityPage({
     new Date(),
   );
   const copy = connectivityCopy(connectivity, workSessionOverview.openSession !== null);
+  const indicator = sensorIndicator(connectivity, workSessionOverview.openSession !== null);
   return (
     <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 md:p-8">
       <Link href="/productivity/sessions" className="text-xs font-bold text-cyan-400">← Work Session Ledger</Link>
@@ -170,7 +173,15 @@ export default async function SensorActivityPage({
       </p>
 
       <div className={`mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 ${copy.className}`}>
-        <span className="text-xs font-black uppercase tracking-wide">{copy.label}</span>
+        <span className="flex items-center gap-2 text-xs font-black uppercase tracking-wide" data-sensor-state={indicator.state}>
+          {/* M3: only a genuinely live state (connected + an open Work Session) animates. */}
+          {indicator.live ? (
+            <span className="mb-live-pulse" aria-hidden="true" />
+          ) : (
+            <span className="inline-block h-2 w-2 rounded-full bg-current opacity-60" aria-hidden="true" />
+          )}
+          {copy.label}
+        </span>
         <span className="text-[11px] font-normal opacity-80">{copy.sublabel}</span>
       </div>
 
@@ -194,9 +205,10 @@ export default async function SensorActivityPage({
             <p className="mt-1 text-xs text-zinc-500">Completed Mac sessions awaiting an operator decision.</p>
           </div>
           <span className="rounded-full bg-violet-500/10 px-3 py-1 text-xs font-bold text-violet-300">
-            {data.inbox.length} pending
+            <ValueChange value={data.inbox.length} /> pending
           </span>
         </div>
+        <DepartureNotice ids={data.inbox.map((session) => `inbox:${session.id}`)} noun="session" />
         <div className="mt-4 space-y-3">
           {data.inbox.length === 0 && <p className="text-sm text-zinc-600">Inbox clear.</p>}
           {data.inbox.map((session) => <SessionCard key={session.id} session={session} review />)}
@@ -215,9 +227,10 @@ export default async function SensorActivityPage({
               </p>
             </div>
             <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-300">
-              {longSessionCandidates.length} flagged
+              <ValueChange value={longSessionCandidates.length} /> flagged
             </span>
           </div>
+          <DepartureNotice ids={longSessionCandidates.map((candidate) => `${candidate.kind}-${candidate.id}`)} noun="session" />
           <div className="mt-4 space-y-2">
             {longSessionCandidates.map((candidate) => (
               <div

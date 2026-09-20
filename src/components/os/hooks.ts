@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { OS_FLASH_HOLD_MS, OS_PENDING } from "@/lib/os/motion";
 import { createPendingGate, type PendingGate } from "@/lib/os/pending-gate";
 import type { FlashTone } from "@/lib/os/feedback";
+import { changedKeys, goneIds, newIds, type Primitive } from "@/lib/os/change";
 
 /**
  * Raw "in flight" boolean -> flicker-free "show loading" boolean.
@@ -105,4 +106,89 @@ export function useUpdateFlash(
   }, [flash, seen, holdMs]);
 
   return flash;
+}
+
+/**
+ * Which canonical fields changed since the last render with different values,
+ * held for `holdMs` and then cleared. Not fired on first render. Use with
+ * flashTarget() to mark a single cell or a whole row.
+ */
+export function useChangedKeys(values: Record<string, Primitive>, holdMs: number = OS_FLASH_HOLD_MS): string[] {
+  const [seen, setSeen] = useState(values);
+  const [changed, setChanged] = useState<string[]>([]);
+  const diff = changedKeys(seen, values);
+  if (diff.length > 0) {
+    setSeen(values);
+    setChanged(diff);
+  }
+  useEffect(() => {
+    if (changed.length === 0) return;
+    const timer = setTimeout(() => setChanged([]), holdMs);
+    return () => clearTimeout(timer);
+  }, [changed, holdMs]);
+  return changed;
+}
+
+/**
+ * Ids that arrived after mount (present now, absent on the previous render),
+ * each held as "new" for `holdMs`. The initial list is never new, and an
+ * arrival stops being new by itself so it never stays louder than older rows.
+ */
+export function useArrivals(ids: readonly string[], holdMs = 8000): ReadonlySet<string> {
+  const [seen, setSeen] = useState<readonly string[]>(ids);
+  const [arrived, setArrived] = useState<ReadonlySet<string>>(new Set());
+  const fresh = newIds(seen, ids);
+  if (fresh.length > 0 || seen.length !== ids.length || ids.some((id, index) => seen[index] !== id)) {
+    setSeen(ids);
+    if (fresh.length > 0) setArrived(new Set([...arrived, ...fresh]));
+  }
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const active = timers.current;
+    for (const id of arrived) {
+      if (active.has(id)) continue;
+      active.set(
+        id,
+        setTimeout(() => {
+          active.delete(id);
+          setArrived((current) => {
+            const next = new Set(current);
+            next.delete(id);
+            return next;
+          });
+        }, holdMs),
+      );
+    }
+  }, [arrived, holdMs]);
+  useEffect(() => {
+    const active = timers.current;
+    return () => {
+      for (const timer of active.values()) clearTimeout(timer);
+      active.clear();
+    };
+  }, []);
+  return arrived;
+}
+
+/**
+ * How many items LEFT a server-rendered queue since mount (refreshed server truth:
+ * they are simply absent now), held for `holdMs` then cleared. The initial
+ * list is never a departure. It reports absence; it does not claim why an item
+ * left, so callers use neutral wording ("resolved").
+ */
+export function useDepartures(ids: readonly string[], holdMs = 2400): number {
+  const [seen, setSeen] = useState<readonly string[]>(ids);
+  const [departed, setDeparted] = useState(0);
+  const gone = goneIds(seen, ids);
+  const changed = gone.length > 0 || seen.length !== ids.length || ids.some((id, index) => seen[index] !== id);
+  if (changed) {
+    setSeen(ids);
+    if (gone.length > 0) setDeparted(departed + gone.length);
+  }
+  useEffect(() => {
+    if (departed === 0) return;
+    const timer = setTimeout(() => setDeparted(0), holdMs);
+    return () => clearTimeout(timer);
+  }, [departed, holdMs]);
+  return departed;
 }

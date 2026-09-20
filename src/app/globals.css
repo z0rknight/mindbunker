@@ -539,3 +539,31 @@ html[data-motion="reduced"] .os-enter[data-enter] { animation: none; }
 .os-seg[data-status="review"]::after { background: repeating-linear-gradient(135deg, var(--os-warning) 0 2px, transparent 2px 6px); opacity: .7; transform: scaleX(1); }
 .os-seg[data-status="done"] { border-color: var(--os-success); }
 .os-seg[data-status="done"]::before { transform: scaleX(1); }
+
+/* ---- M3: operator feedback (row/cell update, arrivals, value change, live) ---- */
+/* Table rows: <tr> cannot carry the inset edge reliably, so the edge sits on the first cell. */
+tr.os-flash[data-flash] { box-shadow: none; }
+tr.os-flash > td:first-child { transition: box-shadow var(--os-motion-panel) var(--os-ease); }
+tr.os-flash[data-flash="success"] > td:first-child { box-shadow: inset 2px 0 0 var(--os-success); }
+tr.os-flash[data-flash="brand"] > td:first-child { box-shadow: inset 2px 0 0 var(--os-violet-text); }
+tr.os-flash[data-flash="warning"] > td:first-child { box-shadow: inset 2px 0 0 var(--os-warning); }
+.os-cell { border-radius: 4px; }
+
+/* New arrival: a word plus an entrance; the edge/tint is the shared os-flash brand marker. */
+.os-new-label { font: 700 9px/1 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--os-violet-text); }
+.os-arrive[data-enter] { animation: os-label-in var(--os-motion-panel) var(--os-ease) both; }
+
+/* Value change: old and new share one grid cell so the width never jumps. */
+.os-vc { display: inline-grid; }
+.os-vc > span { grid-area: 1 / 1; }
+.os-vc-out { animation: os-vc-out var(--os-motion-fast) var(--os-ease-exit) both; }
+.os-vc-in[data-enter] { animation: os-label-in var(--os-motion-standard) var(--os-ease) both; }
+@keyframes os-vc-out { to { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .os-vc-out { display: none; }
+  .os-vc-in[data-enter], .os-arrive[data-enter] { animation: none; }
+}
+html[data-motion="reduced"] .os-vc-out { display: none; }
+html[data-motion="reduced"] .os-vc-in[data-enter],
+html[data-motion="reduced"] .os-arrive[data-enter] { animation: none; }

@@ -164,7 +164,7 @@ test("DeliveryAvailability: not available vs available, no green, no first-rende
 });
 
 test("BatchProgress renders composition text, decorative rail, and nothing for a single item", async () => {
-  const { BatchProgress } = await load("../../app/client/dashboard/BatchProgress.tsx");
+  const { BatchProgress } = await load("../../components/os/BatchProgress.tsx");
   assert.equal(renderToStaticMarkup(createElement(BatchProgress, { items: [{ id: 1, status: "DONE" }] })), "");
   const html = renderToStaticMarkup(createElement(BatchProgress, {
     items: [{ id: 1, status: "DONE" }, { id: 2, status: "READY_FOR_REVIEW" }, { id: 3, status: "PLANNED" }],
@@ -196,7 +196,7 @@ test("reduced motion: check drawing, entry and segment fills degrade to static m
   assert.match(reduced, /\.os-ck path \{ animation: none !important; \}/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.os-enter\[data-enter\] \{ animation: none; \} \}/);
   assert.match(css, /--os-motion-scale: \.0001/);
-  const seg = css.slice(css.indexOf(".os-segbar"));
+  const seg = css.slice(css.indexOf(".os-segbar"), css.indexOf("M3: operator feedback"));
   assert.doesNotMatch(seg, /@keyframes|animation:/, "segments use transitions only; nothing loops or plays on first render");
 });
 
@@ -210,7 +210,7 @@ test("the client surfaces use the shared pieces; no operator or payment scope le
   const dash = read("../../app/client/dashboard/page.tsx");
   assert.match(dash, /<BatchProgress items=\{activeBatch\.items\} \/>/);
   assert.match(dash, /item\.statusLabel/);
-  for (const f of ["ReviewActions.tsx", "ReviewActionsView.tsx", "DeliveryAvailability.tsx", "BatchProgress.tsx", "ClientStatusBadge.tsx"]) {
+  for (const f of ["ReviewActions.tsx", "ReviewActionsView.tsx", "DeliveryAvailability.tsx", "ClientStatusBadge.tsx"]) {
     assert.doesNotMatch(read(`../../app/client/dashboard/${f}`), /payment|Payment|@\/modules\/(finance|sensor|production-memory)/, f);
   }
 });

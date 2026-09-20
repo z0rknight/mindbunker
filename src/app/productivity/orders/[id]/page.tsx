@@ -1,3 +1,4 @@
+import { BatchProgress } from "@/components/os/BatchProgress";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProductionOrderDetail } from "@/modules/production-orders/data";
@@ -203,7 +204,10 @@ export default async function ProductionOrderDetailPage({
             DELIVERABLES ({activeItems.length} active
             {cancelledItems.length > 0 ? `, ${cancelledItems.length} cancelled` : ""})
           </p>
-          <div className="space-y-2">
+          {/* M3: the same truthful composition rail the client sees (review is never drawn as done);
+              segments keep stable keys, so a child changing state elsewhere transitions in place. */}
+          <BatchProgress items={activeItems.map((item) => ({ id: item.videoId, status: item.status }))} />
+          <div className="mt-3 space-y-2">
             {activeItems.map((item) => (
               <div
                 key={item.videoId}

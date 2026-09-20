@@ -434,6 +434,35 @@ test("recent deliveries are sorted newest-first and capped at 5", () => {
   );
 });
 
+test("recent deliveries list each video once, newest event wins, and repeats do not crowd out other videos", () => {
+  const videos = Array.from({ length: 6 }, (_, index) =>
+    video({ id: index + 1, status: "DONE", title: `Video ${index + 1}` }),
+  );
+  const at = (seconds) => new Date(THIS_MONDAY.getTime() + seconds * 1_000);
+  const events = [
+    // video 3 was completed three times (reopened twice): newest is +50s
+    { videoId: 3, createdAt: at(10) },
+    { videoId: 3, createdAt: at(50) },
+    { videoId: 3, createdAt: at(30) },
+    { videoId: 1, createdAt: at(1) },
+    { videoId: 2, createdAt: at(2) },
+    { videoId: 4, createdAt: at(4) },
+    { videoId: 5, createdAt: at(5) },
+    { videoId: 6, createdAt: at(6) },
+  ];
+
+  const result = buildClientDashboard(2, dashboardProjects, videos, events, NOW);
+
+  assert.deepEqual(
+    result.recentDeliveries.map((entry) => entry.title),
+    ["Video 3", "Video 6", "Video 5", "Video 4", "Video 2"],
+    "each video once, five distinct videos, newest first",
+  );
+  assert.equal(new Set(result.recentDeliveries.map((entry) => entry.id)).size, result.recentDeliveries.length);
+  assert.equal(result.recentDeliveries[0].deliveredAt, at(50).toISOString(), "the newest event date is kept");
+  assert.equal(result.completedThisWeek, 6, "completed-this-week was already distinct-by-video");
+});
+
 test("cover and delivery URLs are sanitized the same way as the token-only portal view", () => {
   const result = buildClientDashboard(
     2,

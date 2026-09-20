@@ -2,7 +2,9 @@ import type { VideoStatus } from "@/modules/productivity/config";
 import { summarizeBatchProgress } from "@/modules/client-portal/batch-progress";
 
 /**
- * Batch composition rail for the "In production now" section. Server-rendered
+ * Shared batch composition rail (client "In production now" section since M2;
+ * operator Production Order deliverables since M3 -- one semantic language, no
+ * duplicated logic). Server-rendered
  * from the same canonical items the section already lists: after a child video
  * changes and the page revalidates, the matching segment (stable key = video
  * id) transitions from its previous look. The text carries the meaning; the
