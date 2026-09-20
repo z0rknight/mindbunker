@@ -247,3 +247,35 @@ test("the order page feeds the evidence block from the attribution read (no seco
   assert.match(page, /getOrderExternalTimeEvidence\(orderId\)/u);
   assert.match(page, /externalTime,\n  \}\);/u);
 });
+
+// ── backlog closure: ONE definition of "unallocated" across Finance and CRM ─
+import { unallocatedShareOfEvidence } from "./attribution.ts";
+
+test("CRM unallocated evidence: no allocations -> the whole gross is unallocated", () => {
+  assert.deepEqual(unallocatedShareOfEvidence({ billableMinutes: 180, grossAmount: 75, allocations: [] }), { fullyAllocated: false, unallocatedAmount: 75 });
+});
+
+test("CRM unallocated evidence: a PARTLY attributed row still shows, with only the remaining share", () => {
+  const share = unallocatedShareOfEvidence({ billableMinutes: 180, grossAmount: 75, allocations: [{ id: 1, method: "MANUAL_MINUTES", minutes: 60 }] });
+  assert.equal(share.fullyAllocated, false);
+  assert.equal(share.unallocatedAmount, 50);
+});
+
+test("CRM unallocated evidence: a fully attributed row drops out; a legacy amount-only allocation still counts as allocated", () => {
+  assert.equal(unallocatedShareOfEvidence({ billableMinutes: 180, grossAmount: 75, allocations: [{ id: 1, method: "MANUAL_MINUTES", minutes: 180 }] }).fullyAllocated, true);
+  assert.equal(unallocatedShareOfEvidence({ billableMinutes: 180, grossAmount: 75, allocations: [{ id: 1, method: "MANUAL_AMOUNT", minutes: null }] }).fullyAllocated, true);
+});
+
+test("the Finance panel and the CRM surface agree on what is unallocated (same summary, same minutes)", () => {
+  const allocations = [{ id: 1, method: "MANUAL_MINUTES", minutes: 45 }, { id: 2, method: "DERIVED_PROPORTION", minutes: 15 }];
+  const summary = summarizeEvidenceAttribution(180, allocations);
+  const share = unallocatedShareOfEvidence({ billableMinutes: 180, grossAmount: 90, allocations });
+  assert.equal(summary.unallocatedMinutes, 120);
+  assert.equal(share.unallocatedAmount, 60, "120 of 180 minutes of a $90 row");
+});
+
+test("getClientProjectCommercialAttribution uses the shared helper instead of a row-level 'any allocation' check", () => {
+  const actions = readFileSync(new URL("./actions.ts", import.meta.url), "utf8");
+  assert.match(actions, /unallocatedShareOfEvidence\(\{/u);
+  assert.doesNotMatch(actions, /new Set\(allocationRows\.map\(\(row\) => row\.billingEvidenceId\)\)/u);
+});

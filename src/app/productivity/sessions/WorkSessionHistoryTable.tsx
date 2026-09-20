@@ -1,5 +1,7 @@
 "use client";
 
+import { useCurrentOrigin } from "@/components/navigation/useCurrentOrigin";
+import { videoWorkspaceHref } from "@/modules/productivity/core";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -201,6 +203,7 @@ function SessionRow({
   videoOptions: WorkSessionVideoOption[];
   narrativeNotes: CorrelatedMemoryNote[];
 }) {
+  const origin = useCurrentOrigin();
   const [editing, setEditing] = useState(false);
   // Session Narrative (Sunday Systems Round, Phase C/D): collapsed by
   // default, same "unbounded read list needs a visible default with an
@@ -241,7 +244,7 @@ function SessionRow({
       <td className="px-4 py-3 text-zinc-300">{session.projectName ?? "—"}</td>
       <td className="px-4 py-3 text-zinc-300">
         <Link
-          href={`/productivity?video=${session.videoId}`}
+          href={videoWorkspaceHref(session.videoId, origin)}
           className="text-cyan-400 hover:text-cyan-300"
         >
           {session.videoTitle}

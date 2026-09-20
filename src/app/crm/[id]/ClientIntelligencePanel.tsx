@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { videoWorkspaceHref } from "@/modules/productivity/core";
 import { formatClosedDuration } from "@/modules/work-sessions/core";
 import { formatCurrency } from "@/utils/date";
 import type { ClientIntelligenceSummary } from "@/modules/crm/actions";
@@ -22,8 +23,11 @@ function formatTimestamp(value: string) {
 export function ClientIntelligencePanel({
   summary,
   weekEstimate,
+  returnTo,
 }: {
   summary: ClientIntelligenceSummary;
+  // The page this panel is shown on, so a video opened from a note returns here.
+  returnTo?: string;
   // Tuesday Patch Completion Round §H: "the weekly contract-rate estimate
   // exists in War Room. The original complaint was made while looking at
   // CRM/client context." Same RateEquivalent shape War Room's Section V
@@ -110,7 +114,7 @@ export function ClientIntelligencePanel({
                 <p className="text-xs leading-5 text-zinc-300">{note.body}</p>
                 <p className="mt-1 text-[10px] font-semibold text-zinc-600">
                   <Link
-                    href={`/productivity?video=${note.videoId}`}
+                    href={videoWorkspaceHref(note.videoId, returnTo)}
                     className="text-cyan-500 hover:text-cyan-400"
                   >
                     {note.videoTitle}

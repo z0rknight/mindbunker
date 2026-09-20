@@ -60,6 +60,7 @@ import {
   type ReconciliationResult,
   type RateEquivalent,
 } from "./core";
+import { unallocatedShareOfEvidence } from "./attribution";
 import {
   buildOwnerPayCorrectionStatements,
   buildOwnerPayStatements,
@@ -1379,6 +1380,7 @@ export async function getClientProjectCommercialAttribution(clientId: number): P
     db
       .select({
         billingEvidenceId: billingAllocations.billingEvidenceId,
+        method: billingAllocations.method,
         contractClientId: commercialContracts.clientId,
         amount: billingAllocations.amount,
         minutes: billingAllocations.minutes,
@@ -1412,8 +1414,26 @@ export async function getClientProjectCommercialAttribution(clientId: number): P
 
   const summary = buildClientBillingSummary(clientId, contractRows, evidenceRows, safeAllocationRows, projectNameById);
 
-  const allocatedEvidenceIds = new Set(allocationRows.map((row) => row.billingEvidenceId));
-  const unallocatedManualEvidence = selectUnallocatedManualEvidence(clientId, evidenceRows, allocatedEvidenceIds);
+  // One definition of "unallocated" (finance/attribution.ts): a MANUAL row
+  // that is only PARTLY attributed by minutes still shows here, with just the
+  // remaining share; a fully attributed one drops out.
+  const allocationsByEvidence = new Map<number, Array<{ id: number; method: "MANUAL_AMOUNT" | "MANUAL_MINUTES" | "DERIVED_PROPORTION"; minutes: number | null }>>();
+  allocationRows.forEach((row, index) => {
+    const list = allocationsByEvidence.get(row.billingEvidenceId) ?? [];
+    list.push({ id: index, method: row.method, minutes: row.minutes });
+    allocationsByEvidence.set(row.billingEvidenceId, list);
+  });
+  const allocatedEvidenceIds = new Set<number>();
+  const evidenceForUnallocated = evidenceRows.map((evidence) => {
+    const share = unallocatedShareOfEvidence({
+      billableMinutes: evidence.billableMinutes,
+      grossAmount: evidence.grossAmount,
+      allocations: allocationsByEvidence.get(evidence.id) ?? [],
+    });
+    if (share.fullyAllocated) allocatedEvidenceIds.add(evidence.id);
+    return { ...evidence, grossAmount: share.unallocatedAmount };
+  });
+  const unallocatedManualEvidence = selectUnallocatedManualEvidence(clientId, evidenceForUnallocated, allocatedEvidenceIds);
 
   return { byProject: summary.byProject, unallocatedManualEvidence };
 }

@@ -61,6 +61,33 @@ export function summarizeEvidenceAttribution(
   };
 }
 
+/**
+ * How much of ONE evidence row is still unallocated, in the terms the CRM
+ * "unallocated historical billing" surface shows (an amount). One definition
+ * of "unallocated" for the whole product: it comes from the same
+ * summarizeEvidenceAttribution the Finance attribution panel uses.
+ *  - no allocations                    -> the whole gross is unallocated
+ *  - partly attributed by minutes      -> only the remaining share is unallocated
+ *  - fully attributed by minutes       -> nothing is unallocated
+ *  - legacy amount-only allocation row -> treated as allocated (the historical
+ *    meaning of "has an allocation"), since it cannot be measured in minutes
+ */
+export function unallocatedShareOfEvidence(input: {
+  billableMinutes: number;
+  grossAmount: number;
+  allocations: readonly AllocationRow[];
+}): { fullyAllocated: boolean; unallocatedAmount: number } {
+  const summary = summarizeEvidenceAttribution(input.billableMinutes, input.allocations);
+  if (summary.amountOnlyRows > 0) return { fullyAllocated: true, unallocatedAmount: 0 };
+  if (input.allocations.length === 0) return { fullyAllocated: false, unallocatedAmount: input.grossAmount };
+  if (summary.unallocatedMinutes <= 0) return { fullyAllocated: true, unallocatedAmount: 0 };
+  if (!(input.billableMinutes > 0)) return { fullyAllocated: false, unallocatedAmount: input.grossAmount };
+  return {
+    fullyAllocated: false,
+    unallocatedAmount: Math.round(((input.grossAmount * summary.unallocatedMinutes) / input.billableMinutes) * 100) / 100,
+  };
+}
+
 /** Whole minutes from an hours + minutes pair of inputs; null when not a valid positive duration. */
 export function toMinutes(hours: unknown, minutes: unknown): number | null {
   const parse = (value: unknown): number | null => {

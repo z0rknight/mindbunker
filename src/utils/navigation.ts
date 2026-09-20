@@ -20,3 +20,14 @@ export function isSafeInternalPath(value: unknown): value is string {
   if (/[\x00-\x1f]/.test(value)) return false;
   return true;
 }
+
+/**
+ * A validated internal origin path from a pathname + query string (no leading
+ * "?"), or undefined when it would not be a safe/short internal path. Used by
+ * links that open the Video Workspace from an inspection surface so the close
+ * action returns to that exact view.
+ */
+export function originPathFrom(pathname: string, search: string): string | undefined {
+  const origin = search ? `${pathname}?${search}` : pathname;
+  return isSafeInternalPath(origin) ? origin : undefined;
+}

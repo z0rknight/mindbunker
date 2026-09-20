@@ -343,7 +343,7 @@ export default async function ClientDetailPage({
           Recent activity &amp; history
         </summary>
         <div className="space-y-6 border-t border-zinc-800 p-4">
-          <ClientIntelligencePanel summary={clientIntelligence} weekEstimate={weekEstimateForClient} />
+          <ClientIntelligencePanel summary={clientIntelligence} weekEstimate={weekEstimateForClient} returnTo={`/crm/${client.id}`} />
           <ClientCommercialValuePanel
             realizedRevenueByCurrency={clientIntelligence.totalRevenueByCurrency}
             commercialValue={commercialValue}

@@ -1,5 +1,7 @@
 "use client";
 
+import { useCurrentOrigin } from "@/components/navigation/useCurrentOrigin";
+import { videoWorkspaceHref } from "@/modules/productivity/core";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
@@ -166,6 +168,7 @@ export function SessionInspectorPanel({
   videoOptions: WorkSessionVideoOption[];
   onClose: () => void;
 }) {
+  const origin = useCurrentOrigin();
   const [correcting, setCorrecting] = useState(false);
 
   useEffect(() => {
@@ -214,7 +217,7 @@ export function SessionInspectorPanel({
         <p className="text-base font-black text-white">{session.clientName ?? "—"}</p>
         <p className="text-sm text-zinc-400">{session.projectName ?? "—"}</p>
         <Link
-          href={`/productivity?video=${session.videoId}`}
+          href={videoWorkspaceHref(session.videoId, origin)}
           className="text-sm text-cyan-400 hover:text-cyan-300"
         >
           {session.videoTitle} →
@@ -246,7 +249,7 @@ export function SessionInspectorPanel({
         ) : (
           <div className="mt-5 flex flex-col gap-2">
             <Link
-              href={`/productivity?video=${session.videoId}`}
+              href={videoWorkspaceHref(session.videoId, origin)}
               className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-left text-xs font-bold text-zinc-200 hover:border-cyan-700"
             >
               Open video workspace →

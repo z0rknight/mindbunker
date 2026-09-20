@@ -1,4 +1,5 @@
 import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
+import { videoWorkspaceHref } from "@/modules/productivity/core";
 import { StatCard } from "@/components/ui/StatCard";
 import {
   AddIncomeButton,
@@ -167,7 +168,7 @@ export default async function DashboardPage() {
             {dashboardNow.targets.map((target) => (
               <Link
                 key={target.videoId}
-                href={`/productivity?video=${target.videoId}`}
+                href={videoWorkspaceHref(target.videoId, "/")}
                 className="pixel-frame rounded-xl border border-cyan-900/50 bg-cyan-950/10 p-4 transition hover:border-cyan-600/60"
               >
                 <p className="truncate text-sm font-black text-white">{target.videoTitle}</p>
@@ -196,7 +197,7 @@ export default async function DashboardPage() {
               return (
                 <Link
                   key={group.key}
-                  href={`/productivity?video=${first.videoId}`}
+                  href={videoWorkspaceHref(first.videoId, "/")}
                   className={`pixel-frame pixel-frame-attention flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-3 transition ${attentionClass(group.reason)}`}
                 >
                   <div className="min-w-0">
