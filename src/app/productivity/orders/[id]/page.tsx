@@ -12,6 +12,9 @@ import { FormatsForClient } from "@/components/production-memory/FormatsForClien
 import { getProductionMemoryForClient } from "@/modules/production-memory/data";
 import { ProductionContextBlock } from "@/components/production-context/ProductionContextBlock";
 import { getProductionContextForOrder } from "@/modules/production-context/data";
+import { BatchEvidenceBlock } from "@/components/production-orders/BatchEvidenceBlock";
+import { computeBatchEvidence } from "@/modules/production-orders/evidence";
+import { getProductionOrderSensorSeconds } from "@/modules/production-orders/evidence-data";
 
 export const dynamic = "force-dynamic";
 
@@ -39,9 +42,10 @@ export default async function ProductionOrderDetailPage({
   const safeReturnTo =
     typeof rawReturnTo === "string" && isSafeInternalPath(rawReturnTo) ? rawReturnTo : undefined;
 
-  const [productionMemories, productionContext] = await Promise.all([
+  const [productionMemories, productionContext, sensorSeconds] = await Promise.all([
     getProductionMemoryForClient(order.clientId),
     getProductionContextForOrder(orderId),
+    getProductionOrderSensorSeconds(orderId),
   ]);
   const activeItems = order.items.filter((item) => item.cancelledAt === null);
   const status = describeProductionOrderStatus({
@@ -49,6 +53,15 @@ export default async function ProductionOrderDetailPage({
     phase: order.phase,
     activeCount: activeItems.length,
     doneCount: activeItems.filter((item) => item.status === "DONE").length,
+  });
+  const batchEvidence = computeBatchEvidence({
+    activeDeliverables: activeItems.length,
+    doneDeliverables: activeItems.filter((item) => item.status === "DONE").length,
+    containerSeconds: order.timeBreakdown.containerSeconds,
+    itemSeconds: order.timeBreakdown.itemSecondsTotal,
+    containerSensorSeconds: sensorSeconds.containerSensorSeconds,
+    itemSensorSeconds: sensorSeconds.itemSensorSeconds,
+    billedByCurrency: order.billedByCurrency,
   });
   const cancelledItems = order.items.filter((item) => item.cancelledAt !== null);
   // This exact order page (its own returnTo preserved) -- so a deliverable
@@ -178,6 +191,8 @@ export default async function ProductionOrderDetailPage({
             </div>
           )}
         </section>
+
+        <BatchEvidenceBlock evidence={batchEvidence} />
 
         {/* Deliverables */}
         <section className="mb-6">

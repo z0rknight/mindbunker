@@ -95,7 +95,9 @@ test("aggregateIntentionalAppTime: a CLIENT session later approved into a Work S
   // the same interval twice (simulating a hypothetical bug that also fed
   // the approved work_session's interval in) is what WOULD double count,
   // proving the real code path (which only ever supplies one row per
-  // sensor session) cannot.
+  // sensor session) cannot. Operating-Intelligence train: the function is now
+  // ALSO immune on its own -- overlapping/duplicate intervals are resolved
+  // before intersecting, so the hypothetical bug can no longer double count.
   const once = aggregateIntentionalAppTime(observations, [{ contextType: "CLIENT", startedAt: 0, endedAt: 3_600 }], 0, 3_600);
   const wouldDouble = aggregateIntentionalAppTime(
     observations,
@@ -107,7 +109,7 @@ test("aggregateIntentionalAppTime: a CLIENT session later approved into a Work S
     3_600,
   );
   assert.equal(once[0].seconds, 3_600);
-  assert.equal(wouldDouble[0].seconds, 7_200, "documents why the data layer must supply each sensor session exactly once");
+  assert.equal(wouldDouble[0].seconds, 3_600, "duplicate/overlapping session intervals count each second once");
 });
 
 test("computeCoverageSeconds: merges overlapping/adjacent observation intervals instead of naively summing them", () => {

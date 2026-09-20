@@ -11,7 +11,7 @@ import {
   resolveSensorConnectivityStatus,
   type SensorConnectivityStatus,
 } from "@/modules/sensor/core";
-import { APP_KEY_LABELS, type TimeWindowKind } from "@/modules/sensor/app-intelligence";
+import { APP_KEY_LABELS, sessionCoveragePercent, type TimeWindowKind } from "@/modules/sensor/app-intelligence";
 import { getWorkSessionOverview } from "@/modules/work-sessions/data";
 import { SensorDeviceManager } from "./SensorDeviceManager";
 import { SensorSessionActions } from "./SensorSessionActions";
@@ -307,6 +307,36 @@ export default async function SensorActivityPage({
             </div>
           ))}
         </div>
+        {appMetric === "INTENTIONAL" && (
+          <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3 text-[11px] leading-5 text-zinc-500" data-testid="intentional-coverage">
+            {applicationUsage.sessionCoverage.sessionSeconds > 0 ? (
+              <>
+                <p>
+                  Intentional sessions: <span className="font-mono text-zinc-300">{formatClosedDuration(applicationUsage.sessionCoverage.sessionSeconds)}</span>
+                  {" · "}Sensor telemetry covers{" "}
+                  <span className="font-mono text-zinc-300">{formatClosedDuration(applicationUsage.sessionCoverage.telemetrySeconds)}</span>
+                  {sessionCoveragePercent(applicationUsage.sessionCoverage) !== null && ` (${sessionCoveragePercent(applicationUsage.sessionCoverage)}%)`}
+                </p>
+                <p>
+                  Of that: <span className="font-mono text-zinc-300">{formatClosedDuration(applicationUsage.sessionCoverage.activeSeconds)}</span> active app time
+                  {" · "}<span className="font-mono text-zinc-300">{formatClosedDuration(applicationUsage.sessionCoverage.idleSeconds)}</span> idle while a session was open
+                  {applicationUsage.sessionCoverage.uncoveredSeconds > 0 && (
+                    <>
+                      {" · "}<span className="font-mono text-zinc-300">{formatClosedDuration(applicationUsage.sessionCoverage.uncoveredSeconds)}</span> with no telemetry (unknown, not zero)
+                    </>
+                  )}
+                </p>
+              </>
+            ) : (
+              <p>No intentional sessions in this window.</p>
+            )}
+          </div>
+        )}
+        {applicationUsage.surfaceTelemetry.activeObservations > 0 && applicationUsage.surfaceTelemetry.withWindowTitle === 0 && (
+          <p className="mt-2 text-[10px] leading-4 text-zinc-600" data-testid="surface-disclosure">
+            Browser surface is not attributed: Sensor does not collect window titles, so time in Safari cannot be split by site or web app.
+          </p>
+        )}
         <p className="mt-4 text-[10px] leading-4 text-zinc-600">
           Daily average this window: {formatClosedDuration(Math.round(applicationUsage.dailyAverageSeconds))}/day
           (includes zero-use days) · Observed during Sensor coverage: {formatClosedDuration(applicationUsage.coverageSeconds)} of{" "}

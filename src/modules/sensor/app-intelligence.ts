@@ -230,10 +230,13 @@ export type AppIntentionalTotal = AppTimeTotal & {
 // anything smarter.
 export function aggregateIntentionalAppTime(
   observations: readonly AppObservationRow[],
-  sessions: readonly IntentionalIntervalRow[],
+  rawSessions: readonly IntentionalIntervalRow[],
   windowStart: number,
   windowEnd: number,
 ): AppIntentionalTotal[] {
+  // Overlapping session rows (e.g. after a correction) must never make the
+  // same second of foreground time count twice.
+  const sessions = resolveSessionOverlaps(rawSessions);
   const totals = new Map<string, AppIntentionalTotal>();
   for (const obs of observations) {
     if (obs.idle) continue;
@@ -255,6 +258,112 @@ export function aggregateIntentionalAppTime(
     }
   }
   return Array.from(totals.values()).sort((a, b) => b.seconds - a.seconds);
+}
+
+// ─── Session overlap + coverage disclosure ─────────────────────────────────
+// Operating-Intelligence train (Sep 19): app percentages must never be shown
+// without saying how much of the intentional time the telemetry actually
+// covers. Everything here is pure, derived at read time from the rows passed
+// in (a corrected session timestamp changes the result on the next read --
+// nothing is cached or stored).
+
+/**
+ * Chronologically clips overlapping sessions so every second belongs to at
+ * most one session (the earlier one keeps it). Sessions are never mutated;
+ * fully-swallowed sessions drop out. Order-independent for the caller.
+ */
+export function resolveSessionOverlaps(sessions: readonly IntentionalIntervalRow[]): IntentionalIntervalRow[] {
+  const sorted = [...sessions].sort((a, b) => a.startedAt - b.startedAt || a.endedAt - b.endedAt);
+  const out: IntentionalIntervalRow[] = [];
+  let cursor = -Infinity;
+  for (const session of sorted) {
+    const startedAt = Math.max(session.startedAt, cursor);
+    if (session.endedAt <= startedAt) continue;
+    out.push({ ...session, startedAt });
+    cursor = session.endedAt;
+  }
+  return out;
+}
+
+/** Union of intervals, sorted and merged (touching intervals join). */
+export function mergeIntervals(intervals: readonly Interval[]): Interval[] {
+  const sorted = intervals.filter((i) => i.endedAt > i.startedAt).sort((a, b) => a.startedAt - b.startedAt);
+  const merged: Interval[] = [];
+  for (const interval of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && interval.startedAt <= last.endedAt) last.endedAt = Math.max(last.endedAt, interval.endedAt);
+    else merged.push({ ...interval });
+  }
+  return merged;
+}
+
+function intersectionSeconds(a: readonly Interval[], b: readonly Interval[]): number {
+  let total = 0;
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    const start = Math.max(a[i].startedAt, b[j].startedAt);
+    const end = Math.min(a[i].endedAt, b[j].endedAt);
+    if (end > start) total += end - start;
+    if (a[i].endedAt < b[j].endedAt) i += 1;
+    else j += 1;
+  }
+  return total;
+}
+
+export type SessionCoverage = {
+  /** Union of intentional sessions in the window. */
+  sessionSeconds: number;
+  /** Part of that time for which Sensor telemetry exists (active or idle). */
+  telemetrySeconds: number;
+  /** Telemetry inside sessions where the machine was actively in use. */
+  activeSeconds: number;
+  /** Telemetry inside sessions where the machine was idle. */
+  idleSeconds: number;
+  /** Session time with NO telemetry (Sensor offline / not reporting). */
+  uncoveredSeconds: number;
+};
+
+/**
+ * "How much of my intentional session time can the telemetry actually speak
+ * to?" -- the disclosure that must accompany any intentional app breakdown.
+ * The result is never normalised to 100%: uncoveredSeconds says what is unknown.
+ */
+export function computeSessionCoverage(
+  observations: readonly AppObservationRow[],
+  rawSessions: readonly IntentionalIntervalRow[],
+  windowStart: number,
+  windowEnd: number,
+): SessionCoverage {
+  const sessions = mergeIntervals(
+    resolveSessionOverlaps(rawSessions)
+      .map((s) => clamp({ startedAt: s.startedAt, endedAt: s.endedAt }, windowStart, windowEnd))
+      .filter((i): i is Interval => i !== null),
+  );
+  const toIntervals = (rows: readonly AppObservationRow[]) =>
+    mergeIntervals(
+      rows
+        .map((r) => clamp({ startedAt: r.startedAt, endedAt: r.endedAt }, windowStart, windowEnd))
+        .filter((i): i is Interval => i !== null),
+    );
+  const sessionSeconds = sessions.reduce((sum, i) => sum + (i.endedAt - i.startedAt), 0);
+  const active = toIntervals(observations.filter((o) => !o.idle));
+  const all = toIntervals(observations);
+  const telemetrySeconds = intersectionSeconds(all, sessions);
+  const activeSeconds = intersectionSeconds(active, sessions);
+  return {
+    sessionSeconds,
+    telemetrySeconds,
+    activeSeconds,
+    idleSeconds: Math.max(0, telemetrySeconds - activeSeconds),
+    uncoveredSeconds: Math.max(0, sessionSeconds - telemetrySeconds),
+  };
+}
+
+/** Whole-number % of session time the telemetry covers, or null when there are no sessions. */
+export function sessionCoveragePercent(coverage: SessionCoverage): number | null {
+  if (coverage.sessionSeconds <= 0) return null;
+  return Math.round((coverage.telemetrySeconds / coverage.sessionSeconds) * 100);
 }
 
 // ─── Time windows ──────────────────────────────────────────────────────────

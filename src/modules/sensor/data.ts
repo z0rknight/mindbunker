@@ -24,6 +24,7 @@ import {
   aggregateObservedAppTime,
   classifyWindowSurface,
   computeCoverageSeconds,
+  computeSessionCoverage,
   dailyAverageSeconds,
   normalizeApplication,
   resolveTimeWindow,
@@ -31,6 +32,7 @@ import {
   type AppObservationRow,
   type AppTimeTotal,
   type IntentionalIntervalRow,
+  type SessionCoverage,
   type TimeWindowKind,
 } from "./app-intelligence";
 
@@ -200,6 +202,12 @@ export type ApplicationUsage = {
   intentional: AppIntentionalTotal[];
   coverageSeconds: number;
   dailyAverageSeconds: number; // observed, matching the top-level total the UI leads with
+  // How much intentional session time the telemetry can speak to (never
+  // normalised to 100%): see computeSessionCoverage.
+  sessionCoverage: SessionCoverage;
+  // Whether window titles are captured at all -- without them a browser
+  // "web surface" (e.g. a site inside Safari) cannot be attributed.
+  surfaceTelemetry: { activeObservations: number; withWindowTitle: number };
 };
 
 // App/Window Telemetry Intelligence (addendum §6-§22): reuses the exact
@@ -230,6 +238,7 @@ export async function getApplicationUsage(
         SELECT context_type, started_at, COALESCE(ended_at, ?3) AS ended_at
         FROM sensor_sessions
         WHERE started_at < ?2 AND COALESCE(ended_at, ?3) > ?1
+          AND approval_state != 'DELETED'
       `)
       .bind(window.startSeconds, window.endSeconds, Math.floor(Date.now() / 1_000))
       .all<RawIntentionalIntervalRow>(),
@@ -259,6 +268,12 @@ export async function getApplicationUsage(
     window.endSeconds,
   );
   const totalObservedSeconds = observed.reduce((sum, row) => sum + row.seconds, 0);
+  const sessionCoverage = computeSessionCoverage(observations, sessions, window.startSeconds, window.endSeconds);
+  const activeRows = observationRows.results.filter((row) => !row.idle);
+  const surfaceTelemetry = {
+    activeObservations: activeRows.length,
+    withWindowTitle: activeRows.filter((row) => typeof row.window_title === "string" && row.window_title.trim() !== "").length,
+  };
 
   return {
     window: { label: window.label, startSeconds: window.startSeconds, endSeconds: window.endSeconds, days: window.days },
@@ -266,6 +281,8 @@ export async function getApplicationUsage(
     intentional,
     coverageSeconds,
     dailyAverageSeconds: dailyAverageSeconds(totalObservedSeconds, window.days),
+    sessionCoverage,
+    surfaceTelemetry,
   };
 }
 

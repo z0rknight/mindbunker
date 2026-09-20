@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useState, useTransition, type ReactNode, useRef } from "react";
 import { LiveIndicator, PixelIcon } from "@/components/ui/PixelVisuals";
 import { videoWorkspaceHref } from "@/modules/productivity/core";
 import { startWorkSession, stopWorkSession } from "@/modules/work-sessions/actions";
@@ -118,6 +118,29 @@ function ActiveSessionCard({
       window.clearInterval(interval);
     };
   }, [openSession.id]);
+
+  // Operating-Intelligence train (Sep 19): the ticker above only counts UP from
+  // startedAt, so a session stopped on another device (or window) kept
+  // "running" here until a manual refresh -- the stale-timer note from the
+  // Aug 23 Quick Notes. The database was always right; only this display was
+  // stale. Re-validate against the server whenever this tab becomes visible or
+  // regains focus (throttled, and only while a session is shown as running).
+  const lastResyncMs = useRef(0);
+  useEffect(() => {
+    function resync() {
+      if (document.visibilityState === "hidden") return;
+      const now = Date.now();
+      if (now - lastResyncMs.current < 15_000) return;
+      lastResyncMs.current = now;
+      router.refresh();
+    }
+    document.addEventListener("visibilitychange", resync);
+    window.addEventListener("focus", resync);
+    return () => {
+      document.removeEventListener("visibilitychange", resync);
+      window.removeEventListener("focus", resync);
+    };
+  }, [router, openSession.id]);
 
   const elapsedSeconds =
     nowMs > 0 && Number.isFinite(startedAtMs)
