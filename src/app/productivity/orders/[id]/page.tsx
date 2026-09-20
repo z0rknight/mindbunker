@@ -1,10 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProductionOrderDetail } from "@/modules/production-orders/data";
-import {
-  PRODUCTION_ORDER_PHASE_LABELS,
-  PRODUCTION_ORDER_STATE_LABELS,
-} from "@/modules/production-orders/config";
+import { PRODUCTION_ORDER_TONE_CLASSES } from "@/modules/production-orders/config";
+import { describeProductionOrderStatus } from "@/modules/production-orders/core";
 import { VIDEO_STATUS_LABELS } from "@/modules/productivity/config";
 import { formatClosedDuration } from "@/modules/work-sessions/core";
 import { formatCurrency } from "@/utils/date";
@@ -38,6 +36,12 @@ export default async function ProductionOrderDetailPage({
     typeof rawReturnTo === "string" && isSafeInternalPath(rawReturnTo) ? rawReturnTo : undefined;
 
   const activeItems = order.items.filter((item) => item.cancelledAt === null);
+  const status = describeProductionOrderStatus({
+    state: order.state,
+    phase: order.phase,
+    activeCount: activeItems.length,
+    doneCount: activeItems.filter((item) => item.status === "DONE").length,
+  });
   const cancelledItems = order.items.filter((item) => item.cancelledAt !== null);
   // This exact order page (its own returnTo preserved) -- so a deliverable
   // opened from here returns to here, and from there the chain back to
@@ -58,12 +62,14 @@ export default async function ProductionOrderDetailPage({
         <div className="mb-6 flex flex-col gap-3 rounded-xl border border-emerald-900/40 bg-zinc-950 p-5 font-mono sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded border border-emerald-800/60 bg-emerald-950/30 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-emerald-300">
-                {PRODUCTION_ORDER_PHASE_LABELS[order.phase]}
+              <span
+                className={`rounded border px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${PRODUCTION_ORDER_TONE_CLASSES[status.tone]}`}
+              >
+                {status.headline}
               </span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                {PRODUCTION_ORDER_STATE_LABELS[order.state]}
-              </span>
+              {status.detail && (
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{status.detail}</span>
+              )}
             </div>
             <h1 className="mt-2 text-xl font-black text-emerald-100">{order.label}</h1>
             <p className="mt-1 text-xs text-zinc-500">

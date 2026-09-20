@@ -10,6 +10,7 @@ import {
   countCancelledDeliverables,
   countDoneDeliverables,
   deriveProductionOrderPhase,
+  describeProductionOrderStatus,
   isProductionOrderMutable,
   isStaleProductionOrder,
   sumBilledByCurrency,
@@ -17,6 +18,7 @@ import {
   validateProductionOrderContract,
   validateProductionOrderIngestInput,
 } from "./core.ts";
+import { PRODUCTION_ORDER_PHASE_LABELS } from "./config.ts";
 
 function item(status, overrides = {}) {
   return { videoId: overrides.videoId ?? 1, status, cancelledAt: null, isOperationalContainer: false, ...overrides };
@@ -236,4 +238,102 @@ test("stale-order threshold is exactly the documented window", () => {
     isStaleProductionOrder({ id: 1, label: "x", clientName: null, projectName: null, receivedAt: new Date("2026-08-20T00:00:00Z") }, now),
     false,
   );
+});
+
+// ─── Wave 1 (Sep 19): final-state truth ─────────────────────────────────────
+// describeProductionOrderStatus is what the LET'S COOK list/detail render.
+// Fed here exactly as the pages feed it: derived phase + active/done counts.
+
+function describe(state, items) {
+  return describeProductionOrderStatus({
+    state,
+    phase: deriveProductionOrderPhase(items),
+    activeCount: countActiveDeliverables(items),
+    doneCount: countDoneDeliverables(items),
+  });
+}
+const container = () => item("IN_PROGRESS", { videoId: 99, isOperationalContainer: true });
+
+test("final state A: every active child DONE -> never IN PRODUCTION", () => {
+  const out = describe("OPEN", [item("DONE"), item("DONE"), item("DONE"), item("DONE")]);
+  assert.notEqual(out.headline, PRODUCTION_ORDER_PHASE_LABELS.IN_PRODUCTION);
+  assert.equal(out.headline, "All done");
+  assert.equal(out.tone, "complete");
+  assert.equal(out.detail, "All 4 deliverables done");
+});
+
+test("final state B: 3 DONE + 1 IN_PROGRESS -> still in production", () => {
+  const out = describe("OPEN", [item("DONE"), item("DONE"), item("DONE"), item("IN_PROGRESS")]);
+  assert.equal(out.headline, "In production");
+  assert.equal(out.tone, "active");
+  assert.equal(out.detail, "3 of 4 deliverables done · 1 not finished");
+});
+
+test("final state C: all READY_FOR_REVIEW -> review, not done", () => {
+  const out = describe("OPEN", [item("READY_FOR_REVIEW"), item("READY_FOR_REVIEW")]);
+  assert.equal(out.headline, "In review");
+  assert.equal(out.tone, "review");
+  assert.notEqual(out.headline, "All done");
+});
+
+test("final state D: a cancelled child does not keep the order open", () => {
+  const out = describe("OPEN", [
+    item("DONE"), item("DONE"), item("DONE"),
+    item("PLANNED", { cancelledAt: "2026-09-19T10:00:00Z" }),
+  ]);
+  assert.equal(out.headline, "All done");
+  assert.equal(out.detail, "All 3 deliverables done");
+});
+
+test("final state E: the operational container never counts as unfinished", () => {
+  const out = describe("OPEN", [container(), item("DONE"), item("DONE")]);
+  assert.equal(out.headline, "All done");
+  assert.equal(out.detail, "All 2 deliverables done");
+});
+
+test("final state F: CLOSED with an unfinished real child never claims completion", () => {
+  for (const unfinished of ["IN_PROGRESS", "PLANNED"]) {
+    const out = describe("CLOSED", [item("DONE"), item("DONE"), item("DONE"), item(unfinished)]);
+    assert.equal(out.headline, "Closed");
+    assert.equal(out.tone, "closed");
+    assert.equal(out.detail, "3 of 4 deliverables done · 1 not finished");
+  }
+});
+
+test("final state F (regression): CLOSED never renders the derived phase beside it", () => {
+  // The Sep 19 operator report: "IN PRODUCTION" + "CLOSED" on the same order.
+  const out = describe("CLOSED", [item("DONE"), item("DONE"), item("DONE"), item("PLANNED")]);
+  assert.notEqual(out.headline, PRODUCTION_ORDER_PHASE_LABELS.IN_PRODUCTION);
+});
+
+test("final state G: all DONE, no delivery evidence -> completion kept, no delivery claim", () => {
+  const out = describe("OPEN", [item("DONE"), item("DONE")]);
+  assert.equal(out.headline, "All done");
+  assert.doesNotMatch(`${out.headline} ${out.detail}`, /deliver(ed|y)/iu);
+  assert.doesNotMatch(PRODUCTION_ORDER_PHASE_LABELS.DELIVERED, /deliver/iu, "DONE != DELIVERED: the label must not claim delivery");
+});
+
+test("final state: CLOSED with every child DONE is complete; CANCELLED stays cancelled", () => {
+  const closed = describe("CLOSED", [item("DONE"), item("DONE")]);
+  assert.equal(closed.headline, "Closed");
+  assert.equal(closed.tone, "complete");
+  const cancelled = describe("CANCELLED", [item("DONE"), item("IN_PROGRESS")]);
+  assert.equal(cancelled.headline, "Cancelled");
+  assert.equal(cancelled.tone, "cancelled");
+});
+
+test("final state: empty order has no tally and stays RECEIVED", () => {
+  const out = describe("OPEN", [container()]);
+  assert.equal(out.headline, PRODUCTION_ORDER_PHASE_LABELS.RECEIVED);
+  assert.equal(out.detail, null);
+});
+
+test("final state: list and detail pages render the shared headline, never phase+state side by side", async () => {
+  const { readFileSync } = await import("node:fs");
+  for (const rel of ["../../app/productivity/orders/page.tsx", "../../app/productivity/orders/[id]/page.tsx"]) {
+    const src = readFileSync(new URL(rel, import.meta.url), "utf8");
+    assert.match(src, /describeProductionOrderStatus\(/u, `${rel} must use the canonical headline`);
+    assert.doesNotMatch(src, /PRODUCTION_ORDER_PHASE_LABELS\[order\.phase\]/u, `${rel} must not print the raw phase`);
+    assert.doesNotMatch(src, /PRODUCTION_ORDER_STATE_LABELS/u, `${rel} must not print a second state badge`);
+  }
 });

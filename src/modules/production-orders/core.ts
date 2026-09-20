@@ -9,6 +9,7 @@
 
 import type { VideoStatus } from "@/modules/productivity/config";
 import {
+  PRODUCTION_ORDER_PHASE_LABELS,
   PRODUCTION_ORDER_ITEM_TITLE_MAX_LENGTH,
   PRODUCTION_ORDER_LABEL_MAX_LENGTH,
   PRODUCTION_ORDER_MAX_ITEMS_PER_INGEST,
@@ -88,6 +89,51 @@ export function deriveProductionOrderPhase(
   }
   if (active.every((item) => item.status === "PLANNED")) return "RECEIVED";
   return "IN_PRODUCTION";
+}
+
+// ─── Headline status (Sep 19 Final-State Truth) ─────────────────────────────
+//
+// Model: HYBRID by design. `state` (OPEN/CLOSED/CANCELLED) is the operator's
+// one real container-level fact -- "this order's scope is finalized" -- and
+// `phase` is derived from active children. They answer different questions,
+// so neither may be merged into the other. The bug this fixes was purely
+// presentational: both surfaces printed the derived phase next to the
+// state, so a CLOSED order with one unfinished child read "IN PRODUCTION ·
+// CLOSED" -- production "in progress" on scope the operator had already
+// finalized. The headline now follows the state first; the derived phase
+// is only the headline while the order is still OPEN. A closed order never
+// claims production is complete unless every active child actually is
+// (closed != children done), and never hides an unfinished child either.
+export type ProductionOrderHeadlineTone =
+  | "neutral"
+  | "active"
+  | "review"
+  | "complete"
+  | "closed"
+  | "cancelled";
+
+export function describeProductionOrderStatus(input: {
+  state: "OPEN" | "CLOSED" | "CANCELLED";
+  phase: ProductionOrderPhase;
+  activeCount: number;
+  doneCount: number;
+}): { headline: string; tone: ProductionOrderHeadlineTone; detail: string | null } {
+  const { state, phase, activeCount, doneCount } = input;
+  const remaining = Math.max(0, activeCount - doneCount);
+  const tally =
+    activeCount === 0
+      ? null
+      : remaining === 0
+        ? `All ${activeCount} deliverable${activeCount === 1 ? "" : "s"} done`
+        : `${doneCount} of ${activeCount} deliverables done · ${remaining} not finished`;
+
+  if (state === "CANCELLED") return { headline: "Cancelled", tone: "cancelled", detail: tally };
+  if (state === "CLOSED") {
+    return { headline: "Closed", tone: remaining === 0 && activeCount > 0 ? "complete" : "closed", detail: tally };
+  }
+  const tone: ProductionOrderHeadlineTone =
+    phase === "DELIVERED" ? "complete" : phase === "REVIEW" ? "review" : phase === "IN_PRODUCTION" ? "active" : "neutral";
+  return { headline: PRODUCTION_ORDER_PHASE_LABELS[phase], tone, detail: tally };
 }
 
 export function isProductionOrderPhase(

@@ -19,7 +19,11 @@ export const PRODUCTION_ORDER_PHASE_LABELS: Record<ProductionOrderPhase, string>
   RECEIVED: "Received",
   IN_PRODUCTION: "In production",
   REVIEW: "In review",
-  DELIVERED: "Delivered",
+  // Key stays DELIVERED (every consumer switches on it), but the *label*
+  // must not claim more than the derivation knows: every active child
+  // being DONE is production-complete, not proof anything was delivered --
+  // delivery is separate evidence on each video (DONE != delivered).
+  DELIVERED: "All done",
 };
 
 // Matches production_orders.state in src/db/schema.ts exactly.
@@ -44,3 +48,14 @@ export const PRODUCTION_ORDER_MAX_ITEMS_PER_INGEST = 50;
 // (modules/signals/core.ts) -- this repo's established "worth a nudge,
 // not an emergency" window.
 export const STALE_PRODUCTION_ORDER_DAYS = 7;
+
+// Badge classes for describeProductionOrderStatus tones (core.ts), shared by
+// the LET'S COOK list and detail pages so the two cannot drift.
+export const PRODUCTION_ORDER_TONE_CLASSES: Record<string, string> = {
+  neutral: "border-zinc-700 bg-zinc-900 text-zinc-400",
+  active: "border-amber-800/60 bg-amber-950/30 text-amber-300",
+  review: "border-cyan-800/60 bg-cyan-950/30 text-cyan-300",
+  complete: "border-emerald-800/60 bg-emerald-950/30 text-emerald-300",
+  closed: "border-zinc-700 bg-zinc-900 text-zinc-300",
+  cancelled: "border-red-900/60 bg-red-950/30 text-red-400",
+};

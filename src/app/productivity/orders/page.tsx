@@ -1,25 +1,10 @@
 import Link from "next/link";
 import { getProductionOrders } from "@/modules/production-orders/data";
-import {
-  PRODUCTION_ORDER_PHASE_LABELS,
-  PRODUCTION_ORDER_STATE_LABELS,
-} from "@/modules/production-orders/config";
+import { PRODUCTION_ORDER_TONE_CLASSES } from "@/modules/production-orders/config";
+import { describeProductionOrderStatus } from "@/modules/production-orders/core";
 import { formatCurrency } from "@/utils/date";
 
 export const dynamic = "force-dynamic";
-
-const PHASE_COLOR: Record<string, string> = {
-  RECEIVED: "border-zinc-700 bg-zinc-900 text-zinc-400",
-  IN_PRODUCTION: "border-amber-800/60 bg-amber-950/30 text-amber-300",
-  REVIEW: "border-cyan-800/60 bg-cyan-950/30 text-cyan-300",
-  DELIVERED: "border-emerald-800/60 bg-emerald-950/30 text-emerald-300",
-};
-
-const STATE_COLOR: Record<string, string> = {
-  OPEN: "text-emerald-400",
-  CLOSED: "text-zinc-500",
-  CANCELLED: "text-red-500",
-};
 
 export default async function ProductionOrdersPage() {
   const orders = await getProductionOrders();
@@ -89,16 +74,26 @@ function Section({
               }`}
             >
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`rounded border px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${PHASE_COLOR[order.phase]}`}
-                  >
-                    {PRODUCTION_ORDER_PHASE_LABELS[order.phase]}
-                  </span>
-                  <span className={`text-[10px] font-bold uppercase tracking-widest ${STATE_COLOR[order.state]}`}>
-                    {PRODUCTION_ORDER_STATE_LABELS[order.state]}
-                  </span>
-                </div>
+                {(() => {
+                  const status = describeProductionOrderStatus({
+                    state: order.state,
+                    phase: order.phase,
+                    activeCount: order.activeItemCount,
+                    doneCount: order.doneItemCount,
+                  });
+                  return (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded border px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${PRODUCTION_ORDER_TONE_CLASSES[status.tone]}`}
+                      >
+                        {status.headline}
+                      </span>
+                      {status.detail && (
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{status.detail}</span>
+                      )}
+                    </div>
+                  );
+                })()}
                 <p className="mt-1 truncate text-sm font-bold text-emerald-100">{order.label}</p>
                 <p className="mt-0.5 text-xs text-zinc-500">
                   {order.clientName} · {order.projectName} · {order.receivedAt}
