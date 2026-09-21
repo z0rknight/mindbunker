@@ -10,6 +10,13 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Night closure — Public motion, YouTube Red, System Inbound custody (2026-09-20–21)**
+  - [x] Public + MindBunker primary brand/interactive accent converged to YouTube Red `#FF0000`; semantic success/warning/unknown/derived treatments preserved; Client palette explicitly bounded and unchanged
+  - [x] Home and recovered `/book` source use finite one-shot entrance motion with reduced-motion immediate state; `/book` has a deterministic `href="/"` return action
+  - [x] `/start` decision model and write contract unchanged; accent tokens only changed to red for Home→intake continuity
+  - [x] Added authenticated `CRM → Inbound` read model over canonical Leads + immutable `guided_intake.submitted` events, grouped per Lead, with manual Leads excluded
+  - [x] Durable unread count = unread system-intake events; explicit open appends one idempotent `system_intake.seen` event referencing the immutable source event; no GET write, table or migration
+
 - [x] **Guided Lead Engine — production release closed (2026-09-20)**
   - [x] Shipped public `/start` and `/start?ref=pdbm` card flow plus narrow same-origin Operator API; GET/page views create zero writes
   - [x] Added migration `0053_slow_shen.sql` (`crm_events.payload_json`) for immutable schema-versioned intake evidence

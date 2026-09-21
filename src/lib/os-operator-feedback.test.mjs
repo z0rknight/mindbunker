@@ -128,7 +128,7 @@ test("reduced motion: outgoing value layer removed, entrance animations off, fla
   const m3 = css.slice(css.indexOf("M3: operator feedback"));
   const reduced = m3.slice(m3.indexOf("@media (prefers-reduced-motion: reduce)"));
   assert.doesNotMatch(reduced, /data-flash/, "the static changed/new marker must survive reduced motion");
-  assert.match(m3, /tr\.os-flash\[data-flash="brand"\] > td:first-child \{ box-shadow: inset 2px 0 0 var\(--os-violet-text\); \}/);
+  assert.match(m3, /tr\.os-flash\[data-flash="brand"\] > td:first-child \{ box-shadow: inset 2px 0 0 var\(--os-brand\); \}/);
 });
 
 // ── real-surface wiring ──────────────────────────────────────────────────

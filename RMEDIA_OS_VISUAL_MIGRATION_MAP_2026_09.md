@@ -1,13 +1,13 @@
 # RMEDIA OS — Visual Migration Map (2026-09-20)
 
-Companion to `RMEDIA_OS_VISUAL_FOUNDATION_SPEC_2026_09.md`. Legacy → future, measured against current source (operator worktree at `fc226dde2`; public site `aa04b1e`). **Planning only: no file listed here was changed.** Counts are line-level grep matches, useful for sizing, not exact instance counts.
+Companion to `RMEDIA_OS_VISUAL_FOUNDATION_SPEC_2026_09.md`. The original legacy map remains historical. **Current Sep 20–21 authority:** Public + MindBunker brand emphasis is YouTube Red `#FF0000`; the prior violet target is superseded. Home and `/book` have finite entrance motion; `/book` has deterministic Home navigation; Client remains outside the recolour. Counts below describe the earlier archaeology, not current source.
 
 ## 1. Legacy → future map
 | Legacy (current source) | Where | Future | Train |
 |---|---|---|---|
 | Press Start 2P heading / label | public `assets/css/typography.css`, `--font-pixel`; operator `productivity/sessions/fonts.ts` (`pixelFont`) | Inter 600 heading; mono 11px uppercase label | B, D |
 | Google `@import` of Inter + Press Start 2P (render-blocking) | public `typography.css` | one Inter load (400/500/600, latin, swap), self-hosted or `next/font`; no Press Start | B |
-| Red brand primary (`--color-yt-red #FF0000`, red CTAs) | public `variables.css`, CTAs | violet fill `#6E49E6`; red only for danger/REC | B |
+| Historical red brand primary | public shell and CTAs | **CURRENT: YouTube Red `#FF0000` retained/restored as Public + MindBunker identity; semantic danger also requires copy/context** | Night closure |
 | Green/gold/diamond "rarity" palette (`#00FF41`, `#FFD700`, `#00E5FF`) | public `variables.css` | semantic success/warning/info tokens, used rarely | B |
 | Tibia-style window chrome | public `windows.css` | card/panel recipes, hairline 1px | B |
 | Lobby / PLAYER HUD / XP bar / class cards / avatar slots / debuffs / skill tree / "skip tutorial" | public `index/onboarding.html` | neutral navigation ("Work", "Process", "Start a project"); system/status language; choice cards. Copy is not rewritten here | B |
@@ -21,7 +21,7 @@ Companion to `RMEDIA_OS_VISUAL_FOUNDATION_SPEC_2026_09.md`. Legacy → future, m
 | "The Vault" title / language | `src/app/client/[token]/page.tsx`, portal copy | "RMEDIA Client Portal" (visual and title; copy per Emmanuel) | C |
 | `font-black` headings | 16 in `projects/[id]/page.tsx`, 16 in `client/[token]/page.tsx`, 14 in `productivity/page.tsx`, 14 in `VideoEditor.tsx`, 12 in `projects/page.tsx`, 12 in `client/dashboard/page.tsx` | weight 600 at the correct role | C/D |
 | `text-zinc-500` (661) / `text-zinc-600` (388) muted text | app-wide | `--os-text-3 #8C8C96` (AA); zinc-600 only for disabled | A/D |
-| Cyan accent (464 utilities) beside violet (≈490) | app-wide | violet identity; cyan → neutral unless truly informational | D |
+| Historical cyan/violet competing accents | app-wide | **CURRENT: operator brand aliases converge to red; semantic green/amber/unknown/derived remain independent; Client resets its prior palette** | Night closure |
 | War Room ambient loops (`wr-lamp-flicker`, `wr-editor-pulse`, `wr-ticket-pulse`) | `globals.css`, `WarRoomRestaurantStage.tsx` | static state; a 2.4s ring only on genuinely live dots | E |
 | `wr-panel-enter` 160ms / `mb-stage-enter` 220ms | `globals.css` | 240ms panel-rise with tokens (or kept if equal) | E |
 | Body 32px hairline grid background | `globals.css` `body` | optional: keep on operator only, drop for public/client | A/D |
@@ -39,14 +39,14 @@ Companion to `RMEDIA_OS_VISUAL_FOUNDATION_SPEC_2026_09.md`. Legacy → future, m
 | 5 | CLIENT TRUST | Client | `client/[token]/page.tsx` | 13 pixel matches, 16 `font-black`, title "The Vault" | client density, Portal name (C) |
 | 6 | CLIENT TRUST | Client | `client/dashboard/page.tsx` | 5 pixel matches, 12 `font-black` | client density (C) |
 | 7 | CLIENT TRUST | Client/lead | `g/[token]/*`, `quoteavideo/*`, `book/*` | small pixel/font-black remnants (9/5/3/2 matches) in the gateway and forms | intake grammar (B/C) |
-| 8 | BRAND INCONSISTENCY | Public | `variables.css` | red as brand primary conflicts with red = danger/REC | violet primary (B) |
+| 8 | BRAND AUTHORITY | Public | shared public tokens | **CLOSED: red brand; destructive intent is never colour-only** | Night closure |
 | 9 | BRAND INCONSISTENCY | Public | `windows.css` | Tibia window chrome | panel/card recipes (B) |
 | 10 | BRAND INCONSISTENCY | Operator | `layout.tsx` | stale metadata description; no global Inter | metadata (flag) + font (A) |
 | 11 | OPERATOR CLARITY | Operator | `Sidebar.tsx` | emoji nav icons (13) | icon family (D) |
 | 12 | OPERATOR CLARITY | Operator | `PixelVisuals.tsx` + emoji + sprites | three icon systems | one family (A/D) |
 | 13 | OPERATOR CLARITY | Operator | app-wide | zinc-500/600 text fails AA (1,049 uses) | `--os-text-3` remap (A/D) |
 | 14 | OPERATOR CLARITY | Operator | `projects/*`, `productivity/*`, `VideoEditor.tsx` | `font-black` overuse flattens hierarchy | 600 at roles (D) |
-| 15 | OPERATOR CLARITY | Operator | app-wide | cyan (464) competes with violet (≈490) for "emphasis" | violet identity, semantic colour rare (D) |
+| 15 | OPERATOR CLARITY | Operator | app-wide | cyan/violet competed for brand emphasis | **CLOSED through operator-scoped red aliases; semantic tokens preserved** |
 | 16 | MOTION/POLISH | Operator | `globals.css`, `WarRoomRestaurantStage.tsx` | ambient flicker/pulse loops signal nothing | state-only ring (E) |
 | 17 | MOTION/POLISH | Operator | `VideoEditor`, `SessionInspectorPanel`, `QuickCaptureModal` | modals appear instantly | 240/140ms rise (E) |
 | 18 | LOW PRIORITY | Operator | `ExecutionQueueSection.tsx` (6), `projects/page.tsx` (10), `ProjectCover.tsx`, `NowFocusPanel.tsx` (4), `app/page.tsx` (4) | pixel remnants | fold into D when the page is touched |
@@ -70,13 +70,13 @@ No product-file edit, no import/route, no deploy, no D1 access, no copy rewrite,
 | 1–4 (public) | Press Start headings, RPG vocabulary, sprite art, render-blocking font import | CLOSED (public brand convergence, public `6496f6a`) |
 | 3 (motion) | Sprite idle-bob / lift | CLOSED (removed) |
 | 5–7 (client) | Vault title/language, pixel frames/badges, gateway remnants | CLOSED for `/client/*` (title + CSS neutralisation); `/g/*` unchanged |
-| 8–9 (public brand) | red primary, Tibia windows | CLOSED (violet/neutral, single stylesheet) |
+| 8–9 (public brand) | historical brand conflict, Tibia windows | CLOSED (YouTube Red/neutral, single stylesheet) |
 | 10 | stale metadata description | DEFERRED (copy is the owner's) |
 | 11–12 | emoji nav icons, three icon systems | DEFERRED |
 | 13 | muted text AA (zinc-500) | CLOSED (`@theme` value) |
 | 14 | `font-black` overuse | DEFERRED |
-| 15 | cyan vs violet accent | DEFERRED |
+| 15 | cyan vs violet brand accent | CLOSED for Operator brand emphasis (red aliases; semantic colours preserved) |
 | 16 | ambient War Room loops | CLOSED |
 | 17 | instant dialogs | PARTIAL (entrance added; exit deferred) |
 | 18 | pixel remnants (operator) | DEFERRED (heritage traces stay; none is structural or animated) |
-The `/start` route was not part of the original map; it already used the foundation tokens and is converged as described in the interaction map.
+`/start` changed accent tokens only to red for Home→intake continuity. Its decision model, questions, branches, answer envelope, API and persistence contract are unchanged.

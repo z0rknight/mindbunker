@@ -1,5 +1,9 @@
 # RMEDIA Guided Lead Engine — Production Release Closure
 
+## Sep 20–21 operator-handling extension
+
+The write contract below remains unchanged. A new authenticated `CRM → Inbound` read model projects canonical Leads plus immutable `guided_intake.submitted` events; manual Leads with no registered system-intake event are excluded. Multiple legitimate submissions remain separate events but group under one canonical Lead. The durable notification count is the number of unread system-intake events. First explicit open appends one idempotent `system_intake.seen` CRM event whose `payload_json` references `{ "sourceEventId": <intake event id> }`; it never mutates the intake event and ordinary GET routes write nothing. PDBM is one source inside this same custody model. No notification table, duplicate Lead store, generic notification framework or migration was added.
+
 **Date:** 2026-09-20
 
 **Status:** GREEN — released, production-verified, synthetic QA cleaned

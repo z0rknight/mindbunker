@@ -17,14 +17,16 @@ import { describeLeadSource, isReferralSource } from "@/modules/referrals/core";
 import { AddClientButton } from "./AddClientButton";
 import { ClientActions } from "./ClientActions";
 import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
+import { getSystemInbound } from "@/modules/system-inbound/data";
 
 export const dynamic = "force-dynamic";
 
 export default async function CRMPage() {
-  const [rawClients, listStats, workbenchData] = await Promise.all([
+  const [rawClients, listStats, workbenchData, systemInbound] = await Promise.all([
     getAllClients(),
     getClientListStats(),
     getCRMWorkbenchData(),
+    getSystemInbound(),
   ]);
 
   const today = todayISO();
@@ -76,6 +78,18 @@ export default async function CRMPage() {
           </Link>
         </div>
       </div>
+
+      <nav aria-label="CRM views" className="mb-6 flex gap-2 border-b border-zinc-800">
+        <Link href="/crm" aria-current="page" className="border-b-2 border-red-500 px-3 py-2 text-sm font-bold text-white">
+          All
+        </Link>
+        <Link href="/crm/inbound" className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-zinc-400 hover:text-white">
+          Inbound
+          <span className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" aria-label={`${systemInbound.unreadEventCount} unread system intake events`}>
+            {systemInbound.unreadEventCount}
+          </span>
+        </Link>
+      </nav>
 
       <div className="mb-6">
         <AddClientButton />

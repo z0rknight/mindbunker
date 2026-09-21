@@ -1,12 +1,16 @@
 # RMEDIA OS — Visual Foundation Spec (2026-09-20)
 
-Design foundation + prototype + future-solution preparation. **Nothing here is implemented.** No product code, route, import, bundle, D1 row or deploy changed. The companion artifacts are `docs/design/rmedia-os-styleboard.html` (+ `.css`, standalone) and `RMEDIA_OS_VISUAL_MIGRATION_MAP_2026_09.md`. All token values below are implemented literally in the styleboard CSS, so the board is the executable version of this spec.
+Design foundation plus implemented authority amendments. The original study remains below as historical evidence; `RMEDIA_CURRENT_HANDOFF_2026_09.md` owns current source/deploy facts.
 
-## 1. Source authority
+## Current amendment — Sep 20–21, 2026
+
+**YouTube Red `#FF0000` is the current primary brand and interactive accent for Public and MindBunker/Operator. This supersedes every violet-primary or “red only means danger” statement in the historical foundation below.** Public and Operator use a lighter red companion for small text/focus on dark surfaces. Client Portal was not broadly recoloured. Green remains confirmed success, amber remains warning/waiting, unknown remains neutral/dashed, and derived remains hatched plus explicitly labelled. Since red also carries brand identity, destructive meaning must additionally use destructive copy, context and confirmation rather than colour alone. Public entrance motion is finite (opacity + 8px rise, 300ms at public intensity, 50–60ms related-element stagger); reduced motion shows content immediately with no translation or delay.
+
+## 1. Historical source authority (superseded by current handoff)
 Operator HEAD = release = `production/current` = `fc226dde2` (docs-only over product commit `eb568bb`); Operator Worker `b7130cac-…`, Client Worker `6a619197-…`, D1 migration head 0052 (none pending); public site `aa04b1e`, clean. Direction inherited from `RMEDIA_OS_AESTHETIC_DIRECTION_AND_FINALIZATION_STUDY_2026_09.md` ("calm production pass", evidence-first, flat kitchen-display metaphor). Legacy facts measured against source on 2026-09-20 (counts in the migration map). The public site is a separate static repo and was read-only here.
 
-## 2. Locked brand decisions (not reopened)
-Violet is the primary accent; red is REC/danger/destructive/urgent only. Inter is the primary family for UI, body, headlines and public type; one restrained mono (system stack, nothing downloaded). Press Start 2P is not structural (heritage/easter egg at most). Mark = RM monogram + RMEDIA wordmark. Pixel language: public retired, client retired almost entirely, operator heritage traces only. The kitchen metaphor (LET'S COOK, batches, tickets, lanes) stays, rendered as a flat professional system with no sprites or RPG crafting UI. External name is "RMEDIA Client Portal" ("Vault" internal only). One design system, three densities.
+## 2. Historical brand decision (superseded)
+The former violet-primary decision is retained only to explain earlier artifacts. The current Public + MindBunker authority is YouTube Red `#FF0000` as stated in the amendment above. Inter is the primary family for UI, body, headlines and public type; one restrained mono (system stack, nothing downloaded). Press Start 2P is not structural. Mark = RM monogram + RMEDIA wordmark. Pixel language: public retired, client retired almost entirely, operator heritage traces only. External name is "RMEDIA Client Portal" ("Vault" internal only). One design system, three densities.
 
 ## 3. External research patterns (8 references, one pass)
 | Reference | Class | Useful pattern | Where RMEDIA can use it | Do not copy |

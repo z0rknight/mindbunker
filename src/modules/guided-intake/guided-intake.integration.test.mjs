@@ -11,6 +11,7 @@ import {
   validateGuidedIntakeSubmission,
 } from "./core.ts";
 import { resolveReferral, shouldAdoptReferralSource, sourceForNewLead } from "../referrals/core.ts";
+import { buildSystemInboundProjection } from "../system-inbound/core.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(__dirname, "../../db/migrations");
@@ -105,6 +106,22 @@ function submitSql(db, raw) {
   return { success: true, clientId, payload };
 }
 
+function inboundProjection(db) {
+  return buildSystemInboundProjection(db.prepare(`SELECT
+    e.id AS eventId,
+    e.client_id AS clientId,
+    e.type AS eventType,
+    e.payload_json AS payloadJson,
+    datetime(e.created_at / 1000, 'unixepoch') AS createdAt,
+    c.name,
+    c.email,
+    c.status
+    FROM crm_events e
+    JOIN clients c ON c.id = e.client_id
+    WHERE e.type IN ('guided_intake.submitted', 'system_intake.seen')
+    ORDER BY e.id DESC`).all().map((row) => ({ ...row, createdAt: row.createdAt ? new Date(`${row.createdAt}Z`) : null })));
+}
+
 test("0053 is additive: legacy events survive with NULL and structured evidence round-trips", () => {
   const db = migratedDb("0053_slow_shen.sql");
   db.exec("INSERT INTO clients (id, name, status) VALUES (9001, 'Legacy lead', 'lead')");
@@ -168,4 +185,45 @@ test("honeypot returns ordinary success with exactly zero writes", () => {
   assert.equal(result.honeypot, true);
   assert.equal(db.prepare("SELECT COUNT(*) c FROM clients").get().c, 0);
   assert.equal(db.prepare("SELECT COUNT(*) c FROM crm_events").get().c, 0);
+});
+
+test("sandbox A-F preserves canonical custody and restores the recorded baseline", () => {
+  const db = migratedDb();
+  const baseline = {
+    clients: db.prepare("SELECT COUNT(*) c FROM clients").get().c,
+    events: db.prepare("SELECT COUNT(*) c FROM crm_events").get().c,
+  };
+
+  // A: a manual Lead exists in canonical CRM but not System Inbound.
+  db.exec("INSERT INTO clients (id, name, status, email, source) VALUES (100, 'Manual only', 'lead', 'manual-only@example.com', 'manual')");
+  assert.equal(inboundProjection(db).groups.length, 0);
+
+  // B/C: generic and PDBM submissions become distinct canonical Leads and intakes.
+  submitSql(db, rawSubmission({ email: "generic-sandbox@example.com", key: "sandbox-generic" }));
+  submitSql(db, rawSubmission({ email: "pdbm-sandbox@example.com", key: "sandbox-pdbm", ref: "pdbm" }));
+  let inbound = inboundProjection(db);
+  assert.equal(inbound.groups.length, 2);
+  assert.equal(inbound.unreadEventCount, 2);
+  assert.equal(inbound.groups.find((group) => group.email === "pdbm-sandbox@example.com").latestSourceLabel, "Perfect Day Business Mentorship (PDBM)");
+
+  // D/E: a manual Lead is reused, then a second legitimate intake is preserved.
+  db.exec("INSERT INTO clients (id, name, status, email, source) VALUES (200, 'Manual then system', 'lead', 'manual-system@example.com', 'manual')");
+  submitSql(db, rawSubmission({ email: "manual-system@example.com", key: "sandbox-existing-1" }));
+  submitSql(db, rawSubmission({ email: "manual-system@example.com", key: "sandbox-existing-2", ref: "pdbm" }));
+  const reusedLead = db.prepare("SELECT id FROM clients WHERE email = 'manual-system@example.com'").get();
+  assert.equal(reusedLead.id, 200);
+  assert.equal(db.prepare("SELECT COUNT(*) c FROM clients WHERE email = 'manual-system@example.com'").get().c, 1);
+  inbound = inboundProjection(db);
+  const reusedGroup = inbound.groups.find((group) => group.clientId === 200);
+  assert.equal(reusedGroup.intakeCount, 2);
+  assert.equal(reusedGroup.unreadCount, 2);
+
+  // F: replaying the same request is a no-op for both custody and notification.
+  assert.equal(submitSql(db, rawSubmission({ email: "manual-system@example.com", key: "sandbox-existing-2", ref: "pdbm" })).deduped, true);
+  assert.equal(inboundProjection(db).groups.find((group) => group.clientId === 200).intakeCount, 2);
+
+  db.exec("DELETE FROM clients WHERE id IN (100, 200) OR email IN ('generic-sandbox@example.com', 'pdbm-sandbox@example.com')");
+  assert.equal(db.prepare("SELECT COUNT(*) c FROM clients").get().c, baseline.clients);
+  assert.equal(db.prepare("SELECT COUNT(*) c FROM crm_events").get().c, baseline.events);
+  assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 });
