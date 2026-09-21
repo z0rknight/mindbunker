@@ -171,8 +171,8 @@ function ActiveSessionCard({
 
   return (
     <section
-      className={`pixel-frame ${stale ? "pixel-frame-attention" : "pixel-frame-live"} rounded-2xl border p-4 sm:p-5 ${compact ? "mb-8" : "mb-7"} ${
-        stale ? "border-amber-500/40 bg-amber-500/[0.08]" : "border-emerald-500/35 bg-emerald-500/[0.07]"
+      className={`${compact ? "border-l-[3px] bg-zinc-900/60" : `pixel-frame ${stale ? "pixel-frame-attention" : "pixel-frame-live"}`} rounded-2xl border p-4 sm:p-5 ${compact ? "mb-8" : "mb-7"} ${
+        compact ? (stale ? "border-zinc-800 border-l-amber-500" : "border-zinc-800 border-l-red-600") : stale ? "border-amber-500/40 bg-amber-500/[0.08]" : "border-emerald-500/35 bg-emerald-500/[0.07]"
       }`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

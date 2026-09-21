@@ -397,7 +397,7 @@ export function StartWorkButton() {
       <button
         type="button"
         onClick={handleOpen}
-        className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-5 text-sm font-bold text-white transition-all hover:bg-emerald-500 active:scale-95"
+        className="operator-command"
       >
         <span className="text-2xl">▶</span>
         <span>Start Work</span>
@@ -579,7 +579,7 @@ export function NewWorkButton() {
       <button
         type="button"
         onClick={handleOpen}
-        className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl bg-cyan-700 px-5 py-5 text-sm font-bold text-white transition-all hover:bg-cyan-600 active:scale-95"
+        className="operator-command operator-command-primary"
       >
         <span className="text-2xl">＋</span>
         <span>New Work</span>
@@ -702,7 +702,7 @@ export function FinishedVideoButton() {
 
   return (
     <>
-      <button type="button" onClick={handleOpen} className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-5 text-sm font-bold text-white transition-all hover:bg-violet-500 active:scale-95">
+      <button type="button" onClick={handleOpen} className="operator-command">
         <span className="text-2xl">🎬</span>
         <span>Finished Video</span>
       </button>

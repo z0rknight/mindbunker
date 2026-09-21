@@ -6,15 +6,6 @@ interface StatCardProps {
   icon?: string;
 }
 
-const accentMap = {
-  violet: "border-violet-600/30 bg-violet-600/5",
-  green: "border-emerald-600/30 bg-emerald-600/5",
-  red: "border-red-600/30 bg-red-600/5",
-  blue: "border-blue-600/30 bg-blue-600/5",
-  amber: "border-amber-600/30 bg-amber-600/5",
-  zinc: "border-zinc-700 bg-zinc-800/50",
-};
-
 const valueAccentMap = {
   violet: "text-violet-400",
   green: "text-emerald-400",
@@ -26,10 +17,10 @@ const valueAccentMap = {
 
 export function StatCard({ label, value, sub, accent = "zinc", icon }: StatCardProps) {
   return (
-    <div className={`rounded-xl border p-4 ${accentMap[accent]}`}>
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
       <div className="flex items-start justify-between mb-2">
         <p className="text-zinc-400 text-xs font-medium uppercase tracking-wider">{label}</p>
-        {icon && <span className="text-lg">{icon}</span>}
+        {icon && <span className="text-lg grayscale opacity-70">{icon}</span>}
       </div>
       <p className={`text-2xl font-bold ${valueAccentMap[accent]}`}>
         {value === null || value === undefined ? "—" : value}

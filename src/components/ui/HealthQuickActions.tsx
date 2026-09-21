@@ -181,10 +181,7 @@ export function CoffeeQuickLogButton({ todayCount }: { todayCount: number | null
       onClick={handleClick}
       disabled={isPending}
       aria-label="Log one coffee"
-      className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-all active:scale-95 w-full
-        ${flash ? "border-amber-400 bg-amber-500 text-white scale-95" : "border-amber-800/50 bg-amber-950/30 text-amber-300 hover:bg-amber-900/40"}
-        ${isPending ? "opacity-80" : "cursor-pointer"}
-      `}
+      className="operator-command"
     >
       <span className="text-xl">☕</span>
       <span>{flash ? "Logged!" : "+1 Coffee"}</span>

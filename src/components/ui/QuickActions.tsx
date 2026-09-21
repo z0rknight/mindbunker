@@ -86,7 +86,7 @@ export function AddIncomeButton({
           setError(null);
           setOpen(true);
         }}
-        className="flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm bg-emerald-700 hover:bg-emerald-600 text-white active:scale-95 transition-all w-full cursor-pointer"
+        className="operator-command"
       >
         <span className="text-2xl">💰</span>
         <span>Add Income</span>
@@ -273,7 +273,7 @@ export function AddExpenseButton() {
           setError(null);
           setOpen(true);
         }}
-        className="flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm bg-red-800 hover:bg-red-700 text-white active:scale-95 transition-all w-full cursor-pointer"
+        className="operator-command"
       >
         <span className="text-2xl">💸</span>
         <span>Add Expense</span>
@@ -446,7 +446,7 @@ export function RegisterUpworkTimeButton({
           setOpen(true);
         }}
         disabled={contracts.length === 0}
-        className="flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm bg-teal-800 hover:bg-teal-700 text-white active:scale-95 transition-all w-full cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+        className="operator-command"
         title={contracts.length === 0 ? "No active hourly contract recorded yet" : undefined}
       >
         <span className="text-2xl">🕒</span>
@@ -586,7 +586,7 @@ export function LogTodayButton({ todayISODate }: { todayISODate?: string } = {})
           setError(null);
           setOpen(true);
         }}
-        className="flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm bg-blue-800 hover:bg-blue-700 text-white active:scale-95 transition-all w-full cursor-pointer"
+        className="operator-command"
       >
         <span className="text-2xl">🫀</span>
         <span>Log Today</span>
@@ -704,13 +704,7 @@ export function LogBikeRideButton({ todayISODate }: { todayISODate?: string } = 
           setOpen(true);
         }}
         disabled={isPending}
-        className={`flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm transition-all w-full
-          ${flash
-            ? "bg-cyan-500 text-white scale-95"
-            : "bg-cyan-800 hover:bg-cyan-700 text-white active:scale-95"
-          }
-          ${isPending ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}
-        `}
+        className="operator-command"
       >
         <span className="text-2xl">{flash ? "✅" : "🚴‍♂️"}</span>
         <span>{flash ? "Logged!" : "Log Bike Ride"}</span>
@@ -802,13 +796,7 @@ export function LogWalkButton({ todayISODate }: { todayISODate?: string } = {}) 
           setOpen(true);
         }}
         disabled={isPending}
-        className={`flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-xl font-bold text-sm transition-all w-full
-          ${flash
-            ? "bg-teal-500 text-white scale-95"
-            : "bg-teal-800 hover:bg-teal-700 text-white active:scale-95"
-          }
-          ${isPending ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}
-        `}
+        className="operator-command"
       >
         <span className="text-2xl">{flash ? "✅" : "🚶‍♂️"}</span>
         <span>{flash ? "Logged!" : "Log Walk"}</span>

@@ -141,7 +141,7 @@ export default async function DashboardPage() {
           <RegisterUpworkTimeButton contracts={upworkQuickEntryContracts} />
           <Link
             href="/productivity/orders/new"
-            className="flex flex-col items-center justify-center gap-2 rounded-xl border border-emerald-800/60 bg-black px-6 py-5 font-mono text-sm font-bold text-emerald-400 transition-all hover:border-emerald-500 hover:bg-zinc-950 active:scale-95"
+            className="operator-command"
           >
             <span className="text-lg">🔥</span>
             LET&apos;S COOK
@@ -169,13 +169,13 @@ export default async function DashboardPage() {
               <Link
                 key={target.videoId}
                 href={videoWorkspaceHref(target.videoId, "/")}
-                className="pixel-frame rounded-xl border border-cyan-900/50 bg-cyan-950/10 p-4 transition hover:border-cyan-600/60"
+                className="rounded-xl border border-zinc-700 bg-zinc-900/60 p-4 transition hover:border-red-700"
               >
                 <p className="truncate text-sm font-black text-white">{target.videoTitle}</p>
                 <p className="mt-1 truncate text-xs text-zinc-500">
                   {[target.clientName, target.projectName].filter(Boolean).join(" / ") || "Unattributed video"}
                 </p>
-                <p className="mt-2 text-[11px] font-bold text-cyan-300">
+                <p className="mt-2 text-[11px] font-bold text-zinc-300">
                   Last worked {formatLastActive(target.lastWorkedAt, now.toISOString())} · Continue →
                 </p>
               </Link>
@@ -198,7 +198,7 @@ export default async function DashboardPage() {
                 <Link
                   key={group.key}
                   href={videoWorkspaceHref(first.videoId, "/")}
-                  className={`pixel-frame pixel-frame-attention flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-3 transition ${attentionClass(group.reason)}`}
+                  className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border border-l-[3px] bg-zinc-900/60 px-4 py-3 transition ${attentionClass(group.reason)}`}
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -288,7 +288,7 @@ export default async function DashboardPage() {
                 <StatCard
                   label="Client Production"
                   value={formatClosedDuration(todayWorkSplit.clientProductionSeconds)}
-                  accent="blue"
+                  accent="zinc"
                   icon="🎬"
                 />
                 <StatCard
@@ -301,7 +301,7 @@ export default async function DashboardPage() {
                   label="Total Intentional"
                   value={formatClosedDuration(todayWorkSplit.totalIntentionalSeconds)}
                   sub={`${todayWorkStats.sessionCount} ${todayWorkStats.sessionCount === 1 ? "session" : "sessions"}`}
-                  accent="green"
+                  accent="zinc"
                   icon="⏱️"
                 />
                 {/* Sep 16 Operational Reality Patch: external, platform-
@@ -392,10 +392,10 @@ export default async function DashboardPage() {
 
 function attentionClass(reason: AttentionReason) {
   if (reason === "DATA_ISSUE" || reason === "OVERDUE" || reason === "BLOCKED") {
-    return "border-red-900/60 bg-red-950/15 text-red-300 hover:border-red-700";
+    return "border-zinc-800 border-l-red-600 text-red-300 hover:border-red-700";
   }
   if (reason === "CHANGES_REQUESTED") {
-    return "border-orange-900/60 bg-orange-950/15 text-orange-300 hover:border-orange-700";
+    return "border-zinc-800 border-l-amber-500 text-amber-300 hover:border-amber-500";
   }
-  return "border-violet-900/60 bg-violet-950/10 text-violet-300 hover:border-violet-700";
+  return "border-zinc-800 border-l-zinc-500 text-zinc-300 hover:border-zinc-600";
 }

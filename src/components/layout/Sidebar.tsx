@@ -144,19 +144,17 @@ export function Sidebar() {
                       href={item.href}
                       aria-current={isActive ? "page" : undefined}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                        isActive && isWarRoom
-                          ? "bg-cyan-900/40 text-cyan-300 border border-cyan-700/50"
-                          : isActive
-                          ? "bg-violet-600/20 text-violet-400 border border-violet-600/30"
+                        isActive
+                          ? "border-l-2 border-l-red-600 bg-zinc-900 text-white"
                           : isWarRoom
-                          ? "text-cyan-500 hover:text-cyan-300 hover:bg-cyan-900/20 border border-cyan-900/30"
+                          ? "text-zinc-300 hover:text-white hover:bg-zinc-800"
                           : "text-zinc-400 hover:text-white hover:bg-zinc-800"
                       }`}
                     >
-                      <span className="text-base">{item.icon}</span>
+                      <span className="text-base grayscale opacity-70" aria-hidden="true">{item.icon}</span>
                       {item.label}
                       {isWarRoom && !isActive && (
-                        <span className="ml-auto text-xs bg-cyan-900/50 text-cyan-500 px-1.5 py-0.5 rounded font-bold">
+                        <span className="ml-auto rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] font-bold text-zinc-400">
                           NEW
                         </span>
                       )}
@@ -199,10 +197,10 @@ export function Sidebar() {
               aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
               className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[9px] font-semibold transition-colors ${
-                isActive ? "text-violet-300" : "text-zinc-500 active:bg-zinc-800 active:text-white"
+                isActive ? "border-t-2 border-t-red-600 bg-zinc-900 text-white" : "text-zinc-500 active:bg-zinc-800 active:text-white"
               }`}
             >
-              <span className="text-xl leading-none" aria-hidden="true">{item.icon}</span>
+              <span className="text-xl leading-none grayscale" aria-hidden="true">{item.icon}</span>
               <span className="max-w-full truncate">{item.mobileLabel}</span>
             </Link>
           );
