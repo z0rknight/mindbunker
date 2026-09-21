@@ -16,6 +16,8 @@ The original February 2026 visual design is the canonical interface. The separat
   - [x] `/start` decision model and write contract unchanged; accent tokens only changed to red for Home→intake continuity
   - [x] Added authenticated `CRM → Inbound` read model over canonical Leads + immutable `guided_intake.submitted` events, grouped per Lead, with manual Leads excluded
   - [x] Durable unread count = unread system-intake events; explicit open appends one idempotent `system_intake.seen` event referencing the immutable source event; no GET write, table or migration
+  - [x] Live Workers: Public `e3e35906`, separate `/book` `06bd4bd2`, Operator `c87dba7e`; Client `cf5be8f8` unchanged. Operator code `88252f6`, public/book source `1ce6259` (local no-remote repo). One PDBM QA Lead 9 + events 273–275 was exact-guard cleaned; baseline 6 Leads / 267 events / 1 pre-existing unread restored, migration head 0053 and FKs clean.
+  - [ ] Separate observed issue: Sensor Activity web page emitted React hydration warning `#418` on fresh load; page renders, causation not established, not changed in this release. Do not claim zero operator console errors until diagnosed separately.
 
 - [x] **Guided Lead Engine — production release closed (2026-09-20)**
   - [x] Shipped public `/start` and `/start?ref=pdbm` card flow plus narrow same-origin Operator API; GET/page views create zero writes

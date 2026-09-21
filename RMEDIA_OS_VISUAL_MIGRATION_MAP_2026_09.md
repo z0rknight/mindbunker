@@ -1,6 +1,6 @@
 # RMEDIA OS — Visual Migration Map (2026-09-20)
 
-Companion to `RMEDIA_OS_VISUAL_FOUNDATION_SPEC_2026_09.md`. The original legacy map remains historical. **Current Sep 20–21 authority:** Public + MindBunker brand emphasis is YouTube Red `#FF0000`; the prior violet target is superseded. Home and `/book` have finite entrance motion; `/book` has deterministic Home navigation; Client remains outside the recolour. Counts below describe the earlier archaeology, not current source.
+Companion to `RMEDIA_OS_VISUAL_FOUNDATION_SPEC_2026_09.md`. The original legacy map remains historical. **Current Sep 21 production authority:** Public + MindBunker brand emphasis is YouTube Red `#FF0000`; the prior violet target is superseded. Home and the separate `/book` Worker have finite entrance motion; `/book` has deterministic Home navigation; `/start` accent alone is red for continuity; Client remains outside the recolour. Source/deploy versions are in the current handoff and Night Closure release report. Counts below describe the earlier archaeology, not current source.
 
 ## 1. Legacy → future map
 | Legacy (current source) | Where | Future | Train |

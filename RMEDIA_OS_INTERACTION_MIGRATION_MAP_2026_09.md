@@ -2,7 +2,7 @@
 
 Companion to `RMEDIA_OS_INTERACTION_AND_MOTION_SYSTEM_2026_09.md` and the lab (`docs/design/rmedia-os-interaction-lab.*`). Line references are from source at `21cc20b`. **Status: M1–M6 IMPLEMENTED / CLOSED (2026-09-20).**
 
-**Sep 20–21 amendment:** Public Home and the separate `/book` Worker now use one-shot opacity/8px-rise entrance motion (300ms public panel timing; 50–60ms related-element stagger), with immediate static rendering under reduced motion and zero ambient/infinite public animation. `/book` also has a deterministic normal anchor back to `/`. `/start` retained all Card UX and business behavior; only its accent tokens changed to YouTube Red for continuity.
+**Sep 21 production amendment:** Public Home and the separate `/book` Worker use one-shot opacity/8px-rise entrance motion (300ms public panel timing; 50–60ms related-element stagger), with immediate static rendering under reduced motion and zero ambient/infinite public animation. `/book` also has a deterministic normal anchor back to `/`. `/start` retained all Card UX and business behavior; only its accent tokens changed to YouTube Red for continuity. Source authority and live verification are recorded in the current handoff and Night Closure release report.
 
 ## 1. Legacy → future map
 | Legacy (source) | Future | Lab scene |
