@@ -1,6 +1,6 @@
 # RMEDIA OS — Interaction Migration Map (2026-09-20)
 
-Companion to `RMEDIA_OS_INTERACTION_AND_MOTION_SYSTEM_2026_09.md` and the lab (`docs/design/rmedia-os-interaction-lab.*`). Line references are from source at `21cc20b`. **Status: M1–M4 IMPLEMENTED (2026-09-20); M5–M6 are planning only.**
+Companion to `RMEDIA_OS_INTERACTION_AND_MOTION_SYSTEM_2026_09.md` and the lab (`docs/design/rmedia-os-interaction-lab.*`). Line references are from source at `21cc20b`. **Status: M1–M6 IMPLEMENTED / CLOSED (2026-09-20).**
 
 ## 1. Legacy → future map
 | Legacy (source) | Future | Lab scene |
@@ -53,8 +53,8 @@ Companion to `RMEDIA_OS_INTERACTION_AND_MOTION_SYSTEM_2026_09.md` and the lab (`
 - Not built (no current question): sparkline, timeline strip, ACTIVE-view coverage rail, donut/pie. The lab keeps those recipes.
 - **M5/M6 dependencies:** none blocking.
 
-**M5 — Public + guided intake motion (P1-P2, medium; separate public Worker).** Files: `rmedia-public-site/public/assets/css/{animations,components,variables,responsive}.css`, `index.html`/`onboarding.html`, the guided-intake prototype (`docs/prototypes/guided-intake/*`, owned by another track) once it is approved for production, `src/app/quoteavideo/*`, `src/app/book/*`, `src/app/g/[token]/*`. Components: ChoiceCard, nav/CTA states, poster frame, before/after range, one-time reveal.
-**M6 — Legacy loop removal + final cleanup (P2, low).** Files: `globals.css` (`wr-*`, glow markers), `WarRoomRestaurantStage.tsx`, `projects/ProjectCover.tsx`, `components/health/ActivityTimeline.tsx`, public `animations.css` idle-bob, emoji feedback glyphs. War Room lane FLIP lands here or in M3 depending on scope. QA: visual regression + reduced motion.
+**M5 — IMPLEMENTED 2026-09-20 (final convergence; public `1eb74170`). Original scope: Public + guided intake motion (P1-P2, medium; separate public Worker).** Files: `rmedia-public-site/public/assets/css/{animations,components,variables,responsive}.css`, `index.html`/`onboarding.html`, the guided-intake prototype (`docs/prototypes/guided-intake/*`, owned by another track) once it is approved for production, `src/app/quoteavideo/*`, `src/app/book/*`, `src/app/g/[token]/*`. Components: ChoiceCard, nav/CTA states, poster frame, before/after range, one-time reveal.
+**M6 — IMPLEMENTED 2026-09-20 (final convergence; operator `1362c77c`, client `cf5be8f8`, public `1eb74170`). Original scope: Legacy loop removal + final cleanup (P2, low).** Files: `globals.css` (`wr-*`, glow markers), `WarRoomRestaurantStage.tsx`, `projects/ProjectCover.tsx`, `components/health/ActivityTimeline.tsx`, public `animations.css` idle-bob, emoji feedback glyphs. War Room lane FLIP lands here or in M3 depending on scope. QA: visual regression + reduced motion.
 Reorder rationale: M1 unblocks everything and is invisible; M2 moves before M3 because the client sees motion once and trust matters most; M4 waits for M1 primitives; M5 waits for the separately-owned intake prototype; M6 is deletions.
 **Next recommended: M1 only** (tokens + core feedback), then decide M2.
 
@@ -103,3 +103,9 @@ Tailwind v4: express the tokens with `@theme` custom properties and use `data-[f
 
 ## 5. What this wave did not do
 No product change, no imports/routes, no deploy, no D1 access, no framework, no sound, no haptics, no visual regression run, no light theme.
+
+### M5 + M6 closure (as built)
+- **/start (public repo `public/start/`)**: production motion tokens, hold-then-advance selection, direction-aware steps, "Step n of N" progress, delayed pending cue with `aria-busy`/`aria-disabled`, card focus ring, sticky bar only on contact/review, Inter, brand link, copy fix. Model/envelope/API untouched.
+- **Legacy loops removed (7)**: public idle-bob ×3 (`.avatar-slot`, `.huge-slot`, hover speed-up), War Room lamp flicker, editor pulse, review-ticket pulse, review/blocked marker ring loop. **Lift/glow removed**: public class-card lift and glows, War Room table hover lift and glows, stat-tile scale, xp-bar glow.
+- **Kept on purpose**: the shared live ring (`mb-live-pulse`, live sessions only), `mb-stage-enter`, `wr-panel-enter`, CTA press, scroll-progress bar.
+- **Deferred**: dialog exit motion (needs a modal primitive), public game vocabulary/sprites/red primary, emoji nav icons.

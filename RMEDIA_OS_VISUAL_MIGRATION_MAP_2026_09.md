@@ -63,3 +63,20 @@ A first (invisible), then C or B (decision 4 in the spec), D per page, E last. E
 
 ## 5. What this wave deliberately did not do
 No product-file edit, no import/route, no deploy, no D1 access, no copy rewrite, no logo system, no font download, no emoji replacement, no light-mode implementation, no visual regression run.
+
+## 6. Closure status (final visual convergence, 2026-09-20)
+| # | Item | Status |
+|---|---|---|
+| 1–4 (public) | Press Start headings, RPG vocabulary, sprite art, render-blocking font import | DEFERRED (content + brand pass; the game vocabulary remains on public pages) |
+| 3 (motion) | Sprite idle-bob / lift | CLOSED (removed) |
+| 5–7 (client) | Vault title/language, pixel frames/badges, gateway remnants | CLOSED for `/client/*` (title + CSS neutralisation); `/g/*` unchanged |
+| 8–9 (public brand) | red primary, Tibia windows | DEFERRED |
+| 10 | stale metadata description | DEFERRED (copy is the owner's) |
+| 11–12 | emoji nav icons, three icon systems | DEFERRED |
+| 13 | muted text AA (zinc-500) | CLOSED (`@theme` value) |
+| 14 | `font-black` overuse | DEFERRED |
+| 15 | cyan vs violet accent | DEFERRED |
+| 16 | ambient War Room loops | CLOSED |
+| 17 | instant dialogs | PARTIAL (entrance added; exit deferred) |
+| 18 | pixel remnants (operator) | DEFERRED (heritage traces stay; none is structural or animated) |
+The `/start` route was not part of the original map; it already used the foundation tokens and is converged as described in the interaction map.
