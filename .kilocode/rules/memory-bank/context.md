@@ -10,6 +10,12 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Red as signal, not surface — Operator visual correction (2026-09-21)**
+  - [x] Production Dashboard's 11 action tiles unified on neutral surfaces; New Work alone uses a narrow `#FF0000` edge, not a red fill. Sidebar active state, NOW, Attention and Today cards are neutral-first; semantic amber/red/green facts remain distinct.
+  - [x] Public Home, `/book`, `/start` inspected and intentionally unchanged; Client and Sensor untouched.
+  - [x] 1481 tests, Next build/TypeScript, scoped lint and desktop live QA passed. Operator Worker `d85487b6` only. D1 stayed 6 Leads/267 CRM events, migration 0053, FK clean, read-only queries wrote zero rows.
+  - [ ] 390×844 live screenshot remains unverified: in-app browser viewport override stayed at 1280×720. See `RMEDIA_OS_RED_AS_SIGNAL_VISUAL_CORRECTION_2026_09.md`.
+
 - [x] **Night closure — Public motion, YouTube Red, System Inbound custody (2026-09-20–21)**
   - [x] Public + MindBunker primary brand/interactive accent converged to YouTube Red `#FF0000`; semantic success/warning/unknown/derived treatments preserved; Client palette explicitly bounded and unchanged
   - [x] Home and recovered `/book` source use finite one-shot entrance motion with reduced-motion immediate state; `/book` has a deterministic `href="/"` return action

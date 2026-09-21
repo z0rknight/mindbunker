@@ -1,13 +1,17 @@
 # RMEDIA OS / MindBunker — Current Handoff
-**Updated:** 2026-09-21 (Night Closure released; QA-clean) · Supersedes every earlier handoff and wave narrative. Read this plus the current source; older release paragraphs below are historical evidence unless explicitly marked current.
+**Updated:** 2026-09-21 (Red-as-signal visual correction released; desktop QA green, mobile screenshot unverified) · Supersedes every earlier handoff and wave narrative. Read this plus the current source; older release paragraphs below are historical evidence unless explicitly marked current.
 
-## Current release authority — Sep 21 Night Closure
+## Current visual correction — Sep 21
+
+The Night Closure's large red Operator surfaces were corrected after live review. The Dashboard now uses neutral action tiles, one thin `#FF0000` priority edge on New Work, narrow active-nav and severity edges, and neutral NOW/Attention/Today bodies. `#FF0000` remains the brand anchor; it is a signal, not a tile fill. No actions, domain logic, D1 schema, Client Portal, Sensor native app, or Public/booking/intake runtime changed. Public Home, `/book`, and `/start` were live-inspected and had no oversized red surfaces. Code `125fee74da4f82d52a36c5bb49850aaa805094c7`; Operator Worker **`d85487b6-32b4-4d64-815c-49a385771bea`** (rollback `c87dba7e-ba59-4161-9501-24576daa3a5a`). Tests **1481/1481**, build/TypeScript and desktop live visual QA passed with no Dashboard console error. D1 remained **6 Leads / 267 events**, head `0053_slow_shen.sql`, FK clean and read-only queries wrote 0 rows. The 390×844 screenshot is **not verified** because the in-app browser viewport control remained at 1280×720. See `RMEDIA_OS_RED_AS_SIGNAL_VISUAL_CORRECTION_2026_09.md`.
+
+## Previous release evidence — Sep 21 Night Closure (superseded for Operator visuals/version by the correction above)
 
 Public and MindBunker/Operator now use **YouTube Red `#FF0000`** as the primary brand/interactive accent. This supersedes the older violet-primary descriptions below; Client Portal was not recoloured or deployed. The public Home and the separately routed `/book` Worker have finite entrance motion, reduced-motion immediate rendering, and zero infinite public animation; `/book` has a normal `href="/"` return link. `/start` changed accent tokens only (red for continuity), not questions, decision model, API or persistence.
 
 `CRM → Inbound` (`/mindbunker/crm/inbound`) is an authenticated read model over the one canonical Lead plus immutable `guided_intake.submitted` events. Explicit registration of intake event types excludes manual Leads unless they later submit a real system intake. Multiple intakes remain distinct historical events, grouped per Lead. The durable badge counts **unseen system-intake events**, not Leads; opening only that Lead's unread intakes through the explicit POST action appends idempotent `system_intake.seen` events. GET routes write nothing. Source/referral, received time, schema-v1 payload and server-derived path remain on immutable events after mutable Lead edits. No second Lead store, notification table or migration.
 
-| Authority | Current production truth |
+| Authority | Night Closure baseline (historical where superseded above) |
 |---|---|
 | Operator source | Code commit `88252f6e8550de0238ff1e51245a9b2fc5852341`; this handoff's docs-only descendant is the final `release/video-workspace-hotfix = production/current` authority. |
 | Operator Worker | `mindbunker` **`c87dba7e-ba59-4161-9501-24576daa3a5a`**; rollback `1362c77c-f19a-4603-adb6-b0d0214a3d6c`. |
