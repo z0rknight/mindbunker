@@ -106,7 +106,8 @@ export function QuickCaptureModal({
         role="dialog"
         aria-modal="true"
         aria-label="Quick Capture"
-        className="max-h-[78vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl mx-4"
+        data-enter="true"
+        className="os-arrive max-h-[78vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl mx-4"
       >
         <header className="mb-4 flex items-center justify-between gap-3">
           <div>

@@ -62,7 +62,7 @@ function StatTile({
 }: StatTileProps) {
   return (
     <div
-      className={`rounded-xl border p-4 shadow-lg ${tileAccentMap[accent]} transition-all duration-200 hover:scale-[1.02]`}
+      className={`rounded-xl border p-4 shadow-lg ${tileAccentMap[accent]} transition-colors duration-200`}
     >
       <div className="flex items-start justify-between mb-2">
         <p className="text-zinc-400 text-xs font-medium uppercase tracking-wider leading-tight">
@@ -142,7 +142,7 @@ function StreakDisplay({ streak }: { streak: number }) {
             : "💤";
 
   return (
-    <div className="rounded-xl border border-orange-500/40 bg-orange-500/5 shadow-lg shadow-orange-500/10 p-4 transition-all duration-200 hover:scale-[1.02]">
+    <div className="rounded-xl border border-orange-500/40 bg-orange-500/5 shadow-lg shadow-orange-500/10 p-4 transition-colors duration-200">
       <div className="flex items-start justify-between mb-2">
         <p className="text-zinc-400 text-xs font-medium uppercase tracking-wider">
           Consistency Streak

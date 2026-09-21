@@ -30,7 +30,7 @@ function primaryPortalLink(video: {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "The Vault | RMedia",
+  title: "RMEDIA Client Portal",
   description: "Your private RMedia project space.",
   robots: { index: false, follow: false },
   referrer: "no-referrer",
@@ -82,7 +82,7 @@ function VaultFrame({ children }: { children: React.ReactNode }) {
             <div>
               <p className="text-sm font-black tracking-[0.16em] text-white">RMEDIA</p>
               <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-zinc-600">
-                The Vault
+                Client Portal
               </p>
             </div>
           </div>
@@ -111,7 +111,7 @@ export default async function ClientPortalPage({
           <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-800 text-xl text-zinc-400">
             ◈
           </div>
-          <h1 className="text-2xl font-black text-white">Vault unavailable</h1>
+          <h1 className="text-2xl font-black text-white">Portal unavailable</h1>
           <p className="mt-3 max-w-lg text-sm leading-6 text-zinc-400">
             This private link is invalid, expired, or has been replaced. Ask
             Emmanuel for a new link.

@@ -252,7 +252,8 @@ export function VideoEditor({
             role="dialog"
             aria-modal="true"
             aria-labelledby={`video-workspace-title-${video.id}`}
-            className="safe-sheet max-h-[94dvh] w-full overflow-y-auto rounded-t-3xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl sm:mx-4 sm:rounded-2xl sm:p-6 md:max-w-6xl md:p-7"
+            data-enter="true"
+            className="os-arrive safe-sheet max-h-[94dvh] w-full overflow-y-auto rounded-t-3xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl sm:mx-4 sm:rounded-2xl sm:p-6 md:max-w-6xl md:p-7"
           >
             <header className="mb-5 flex items-start justify-between gap-3">
               <div className="min-w-0">

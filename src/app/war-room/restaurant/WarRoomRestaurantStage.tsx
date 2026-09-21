@@ -163,9 +163,9 @@ function EditorStation({ session }: { session: RestaurantViewModel["activeSessio
     ? `${isSensorRecording ? "Sensor recording" : "Editing"} started`
     : "Editor idle";
   const iconToneClass = isSensorRecording
-    ? "wr-editor-pulse text-amber-300"
+    ? "text-amber-300"
     : active
-      ? "wr-editor-pulse text-cyan-300"
+      ? "text-cyan-300"
       : "text-zinc-600";
   return (
     <div className="pointer-events-none absolute left-1/2 top-[26%] flex -translate-x-1/2 flex-col items-center gap-1">

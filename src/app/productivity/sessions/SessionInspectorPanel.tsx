@@ -192,7 +192,8 @@ export function SessionInspectorPanel({
       <aside
         role="dialog"
         aria-label={`Session ${session.id} detail`}
-        className="fixed inset-x-0 bottom-0 z-50 max-h-[75vh] overflow-y-auto rounded-t-xl border-t border-zinc-800 bg-[#0A0A0A] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:inset-y-0 sm:inset-x-auto sm:right-0 sm:max-h-none sm:w-[360px] sm:max-w-[92vw] sm:rounded-none sm:rounded-l-xl sm:border-l sm:border-t-0"
+        data-enter="true"
+        className="os-arrive fixed inset-x-0 bottom-0 z-50 max-h-[75vh] overflow-y-auto rounded-t-xl border-t border-zinc-800 bg-[#0A0A0A] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:inset-y-0 sm:inset-x-auto sm:right-0 sm:max-h-none sm:w-[360px] sm:max-w-[92vw] sm:rounded-none sm:rounded-l-xl sm:border-l sm:border-t-0"
       >
         <button
           type="button"
