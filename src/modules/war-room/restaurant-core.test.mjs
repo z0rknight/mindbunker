@@ -53,6 +53,34 @@ test("internal RMEDIA client and GELADEIRA-archived clients are excluded", () =>
   assert.deepEqual(selected, []);
 });
 
+test("Taryn direct and DFY work share one commercial table while projects stay distinct", () => {
+  const clients = [
+    { id: 2, name: "Taryn Dubreuil", archivalState: "ACTIVE_SURFACE" },
+    { id: 12, name: "Taryn DFY", archivalState: "ACTIVE_SURFACE" },
+  ];
+  const videos = [
+    video({ id: 20, clientId: 2, projectId: 5, projectName: "Bonnie - Content Waterfall", status: "IN_PROGRESS" }),
+    video({ id: 21, clientId: 12, projectId: 19, projectName: "GEOFF - September Long Form Videos", status: "READY_FOR_REVIEW" }),
+  ];
+  const selected = selectRestaurantClients(
+    clients,
+    videos,
+    new Set(),
+    new Map([[2, "2026-09-29T10:00:00.000Z"], [12, "2026-09-30T10:00:00.000Z"]]),
+    8,
+  );
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].id, 2);
+  assert.equal(selected[0].name, "Taryn Dubreuil");
+  assert.equal(selected[0].activeCount, 1);
+  assert.equal(selected[0].reviewCount, 1);
+  assert.equal(selected[0].lastActiveAt, "2026-09-30T10:00:00.000Z");
+  assert.deepEqual(selected[0].projects, [
+    { id: 5, name: "Bonnie - Content Waterfall" },
+    { id: 19, name: "GEOFF - September Long Form Videos" },
+  ]);
+});
+
 test("table mapping is deterministic for identical input", () => {
   const videos = [video({ id: 1, clientId: 1, status: "IN_PROGRESS" }), video({ id: 2, clientId: 2, status: "READY_FOR_REVIEW" })];
   const a = selectRestaurantClients(CLIENTS, videos, new Set(), new Map(), 8);

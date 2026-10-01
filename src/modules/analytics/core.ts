@@ -1,4 +1,4 @@
-import { isActiveExternalClient } from "../../lib/client-identity.ts";
+import { canonicalClientId, isActiveExternalClient } from "../../lib/client-identity.ts";
 import { operatorDateKey, shiftDateKey } from "../../utils/date.ts";
 
 export type CurrencyAmount = { currency: string; amount: number };
@@ -119,4 +119,4 @@ export function consistencyStreakFromSessions(
   );
 }
 
-export { isActiveExternalClient };
+export { canonicalClientId, isActiveExternalClient };

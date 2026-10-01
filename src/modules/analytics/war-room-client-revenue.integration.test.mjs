@@ -4,6 +4,10 @@ import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  canonicalClientId,
+  isActiveExternalClient,
+} from "../../lib/client-identity.ts";
 
 // Sprint 3 P2 — mirrors getWarRoomAnalytics's clientRevenueEntries logic
 // (src/modules/analytics/service.ts) against the real migration chain,
@@ -36,21 +40,24 @@ const DEFAULT_CURRENCY = "USD";
 // Mirrors clientRevenueEntries() exactly.
 function clientRevenueEntries(db) {
   const activeClients = db
-    .prepare("SELECT id, name FROM clients WHERE status = 'active' AND archival_state != 'GELADEIRA'")
-    .all();
+    .prepare("SELECT id, name, status, archival_state AS archivalState FROM clients")
+    .all()
+    .filter(isActiveExternalClient);
   const projectRows = db.prepare("SELECT client_id FROM projects").all();
   const projectCountByClientId = new Map();
   for (const row of projectRows) {
-    projectCountByClientId.set(row.client_id, (projectCountByClientId.get(row.client_id) ?? 0) + 1);
+    const clientId = canonicalClientId(row.client_id);
+    projectCountByClientId.set(clientId, (projectCountByClientId.get(clientId) ?? 0) + 1);
   }
   const incomeRows = db
     .prepare("SELECT client_id, currency, amount FROM transactions WHERE type = 'income' AND client_id IS NOT NULL")
     .all();
   const incomeByClientCurrency = new Map();
   for (const row of incomeRows) {
-    const byCurrency = incomeByClientCurrency.get(row.client_id) ?? new Map();
+    const clientId = canonicalClientId(row.client_id);
+    const byCurrency = incomeByClientCurrency.get(clientId) ?? new Map();
     byCurrency.set(row.currency, (byCurrency.get(row.currency) ?? 0) + row.amount);
-    incomeByClientCurrency.set(row.client_id, byCurrency);
+    incomeByClientCurrency.set(clientId, byCurrency);
   }
 
   return activeClients.flatMap((c) => {
@@ -128,4 +135,26 @@ test("an inactive or Geladeira client is excluded, matching the pre-existing sco
   const entries = clientRevenueEntries(db);
   assert.equal(entries.length, 1);
   assert.equal(entries[0].name, "Active Client");
+});
+
+test("Taryn DFY rolls project and revenue context into Taryn and never creates a second commercial entry", () => {
+  const db = buildMigratedDb();
+  db.exec(`
+    INSERT INTO clients (id, name, status, archival_state) VALUES
+      (2, 'Taryn Dubreuil', 'active', 'ACTIVE_SURFACE'),
+      (12, 'Taryn DFY', 'active', 'ACTIVE_SURFACE');
+    INSERT INTO projects (id, client_id, name, status) VALUES
+      (5, 2, 'Bonnie - Content Waterfall', 'active'),
+      (19, 12, 'GEOFF - September Long Form Videos', 'active');
+    INSERT INTO transactions (type, amount, category, date, currency, client_id) VALUES
+      ('income', 644.29, 'Upwork settlement', '2026-09-29', 'USD', 2);
+  `);
+  const entries = clientRevenueEntries(db);
+  assert.deepEqual(entries, [{
+    name: "Taryn Dubreuil",
+    currency: "USD",
+    revenue: 644.29,
+    projects: 2,
+    effectiveYield: 322,
+  }]);
 });

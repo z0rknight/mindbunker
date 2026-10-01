@@ -2,12 +2,26 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  canonicalClientId,
+  clientWorkMode,
   displayClientName,
   getClientAccent,
   isInternalClientName,
+  isOperationalAliasClientId,
   resolveVideoKindForClient,
   splitIntentionalWork,
 } from "./client-identity.ts";
+
+test("Taryn DFY is a structured work mode under one canonical Taryn relationship", () => {
+  assert.equal(canonicalClientId(2), 2);
+  assert.equal(clientWorkMode(2), "DIRECT");
+  assert.equal(isOperationalAliasClientId(2), false);
+  assert.equal(canonicalClientId(12), 2);
+  assert.equal(clientWorkMode(12), "DFY");
+  assert.equal(isOperationalAliasClientId(12), true);
+  assert.equal(canonicalClientId(99), 99);
+  assert.equal(clientWorkMode(99), "UNCLASSIFIED");
+});
 
 test("isInternalClientName matches RMEDIA's canonical record, case/whitespace-insensitive", () => {
   assert.equal(isInternalClientName("RMEDIA"), true);

@@ -110,4 +110,6 @@ test("active clients exclude Geladeira, inactive, leads, and RMEDIA", () => {
   assert.equal(isActiveExternalClient({ name: "Taryn", status: "active", archivalState: "GELADEIRA" }), false);
   assert.equal(isActiveExternalClient({ name: "Taryn", status: "lead", archivalState: "ACTIVE_SURFACE" }), false);
   assert.equal(isActiveExternalClient({ name: "RMEDIA", status: "active", archivalState: "ACTIVE_SURFACE" }), false);
+  assert.equal(isActiveExternalClient({ id: 12, name: "Taryn DFY", status: "active", archivalState: "ACTIVE_SURFACE" }), false);
+  assert.equal(isActiveExternalClient({ id: 2, name: "Taryn Dubreuil", status: "active", archivalState: "ACTIVE_SURFACE" }), true);
 });

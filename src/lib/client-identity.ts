@@ -21,6 +21,34 @@
 
 const INTERNAL_CLIENT_NAMES = new Set(["RMEDIA", "RMEDIA (INTERNAL)"]);
 
+// September 2026 closure: this is intentionally a tiny, explicit alias
+// registry, not an agency/reseller domain model. The database already has a
+// durable operational surface for Taryn DFY (client 12), while Taryn Dubreuil
+// (client 2) owns the commercial contract, billing and revenue truth. Keeping
+// the mapping here makes the existing client_id a structured work-mode signal
+// without a migration or a fragile notes-only convention.
+const CLIENT_RELATIONSHIP_CONTEXT = new Map<number, {
+  canonicalClientId: number;
+  workMode: "DIRECT" | "DFY";
+}>([
+  [2, { canonicalClientId: 2, workMode: "DIRECT" }],
+  [12, { canonicalClientId: 2, workMode: "DFY" }],
+]);
+
+export type ClientWorkMode = "DIRECT" | "DFY" | "UNCLASSIFIED";
+
+export function canonicalClientId(clientId: number): number {
+  return CLIENT_RELATIONSHIP_CONTEXT.get(clientId)?.canonicalClientId ?? clientId;
+}
+
+export function clientWorkMode(clientId: number): ClientWorkMode {
+  return CLIENT_RELATIONSHIP_CONTEXT.get(clientId)?.workMode ?? "UNCLASSIFIED";
+}
+
+export function isOperationalAliasClientId(clientId: number): boolean {
+  return canonicalClientId(clientId) !== clientId;
+}
+
 /**
  * True when `name` is one of RMEDIA's known exact internal labels (exact
  * match, case/whitespace-insensitive). The parenthesized label is retained
@@ -100,12 +128,14 @@ export function splitIntentionalWork(
 }
 
 export function isActiveExternalClient(client: {
+  id?: number;
   name: string;
   status: string;
   archivalState: string;
 }): boolean {
   return client.status === "active" &&
     client.archivalState === "ACTIVE_SURFACE" &&
+    (client.id === undefined || !isOperationalAliasClientId(client.id)) &&
     !isInternalClientName(client.name);
 }
 

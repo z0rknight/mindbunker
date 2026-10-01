@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { StatCard } from "@/components/ui/StatCard";
-import { displayClientName, isInternalClientName } from "@/lib/client-identity";
+import {
+  displayClientName,
+  isInternalClientName,
+  isOperationalAliasClientId,
+} from "@/lib/client-identity";
 import {
   getAllClients,
   getClientListStats,
@@ -50,7 +54,11 @@ export default async function CRMPage() {
 
   const visibleClients = clients.filter((c) => c.archivalState !== "GELADEIRA");
   const internalClient = visibleClients.find((c) => isInternalClientName(c.name)) ?? null;
-  const externalVisibleClients = visibleClients.filter((c) => c !== internalClient);
+  // Operational aliases (currently Taryn DFY) remain usable by production
+  // records but are not separate commercial relationships in CRM counts.
+  const externalVisibleClients = visibleClients.filter(
+    (c) => c !== internalClient && !isOperationalAliasClientId(c.id),
+  );
   const activeClients = externalVisibleClients.filter((c) => c.status === "active");
   const leads = externalVisibleClients.filter((c) => c.status === "lead");
   const inactiveClients = externalVisibleClients.filter((c) => c.status === "inactive");

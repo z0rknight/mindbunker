@@ -22,6 +22,7 @@ import { completedVideoLogs } from "@/modules/productivity/core";
 import { caffeineDayKey, reconcileDailyCaffeineMg, computeCoffeesPerVideo } from "@/modules/caffeine/core";
 import {
   amountForCurrency,
+  canonicalClientId,
   computeConsistencyStreak,
   consistencyStreakFromSessions,
   computeGoalProgress,
@@ -264,17 +265,19 @@ export async function getWarRoomData(): Promise<WarRoomData> {
   // built once here from data already fetched above, no extra queries.
   const projectCountByClientId = new Map<number, number>();
   for (const row of allProjectRows) {
+    const clientId = canonicalClientId(row.clientId);
     projectCountByClientId.set(
-      row.clientId,
-      (projectCountByClientId.get(row.clientId) ?? 0) + 1,
+      clientId,
+      (projectCountByClientId.get(clientId) ?? 0) + 1,
     );
   }
   const incomeByClientCurrency = new Map<number, Map<string, number>>();
   for (const t of allTransactions) {
     if (t.type !== "income" || t.clientId === null) continue;
-    const byCurrency = incomeByClientCurrency.get(t.clientId) ?? new Map<string, number>();
+    const clientId = canonicalClientId(t.clientId);
+    const byCurrency = incomeByClientCurrency.get(clientId) ?? new Map<string, number>();
     byCurrency.set(t.currency, (byCurrency.get(t.currency) ?? 0) + t.amount);
-    incomeByClientCurrency.set(t.clientId, byCurrency);
+    incomeByClientCurrency.set(clientId, byCurrency);
   }
   // One entry per (active client, currency they actually have income in) --
   // never merged across currencies. A client with zero recorded income

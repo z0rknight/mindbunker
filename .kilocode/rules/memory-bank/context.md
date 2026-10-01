@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **September 2026 truth closure — MindBunker reconciliation (2026-10-01)**
+  - [x] Recovered the post-write checkpoint, applied the later human-input close once, and verified it read-only afterward; no replay, migration, or deploy was performed
+  - [x] Closed the seven BRL movements as BRL 603.44 operating + BRL 234.90 personal; September BRL operating total is 923.48 and unknown BRL is zero
+  - [x] Closed the Upwork bridge at USD 729.17 posted gross, USD 72.92 service fees, USD 11.96 withdrawal fees and USD 644.29 net proceeds/Wise cash
+  - [x] Preserved Work Session 83 as an unresolved 41.0533h interval and excluded it from the read model; final current September read is 153.8425h raw / 112.7725h admissible (CLIENT 72.0350, INTERNAL 28.7931, ADMIN 11.4594, LEAD 0.4850)
+  - [x] Preserved Taryn DFY as an `ACTIVE_SURFACE` operational alias mapped to canonical Taryn with work mode DFY; commercial client count remains one and DIRECT/DFY time stays separable
+  - [x] Added guarded reconciliation SQL/tests, the read-only projection, and finalized all four month-close artifacts plus the existing Notion human-input card
+  - [x] Focused tests 56/56, full suite 1489/1489, typecheck and production build pass; migration head 0053, FK clean, duplicates zero. Deployed Operator source authority remains YELLOW
+
 - [x] **Red as signal, not surface — Operator visual correction (2026-09-21)**
   - [x] Production Dashboard's 11 action tiles unified on neutral surfaces; New Work alone uses a narrow `#FF0000` edge, not a red fill. Sidebar active state, NOW, Attention and Today cards are neutral-first; semantic amber/red/green facts remain distinct.
   - [x] Public Home, `/book`, `/start` inspected and intentionally unchanged; Client and Sensor untouched.
@@ -377,3 +386,4 @@ The original February 2026 visual design is the canonical interface. The separat
 | 2026-08-25 | Activated reconciled Worker `82aefdcc-eb7c-4dc5-9ccc-19540dbd3e8c`, imported canonical All History fingerprint `932047bd8bdbf0f3b14672ce7fa9bf88a18e83e4de76e25fa30df3f74d987390` as active batch 1, proved rerun idempotency, preserved operational counts/FKs and known videos, and verified live operator/client-auth surfaces; production schema remains 0000–0028 |
 | 2026-08-29 | Trust-restoration patch: production booking mock fails closed, War Room/Performance keep currencies separate, operator calendar uses America/Sao_Paulo, Active Clients exclude archived/internal records, Consistency Streak derives only from closed Work Sessions, normal Finance rows are editable in place, and Owner Pay corrections atomically preserve both paired ledger identities. No schema or production mutation. |
 | 2026-09-13 | Emergency video-workspace hotfix: a requested DONE/delivered video now opens its completed archive disclosure instead of remaining hidden inside a closed `<details>`; requested videos outside the bounded recent list remain available, while queue eligibility stays independent from canonical workspace access. |
+| 2026-10-01 | September final truth close: 33h40 Taryn external time; USD 729.17 posted gross, 72.92 service fees, 11.96 withdrawal fees and 644.29 Wise cash; BRL operating 923.48, personal excluded 234.90, unknown 0; Taryn DFY mapped as a distinct operational work mode under one canonical Taryn relationship; Work Session 83 preserved/excluded; D1 migration 0053/FK/duplicates green; 1489 tests, typecheck and build green; no migration or deploy. |

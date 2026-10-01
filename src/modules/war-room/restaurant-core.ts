@@ -15,7 +15,11 @@ import type { ProductionOrderListRow } from "../production-orders/data.ts";
 import { PRODUCTION_ORDER_PHASE_LABELS, type ProductionOrderPhase } from "../production-orders/config.ts";
 import type { OpenWorkSession } from "../work-sessions/core.ts";
 import type { OpenSensorSession } from "../sensor/core.ts";
-import { isInternalClientName } from "../../lib/client-identity.ts";
+import {
+  canonicalClientId,
+  isInternalClientName,
+  isOperationalAliasClientId,
+} from "../../lib/client-identity.ts";
 
 export const RESTAURANT_MAX_TABLES = 8;
 export const RESTAURANT_MAX_TICKETS = 8;
@@ -66,7 +70,11 @@ export function selectRestaurantClients(
 ): SelectedRestaurantClient[] {
   const eligibleClients = new Map(
     clients
-      .filter((c) => c.archivalState !== "GELADEIRA" && !isInternalClientName(c.name))
+      .filter((c) =>
+        c.archivalState !== "GELADEIRA" &&
+        !isInternalClientName(c.name) &&
+        !isOperationalAliasClientId(c.id)
+      )
       .map((c) => [c.id, c] as const),
   );
 
@@ -78,21 +86,31 @@ export function selectRestaurantClients(
   };
   const byClient = new Map<number, Accumulator>();
   for (const video of videos) {
-    if (video.clientId === null || !eligibleClients.has(video.clientId)) continue;
+    if (video.clientId === null) continue;
+    const clientId = canonicalClientId(video.clientId);
+    if (!eligibleClients.has(clientId)) continue;
     if (!isRealClientDeliverable(video)) continue;
-    const entry = byClient.get(video.clientId) ?? { active: 0, review: 0, blocked: 0, projects: new Map() };
+    const entry = byClient.get(clientId) ?? { active: 0, review: 0, blocked: 0, projects: new Map() };
     if (video.status === "IN_PROGRESS") entry.active += 1;
     if (video.status === "READY_FOR_REVIEW" || video.status === "CHANGES_REQUESTED") entry.review += 1;
     if (blockedVideoIds.has(video.id)) entry.blocked += 1;
     if (video.projectId !== null && video.projectName) entry.projects.set(video.projectId, video.projectName);
-    byClient.set(video.clientId, entry);
+    byClient.set(clientId, entry);
+  }
+
+  const canonicalLastActiveByClient = new Map<number, string>();
+  for (const [clientId, lastActiveAt] of lastActiveByClient) {
+    const canonicalId = canonicalClientId(clientId);
+    if (!eligibleClients.has(canonicalId)) continue;
+    const current = canonicalLastActiveByClient.get(canonicalId);
+    if (!current || lastActiveAt > current) canonicalLastActiveByClient.set(canonicalId, lastActiveAt);
   }
 
   // Candidate pool: any eligible client with a current deliverable OR a
   // recent Work Session -- never the full historical client list, per the
   // mission's explicit "do not fill the restaurant with historical
   // inactive clients" instruction.
-  const candidateIds = new Set<number>([...byClient.keys(), ...lastActiveByClient.keys()]);
+  const candidateIds = new Set<number>([...byClient.keys(), ...canonicalLastActiveByClient.keys()]);
 
   const candidates: SelectedRestaurantClient[] = [];
   for (const clientId of candidateIds) {
@@ -108,7 +126,7 @@ export function selectRestaurantClients(
       reviewCount: entry.review,
       blockedCount: entry.blocked,
       health,
-      lastActiveAt: lastActiveByClient.get(clientId) ?? null,
+      lastActiveAt: canonicalLastActiveByClient.get(clientId) ?? null,
       projects: Array.from(entry.projects, ([id, name]) => ({ id, name })),
     });
   }
