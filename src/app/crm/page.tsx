@@ -22,6 +22,7 @@ import { AddClientButton } from "./AddClientButton";
 import { ClientActions } from "./ClientActions";
 import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { getSystemInbound } from "@/modules/system-inbound/data";
+import { SYNTHETIC_OPERATIONAL_CLIENT_SOURCE } from "@/modules/projects/core";
 
 export const dynamic = "force-dynamic";
 
@@ -46,13 +47,17 @@ export default async function CRMPage() {
     };
   });
 
+  const operationalClients = clients.filter(
+    (client) => client.source !== SYNTHETIC_OPERATIONAL_CLIENT_SOURCE,
+  );
+
   const kpis = computeCRMActionableKPIs(
-    clients as WorkbenchClient[],
+    operationalClients as WorkbenchClient[],
     workbenchData.quotes as WorkbenchQuote[],
     today,
   );
 
-  const visibleClients = clients.filter((c) => c.archivalState !== "GELADEIRA");
+  const visibleClients = operationalClients.filter((c) => c.archivalState !== "GELADEIRA");
   const internalClient = visibleClients.find((c) => isInternalClientName(c.name)) ?? null;
   // Operational aliases (currently Taryn DFY) remain usable by production
   // records but are not separate commercial relationships in CRM counts.
@@ -62,7 +67,7 @@ export default async function CRMPage() {
   const activeClients = externalVisibleClients.filter((c) => c.status === "active");
   const leads = externalVisibleClients.filter((c) => c.status === "lead");
   const inactiveClients = externalVisibleClients.filter((c) => c.status === "inactive");
-  const geladeiraClients = clients.filter((c) => c.archivalState === "GELADEIRA");
+  const geladeiraClients = operationalClients.filter((c) => c.archivalState === "GELADEIRA");
 
   return (
     <div className={OPERATOR_WORKSPACE_CLASS}>
