@@ -10,6 +10,13 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **October Admin Reality Patch — production closure (2026-10-02)**
+  - [x] Added concise October operating summaries to Dashboard/Productivity, a readable weekly Sessions strip, and explicit captured-versus-Unknown Health semantics
+  - [x] Preserved six real Taryn HF deliverables as unassigned while excluding `RELEASE_TEST` fixtures from Unassigned, Productivity, Projects, CRM, and aggregate Project counts without deleting canonical rows
+  - [x] Verified Taryn and Dave commercial projections, Finance separation, and both existing Pricing Lab modes; Pricing Lab activation remains NO and Content Waterfall remains a separate curation track
+  - [x] Full suite 1503/1503, targeted 132/132, typecheck/build green, ESLint 0 errors/3 pre-existing warnings, migration 0053 and FK integrity green, D1 writes 0
+  - [x] Operator-only final runtime source `227895a`, Worker `08ef740a-b7fc-40fe-a195-040bb9d20b7f`; Public, Client and Sensor untouched
+
 - [x] **October Operational Reality Integration — live Operator read models (2026-10-02)**
   - [x] Added reusable client Reality blocks and current/closed monthly Finance blocks without schema or D1 writes
   - [x] Closed Dave request chronology at USD 400 prior / USD 68.33 supported delta / USD 468.33 open / USD 0 paid, with per-video allocation still unknown
