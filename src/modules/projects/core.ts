@@ -165,6 +165,32 @@ const EXCEPTION_RANK: Record<ProjectExceptionKind | "NONE", number> = {
 
 export type ProjectSortMode = "attention" | "recent";
 
+export type UnassignedDeliveryClassification =
+  | "SYNTHETIC_QA"
+  | "UNASSIGNED_WITH_EVIDENCE"
+  | "UNASSIGNED_NO_EXECUTION_EVIDENCE";
+
+// October Admin Reset: unassigned work remains visible without allowing
+// release fixtures to impersonate client obligations. This is deliberately
+// a read-time classification: no project is fabricated and no production
+// row is mutated merely to make the UI quieter.
+export function classifyUnassignedDelivery(input: {
+  clientSource: string | null;
+  sessionCount: number;
+  deliveryUrl: string | null;
+  reviewUrl: string | null;
+  publishedUrl: string | null;
+}): UnassignedDeliveryClassification {
+  if (input.clientSource === "RELEASE_TEST") return "SYNTHETIC_QA";
+  if (
+    input.sessionCount > 0 ||
+    Boolean(input.deliveryUrl || input.reviewUrl || input.publishedUrl)
+  ) {
+    return "UNASSIGNED_WITH_EVIDENCE";
+  }
+  return "UNASSIGNED_NO_EXECUTION_EVIDENCE";
+}
+
 // Groups an already-filtered project list by client, sorts projects
 // within each client group, and sorts the client groups themselves --
 // groups containing a real exception come first (matching the brief's

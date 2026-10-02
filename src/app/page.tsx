@@ -35,6 +35,8 @@ import { isInternalClientName, splitIntentionalWork } from "@/lib/client-identit
 import { getOpenCommitmentsWithContext, rankOpenCommitments } from "@/modules/signals";
 import { ActiveCommitmentCard } from "@/components/commitments/ActiveCommitmentCard";
 import { PixelDivider, PixelIcon } from "@/components/ui/PixelVisuals";
+import { getMonthlyReality } from "@/modules/reality/data";
+import { DashboardRealitySummary } from "@/components/reality/OperatingRealitySummary";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +67,7 @@ export default async function DashboardPage() {
     todaySensorOperational,
     upworkQuickEntryContracts,
     todayUpworkRegisteredMinutes,
+    monthlyReality,
   ] = await Promise.all([
     getHealthSummary(),
     getWorkSessionOverview(),
@@ -79,6 +82,7 @@ export default async function DashboardPage() {
     getTodaySensorOperationalStats(),
     getUpworkQuickEntryContracts(),
     getTodayUpworkRegisteredMinutes(),
+    getMonthlyReality(currentMonthKey()),
   ]);
 
   const now = new Date();
@@ -119,6 +123,8 @@ export default async function DashboardPage() {
         openSession={workSessionOverview.openSession}
         openSessionElapsedSeconds={workSessionOverview.openSessionElapsedSeconds}
       />
+
+      <DashboardRealitySummary reality={monthlyReality} />
 
       {/* Operator Flow round: capture belongs beside the command surface,
           before secondary evidence and history. These are the existing

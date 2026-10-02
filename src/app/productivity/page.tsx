@@ -28,7 +28,7 @@ import {
   groupWorkSessionsByDay,
   mondayOfWeek,
 } from "@/modules/work-sessions/core";
-import { currentMonthName, todayISO } from "@/utils/date";
+import { currentMonthKey, currentMonthName, todayISO } from "@/utils/date";
 import Link from "next/link";
 import { VideoOperationsCard } from "./VideoOperationsCard";
 import { isSafeInternalPath } from "@/utils/navigation";
@@ -37,6 +37,8 @@ import { QuickBlock, QuickNote } from "@/components/work-sessions/QuickVideoActi
 import { NeedsAttentionSection } from "./NeedsAttentionSection";
 import { selectProductivityAttention } from "@/modules/productivity/attention";
 import { getActiveSignals } from "@/modules/signals/data";
+import { getMonthlyReality } from "@/modules/reality/data";
+import { ProductivityRealitySummary } from "@/components/reality/OperatingRealitySummary";
 
 export const dynamic = "force-dynamic";
 
@@ -111,7 +113,7 @@ export default async function ProductivityPage({
     typeof rawReturnTo === "string" && isSafeInternalPath(rawReturnTo)
       ? rawReturnTo
       : undefined;
-  const [stats, logs, options, workSessionOverview, sessionHistory, activeSignals, openBlockersByVideo, soonestCommitmentByVideo] =
+  const [stats, logs, options, workSessionOverview, sessionHistory, activeSignals, openBlockersByVideo, soonestCommitmentByVideo, monthlyReality] =
     await Promise.all([
       getVideoStats(),
       getAllVideoLogs(),
@@ -131,6 +133,7 @@ export default async function ProductivityPage({
       // P0.4 execution queue context.
       getOpenBlockersByVideo(),
       getSoonestOpenCommitmentByVideo(),
+      getMonthlyReality(currentMonthKey()),
     ]);
   const attentionGroups = selectProductivityAttention(activeSignals);
   const recentLogs = selectVideoWorkspaceLogs(logs, initialVideoId);
@@ -286,16 +289,22 @@ export default async function ProductivityPage({
         </nav>
       </header>
 
-      <section aria-label="Productivity operational snapshot" className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
-        <StatCard label="Queue load" value={executionQueue.length} accent="violet" icon="🎞️" />
-        <StatCard label="In production" value={inProductionCount} accent="blue" icon="✂️" />
-        <StatCard label="In review" value={inReviewCount} accent="violet" icon="👁️" />
-        <StatCard label="Blocked" value={blockedCount} accent={blockedCount > 0 ? "red" : "zinc"} icon="⛔" />
-        <StatCard label="Done this month" value={stats.month} sub={currentMonthName()} accent="green" icon="✓" />
-      </section>
+      <ProductivityRealitySummary reality={monthlyReality} />
 
-      <section className="mb-6 rounded-2xl border border-violet-800/40 bg-violet-950/10 p-4 sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <details className="group mb-6 rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4 sm:p-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-zinc-400">
+          <span><span className="mr-2 inline-block transition group-open:rotate-90">▸</span>Queue &amp; capture controls</span>
+          <span className="font-mono text-xs text-zinc-600">{executionQueue.length} queued</span>
+        </summary>
+        <section aria-label="Productivity operational snapshot" className="mt-4 grid grid-cols-2 gap-3 border-t border-zinc-800 pt-4 md:grid-cols-5">
+          <StatCard label="Queue load" value={executionQueue.length} accent="violet" icon="🎞️" />
+          <StatCard label="In production" value={inProductionCount} accent="blue" icon="✂️" />
+          <StatCard label="In review" value={inReviewCount} accent="violet" icon="👁️" />
+          <StatCard label="Blocked" value={blockedCount} accent={blockedCount > 0 ? "red" : "zinc"} icon="⛔" />
+          <StatCard label="Done this month" value={stats.month} sub={currentMonthName()} accent="green" icon="✓" />
+        </section>
+        <section className="mt-4 rounded-2xl border border-violet-800/40 bg-violet-950/10 p-4 sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">Capture</p>
             <h2 className="mt-1 text-base font-black text-white">Quick actions</h2>
@@ -313,8 +322,9 @@ export default async function ProductivityPage({
               Capture Inbox →
             </Link>
           </div>
-        </div>
-      </section>
+          </div>
+        </section>
+      </details>
 
       <NeedsAttentionSection groups={attentionGroups} />
 

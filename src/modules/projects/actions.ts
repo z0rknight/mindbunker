@@ -8,6 +8,7 @@ import { desc, eq, ne, sql } from "drizzle-orm";
 import { getLastActiveByProject } from "../work-sessions/data";
 import { revalidatePath } from "next/cache";
 import {
+  classifyUnassignedDelivery,
   isPositiveId,
   sortProjectWorkspaceVideos,
   validateProjectInput,
@@ -232,6 +233,13 @@ export async function getUnassignedClientVideos() {
       status: videoLogs.status,
       clientId: videoLogs.clientId,
       clientName: clients.name,
+      clientSource: clients.source,
+      deliveryUrl: videoLogs.deliveryUrl,
+      reviewUrl: videoLogs.reviewUrl,
+      publishedUrl: videoLogs.publishedUrl,
+      sessionCount: sql<number>`(
+        select count(*) from work_sessions ws where ws.video_id = ${videoLogs.id}
+      )`,
       createdAt: videoLogs.createdAt,
     })
     .from(videoLogs)
@@ -249,7 +257,22 @@ export async function getUnassignedClientVideos() {
   // clientId is nullable in the schema, but the WHERE clause above
   // guarantees it's set on every returned row -- coerce so callers don't
   // have to re-check what SQL already enforced.
-  return rows.map((row) => ({ ...row, clientId: row.clientId as number }));
+  return rows.flatMap((row) => {
+    const classification = classifyUnassignedDelivery({
+        clientSource: row.clientSource,
+        sessionCount: Number(row.sessionCount),
+        deliveryUrl: row.deliveryUrl,
+        reviewUrl: row.reviewUrl,
+        publishedUrl: row.publishedUrl,
+      });
+    if (classification === "SYNTHETIC_QA") return [];
+    return [{
+      ...row,
+      clientId: row.clientId as number,
+      sessionCount: Number(row.sessionCount),
+      classification,
+    }];
+  });
 }
 
 export async function createProject(

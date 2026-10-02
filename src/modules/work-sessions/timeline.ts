@@ -243,6 +243,65 @@ export function totalDurationSeconds(sessions: readonly SessionTimelineItem[]): 
   return rawDurationSeconds(sessions);
 }
 
+export type WeeklyOperatingDay = {
+  dayKey: string;
+  totalSeconds: number;
+  sessionCount: number;
+  clientSeconds: number;
+  internalSeconds: number;
+  adminSeconds: number;
+  sensorLinkedCount: number;
+  manualCount: number;
+  longSessionCount: number;
+  overlapCount: number;
+};
+
+function shiftDateKey(dateKey: string, days: number) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
+
+// The weekly surface is an operating summary, not seven compressed copies
+// of the detailed timeline. Categories use only explicit session facts;
+// Sensor linkage, manual capture, long rows and overlap remain visible as
+// evidence/exception counts instead of being inferred away.
+export function buildWeeklyOperatingSummary(
+  sessions: readonly SessionTimelineItem[],
+  mondayKey: string,
+  nowIso: string,
+): WeeklyOperatingDay[] {
+  const byDay = sessionsByDayKey(sessions);
+  return Array.from({ length: 7 }, (_, index) => {
+    const dayKey = shiftDateKey(mondayKey, index);
+    const rows = byDay.get(dayKey) ?? [];
+    const overlaps = computeOverlaps(rows, nowIso);
+    return rows.reduce<WeeklyOperatingDay>((day, session) => {
+      day.totalSeconds += session.durationSeconds;
+      day.sessionCount += 1;
+      if (session.activityType === "ADMIN") day.adminSeconds += session.durationSeconds;
+      else if (session.videoKind === "INTERNAL") day.internalSeconds += session.durationSeconds;
+      else day.clientSeconds += session.durationSeconds;
+      if (session.sensorSessionId !== null || session.source === "MAC_SENSOR_APPROVED") day.sensorLinkedCount += 1;
+      if (session.source === "MANUAL") day.manualCount += 1;
+      if (session.durationSeconds > 43_200) day.longSessionCount += 1;
+      if (overlaps.has(session.id)) day.overlapCount += 1;
+      return day;
+    }, {
+      dayKey,
+      totalSeconds: 0,
+      sessionCount: 0,
+      clientSeconds: 0,
+      internalSeconds: 0,
+      adminSeconds: 0,
+      sensorLinkedCount: 0,
+      manualCount: 0,
+      longSessionCount: 0,
+      overlapCount: 0,
+    });
+  });
+}
+
 // ─── Minimal filters ────────────────────────────────────────────────────
 //
 // Deliberately just three narrow, orthogonal filters (client, source,

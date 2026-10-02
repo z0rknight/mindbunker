@@ -2,28 +2,12 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { formatClosedDuration } from "@/modules/work-sessions/core";
-import {
-  computeOverlaps,
-  rawDurationSeconds,
-  sessionsByDayKey,
-  type SessionTimelineItem,
-} from "@/modules/work-sessions/timeline";
+import { buildWeeklyOperatingSummary, type SessionTimelineItem } from "@/modules/work-sessions/timeline";
 import { pixelFont } from "./fonts";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-function addDays(dateKey: string, delta: number): string {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  date.setUTCDate(date.getUTCDate() + delta);
-  return date.toISOString().slice(0, 10);
-}
-
-export function SessionWeekCalendar({
-  items,
-  mondayKey,
-  nowIso,
-}: {
+export function SessionWeekCalendar({ items, mondayKey, nowIso }: {
   items: SessionTimelineItem[];
   mondayKey: string;
   nowIso: string;
@@ -31,6 +15,11 @@ export function SessionWeekCalendar({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const days = buildWeeklyOperatingSummary(items, mondayKey, nowIso);
+  const weekSeconds = days.reduce((sum, day) => sum + day.totalSeconds, 0);
+  const weekSessions = days.reduce((sum, day) => sum + day.sessionCount, 0);
+  const activeDays = days.filter((day) => day.sessionCount > 0).length;
+  const exceptionDays = days.filter((day) => day.longSessionCount > 0 || day.overlapCount > 0).length;
 
   function goToDay(dateKey: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -39,117 +28,73 @@ export function SessionWeekCalendar({
     router.push(`${pathname}?${params.toString()}`);
   }
 
-  const byDay = sessionsByDayKey(items);
-  const dayKeys = Array.from({ length: 7 }, (_, i) => addDays(mondayKey, i));
-
-  // Dynamic time-of-day window for the compact mini-tracks -- derived from
-  // the actual sessions in view (padded by an hour on each side), rather
-  // than a hardcoded window that could clip real, early or late-running
-  // sessions.
-  let minHour = 9;
-  let maxHour = 18;
-  for (const session of items) {
-    const start = new Date(session.startedAt);
-    const end = new Date(session.endedAt ?? nowIso);
-    minHour = Math.min(minHour, start.getHours());
-    maxHour = Math.max(maxHour, end.getHours() + (end.getMinutes() > 0 ? 1 : 0));
-  }
-  minHour = Math.max(0, minHour - 1);
-  maxHour = Math.min(24, maxHour + 1);
-  const span = Math.max(1, maxHour - minHour);
-
   return (
     <div>
-      {/* Desktop / iPad landscape: 7-column grid */}
-      <div className="hidden gap-2 sm:grid" style={{ gridTemplateColumns: "repeat(7, minmax(0,1fr))" }}>
-        {dayKeys.map((dayKey, i) => {
-          const sessions = (byDay.get(dayKey) ?? []).sort(
-            (a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt),
-          );
-          const overlaps = computeOverlaps(sessions, nowIso);
-          const total = rawDurationSeconds(sessions);
-          const [, , dNum] = dayKey.split("-");
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Summary label="Intentional time" value={formatClosedDuration(weekSeconds)} />
+        <Summary label="Sessions" value={String(weekSessions)} />
+        <Summary label="Active days" value={`${activeDays}/7`} />
+        <Summary label="Exception days" value={String(exceptionDays)} warning={exceptionDays > 0} />
+      </div>
 
+      <div className="space-y-2">
+        {days.map((day, index) => {
+          const [, , dayNumber] = day.dayKey.split("-");
+          const total = Math.max(1, day.totalSeconds);
           return (
             <button
-              key={dayKey}
+              key={day.dayKey}
               type="button"
-              onClick={() => goToDay(dayKey)}
-              className={`flex min-h-[300px] flex-col rounded-md border p-2 text-left ${
-                sessions.length === 0 ? "border-zinc-900 opacity-50" : "border-zinc-800 hover:border-cyan-800/60"
-              } bg-[#0A0A0A]`}
+              onClick={() => goToDay(day.dayKey)}
+              className={`grid w-full grid-cols-[58px_minmax(0,1fr)_64px] items-center gap-3 rounded-xl border bg-[#0A0A0A] px-3 py-3 text-left transition sm:grid-cols-[78px_minmax(0,1fr)_90px] ${day.sessionCount === 0 ? "border-zinc-900 opacity-55" : "border-zinc-800 hover:border-cyan-800/60"}`}
             >
-              <div className="mb-1.5 flex items-baseline justify-between">
-                <span className={`${pixelFont.className} text-[8px] uppercase tracking-wide text-zinc-500`}>
-                  {DAY_LABELS[i]} {Number(dNum)}
-                </span>
-                {total > 0 && <span className="text-[9px] font-bold text-cyan-400">{formatClosedDuration(total)}</span>}
-              </div>
-              <div className="relative flex-1 overflow-hidden rounded bg-black/40">
-                {sessions.length === 0 ? (
-                  <span className="absolute inset-0 flex items-center justify-center text-[10px] text-zinc-700">—</span>
+              <span className={`${pixelFont.className} text-[8px] uppercase tracking-wide text-zinc-400`}>
+                {DAY_LABELS[index]} {Number(dayNumber)}
+              </span>
+              <span className="min-w-0">
+                {day.sessionCount === 0 ? (
+                  <span className="text-xs text-zinc-700">No recorded session</span>
                 ) : (
-                  sessions.map((session) => {
-                    const start = new Date(session.startedAt);
-                    const end = new Date(session.endedAt ?? nowIso);
-                    const startPct = Math.max(0, ((start.getHours() + start.getMinutes() / 60 - minHour) / span) * 100);
-                    const endPct = Math.min(100, ((end.getHours() + end.getMinutes() / 60 - minHour) / span) * 100);
-                    const height = Math.max(3, endPct - startPct);
-                    const isOverlap = (overlaps.get(session.id)?.length ?? 0) > 0;
-                    const isOpen = session.status === "OPEN";
-                    return (
-                      <div
-                        key={session.id}
-                        title={`${session.clientName ?? "—"} · ${session.projectName ?? ""}`}
-                        style={{ top: `${startPct}%`, height: `${height}%` }}
-                        className={`absolute inset-x-0.5 overflow-hidden rounded-sm border px-1 text-[8px] leading-tight ${
-                          isOpen
-                            ? "border-[#00FF41]/50 bg-[#00FF41]/10 text-[#00FF41]"
-                            : isOverlap
-                              ? "border-[#FF0000]/45 bg-[#FF0000]/10 text-red-300"
-                              : session.videoKind === "INTERNAL"
-                                ? "border-violet-700/50 bg-violet-500/10 text-violet-300"
-                                : "border-zinc-700 bg-zinc-800/70 text-zinc-300"
-                        }`}
-                      >
-                        {session.clientName ? session.clientName.split(" ")[0] : "RMEDIA"}
-                      </div>
-                    );
-                  })
+                  <>
+                    <span className="flex h-2 overflow-hidden rounded-full bg-zinc-900">
+                      <span className="bg-cyan-500" style={{ width: `${(day.clientSeconds / total) * 100}%` }} />
+                      <span className="bg-violet-500" style={{ width: `${(day.internalSeconds / total) * 100}%` }} />
+                      <span className="bg-amber-500" style={{ width: `${(day.adminSeconds / total) * 100}%` }} />
+                    </span>
+                    <span className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-zinc-600">
+                      {day.clientSeconds > 0 && <span>Client {formatClosedDuration(day.clientSeconds)}</span>}
+                      {day.internalSeconds > 0 && <span>Internal {formatClosedDuration(day.internalSeconds)}</span>}
+                      {day.adminSeconds > 0 && <span>Admin {formatClosedDuration(day.adminSeconds)}</span>}
+                      {day.sensorLinkedCount > 0 && <span>Sensor {day.sensorLinkedCount}</span>}
+                      {day.manualCount > 0 && <span>Manual {day.manualCount}</span>}
+                      {day.longSessionCount > 0 && <span className="text-red-300">Long {day.longSessionCount}</span>}
+                      {day.overlapCount > 0 && <span className="text-red-300">Overlap {day.overlapCount}</span>}
+                    </span>
+                  </>
                 )}
-              </div>
+              </span>
+              <span className="text-right">
+                <span className="block text-xs font-black text-cyan-300">{day.totalSeconds > 0 ? formatClosedDuration(day.totalSeconds) : "—"}</span>
+                <span className="mt-0.5 block text-[10px] text-zinc-600">{day.sessionCount} sessions</span>
+              </span>
             </button>
           );
         })}
       </div>
+      <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-zinc-600">
+        <span><i className="mr-1 inline-block h-1.5 w-3 rounded bg-cyan-500" />Client</span>
+        <span><i className="mr-1 inline-block h-1.5 w-3 rounded bg-violet-500" />Internal</span>
+        <span><i className="mr-1 inline-block h-1.5 w-3 rounded bg-amber-500" />Admin</span>
+      </div>
+    </div>
+  );
+}
 
-      {/* Phone: compact agenda list, never a squeezed 7-column grid */}
-      <div className="flex flex-col gap-2 sm:hidden">
-        {dayKeys.map((dayKey, i) => {
-          const sessions = byDay.get(dayKey) ?? [];
-          const total = rawDurationSeconds(sessions);
-          const barPct = Math.min(100, (total / (8 * 3600)) * 100);
-          const [, , dNum] = dayKey.split("-");
-          return (
-            <button
-              key={dayKey}
-              type="button"
-              onClick={() => goToDay(dayKey)}
-              className="flex items-center gap-3 rounded-md border border-zinc-800 bg-[#0A0A0A] px-3 py-2.5"
-            >
-              <span className="w-14 flex-shrink-0 text-left text-xs font-bold text-zinc-200">
-                {DAY_LABELS[i]} {Number(dNum)}
-              </span>
-              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-900">
-                <span className="block h-full rounded-full bg-cyan-700" style={{ width: `${barPct}%` }} />
-              </span>
-              <span className="w-14 flex-shrink-0 text-right text-[11px] font-bold text-zinc-400">
-                {total > 0 ? formatClosedDuration(total) : "—"}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+function Summary({ label, value, warning = false }: { label: string; value: string; warning?: boolean }) {
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2">
+      <p className="text-[9px] font-black uppercase tracking-wide text-zinc-600">{label}</p>
+      <p className={`mt-1 text-sm font-black ${warning ? "text-red-300" : "text-zinc-200"}`}>{value}</p>
     </div>
   );
 }

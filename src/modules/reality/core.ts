@@ -40,6 +40,18 @@ export function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+export function summarizeTopApplications(
+  rows: readonly { appKey: string; seconds: number }[],
+  limit = 5,
+) {
+  const totals = new Map<string, number>();
+  for (const row of rows) totals.set(row.appKey, (totals.get(row.appKey) ?? 0) + row.seconds);
+  return [...totals.entries()]
+    .map(([appKey, seconds]) => ({ appKey, seconds }))
+    .sort((a, b) => b.seconds - a.seconds || a.appKey.localeCompare(b.appKey))
+    .slice(0, Math.max(0, limit));
+}
+
 export function classifyCommercialModel(contracts: readonly ContractFact[]): CommercialModel {
   const active = contracts.filter((contract) => contract.status === "ACTIVE");
   const types = new Set(active.map((contract) => contract.billingType));

@@ -5,6 +5,7 @@ import { currentMonthKey, shiftMonthKey } from "@/utils/date";
 import { dayKeyFor } from "@/modules/work-sessions/core";
 import { getApplicationUsage } from "@/modules/sensor/data";
 import { resolveTimeWindow } from "@/modules/sensor/app-intelligence";
+import { APP_KEY_LABELS, type AppKey } from "@/modules/sensor/app-intelligence";
 import { canonicalClientId, isOperationalAliasClientId } from "@/lib/client-identity";
 import {
   buildCoverageMatrix,
@@ -13,6 +14,7 @@ import {
   computeWeeklyCommercialLine,
   deriveCommercialPosition,
   roundMoney,
+  summarizeTopApplications,
   type CommercialPosition,
   type CoverageDimension,
   type MonthlyFinanceRow,
@@ -135,6 +137,7 @@ export type MonthlyReality = {
     manualOffsiteSeconds: null;
     unresolvedContextCount: number;
     implausibleSessionCount: number;
+    topApplications: Array<{ appKey: string; label: string; seconds: number }>;
   };
   coverage: CoverageDimension[];
   operations: {
@@ -252,6 +255,10 @@ export async function getMonthlyReality(monthKey: string): Promise<MonthlyRealit
     return map;
   }, new Map<string, number>())].map(([currency, amount]) => ({ currency, amount: roundMoney(amount) }));
   const externalRegisteredMinutes = registeredMinutesForMonth(monthKey, billingRows, overrides);
+  const topApplications = summarizeTopApplications(sensor.intentional).map((row) => ({
+    ...row,
+    label: APP_KEY_LABELS[row.appKey as AppKey] ?? row.appKey,
+  }));
 
   return {
     monthKey,
@@ -266,6 +273,7 @@ export async function getMonthlyReality(monthKey: string): Promise<MonthlyRealit
       manualOffsiteSeconds: null,
       unresolvedContextCount: 0,
       implausibleSessionCount: time.implausibleCount,
+      topApplications,
     },
     coverage: buildCoverageMatrix({
       financeUnknownCost: unknownCost,

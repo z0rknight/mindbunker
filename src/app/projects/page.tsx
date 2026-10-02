@@ -142,22 +142,35 @@ function ProjectCard({
 function UnassignedDeliverablesSection({
   videos,
 }: {
-  videos: Array<{ id: number; title: string | null; date: string; status: string; clientName: string }>;
+  videos: Array<{
+    id: number;
+    title: string | null;
+    date: string;
+    status: string;
+    clientName: string;
+    classification: "UNASSIGNED_WITH_EVIDENCE" | "UNASSIGNED_NO_EXECUTION_EVIDENCE";
+  }>;
 }) {
   if (videos.length === 0) return null;
+  const evidenceCount = videos.filter((video) => video.classification === "UNASSIGNED_WITH_EVIDENCE").length;
   return (
-    <section aria-labelledby="unassigned-deliverables" className="rounded-2xl border border-amber-800/50 bg-amber-950/10 p-4 sm:p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <PixelIcon name="flag" className="h-3.5 w-3.5 text-amber-400" />
-        <h2 id="unassigned-deliverables" className="text-sm font-black uppercase tracking-wide text-amber-300">
-          Unassigned deliverables
-        </h2>
+    <details open={evidenceCount > 0} className="group rounded-2xl border border-amber-800/40 bg-amber-950/10 p-4 sm:p-5">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="transition group-open:rotate-90">▸</span>
+          <PixelIcon name="flag" className="h-3.5 w-3.5 text-amber-400" />
+          <span id="unassigned-deliverables" className="text-sm font-black uppercase tracking-wide text-amber-300">
+            Unassigned client work
+          </span>
+        </span>
         <span className="text-xs font-bold text-amber-600">{videos.length}</span>
-      </div>
-      <p className="mb-3 text-xs leading-5 text-zinc-500">
-        Real client work with no project. Not a project -- open the video directly in Productivity to assign one.
+      </summary>
+      <p className="mt-3 text-xs leading-5 text-zinc-500">
+        {evidenceCount > 0
+          ? `${evidenceCount} item${evidenceCount === 1 ? " has" : "s have"} execution evidence and need association.`
+          : "No execution, review, delivery, or publication evidence was found. Kept visible but collapsed; no project was invented."}
       </p>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {videos.map((video) => (
           <Link
             key={video.id}
@@ -166,13 +179,15 @@ function UnassignedDeliverablesSection({
           >
             <span className="min-w-0">
               <span className="block truncate font-bold text-zinc-200">{video.title ?? `Video ${formatDate(video.date)}`}</span>
-              <span className="block truncate text-[11px] text-zinc-600">{video.clientName}</span>
+              <span className="block truncate text-[11px] text-zinc-600">
+                {video.clientName} · {video.classification === "UNASSIGNED_WITH_EVIDENCE" ? "Needs association" : "No execution evidence"}
+              </span>
             </span>
             <span className="shrink-0 font-black text-amber-400">Open →</span>
           </Link>
         ))}
       </div>
-    </section>
+    </details>
   );
 }
 

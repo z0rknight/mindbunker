@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildWeeklyOperatingSummary,
   computeGaps,
   computeOverlaps,
   assignOverlapLanes,
@@ -13,6 +14,20 @@ import {
   shiftMonthKey,
   wallClockDurationSeconds,
 } from "./timeline.ts";
+
+test("weekly operating summary separates context and preserves capture exceptions", () => {
+  const client = item("2026-09-07T12:00:00.000Z", "2026-09-07T13:00:00.000Z", { sensorSessionId: 9, source: "MAC_SENSOR_APPROVED" });
+  const admin = item("2026-09-07T14:00:00.000Z", "2026-09-07T14:30:00.000Z", { videoKind: "INTERNAL", activityType: "ADMIN", source: "MANUAL" });
+  const internal = item("2026-09-08T12:00:00.000Z", "2026-09-08T14:00:00.000Z", { videoKind: "INTERNAL" });
+  const days = buildWeeklyOperatingSummary([client, admin, internal], "2026-09-07", NOW);
+  assert.equal(days.length, 7);
+  assert.deepEqual(
+    { total: days[0].totalSeconds, client: days[0].clientSeconds, admin: days[0].adminSeconds, sensor: days[0].sensorLinkedCount, manual: days[0].manualCount },
+    { total: 5400, client: 3600, admin: 1800, sensor: 1, manual: 1 },
+  );
+  assert.equal(days[1].internalSeconds, 7200);
+  assert.equal(days[6].sessionCount, 0);
+});
 
 const NOW = "2026-09-11T20:00:00.000Z";
 

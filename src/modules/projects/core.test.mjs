@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  classifyUnassignedDelivery,
   filterProjectsBySearch,
   getProjectException,
   getProjectGroup,
@@ -16,6 +17,14 @@ import {
   sortProjectWorkspaceVideos,
   validateProjectInput,
 } from "./core.ts";
+
+test("unassigned delivery classification excludes release fixtures without hiding real ambiguity", () => {
+  const base = { clientSource: null, sessionCount: 0, deliveryUrl: null, reviewUrl: null, publishedUrl: null };
+  assert.equal(classifyUnassignedDelivery({ ...base, clientSource: "RELEASE_TEST" }), "SYNTHETIC_QA");
+  assert.equal(classifyUnassignedDelivery(base), "UNASSIGNED_NO_EXECUTION_EVIDENCE");
+  assert.equal(classifyUnassignedDelivery({ ...base, sessionCount: 1 }), "UNASSIGNED_WITH_EVIDENCE");
+  assert.equal(classifyUnassignedDelivery({ ...base, reviewUrl: "https://example.com/review" }), "UNASSIGNED_WITH_EVIDENCE");
+});
 
 test("project input keeps only useful bounded fields", () => {
   const result = validateProjectInput({

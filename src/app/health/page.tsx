@@ -16,6 +16,8 @@ const ACTIVITY_TIMELINE_DAYS = 84; // 12 weeks
 export default async function HealthPage() {
   const { summary, caffeineSummary, timelineDays, ledger, today } =
     await getHealthPageData({ timelineDays: ACTIVITY_TIMELINE_DAYS, ledgerDays: 30 });
+  const capturedHealthDays = ledger.filter((day) => day.healthLogId !== null || day.coffeeServings !== null).length;
+  const unknownHealthDays = ledger.length - capturedHealthDays;
 
   return (
     <div className={OPERATOR_WORKSPACE_CLASS}>
@@ -124,6 +126,9 @@ export default async function HealthPage() {
         <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
           Daily Health Ledger · last 30 days
         </h2>
+        <p className="mb-3 text-xs text-zinc-500">
+          <strong className="text-zinc-300">{capturedHealthDays} days</strong> with explicit health evidence · <strong className="text-amber-300">{unknownHealthDays} days Unknown</strong>. Missing data is not zero and is not interpreted as a health outcome.
+        </p>
         {ledger.length === 0 ? (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center">
             <p className="text-zinc-500 text-sm">No health logs yet. Start tracking today!</p>
@@ -150,12 +155,12 @@ export default async function HealthPage() {
                   )}
                 </div>
                 <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                  <LedgerFact label="Sleep" value={day.sleepHours !== null ? `${day.sleepHours}h` : "—"} />
-                  <LedgerFact label="Coffee" value={day.coffeeServings !== null ? `${day.coffeeServings} servings` : "—"} />
+                  <LedgerFact label="Sleep" value={day.sleepHours !== null ? `${day.sleepHours}h` : "Unknown"} />
+                  <LedgerFact label="Coffee" value={day.coffeeServings !== null ? `${day.coffeeServings} servings` : "Unknown"} />
                   <LedgerFact label="Caffeine" value={formatLedgerCaffeine(day.caffeineMg, day.caffeineSource)} />
-                  <LedgerFact label="Walk" value={day.walkingMinutes !== null ? `${day.walkingMinutes}min` : "—"} />
-                  <LedgerFact label="Cycling" value={day.cyclingKm !== null ? `${day.cyclingKm}km` : "—"} />
-                  <LedgerFact label="Intentional work" value={day.workSeconds !== null ? `${formatClosedDuration(day.workSeconds)} · ${day.workSessionCount} sessions` : "—"} />
+                  <LedgerFact label="Walk" value={day.walkingMinutes !== null ? `${day.walkingMinutes}min` : "Unknown"} />
+                  <LedgerFact label="Cycling" value={day.cyclingKm !== null ? `${day.cyclingKm}km` : "Unknown"} />
+                  <LedgerFact label="Intentional work" value={day.workSeconds !== null ? `${formatClosedDuration(day.workSeconds)} · ${day.workSessionCount} sessions` : "Unknown"} />
                 </dl>
               </article>
             ))}

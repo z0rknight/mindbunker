@@ -7,7 +7,19 @@ import {
   computeMonthlyTime,
   computeWeeklyCommercialLine,
   deriveCommercialPosition,
+  summarizeTopApplications,
 } from "./core.ts";
+
+test("top applications merge browser surfaces without inventing extra app time", () => {
+  assert.deepEqual(summarizeTopApplications([
+    { appKey: "SAFARI", seconds: 20 },
+    { appKey: "PREMIERE_PRO", seconds: 40 },
+    { appKey: "SAFARI", seconds: 30 },
+  ], 2), [
+    { appKey: "SAFARI", seconds: 50 },
+    { appKey: "PREMIERE_PRO", seconds: 40 },
+  ]);
+});
 
 const hourly = [{ id: 2, billingType: "HOURLY", hourlyRate: 25, currency: "USD", status: "ACTIVE" }];
 const previous = { id: 2, amountCents: 40000, currency: "USD", status: "CANCELLED", createdAt: 1000, note: null };
