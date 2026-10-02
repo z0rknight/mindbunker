@@ -170,6 +170,8 @@ export type UnassignedDeliveryClassification =
   | "UNASSIGNED_WITH_EVIDENCE"
   | "UNASSIGNED_NO_EXECUTION_EVIDENCE";
 
+export const SYNTHETIC_OPERATIONAL_CLIENT_SOURCE = "RELEASE_TEST";
+
 // October Admin Reset: unassigned work remains visible without allowing
 // release fixtures to impersonate client obligations. This is deliberately
 // a read-time classification: no project is fabricated and no production
@@ -181,7 +183,7 @@ export function classifyUnassignedDelivery(input: {
   reviewUrl: string | null;
   publishedUrl: string | null;
 }): UnassignedDeliveryClassification {
-  if (input.clientSource === "RELEASE_TEST") return "SYNTHETIC_QA";
+  if (input.clientSource === SYNTHETIC_OPERATIONAL_CLIENT_SOURCE) return "SYNTHETIC_QA";
   if (
     input.sessionCount > 0 ||
     Boolean(input.deliveryUrl || input.reviewUrl || input.publishedUrl)

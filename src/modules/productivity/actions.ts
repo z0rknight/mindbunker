@@ -47,6 +47,7 @@ import {
   type VideoStatus,
 } from "./config";
 import { VIDEO_OPERATIONAL_NOTE_EVENT_TYPE } from "@/modules/video-memory/core";
+import { SYNTHETIC_OPERATIONAL_CLIENT_SOURCE } from "@/modules/projects/core";
 import { revalidateProductivityViews } from "./revalidation";
 import { isQueueEligible, moveBefore, moveInOrder, resequencePositions, type QueueMoveDirection } from "./queue";
 import {
@@ -461,7 +462,11 @@ export async function getVideoStats() {
           // at PLANNED by design), so this mirrors isDeliverableVideo
           // without needing the join that helper implies.
           isNull(videoLogs.cancelledAt),
-          or(isNull(videoLogs.clientId), isNull(clients.source), ne(clients.source, "RELEASE_TEST")),
+          or(
+            isNull(videoLogs.clientId),
+            isNull(clients.source),
+            ne(clients.source, SYNTHETIC_OPERATIONAL_CLIENT_SOURCE),
+          ),
         ),
       ),
     db
@@ -474,7 +479,11 @@ export async function getVideoStats() {
           eq(videoLogs.status, "DONE"),
           inArray(videoLogs.videoKind, PRODUCTION_COUNT_KINDS),
           isNull(videoLogs.cancelledAt),
-          or(isNull(videoLogs.clientId), isNull(clients.source), ne(clients.source, "RELEASE_TEST")),
+          or(
+            isNull(videoLogs.clientId),
+            isNull(clients.source),
+            ne(clients.source, SYNTHETIC_OPERATIONAL_CLIENT_SOURCE),
+          ),
         ),
       ),
     db
@@ -489,7 +498,13 @@ export async function getVideoStats() {
       })
       .from(videoLogs)
       .leftJoin(clients, eq(videoLogs.clientId, clients.id))
-      .where(or(isNull(videoLogs.clientId), isNull(clients.source), ne(clients.source, "RELEASE_TEST")))
+      .where(
+        or(
+          isNull(videoLogs.clientId),
+          isNull(clients.source),
+          ne(clients.source, SYNTHETIC_OPERATIONAL_CLIENT_SOURCE),
+        ),
+      )
       .orderBy(videoLogs.createdAt),
   ]);
 
@@ -581,7 +596,11 @@ export async function getAllVideoLogs() {
     // only changes what getAllVideoLogs() returns for the grouped overview.
     .where(and(
       or(isNull(videoLogs.clientId), ne(clients.archivalState, "GELADEIRA")),
-      or(isNull(videoLogs.clientId), isNull(clients.source), ne(clients.source, "RELEASE_TEST")),
+      or(
+        isNull(videoLogs.clientId),
+        isNull(clients.source),
+        ne(clients.source, SYNTHETIC_OPERATIONAL_CLIENT_SOURCE),
+      ),
     ))
     .orderBy(desc(videoLogs.createdAt), desc(videoLogs.id));
 }
