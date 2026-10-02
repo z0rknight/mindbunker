@@ -7,6 +7,7 @@ import { getApplicationUsage } from "@/modules/sensor/data";
 import { resolveTimeWindow } from "@/modules/sensor/app-intelligence";
 import { APP_KEY_LABELS, type AppKey } from "@/modules/sensor/app-intelligence";
 import { canonicalClientId, isOperationalAliasClientId } from "@/lib/client-identity";
+import { SYNTHETIC_OPERATIONAL_CLIENT_SOURCE } from "@/modules/projects/core";
 import {
   buildCoverageMatrix,
   computeMonthlyFinance,
@@ -204,16 +205,23 @@ export async function getMonthlyReality(monthKey: string): Promise<MonthlyRealit
         (SELECT COUNT(*) FROM revisions WHERE created_at >= ?1 AND created_at < ?2) AS reviews
     `).bind(window.startSeconds, window.endSeconds).first<{ deliveries: number; reviews: number }>(),
     getApplicationUsage("MONTH", monthKey),
-    all(db.$client.prepare(`SELECT id FROM clients WHERE status='active' AND COALESCE(source,'')!='RELEASE_TEST'`).all<{ id: number }>()),
+    all(
+      db.$client
+        .prepare(`SELECT id FROM clients WHERE status='active' AND COALESCE(source,'') != ?1`)
+        .bind(SYNTHETIC_OPERATIONAL_CLIENT_SOURCE)
+        .all<{ id: number }>(),
+    ),
     db.$client.prepare(`
       SELECT
-        (SELECT COUNT(*) FROM projects WHERE status='active') AS active_projects,
+        (SELECT COUNT(*) FROM projects p
+          JOIN clients c ON c.id=p.client_id
+          WHERE p.status='active' AND COALESCE(c.source,'') != ?3) AS active_projects,
         (SELECT COUNT(*) FROM production_orders WHERE state='OPEN') AS open_orders,
         (SELECT COUNT(*) FROM clients WHERE status='lead' AND created_at>=?1 AND created_at<?2) AS new_leads,
         (SELECT COUNT(*) FROM clients WHERE source='start') AS inbound_total,
         (SELECT COUNT(*) FROM clients WHERE source='start' AND created_at>=?1 AND created_at<?2) AS inbound_new,
         (SELECT COUNT(*) FROM work_sessions WHERE (ended_at IS NULL OR ended_at-started_at>43200) AND started_at>=?1 AND started_at<?2) AS unresolved_sessions
-    `).bind(window.startSeconds, window.endSeconds).first<{
+    `).bind(window.startSeconds, window.endSeconds, SYNTHETIC_OPERATIONAL_CLIENT_SOURCE).first<{
       active_projects: number; open_orders: number; new_leads: number; inbound_total: number; inbound_new: number; unresolved_sessions: number;
     }>(),
     all(db.$client.prepare(`SELECT amount_cents,currency FROM payment_requests WHERE status='OPEN'`).all<{ amount_cents: number; currency: string }>()),
