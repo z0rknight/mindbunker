@@ -31,6 +31,8 @@ import { ClientMetricStrip } from "./ClientMetricStrip";
 import { ClientDashboardManager } from "./ClientDashboardManager";
 import { filterVideosForClient, selectActiveContractForClient } from "@/modules/crm/spatial-composition";
 import { indexClientBillingByProject } from "@/modules/client-portal/core";
+import { getClientReality } from "@/modules/reality/data";
+import { ClientRealityPanel } from "@/components/reality/ClientRealityPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +107,7 @@ export default async function ClientDetailPage({
     productionMemories,
     referenceVideoOptions,
     clientQa,
+    clientReality,
   ] = await Promise.all([
     getAdminGatewayWorkspace(clientId),
     getAdminBookingConfiguration(),
@@ -135,6 +138,7 @@ export default async function ClientDetailPage({
     getReferenceVideoOptions(clientId),
     // Wave 4: client-owned protected terms + export reminders (operator-only).
     getClientQaForClient(clientId),
+    getClientReality(clientId),
   ]);
   const weekEstimateForClient = weekEstimates.find((row) => row.clientId === clientId) ?? null;
   const unassignedVideos = filterVideosForClient(allUnassignedVideos, clientId);
@@ -204,6 +208,12 @@ export default async function ClientDetailPage({
           revisionCount={clientIntelligence.revisionCount}
         />
       </div>
+
+      {clientReality && (
+        <div className="mt-4">
+          <ClientRealityPanel reality={clientReality} />
+        </div>
+      )}
 
       <div className="mt-6 space-y-6">
       <OpportunityPanel

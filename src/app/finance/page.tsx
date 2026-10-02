@@ -15,7 +15,7 @@ import {
   getUnattributedIncomeTransactions,
 } from "@/modules/finance/actions";
 import { getAmbiguousCashMovements } from "@/modules/cash-accounts/actions";
-import { formatCurrency, formatDate, currentMonthKey, currentMonthName, todayISO } from "@/utils/date";
+import { formatCurrency, formatDate, currentMonthKey, currentMonthName, shiftMonthKey, todayISO } from "@/utils/date";
 import {
   computeReservedByCurrency,
   computeUpcomingObligations,
@@ -37,6 +37,8 @@ import { FinanceHealthPanel } from "@/components/finance/FinanceHealthPanel";
 import { EconomicLedgerCard } from "@/components/finance/EconomicLedgerCard";
 import { FinanceOverviewPanel, type NeedsYouItem } from "@/components/finance/FinanceOverviewPanel";
 import { FinanceTabs } from "./FinanceTabs";
+import { getMonthlyReality } from "@/modules/reality/data";
+import { MonthlyRealityPanel } from "@/components/reality/MonthlyRealityPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +59,8 @@ export default async function FinancePage() {
     commercialContracts,
     unattributedTransactions,
     ambiguousMovements,
+    currentReality,
+    previousReality,
   ] = await Promise.all([
     getFinanceOverview(),
     getAllTransactions(),
@@ -73,6 +77,8 @@ export default async function FinancePage() {
     getCommercialContracts(),
     getUnattributedIncomeTransactions(),
     getAmbiguousCashMovements(),
+    getMonthlyReality(currentMonthKey()),
+    getMonthlyReality(shiftMonthKey(currentMonthKey(), -1)),
   ]);
   const { summary, ledgerPlanning: rmediaCash } = financeOverview;
   const activeDebts = debts.filter((d) => d.status === "ACTIVE");
@@ -549,6 +555,18 @@ export default async function FinancePage() {
             👤 Personal
           </Link>
         </div>
+      </div>
+
+      <div className="mb-6 space-y-4">
+        <MonthlyRealityPanel reality={currentReality} current />
+        <details className="rounded-2xl border border-zinc-800 bg-zinc-950/30">
+          <summary className="cursor-pointer px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-zinc-400">
+            Previous month reconciliation fixture
+          </summary>
+          <div className="border-t border-zinc-800 p-3">
+            <MonthlyRealityPanel reality={previousReality} />
+          </div>
+        </details>
       </div>
 
       <FinanceTabs
