@@ -5,6 +5,7 @@ import { currentMonthKey, shiftMonthKey } from "@/utils/date";
 import { dayKeyFor } from "@/modules/work-sessions/core";
 import { getApplicationUsage } from "@/modules/sensor/data";
 import { resolveTimeWindow } from "@/modules/sensor/app-intelligence";
+import { canonicalClientId, isOperationalAliasClientId } from "@/lib/client-identity";
 import {
   buildCoverageMatrix,
   computeMonthlyFinance,
@@ -154,7 +155,7 @@ export async function getMonthlyReality(monthKey: string): Promise<MonthlyRealit
   const db = await getAuthenticatedDb();
   const { start, end } = monthDateRange(monthKey);
   const window = resolveTimeWindow("MONTH", new Date().toISOString(), monthKey);
-  const [transactionRows, billingRows, requestRows, feeRows, unknownRows, sessionRows, notes, evidenceCounts, sensor, activeClients, operationCounts, openRequests, aliasNotes] = await Promise.all([
+  const [transactionRows, billingRows, requestRows, feeRows, unknownRows, sessionRows, notes, evidenceCounts, sensor, activeClients, operationCounts, openRequests] = await Promise.all([
     all(db.$client.prepare(`
       SELECT type, amount, currency,
         CASE WHEN client_id IS NOT NULL AND contract_id IS NOT NULL THEN 1 ELSE 0 END AS attributed
@@ -213,7 +214,6 @@ export async function getMonthlyReality(monthKey: string): Promise<MonthlyRealit
       active_projects: number; open_orders: number; new_leads: number; inbound_total: number; inbound_new: number; unresolved_sessions: number;
     }>(),
     all(db.$client.prepare(`SELECT amount_cents,currency FROM payment_requests WHERE status='OPEN'`).all<{ amount_cents: number; currency: string }>()),
-    all(db.$client.prepare(`SELECT note FROM reconciliation_notes WHERE note LIKE '%operational alias mapped in source%'`).all<{ note: string }>()),
   ]);
 
   const overrides = notes
@@ -247,10 +247,6 @@ export async function getMonthlyReality(monthKey: string): Promise<MonthlyRealit
   const unattributedPaid = finance.reduce((sum, row) => sum + row.unattributedPaid, 0);
   const deliveries = Number(evidenceCounts?.deliveries ?? 0);
   const reviews = Number(evidenceCounts?.reviews ?? 0);
-  const aliasIds = new Set(aliasNotes.flatMap((row) => {
-    const match = row.note.match(/client\s+(\d+).*canonical client\s+(\d+)/iu);
-    return match ? [Number(match[1])] : [];
-  }));
   const openCommercial = [...openRequests.reduce((map, row) => {
     map.set(row.currency, (map.get(row.currency) ?? 0) + row.amount_cents / 100);
     return map;
@@ -280,7 +276,7 @@ export async function getMonthlyReality(monthKey: string): Promise<MonthlyRealit
       sourceAuthorityClean: true,
     }),
     operations: {
-      activeClients: activeClients.filter((row) => !aliasIds.has(row.id)).length,
+      activeClients: activeClients.filter((row) => !isOperationalAliasClientId(row.id)).length,
       activeProjects: Number(operationCounts?.active_projects ?? 0),
       openProductionOrders: Number(operationCounts?.open_orders ?? 0),
       newLeads: Number(operationCounts?.new_leads ?? 0),
@@ -341,13 +337,10 @@ export async function getClientReality(clientId: number, periodMonthKey = shiftM
   if (!client) return null;
   const { start, end } = monthDateRange(periodMonthKey);
   const window = resolveTimeWindow("MONTH", new Date().toISOString(), periodMonthKey);
-  const aliasRows = await all(db.$client.prepare(`
-    SELECT note FROM reconciliation_notes WHERE note LIKE '%operational alias mapped in source%'
-  `).all<{ note: string }>());
-  const aliasIds = aliasRows.flatMap((row) => {
-    const match = row.note.match(/client\s+(\d+).*canonical client\s+(\d+)/iu);
-    return match && Number(match[2]) === clientId ? [Number(match[1])] : [];
-  });
+  const relationshipRows = await all(db.$client.prepare(`SELECT id FROM clients`).all<{ id: number }>());
+  const aliasIds = relationshipRows
+    .map((row) => row.id)
+    .filter((id) => id !== clientId && canonicalClientId(id) === clientId);
   const relationshipIds = [clientId, ...aliasIds];
   const placeholders = relationshipIds.map((_, index) => `?${index + 1}`).join(",");
   const [contracts, requests, sessions, paid, counts, billingRows, notes, fees, cashRows, revisions] = await Promise.all([
