@@ -1,5 +1,13 @@
 # RMEDIA OS / MindBunker — Current Handoff
-**Updated:** 2026-09-21 (Red-as-signal visual correction released; desktop QA green, mobile screenshot unverified) · Supersedes every earlier handoff and wave narrative. Read this plus the current source; older release paragraphs below are historical evidence unless explicitly marked current.
+**Updated:** 2026-10-02 (October Operational Reality Integration live) · Supersedes every earlier handoff and wave narrative. Read this plus the current source; older release paragraphs below are historical evidence unless explicitly marked current.
+
+## Current release — October Operational Reality Integration
+
+September's reconciled truth is now available as reusable read models inside the authenticated Operator. CRM has one generic Reality block for every client, with guarded commercial model, request/payment/delta/draft boundaries and relationship-level monthly facts. Taryn renders as one canonical relationship with **23h51 DIRECT / 10h00 DFY**, **33h40 / USD 841.67** work-date registration, **USD 729.17 posted gross**, **USD 72.92 service fees**, **USD 11.96 withdrawal fees** and **USD 644.29 cash**. Dave renders **USD 400 previous request**, **USD 0 paid**, **USD 68.33 newly supported over 164 whole minutes**, **USD 468.33 current open request**, and **USD 0 draft after the request**. Per-video economics remain explicitly unallocated.
+
+Finance opens on October current reality and contains an expandable September close by currency. September admissible Work Session time is **112.7725h** from **153.8425h raw**, with **41.07h / 2 rows preserved and excluded**. September management operating results are **USD 611.54** and **BRL -523.48**. The coverage matrix keeps Finance, time, client attribution, delivery, review and source authority separate; it has no global score. Sensor coverage is a drill-down and never becomes the definition of work.
+
+Authenticated production QA found and closed two cross-client defects before release: reconciliation notes are now scoped through the current client's contracts, and operational aliases derive from the canonical source registry rather than prose parsing. Final live QA passed on Dave CRM, Taryn CRM, Finance current/September fixture and Sensor. Operator source **`f06d02e`**; Worker **`88a657cf-221f-4966-813b-b0a8bc323489`**. Full gate: **1500/1500 tests**, TypeScript/build green, ESLint 0 errors + 3 pre-existing warnings. D1 remains **9 clients / 293 CRM events**, head **`0053_slow_shen.sql`**, FK clean, no migration and no production data writes. Client/Public/Sensor were not deployed. Full evidence: `RMEDIA_OCTOBER_OPERATIONAL_REALITY_INTEGRATION_2026_10.md`.
 
 ## Current visual correction — Sep 21
 

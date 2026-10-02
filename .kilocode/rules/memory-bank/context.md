@@ -10,6 +10,20 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **October Operational Reality Integration — live Operator read models (2026-10-02)**
+  - [x] Added reusable client Reality blocks and current/closed monthly Finance blocks without schema or D1 writes
+  - [x] Closed Dave request chronology at USD 400 prior / USD 68.33 supported delta / USD 468.33 open / USD 0 paid, with per-video allocation still unknown
+  - [x] Closed Taryn at one commercial relationship with 23h51 DIRECT, 10h00 DFY, 33h40 external registered and the reconciled gross/fee/cash chain
+  - [x] Preserved Sensor as a coverage source rather than a definition of work; added explicit Finance/time/attribution/delivery/review/source coverage dimensions
+  - [x] Fixed client-scoped reconciliation and canonical alias derivation after authenticated live QA; Operator `f06d02e` / `88a657cf-221f-4966-813b-b0a8bc323489`; 1500 tests; migration 0053/FK green
+
+- [x] **Taryn September final close — evidence reconciliation (2026-10-01)**
+  - [x] Reconciled the September chatlog against the canonical Upwork close, MindBunker Work Sessions/video lifecycle, and Notion production logs
+  - [x] Preserved one commercial Taryn relationship with DIRECT/DFY separation: 33h40m Upwork work-date time and 33h51m25s intentional MindBunker time
+  - [x] Closed client-level commercial truth at USD 841.67 work-date gross, USD 729.17 posted gross, USD 72.92 service fees, USD 11.96 withdrawal fees and USD 644.29 Wise cash
+  - [x] Kept asset-level delivery/approval YELLOW: 20 September-created client-work records currently DONE versus 12 finish events, one rejected/DONE contradiction, Mini Series changes requested and Geoff in progress
+  - [x] Preserved the Bonnie inventory question as unresolved; no production, schema, D1 or deployment changes
+
 - [x] **September 2026 truth closure — MindBunker reconciliation (2026-10-01)**
   - [x] Recovered the post-write checkpoint, applied the later human-input close once, and verified it read-only afterward; no replay, migration, or deploy was performed
   - [x] Closed the seven BRL movements as BRL 603.44 operating + BRL 234.90 personal; September BRL operating total is 923.48 and unknown BRL is zero
@@ -387,3 +401,6 @@ The original February 2026 visual design is the canonical interface. The separat
 | 2026-08-29 | Trust-restoration patch: production booking mock fails closed, War Room/Performance keep currencies separate, operator calendar uses America/Sao_Paulo, Active Clients exclude archived/internal records, Consistency Streak derives only from closed Work Sessions, normal Finance rows are editable in place, and Owner Pay corrections atomically preserve both paired ledger identities. No schema or production mutation. |
 | 2026-09-13 | Emergency video-workspace hotfix: a requested DONE/delivered video now opens its completed archive disclosure instead of remaining hidden inside a closed `<details>`; requested videos outside the bounded recent list remain available, while queue eligibility stays independent from canonical workspace access. |
 | 2026-10-01 | September final truth close: 33h40 Taryn external time; USD 729.17 posted gross, 72.92 service fees, 11.96 withdrawal fees and 644.29 Wise cash; BRL operating 923.48, personal excluded 234.90, unknown 0; Taryn DFY mapped as a distinct operational work mode under one canonical Taryn relationship; Work Session 83 preserved/excluded; D1 migration 0053/FK/duplicates green; 1489 tests, typecheck and build green; no migration or deploy. |
+| 2026-10-01 | Operating Intelligence baseline documented without product or production changes: 112.7725h admissible September time; explicit Sensor active/idle/no-telemetry matrix; Taryn weekly multi-calendar review; Dave USD 400 open balance and USD 348.66 supported Sep 6 sprint with unresolved deltas; BI/readiness, workflow and rest-inference boundaries recorded in five RMEDIA reports. Fresh live D1 read was blocked by expired Cloudflare authentication, so current database counts use the verified post-close local reconstruction. |
+| 2026-10-01 | Dave commercial close updated from operator evidence: prior USD 372.66 and USD 400 requests cancelled; replacement Wise/MindBunker request USD 468.33 OPEN at `https://wise.com/pay/r/eZKtOZK7w-f3xJo`; USD 68.33 increment is the Sep 25/30 three-video batch (2h44 client-facing at USD 25/h). Latest cuts were sent for review, but final approval and payment settlement remain open. |
+| 2026-10-02 | October Operational Reality Integration released read-model-first: generic CRM Reality, Finance October current + September fixture, Taryn DIRECT/DFY weekly view, Dave guarded hourly position and explicit coverage matrix. Authenticated live QA fixed cross-client reconciliation leakage and canonical-alias parsing before final Operator `f06d02e` / Worker `88a657cf-221f-4966-813b-b0a8bc323489`; 1500 tests; D1 9 clients/293 events, migration 0053, FK clean, no D1 writes. |
