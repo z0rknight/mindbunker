@@ -448,6 +448,7 @@ export async function getVideoStats() {
     db
       .select({ count: sql<number>`count(*)` })
       .from(videoLogs)
+      .leftJoin(clients, eq(videoLogs.clientId, clients.id))
       .where(
         and(
           eq(videoLogs.date, today),
@@ -460,20 +461,36 @@ export async function getVideoStats() {
           // at PLANNED by design), so this mirrors isDeliverableVideo
           // without needing the join that helper implies.
           isNull(videoLogs.cancelledAt),
+          or(isNull(videoLogs.clientId), isNull(clients.source), ne(clients.source, "RELEASE_TEST")),
         ),
       ),
     db
       .select({ count: sql<number>`count(*)` })
       .from(videoLogs)
+      .leftJoin(clients, eq(videoLogs.clientId, clients.id))
       .where(
         and(
           gte(videoLogs.date, monthStart),
           eq(videoLogs.status, "DONE"),
           inArray(videoLogs.videoKind, PRODUCTION_COUNT_KINDS),
           isNull(videoLogs.cancelledAt),
+          or(isNull(videoLogs.clientId), isNull(clients.source), ne(clients.source, "RELEASE_TEST")),
         ),
       ),
-    db.select().from(videoLogs).orderBy(videoLogs.createdAt),
+    db
+      .select({
+        id: videoLogs.id,
+        date: videoLogs.date,
+        status: videoLogs.status,
+        revisionsCount: videoLogs.revisionsCount,
+        videoKind: videoLogs.videoKind,
+        isOperationalContainer: videoLogs.isOperationalContainer,
+        cancelledAt: videoLogs.cancelledAt,
+      })
+      .from(videoLogs)
+      .leftJoin(clients, eq(videoLogs.clientId, clients.id))
+      .where(or(isNull(videoLogs.clientId), isNull(clients.source), ne(clients.source, "RELEASE_TEST")))
+      .orderBy(videoLogs.createdAt),
   ]);
 
   // NIGHT SHIFT REALITY PATCH §10: "This Week" must mean the same thing
@@ -562,7 +579,10 @@ export async function getAllVideoLogs() {
     // default. A Video with no Client at all (clientId null) is never
     // affected. Direct navigation to a specific video is untouched — this
     // only changes what getAllVideoLogs() returns for the grouped overview.
-    .where(or(isNull(videoLogs.clientId), ne(clients.archivalState, "GELADEIRA")))
+    .where(and(
+      or(isNull(videoLogs.clientId), ne(clients.archivalState, "GELADEIRA")),
+      or(isNull(videoLogs.clientId), isNull(clients.source), ne(clients.source, "RELEASE_TEST")),
+    ))
     .orderBy(desc(videoLogs.createdAt), desc(videoLogs.id));
 }
 
