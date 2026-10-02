@@ -17,3 +17,10 @@ test("relationship aliases use the canonical source registry, never prose parsin
   assert.match(source, /activeClients\.filter\(\(row\) => !isOperationalAliasClientId\(row\.id\)\)/u);
   assert.doesNotMatch(source, /note\.match\(\/client\\s\+/u);
 });
+
+test("client reality drill-down points at the canonical Sensor route", async () => {
+  const source = await readFile(new URL("../../components/reality/ClientRealityPanel.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /href="\/productivity\/sensor"/u);
+  assert.doesNotMatch(source, /href="\/sensor"/u);
+});

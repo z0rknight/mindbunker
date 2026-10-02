@@ -134,7 +134,7 @@ export function ClientRealityPanel({ reality }: { reality: ClientReality }) {
       )}
       <div className="mt-3 flex gap-4 text-xs">
         <Link href="/finance" className="font-semibold text-cyan-400 hover:text-cyan-300">Finance drill-down →</Link>
-        <Link href="/sensor" className="font-semibold text-cyan-400 hover:text-cyan-300">Sensor coverage →</Link>
+        <Link href="/productivity/sensor" className="font-semibold text-cyan-400 hover:text-cyan-300">Sensor coverage →</Link>
       </div>
     </section>
   );
