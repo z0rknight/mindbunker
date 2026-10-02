@@ -378,7 +378,12 @@ export async function getClientReality(clientId: number, periodMonthKey = shiftM
       WHERE cc.client_id=?1 AND ((be.period_end>=?2 AND be.period_start<?3) OR (be.earning_date>=?2 AND be.earning_date<?3))
       ORDER BY be.period_start
     `).bind(clientId, start, end).all<BillingRow>()),
-    all(db.$client.prepare(`SELECT contract_id,note FROM reconciliation_notes WHERE date>=?1 AND date<?2`).bind(start, end).all<{ contract_id: number; note: string }>()),
+    all(db.$client.prepare(`
+      SELECT rn.contract_id,rn.note
+      FROM reconciliation_notes rn
+      JOIN commercial_contracts cc ON cc.id=rn.contract_id
+      WHERE cc.client_id=?1 AND rn.date>=?2 AND rn.date<?3
+    `).bind(clientId, start, end).all<{ contract_id: number; note: string }>()),
     all(db.$client.prepare(`
       SELECT pf.billing_evidence_id,pf.amount,pf.occurred_at,pf.notes
       FROM platform_fees pf JOIN billing_evidence be ON be.id=pf.billing_evidence_id
