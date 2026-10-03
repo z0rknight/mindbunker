@@ -32,6 +32,7 @@ export type ExecutionRecommendationFacts = {
 async function projectClient(
   operationalId: number | null,
   operationalName: string | null,
+  returnTo?: string,
 ): Promise<ExecutionClientProjection | null> {
   if (operationalId === null) return null;
   const canonicalId = canonicalClientId(operationalId);
@@ -57,7 +58,7 @@ async function projectClient(
     canonicalId,
     canonicalName,
     workMode: clientWorkMode(operationalId),
-    href: entityInspectionHref({ type: "client", id: canonicalId }),
+    href: entityInspectionHref({ type: "client", id: canonicalId }, returnTo),
   };
 }
 
@@ -123,7 +124,7 @@ export async function getCurrentExecution(returnTo?: string): Promise<CurrentExe
     stale: isSessionStale(elapsedSeconds),
     source: row.source,
     deviceName: row.deviceName,
-    sessionHref: entityInspectionHref({ type: "session", id: row.sessionId }),
+    sessionHref: entityInspectionHref({ type: "session", id: row.sessionId }, returnTo),
     nextAction: getVideoNextAction(row.videoStatus),
     blocker,
     video: {
@@ -138,9 +139,9 @@ export async function getCurrentExecution(returnTo?: string): Promise<CurrentExe
       : {
           id: row.projectId,
           name: row.projectName ?? `Project ${row.projectId}`,
-          href: entityInspectionHref({ type: "project", id: row.projectId }),
+          href: entityInspectionHref({ type: "project", id: row.projectId }, returnTo),
         },
-    client: await projectClient(operationalClientId, row.videoClientName),
+    client: await projectClient(operationalClientId, row.videoClientName, returnTo),
     ...(integrityIssues.length > 0 ? { integrityIssues } : {}),
   };
 }
@@ -182,9 +183,9 @@ export async function getExecutionRecommendation(
       : {
           id: selected.projectId,
           name: selected.projectName ?? `Project ${selected.projectId}`,
-          href: entityInspectionHref({ type: "project", id: selected.projectId }),
+          href: entityInspectionHref({ type: "project", id: selected.projectId }, returnTo),
         },
-    client: await projectClient(selected.clientId, selected.clientName),
+    client: await projectClient(selected.clientId, selected.clientName, returnTo),
     signals: explainExecutionRecommendation(selected),
     deadline,
     blockingState: { isBlocked: false, reason: null },

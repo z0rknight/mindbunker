@@ -59,7 +59,7 @@ test("modals enter with the shared animation (no new vocabulary) and keep their 
   for (const [file, label] of [
     ["../app/productivity/VideoEditor.tsx", 'aria-modal="true"'],
     ["../components/quick-capture/QuickCaptureModal.tsx", 'aria-modal="true"'],
-    ["../app/productivity/sessions/SessionInspectorPanel.tsx", 'role="dialog"'],
+    ["../components/entity-inspection/EntityDrawerHost.tsx", 'role="dialog"'],
   ]) {
     const src = read(file);
     assert.match(src, /data-enter="true"/, file);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   WORK_SESSION_ACTIVITY_LABELS,
   formatClosedDuration,
@@ -12,9 +12,8 @@ import {
   wallClockDurationSeconds,
   type SessionTimelineItem,
 } from "@/modules/work-sessions/timeline";
-import type { WorkSessionVideoOption } from "@/modules/work-sessions/data";
-import { SessionInspectorPanel } from "./SessionInspectorPanel";
 import { pixelFont } from "./fonts";
+import { useEntityInspection } from "@/components/entity-inspection/EntityDrawerProvider";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en-US", {
@@ -35,15 +34,13 @@ export function SessionTimeline({
   totalCountBeforeFilters,
   dateKey,
   nowIso,
-  videoOptions,
 }: {
   items: SessionTimelineItem[];
   totalCountBeforeFilters: number;
   dateKey: string;
   nowIso: string;
-  videoOptions: WorkSessionVideoOption[];
 }) {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const { openEntity } = useEntityInspection();
 
   const sorted = useMemo(
     () => [...items].sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt)),
@@ -56,8 +53,6 @@ export function SessionTimeline({
   const hasOverlap = overlaps.size > 0;
   const raw = useMemo(() => rawDurationSeconds(sorted), [sorted]);
   const wall = useMemo(() => wallClockDurationSeconds(sorted, nowIso), [sorted, nowIso]);
-
-  const selected = sorted.find((s) => s.id === selectedId) ?? null;
 
   if (sorted.length === 0) {
     return (
@@ -127,7 +122,7 @@ export function SessionTimeline({
                     <button
                       key={session.id}
                       type="button"
-                      onClick={() => setSelectedId(session.id)}
+                      onClick={(event) => openEntity({ type: "session", id: session.id }, event.currentTarget)}
                       className={`w-full rounded-md border px-3 text-left transition-colors ${compact ? "py-2" : "py-2.5"} ${
                         isOpen
                           ? "border-[#00FF41]/40 bg-[#00FF41]/[0.06] hover:border-[#00FF41]/70"
@@ -210,13 +205,6 @@ export function SessionTimeline({
           );
         })}
       </ol>
-
-      <SessionInspectorPanel
-        session={selected}
-        isOverlap={selected ? (overlaps.get(selected.id)?.length ?? 0) > 0 : false}
-        videoOptions={videoOptions}
-        onClose={() => setSelectedId(null)}
-      />
     </div>
   );
 }

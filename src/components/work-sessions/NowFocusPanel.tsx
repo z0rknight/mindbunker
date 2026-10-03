@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type ReactNode, useRef } from "react";
 import { LiveIndicator, PixelIcon } from "@/components/ui/PixelVisuals";
 import type { CurrentExecution, ExecutionRecommendation } from "@/modules/execution/core";
 import { startWork, endWorkSession } from "@/modules/work-sessions/actions";
+import { EntityInspectionTrigger, useEntityInspection } from "@/components/entity-inspection/EntityDrawerProvider";
 import {
   DEFAULT_WORK_SESSION_ACTIVITY,
   OPERATOR_NAME,
@@ -183,6 +183,11 @@ function ActiveSessionCard({
           {current.integrityIssues?.map((issue) => (
             <p key={issue} className="mt-1 text-xs font-semibold text-amber-300">Integrity: {issue}</p>
           ))}
+          <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-bold">
+            {current.client && <EntityInspectionTrigger entity={{ type: "client", id: current.client.canonicalId }} className="text-cyan-400 hover:text-cyan-300">Inspect Client</EntityInspectionTrigger>}
+            {current.project && <EntityInspectionTrigger entity={{ type: "project", id: current.project.id }} className="text-cyan-400 hover:text-cyan-300">Inspect Project</EntityInspectionTrigger>}
+            <EntityInspectionTrigger entity={{ type: "session", id: current.sessionId }} className="text-zinc-400 hover:text-zinc-200">Inspect Session</EntityInspectionTrigger>
+          </div>
           {error && <p aria-live="polite" className="mt-2 text-xs text-red-300">{error}</p>}
         </div>
         <div className="flex flex-col gap-2 sm:items-end">
@@ -194,14 +199,14 @@ function ActiveSessionCard({
           >
             {isPending ? "Ending…" : "End Session"}
           </button>
-          <Link
-            href={current.video.href}
+          <EntityInspectionTrigger
+            entity={{ type: "video", id: current.video.id }}
             className={`min-h-11 rounded-xl px-4 py-3 text-center text-sm font-black text-zinc-950 ${
               stale ? "bg-amber-500 hover:bg-amber-400" : "bg-emerald-500 hover:bg-emerald-400"
             }`}
           >
-            Open Workspace
-          </Link>
+            Inspect Work
+          </EntityInspectionTrigger>
         </div>
       </div>
       {children}
@@ -217,6 +222,7 @@ function NoActiveWorkCard({
   variant: "dominant" | "compact";
 }) {
   const router = useRouter();
+  const { openEntity } = useEntityInspection();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const compact = variant === "compact";
@@ -230,7 +236,8 @@ function NoActiveWorkCard({
         setError(result.error);
         return;
       }
-      router.push(recommended.videoHref);
+      router.refresh();
+      openEntity({ type: "video", id: recommended.videoId });
     });
   }
 
@@ -242,13 +249,13 @@ function NoActiveWorkCard({
       </p>
       {recommended ? (
         <>
-          <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
-            Recommended next
-            {[recommended.client?.canonicalName, recommended.project?.name].filter(Boolean).length > 0 &&
-              ` · ${[recommended.client?.canonicalName, recommended.project?.name].filter(Boolean).join(" / ")}`}
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+            <span>Recommended next</span>
+            {recommended.client && <EntityInspectionTrigger entity={{ type: "client", id: recommended.client.canonicalId }} className="text-cyan-500 hover:text-cyan-300">{recommended.client.canonicalName}</EntityInspectionTrigger>}
+            {recommended.project && <EntityInspectionTrigger entity={{ type: "project", id: recommended.project.id }} className="text-cyan-500 hover:text-cyan-300">{recommended.project.name}</EntityInspectionTrigger>}
+          </div>
           <h2 className={`mt-1 truncate font-black text-white ${compact ? "text-base" : "text-lg sm:text-xl"}`}>
-            {recommended.title}
+            <EntityInspectionTrigger entity={{ type: "video", id: recommended.videoId }} className="truncate text-left hover:text-cyan-200">{recommended.title}</EntityInspectionTrigger>
           </h2>
           <p className="mt-1 text-xs text-zinc-500">{recommended.nextAction}</p>
           <p className="mt-1 text-[11px] text-zinc-600">{recommended.signals[0]?.message}</p>

@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Wave 2 — Global Entity Inspection / App Shell (2026-10-03, local candidate)**
+  - [x] Added one App Shell-owned, URL-addressable Entity Drawer for canonical Client, Project, Video, and Work Session inspection; `?inspect=type:id` survives refresh, Back/Forward closes/reopens, Escape restores trigger focus, and full pages remain the management destinations
+  - [x] Kept business truth in canonical owners: CRM identity/integrity, Projects progress, Productivity lifecycle, Execution recommendation, Work Sessions, Sensor evidence, and Finance received value are composed on demand into read-only inspection DTOs
+  - [x] Migrated Dashboard and War Room Next Objective, supported Active Signals, War Room client stage, Projects cards, CRM client rows, and Sessions timeline/table without redesigning those surfaces; removed the two route-local client/session inspectors
+  - [x] Video Start/Resume/End remains delegated to canonical `startWork` / `endWorkSession`; the drawer owns no lifecycle mutation, schema, persistence, migration, or financial derivation
+  - [x] Added loading, unavailable, missing, inactive and relationship-integrity states plus focus trap, body-scroll lock, independent scrolling, deep links, rapid contextual switching, and a 390×844 bottom-sheet layout
+  - [x] Typecheck, 1545/1545 tests, production build, diff check, and lint with 0 errors / 3 pre-existing warnings pass; visual QA passed on Dashboard, War Room, Projects and Sessions. CRM surface-level QA is blocked by the pre-existing local D1 missing `crm_events.payload_json`; no forbidden migration was applied
+  - [x] No deploy, production D1 write, migration, Card UX change, or M5/M6 visual work
+
 - [x] **Wave 0 — Truth, integrity & canonical domain foundation (2026-10-03, local candidate)**
   - [x] Established `clients` as canonical Account/Relationship identity while preserving Taryn DFY as an operational alias of canonical Taryn; CRM project counts, current work and realized revenue now roll up to the canonical row without erasing DIRECT/DFY evidence
   - [x] Root-caused the apparent Taryn disappearance to the intentional operational-alias filter introduced by `24b37ed`: the canonical relationship remained visible, but alias work was not projected into it

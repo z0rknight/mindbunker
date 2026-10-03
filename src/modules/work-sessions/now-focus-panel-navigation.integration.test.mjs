@@ -18,10 +18,11 @@ function source(relativePath) {
 // (master-qa-wave1.integration.test.mjs), since this codebase has no
 // component-render test harness.
 
-test("NowFocusPanel: both video links consume the app-shell href projected by the canonical execution API", () => {
+test("NowFocusPanel opens the shared entity inspection contract without rebuilding routes", () => {
   const panel = source("../../components/work-sessions/NowFocusPanel.tsx");
-  assert.match(panel, /href=\{current\.video\.href\}/u);
-  assert.match(panel, /router\.push\(recommended\.videoHref\)/u);
+  assert.match(panel, /EntityInspectionTrigger/u);
+  assert.match(panel, /openEntity\(\{ type: "video", id: recommended\.videoId \}\)/u);
+  assert.match(panel, /entity=\{\{ type: "session", id: current\.sessionId \}\}/u);
   assert.doesNotMatch(
     panel,
     /`\/productivity\?video=/u,

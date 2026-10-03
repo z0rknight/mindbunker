@@ -25,6 +25,7 @@ import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { getSystemInbound } from "@/modules/system-inbound/data";
 import { SYNTHETIC_OPERATIONAL_CLIENT_SOURCE } from "@/modules/projects/core";
 import { getRelationshipIntegrity } from "@/modules/crm/integrity-data";
+import { EntityInspectionTrigger } from "@/components/entity-inspection/EntityDrawerProvider";
 
 export const dynamic = "force-dynamic";
 
@@ -167,9 +168,9 @@ export default async function CRMPage() {
           <h2 className="text-zinc-400 text-xs font-semibold uppercase tracking-widest mb-3">
             Internal
           </h2>
-          <Link
-            href={`/crm/${internalClient.id}`}
-            className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 transition hover:border-zinc-600"
+          <EntityInspectionTrigger
+            entity={{ type: "client", id: internalClient.id }}
+            className="flex w-full items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-left transition hover:border-zinc-600"
           >
             <span className="flex items-center gap-2 text-sm font-bold text-zinc-300">
               <span className="h-1.5 w-1.5 rounded-full bg-zinc-500" aria-hidden="true" />
@@ -178,7 +179,7 @@ export default async function CRMPage() {
             <span className="text-xs font-semibold text-zinc-600">
               {internalClient.liveProjectCount} project{internalClient.liveProjectCount === 1 ? "" : "s"} →
             </span>
-          </Link>
+          </EntityInspectionTrigger>
         </div>
       )}
 
@@ -313,9 +314,9 @@ function ClientRow({ client, showConvert }: { client: ListClient; showConvert: b
           <LeadAvatar name={client.name} photoUrl={client.instagramProfilePictureUrl} />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
-              <Link href={`/crm/${client.id}`} className="truncate font-bold text-white hover:text-cyan-400">
+              <EntityInspectionTrigger entity={{ type: "client", id: client.id }} className="truncate text-left font-bold text-white hover:text-cyan-400">
                 {client.name}
-              </Link>
+              </EntityInspectionTrigger>
               {client.source === "book" && (
                 <span className="rounded border border-violet-800/60 px-1 py-0.5 text-[9px] font-black uppercase tracking-wide text-violet-400">
                   via /book

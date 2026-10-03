@@ -197,7 +197,7 @@ export default async function WorkSessionHistoryPage({
   // still fully reachable via the switcher exactly as before.
   const isDefaultLanding = requestedView === null && !hasLegacyFilter;
 
-  const [items, videoOptions, landingWeekItems, landingMonthItems] = await Promise.all([
+  const [items, landingWeekItems, landingMonthItems] = await Promise.all([
     getSessionTimelineItems(
       view === "week"
         ? { kind: "week", mondayKey }
@@ -212,7 +212,6 @@ export default async function WorkSessionHistoryPage({
             : { kind: "day", dayKey: dateKey },
       now,
     ),
-    getVideoOptionsForCorrection(),
     isDefaultLanding ? getSessionTimelineItems({ kind: "week", mondayKey }, now) : Promise.resolve(null),
     isDefaultLanding ? getSessionTimelineItems({ kind: "month", monthKey }, now) : Promise.resolve(null),
   ]);
@@ -287,7 +286,6 @@ export default async function WorkSessionHistoryPage({
           totalCountBeforeFilters={items.length}
           dateKey={dateKey}
           nowIso={now.toISOString()}
-          videoOptions={videoOptions}
         />
       ) : view === "week" ? (
         <SessionWeekCalendar

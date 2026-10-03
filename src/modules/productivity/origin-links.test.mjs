@@ -31,19 +31,18 @@ test("the resulting video link round-trips through the existing returnTo gate", 
 
 const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 
-test("the four inspection surfaces now build their video links with an origin", () => {
+test("deep management links preserve origin while global inspection owns Sessions", () => {
   const dashboard = src("../../app/page.tsx");
   assert.match(dashboard, /getExecutionSnapshot\("\/"\)/u);
   assert.match(dashboard, /videoWorkspaceHref\(first\.videoId, "\/"\)/u);
   const crm = src("../../app/crm/[id]/ClientIntelligencePanel.tsx");
   assert.match(crm, /videoWorkspaceHref\(note\.videoId, returnTo\)/u);
   assert.match(src("../../app/crm/[id]/page.tsx"), /returnTo=\{`\/crm\/\$\{client\.id\}`\}/u);
-  for (const rel of ["../../app/productivity/sessions/SessionInspectorPanel.tsx", "../../app/productivity/sessions/WorkSessionHistoryTable.tsx"]) {
-    const text = src(rel);
-    assert.match(text, /useCurrentOrigin\(\)/u, rel);
-    assert.match(text, /videoWorkspaceHref\(session\.videoId, origin\)/u, rel);
-  }
-  for (const rel of ["../../app/page.tsx", "../../app/crm/[id]/ClientIntelligencePanel.tsx", "../../app/productivity/sessions/SessionInspectorPanel.tsx", "../../app/productivity/sessions/WorkSessionHistoryTable.tsx"]) {
+  const sessions = src("../../app/productivity/sessions/WorkSessionHistoryTable.tsx");
+  assert.match(sessions, /EntityInspectionTrigger/u);
+  assert.match(sessions, /type: "video"/u);
+  assert.match(sessions, /type: "session"/u);
+  for (const rel of ["../../app/page.tsx", "../../app/crm/[id]/ClientIntelligencePanel.tsx", "../../app/productivity/sessions/WorkSessionHistoryTable.tsx"]) {
     assert.doesNotMatch(src(rel), /href=\{`\/productivity\?video=\$\{/u, `${rel} has no raw origin-less video link left`);
   }
 });

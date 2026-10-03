@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
 import { formatCurrency } from "@/utils/date";
 import { PixelIcon, LiveIndicator } from "@/components/ui/PixelVisuals";
 import { ArrivalScope, NewBadge, StatusTransition, useIsNew, useUpdateFlash } from "@/components/os";
@@ -12,6 +10,7 @@ import type {
   RestaurantClientHealth,
   RestaurantTicket,
 } from "@/modules/war-room/restaurant-core";
+import { useEntityInspection } from "@/components/entity-inspection/EntityDrawerProvider";
 
 const HEALTH_LABEL: Record<RestaurantClientHealth, string> = {
   ACTIVE: "Active",
@@ -30,15 +29,6 @@ function formatElapsed(seconds: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-function formatMinutes(minutes: number): string {
-  if (minutes >= 60) {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return `${h}h${m > 0 ? ` ${m}m` : ""}`;
-  }
-  return `${minutes}m`;
-}
-
 // The dominant visual center of War Room: a top-down restaurant floor
 // where clients are tables, open Production Orders are the comanda rail,
 // and the canonical open Work Session is the editor station. Every value
@@ -46,10 +36,8 @@ function formatMinutes(minutes: number): string {
 // buildRestaurantViewModel -- this component only lays them out and
 // handles the click-to-inspect interaction.
 export function WarRoomRestaurantStage({ viewModel }: { viewModel: RestaurantViewModel }) {
-  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+  const { openEntity } = useEntityInspection();
   const placed = assignTableSlots(viewModel.clients);
-  const selected = viewModel.clients.find((c) => c.id === selectedClientId) ?? null;
-  const selectedTickets = selected ? viewModel.tickets.filter((t) => t.clientId === selected.id) : [];
 
   return (
     <div
@@ -78,14 +66,9 @@ export function WarRoomRestaurantStage({ viewModel }: { viewModel: RestaurantVie
             key={client.id}
             slot={slot}
             client={client}
-            selected={client.id === selectedClientId}
-            onSelect={() => setSelectedClientId((current) => (current === client.id ? null : client.id))}
+            onSelect={(trigger) => openEntity({ type: "client", id: client.id }, trigger)}
           />
         ))
-      )}
-
-      {selected && (
-        <ClientDetailPanel client={selected} tickets={selectedTickets} onClose={() => setSelectedClientId(null)} />
       )}
     </div>
   );
@@ -205,13 +188,11 @@ function EditorStation({ session }: { session: RestaurantViewModel["activeSessio
 function ClientTableMarker({
   slot,
   client,
-  selected,
   onSelect,
 }: {
   slot: TableSlot;
   client: RestaurantClientTable;
-  selected: boolean;
-  onSelect: () => void;
+  onSelect: (trigger: HTMLButtonElement) => void;
 }) {
   const primaryAttributable = client.attributable[0] ?? null;
   const workCount = client.activeCount + client.reviewCount;
@@ -222,14 +203,11 @@ function ClientTableMarker({
   return (
     <button
       type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
+      onClick={(event) => onSelect(event.currentTarget)}
       aria-label={`${client.name}, ${HEALTH_LABEL[client.health]}`}
       style={{ left: `${slot.xPct}%`, top: `${slot.yPct}%` }}
       data-flash={client.health === "BLOCKED" ? undefined : healthFlash}
-      className={`os-flash wr-table-button absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-lg border px-2 py-1.5 text-center backdrop-blur-sm sm:px-2.5 sm:py-2 ${
-        selected ? "border-cyan-400/70 bg-cyan-950/40" : "border-amber-900/30 bg-black/40 hover:border-amber-700/50"
-      }`}
+      className="os-flash wr-table-button absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-lg border border-amber-900/30 bg-black/40 px-2 py-1.5 text-center backdrop-blur-sm hover:border-amber-700/50 sm:px-2.5 sm:py-2"
     >
       <span className={`wr-table-marker wr-table-marker-${client.health.toLowerCase()}`} aria-hidden="true" />
       <span className="max-w-[5.5rem] truncate text-[10px] font-black text-white sm:max-w-[6.5rem] sm:text-[11px]">
@@ -244,118 +222,5 @@ function ClientTableMarker({
         </span>
       )}
     </button>
-  );
-}
-
-function ClientDetailPanel({
-  client,
-  tickets,
-  onClose,
-}: {
-  client: RestaurantClientTable;
-  tickets: RestaurantTicket[];
-  onClose: () => void;
-}) {
-  const primaryProjectId = client.projects[0]?.id ?? null;
-  return (
-    <div className="wr-panel-enter absolute inset-y-0 right-0 z-10 flex w-full max-w-[14rem] flex-col gap-3 overflow-y-auto border-l border-amber-900/40 bg-zinc-950/95 p-3 sm:max-w-[16rem]">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-black text-white">{client.name}</p>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="text-xs font-bold text-zinc-500 hover:text-zinc-300"
-        >
-          ✕
-        </button>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <span className={`wr-table-marker wr-table-marker-${client.health.toLowerCase()}`} aria-hidden="true" />
-        <span className="text-[10px] font-black uppercase tracking-wide text-zinc-400">
-          {HEALTH_LABEL[client.health]}
-        </span>
-      </div>
-
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-wide text-zinc-500">Current projects</p>
-        {client.projects.length === 0 ? (
-          <p className="mt-1 text-xs text-zinc-600">No project attribution on active work.</p>
-        ) : (
-          <ul className="mt-1 space-y-0.5">
-            {client.projects.map((project) => (
-              <li key={project.id} className="truncate text-xs text-zinc-300">
-                {project.name}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-wide text-zinc-500">Active / review videos</p>
-        <p className="mt-1 text-xs text-zinc-300">
-          {client.activeCount} in production · {client.reviewCount} waiting on review
-        </p>
-        {client.blockedCount > 0 && (
-          <p className="mt-0.5 text-xs font-bold text-red-400">{client.blockedCount} blocked</p>
-        )}
-      </div>
-
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-wide text-zinc-500">Current comandas</p>
-        {tickets.length === 0 ? (
-          <p className="mt-1 text-xs text-zinc-600">No open comandas for this client.</p>
-        ) : (
-          <ul className="mt-1 space-y-1">
-            {tickets.map((ticket) => (
-              <li key={ticket.id} className="rounded-md border border-amber-900/30 bg-black/30 px-2 py-1 text-xs text-zinc-300">
-                <span className="font-bold text-amber-200">{ticket.label}</span> · {ticket.itemCount} item
-                {ticket.itemCount === 1 ? "" : "s"} · {ticket.phaseLabel}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-wide text-zinc-500">Confirmed attributable billing</p>
-        {client.attributable.length === 0 ? (
-          <p className="mt-1 text-xs text-zinc-600">No canonical attribution yet.</p>
-        ) : (
-          <div className="mt-1 space-y-1">
-            {client.attributable.map((row) => (
-              <p key={row.currency} className="text-xs font-bold text-emerald-300">
-                {formatCurrency(row.amount, row.currency)}
-                {row.minutes !== null && (
-                  <span className="ml-1 font-normal text-emerald-400/70">· {formatMinutes(row.minutes)} allocated</span>
-                )}
-              </p>
-            ))}
-          </div>
-        )}
-        {client.hasUnallocatedHistorical && (
-          <p className="mt-1 text-[10px] text-amber-400">+ unallocated historical billing exists · see CRM</p>
-        )}
-      </div>
-
-      <div className="mt-auto flex flex-col gap-1.5 pt-2">
-        <Link
-          href={`/crm/${client.id}`}
-          className="rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-center text-[11px] font-bold text-zinc-200 hover:border-cyan-500"
-        >
-          Open CRM →
-        </Link>
-        {primaryProjectId !== null && (
-          <Link
-            href={`/projects/${primaryProjectId}`}
-            className="rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-center text-[11px] font-bold text-zinc-200 hover:border-cyan-500"
-          >
-            Open project →
-          </Link>
-        )}
-      </div>
-    </div>
   );
 }

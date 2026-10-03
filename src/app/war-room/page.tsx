@@ -17,6 +17,7 @@ import { ActiveCommitmentCard } from "@/components/commitments/ActiveCommitmentC
 import { OpenDecisionCard, RecordDecisionButton } from "./DecisionControls";
 import { formatCurrency, startOfMonthISO, todayISO } from "@/utils/date";
 import Link from "next/link";
+import { EntityInspectionHrefTrigger } from "@/components/entity-inspection/EntityDrawerProvider";
 import { WarRoomRefreshControl } from "./WarRoomRefreshControl";
 import { getWorkSessionOverview } from "@/modules/work-sessions/data";
 import { getLastActiveByClient } from "@/modules/work-sessions/data";
@@ -851,12 +852,12 @@ function ActiveSignalsSection({ signals }: { signals: Signal[] }) {
               </div>
               <div className="flex flex-wrap items-start gap-2">
                 {signal.action && (
-                  <Link
+                  <EntityInspectionHrefTrigger
                     href={signalActionHref(signal.action.href, "/war-room")}
                     className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-center text-xs font-bold text-zinc-200 hover:border-violet-500 hover:text-violet-200"
                   >
                     {signal.action.label} →
-                  </Link>
+                  </EntityInspectionHrefTrigger>
                 )}
                 <RecordDecisionButton signalType={signal.kind} context={signal.context} />
               </div>

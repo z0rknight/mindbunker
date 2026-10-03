@@ -1,7 +1,6 @@
 import { displayClientName } from "@/lib/client-identity";
 import { getProjectsOverview, getUnassignedClientVideos } from "@/modules/projects/actions";
 import { getProductivityQuickOptions } from "@/modules/productivity/actions";
-import { videoWorkspaceHref } from "@/modules/productivity/core";
 import {
   filterProjectsBySearch,
   getProjectException,
@@ -26,6 +25,7 @@ import { resolveCoverUrl } from "@/modules/media/core";
 import { ProjectCover } from "./ProjectCover";
 import { PixelEmptyState, PixelIcon } from "@/components/ui/PixelVisuals";
 import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
+import { EntityInspectionTrigger } from "@/components/entity-inspection/EntityDrawerProvider";
 
 export const dynamic = "force-dynamic";
 
@@ -70,9 +70,10 @@ function ProjectCard({
   );
 
   return (
-    <Link
-      href={`/projects/${project.id}`}
-      className={`pixel-frame group overflow-hidden rounded-2xl border transition ${
+    <EntityInspectionTrigger
+      entity={{ type: "project", id: project.id }}
+      ariaLabel={`Inspect project ${project.name}`}
+      className={`pixel-frame group overflow-hidden rounded-2xl border text-left transition ${
         exception === "OVERDUE"
           ? "border-red-900/50 bg-red-950/10 hover:border-red-700/60"
           : exception === "BLOCKED"
@@ -127,7 +128,7 @@ function ProjectCard({
           <span className="shrink-0 text-xs font-black text-cyan-300">Open →</span>
         </div>
       </div>
-    </Link>
+    </EntityInspectionTrigger>
   );
 }
 
@@ -172,9 +173,9 @@ function UnassignedDeliverablesSection({
       </p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {videos.map((video) => (
-          <Link
+          <EntityInspectionTrigger
             key={video.id}
-            href={videoWorkspaceHref(video.id)}
+            entity={{ type: "video", id: video.id }}
             className="flex items-center justify-between gap-2 rounded-xl border border-amber-900/40 bg-zinc-950/60 px-3 py-2.5 text-xs hover:border-amber-600/60"
           >
             <span className="min-w-0">
@@ -184,7 +185,7 @@ function UnassignedDeliverablesSection({
               </span>
             </span>
             <span className="shrink-0 font-black text-amber-400">Open →</span>
-          </Link>
+          </EntityInspectionTrigger>
         ))}
       </div>
     </details>

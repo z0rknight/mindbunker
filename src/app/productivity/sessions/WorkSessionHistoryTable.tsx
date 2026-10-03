@@ -1,7 +1,5 @@
 "use client";
 
-import { useCurrentOrigin } from "@/components/navigation/useCurrentOrigin";
-import { videoWorkspaceHref } from "@/modules/productivity/core";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -18,6 +16,7 @@ import {
   type WorkSessionWeekGroup,
 } from "@/modules/work-sessions/core";
 import type { WorkSessionVideoOption } from "@/modules/work-sessions/data";
+import { EntityInspectionTrigger } from "@/components/entity-inspection/EntityDrawerProvider";
 
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
@@ -205,7 +204,6 @@ function SessionRow({
   videoOptions: WorkSessionVideoOption[];
   narrativeNotes: CorrelatedMemoryNote[];
 }) {
-  const origin = useCurrentOrigin();
   const [editing, setEditing] = useState(false);
   // Session Narrative (Sunday Systems Round, Phase C/D): collapsed by
   // default, same "unbounded read list needs a visible default with an
@@ -264,12 +262,12 @@ function SessionRow({
       <td className="os-flash px-4 py-3 text-zinc-300" data-flash={cellFlash("client")}>{session.clientName ?? "—"}</td>
       <td className="os-flash px-4 py-3 text-zinc-300" data-flash={cellFlash("project")}>{session.projectName ?? "—"}</td>
       <td className="os-flash px-4 py-3 text-zinc-300" data-flash={cellFlash("video")}>
-        <Link
-          href={videoWorkspaceHref(session.videoId, origin)}
+        <EntityInspectionTrigger
+          entity={{ type: "video", id: session.videoId }}
           className="text-cyan-400 hover:text-cyan-300"
         >
           {session.videoTitle}
-        </Link>
+        </EntityInspectionTrigger>
       </td>
       <td className="os-flash px-4 py-3 text-zinc-400" data-flash={cellFlash("activity")}>
         {WORK_SESSION_ACTIVITY_LABELS[session.activityType]}
@@ -306,6 +304,12 @@ function SessionRow({
               Edit
             </button>
           )}
+          <EntityInspectionTrigger
+            entity={{ type: "session", id: session.id }}
+            className="text-[10px] font-bold uppercase text-zinc-400 hover:text-white"
+          >
+            Inspect
+          </EntityInspectionTrigger>
         </div>
         {/* Local consolidation round: source and the corrected timestamp
             (when present) are shown as always-visible text rather than a
