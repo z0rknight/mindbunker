@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { StatCard } from "@/components/ui/StatCard";
 import {
+  canonicalClientId,
   displayClientName,
   isInternalClientName,
   isOperationalAliasClientId,
@@ -23,16 +24,28 @@ import { ClientActions } from "./ClientActions";
 import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { getSystemInbound } from "@/modules/system-inbound/data";
 import { SYNTHETIC_OPERATIONAL_CLIENT_SOURCE } from "@/modules/projects/core";
+import { getRelationshipIntegrity } from "@/modules/crm/integrity-data";
 
 export const dynamic = "force-dynamic";
 
 export default async function CRMPage() {
-  const [rawClients, listStats, workbenchData, systemInbound] = await Promise.all([
+  const [rawClients, listStats, workbenchData, systemInbound, integrity] = await Promise.all([
     getAllClients(),
     getClientListStats(),
     getCRMWorkbenchData(),
     getSystemInbound(),
+    getRelationshipIntegrity(),
   ]);
+
+  const aliasNamesByCanonical = new Map<number, string[]>();
+  for (const client of rawClients) {
+    if (!isOperationalAliasClientId(client.id)) continue;
+    const ownerId = canonicalClientId(client.id);
+    aliasNamesByCanonical.set(ownerId, [
+      ...(aliasNamesByCanonical.get(ownerId) ?? []),
+      client.name,
+    ]);
+  }
 
   const today = todayISO();
   const clients = rawClients.map((client) => {
@@ -44,6 +57,7 @@ export default async function CRMPage() {
       liveProjectCount: listStats.projectCounts.get(client.id) ?? 0,
       liveRevenueByCurrency: listStats.revenueByCurrency.get(client.id) ?? [],
       currentProjectName: currentProject?.name ?? null,
+      operationalAliases: aliasNamesByCanonical.get(client.id) ?? [],
     };
   });
 
@@ -103,6 +117,36 @@ export default async function CRMPage() {
           </span>
         </Link>
       </nav>
+
+      <details
+        className={`mb-6 rounded-xl border px-4 py-3 ${
+          integrity.status === "HEALTHY"
+            ? "border-emerald-900/60 bg-emerald-950/10"
+            : "border-amber-900/60 bg-amber-950/10"
+        }`}
+      >
+        <summary className="cursor-pointer select-none text-xs font-bold text-zinc-300">
+          Relationship integrity {integrity.status === "HEALTHY" ? "✓" : `— ${integrity.issues.length} issue${integrity.issues.length === 1 ? "" : "s"}`}
+        </summary>
+        <div className="mt-3 border-t border-zinc-800/80 pt-3">
+          {integrity.issues.length === 0 ? (
+            <p className="text-xs leading-5 text-zinc-500">
+              Canonical client, project, deliverable, contract, payment-request, and transaction links passed the current checks.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {integrity.issues.map((issue) => (
+                <li key={`${issue.code}:${issue.entityType}:${issue.entityId}`} className="text-xs leading-5 text-zinc-400">
+                  <span className={issue.severity === "ERROR" ? "font-black text-red-400" : "font-black text-amber-400"}>
+                    {issue.severity}
+                  </span>{" "}
+                  {issue.message}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </details>
 
       <div className="mb-6">
         <AddClientButton />
@@ -236,6 +280,7 @@ type ListClient = {
   nextActionDate: string | null;
   currentProjectName: string | null;
   liveRevenueByCurrency: Array<{ currency: string; amount: number }>;
+  operationalAliases: string[];
 };
 
 function ClientList({ clients, showConvert = false }: { clients: ListClient[]; showConvert?: boolean }) {
@@ -281,6 +326,15 @@ function ClientRow({ client, showConvert }: { client: ListClient; showConvert: b
                   {describeLeadSource(client.source)}
                 </span>
               )}
+              {client.operationalAliases.map((alias) => (
+                <span
+                  key={alias}
+                  className="rounded border border-cyan-800/60 px-1 py-0.5 text-[9px] font-black uppercase tracking-wide text-cyan-400"
+                  title="Operational work mode rolled into this canonical relationship"
+                >
+                  includes {alias}
+                </span>
+              ))}
             </div>
             <p className="mt-0.5 truncate text-xs text-zinc-500">
               {client.instagramUsername ? `@${client.instagramUsername}` : client.email ?? "No contact detail yet"}

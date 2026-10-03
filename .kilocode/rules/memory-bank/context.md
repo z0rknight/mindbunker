@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Wave 0 — Truth, integrity & canonical domain foundation (2026-10-03, local candidate)**
+  - [x] Established `clients` as canonical Account/Relationship identity while preserving Taryn DFY as an operational alias of canonical Taryn; CRM project counts, current work and realized revenue now roll up to the canonical row without erasing DIRECT/DFY evidence
+  - [x] Root-caused the apparent Taryn disappearance to the intentional operational-alias filter introduced by `24b37ed`: the canonical relationship remained visible, but alias work was not projected into it
+  - [x] Added a read-only CRM relationship-integrity scanner for missing canonical aliases, exact duplicate identities, project/video ownership drift, unassigned active client work and archived relationships with active commercial/operational children
+  - [x] Removed permanent deletion from the normal CRM row surface, expanded protected-history custody across operational, commercial and memory tables, and made identity/status changes atomic with append-only audit events
+  - [x] Preserved Finance boundaries: Work Sessions are operational truth, contracts/payment requests are commercial evidence, and transactions are received-value truth; no financial schema or projection rewrite
+  - [x] No migration, D1 write, production data repair or deploy. Fresh production D1 verification was blocked by Cloudflare authorization code 7403, so this remains `DEPLOY READY — NOT DEPLOYED`
+  - [x] Focused 32/32, full 1525/1525, typecheck/build green, lint 0 errors/3 pre-existing warnings; isolated migrations through 0053 and FK integrity green
+
 - [x] **October Commercial Intelligence Train — production closure (2026-10-03)**
   - [x] Added fail-closed Expected Commercial Value Level 1: Direct hourly work starts after the strongest effective request cutoff; fixed, mixed, unknown and external-platform relationships never derive new owed value from hours
   - [x] Accepted Dave at USD 468.33 OPEN with USD 0 new expected / 0m after cutoff and USD 68.33 / 2h44m historical support inside the current request; preserved Taryn/Upwork as external value authority without double counting Direct/DFY time

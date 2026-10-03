@@ -89,6 +89,16 @@ test("any single non-zero dependency counts as protected history", () => {
     "gatewayInvitations",
     "intakeSubmissions",
     "videos",
+    "quotes",
+    "contracts",
+    "transactions",
+    "paymentRequests",
+    "productionOrders",
+    "productionMemory",
+    "protectedTerms",
+    "exportReminders",
+    "decisions",
+    "promotedCaptures",
     "nonCreationEvents",
   ];
   for (const dimension of dimensions) {
@@ -126,6 +136,7 @@ test("describeProtectedHistory lists only present dependencies with correct plur
 test("a client with real accumulated history across every dimension is protected", () => {
   assert.equal(
     clientHasProtectedHistory({
+      ...EMPTY_CLIENT_DEPENDENCY_COUNTS,
       projects: 2,
       bookings: 1,
       gatewayInvitations: 1,
@@ -134,6 +145,19 @@ test("a client with real accumulated history across every dimension is protected
       nonCreationEvents: 6,
     }),
     true,
+  );
+});
+
+test("protected-history descriptions include commercial and client-memory custody", () => {
+  assert.equal(
+    describeProtectedHistory({
+      ...EMPTY_CLIENT_DEPENDENCY_COUNTS,
+      quotes: 1,
+      contracts: 2,
+      paymentRequests: 1,
+      productionMemory: 3,
+    }),
+    "1 quote, 2 contracts, 1 payment request, 3 production-memory records",
   );
 });
 

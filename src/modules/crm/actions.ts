@@ -1,13 +1,25 @@
 "use server";
 
 import { getAuthenticatedDb } from "@/db";
-import { isActiveExternalClient, isInternalClientName } from "@/lib/client-identity";
+import {
+  canonicalClientId,
+  isActiveExternalClient,
+  isInternalClientName,
+} from "@/lib/client-identity";
 import {
   bookings,
+  captures,
+  clientExportReminders,
+  clientProductionMemory,
+  clientProtectedTerms,
   clients,
+  commercialContracts,
   crmEvents,
+  decisions,
   gatewayInvitations,
   intakeSubmissions,
+  paymentRequests,
+  productionOrders,
   projects,
   quotes,
   transactions,
@@ -162,7 +174,39 @@ export async function updateClient(
   }
 
   const db = await getAuthenticatedDb();
-  await db.update(clients).set(set).where(eq(clients.id, id));
+  const current = await db
+    .select({ name: clients.name, status: clients.status })
+    .from(clients)
+    .where(eq(clients.id, id))
+    .limit(1);
+  if (!current[0]) {
+    throw new Error("Contact not found.");
+  }
+  const identityEvents = [];
+  if (set.name !== undefined && set.name !== current[0].name) {
+    identityEvents.push({
+      clientId: id,
+      type: "client_identity_renamed",
+      actor: "admin" as const,
+      description: `Client renamed from "${current[0].name}" to "${set.name}"`,
+    });
+  }
+  if (set.status !== undefined && set.status !== current[0].status) {
+    identityEvents.push({
+      clientId: id,
+      type: "relationship_status_changed",
+      actor: "admin" as const,
+      description: `Relationship status changed from ${current[0].status} to ${set.status}`,
+    });
+  }
+  if (identityEvents.length > 0) {
+    await db.batch([
+      db.update(clients).set(set).where(eq(clients.id, id)),
+      db.insert(crmEvents).values(identityEvents),
+    ]);
+  } else {
+    await db.update(clients).set(set).where(eq(clients.id, id));
+  }
   revalidatePath("/");
   revalidatePath("/crm");
   revalidatePath(`/crm/${id}`);
@@ -303,6 +347,16 @@ async function getClientDependencyCounts(
     invitationRows,
     intakeRows,
     videoRows,
+    quoteRows,
+    contractRows,
+    transactionRows,
+    paymentRequestRows,
+    productionOrderRows,
+    productionMemoryRows,
+    protectedTermRows,
+    exportReminderRows,
+    decisionRows,
+    promotedCaptureRows,
     eventRows,
   ] = await Promise.all([
     db
@@ -325,6 +379,16 @@ async function getClientDependencyCounts(
       .select({ count: sql<number>`count(*)` })
       .from(videoLogs)
       .where(eq(videoLogs.clientId, clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(quotes).where(eq(quotes.clientId, clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(commercialContracts).where(eq(commercialContracts.clientId, clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(transactions).where(eq(transactions.clientId, clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(paymentRequests).where(eq(paymentRequests.clientId, clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(productionOrders).where(eq(productionOrders.clientId, clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(clientProductionMemory).where(eq(clientProductionMemory.clientId, clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(clientProtectedTerms).where(eq(clientProtectedTerms.clientId, clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(clientExportReminders).where(eq(clientExportReminders.clientId, clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(decisions).where(eq(decisions.clientId, clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(captures).where(eq(captures.promotedClientId, clientId)),
     db
       .select({ count: sql<number>`count(*)` })
       .from(crmEvents)
@@ -342,6 +406,16 @@ async function getClientDependencyCounts(
     gatewayInvitations: Number(invitationRows[0]?.count ?? 0),
     intakeSubmissions: Number(intakeRows[0]?.count ?? 0),
     videos: Number(videoRows[0]?.count ?? 0),
+    quotes: Number(quoteRows[0]?.count ?? 0),
+    contracts: Number(contractRows[0]?.count ?? 0),
+    transactions: Number(transactionRows[0]?.count ?? 0),
+    paymentRequests: Number(paymentRequestRows[0]?.count ?? 0),
+    productionOrders: Number(productionOrderRows[0]?.count ?? 0),
+    productionMemory: Number(productionMemoryRows[0]?.count ?? 0),
+    protectedTerms: Number(protectedTermRows[0]?.count ?? 0),
+    exportReminders: Number(exportReminderRows[0]?.count ?? 0),
+    decisions: Number(decisionRows[0]?.count ?? 0),
+    promotedCaptures: Number(promotedCaptureRows[0]?.count ?? 0),
     nonCreationEvents: Number(eventRows[0]?.count ?? 0),
   };
 }
@@ -515,15 +589,19 @@ export async function getClientListStats(): Promise<ClientListStats> {
 
   const projectCounts = new Map<number, number>();
   for (const row of projectCountRows) {
-    projectCounts.set(row.clientId, row.count);
+    const ownerId = canonicalClientId(row.clientId);
+    projectCounts.set(ownerId, (projectCounts.get(ownerId) ?? 0) + row.count);
   }
 
   const revenueByCurrency = new Map<number, Array<{ currency: string; amount: number }>>();
   for (const row of revenueRows) {
     if (row.clientId === null) continue;
-    const existing = revenueByCurrency.get(row.clientId) ?? [];
-    existing.push({ currency: row.currency, amount: row.amount ?? 0 });
-    revenueByCurrency.set(row.clientId, existing);
+    const ownerId = canonicalClientId(row.clientId);
+    const existing = revenueByCurrency.get(ownerId) ?? [];
+    const currency = existing.find((item) => item.currency === row.currency);
+    if (currency) currency.amount += row.amount ?? 0;
+    else existing.push({ currency: row.currency, amount: row.amount ?? 0 });
+    revenueByCurrency.set(ownerId, existing);
   }
 
   return { projectCounts, revenueByCurrency, lastActiveByClient };
@@ -579,8 +657,9 @@ export async function getCRMWorkbenchData(): Promise<{
   // project, exactly like the identical pattern used for lastActiveAt.
   const currentProjectByClient = new Map<number, CRMCurrentProject>();
   for (const row of projectRows) {
-    if (currentProjectByClient.has(row.clientId)) continue;
-    currentProjectByClient.set(row.clientId, { id: row.id, name: row.name, status: row.status });
+    const ownerId = canonicalClientId(row.clientId);
+    if (currentProjectByClient.has(ownerId)) continue;
+    currentProjectByClient.set(ownerId, { id: row.id, name: row.name, status: row.status });
   }
 
   return {

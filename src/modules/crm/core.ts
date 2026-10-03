@@ -54,6 +54,16 @@ export interface ClientDependencyCounts {
   gatewayInvitations: number;
   intakeSubmissions: number;
   videos: number;
+  quotes: number;
+  contracts: number;
+  transactions: number;
+  paymentRequests: number;
+  productionOrders: number;
+  productionMemory: number;
+  protectedTerms: number;
+  exportReminders: number;
+  decisions: number;
+  promotedCaptures: number;
   /**
    * CRM Events beyond the single `lead_created` / `client_created` row
    * every Client receives on creation. A brand-new, untouched Client has
@@ -69,6 +79,16 @@ export const EMPTY_CLIENT_DEPENDENCY_COUNTS: ClientDependencyCounts = {
   gatewayInvitations: 0,
   intakeSubmissions: 0,
   videos: 0,
+  quotes: 0,
+  contracts: 0,
+  transactions: 0,
+  paymentRequests: 0,
+  productionOrders: 0,
+  productionMemory: 0,
+  protectedTerms: 0,
+  exportReminders: 0,
+  decisions: 0,
+  promotedCaptures: 0,
   nonCreationEvents: 0,
 };
 
@@ -90,6 +110,16 @@ export function clientHasProtectedHistory(
     counts.gatewayInvitations > 0 ||
     counts.intakeSubmissions > 0 ||
     counts.videos > 0 ||
+    counts.quotes > 0 ||
+    counts.contracts > 0 ||
+    counts.transactions > 0 ||
+    counts.paymentRequests > 0 ||
+    counts.productionOrders > 0 ||
+    counts.productionMemory > 0 ||
+    counts.protectedTerms > 0 ||
+    counts.exportReminders > 0 ||
+    counts.decisions > 0 ||
+    counts.promotedCaptures > 0 ||
     counts.nonCreationEvents > 0
   );
 }
@@ -127,6 +157,19 @@ export function describeProtectedHistory(
       `${counts.nonCreationEvents} CRM event${counts.nonCreationEvents === 1 ? "" : "s"}`,
     );
   }
+  const append = (count: number, singular: string, plural = `${singular}s`) => {
+    if (count > 0) parts.push(`${count} ${count === 1 ? singular : plural}`);
+  };
+  append(counts.quotes, "quote");
+  append(counts.contracts, "contract");
+  append(counts.transactions, "transaction");
+  append(counts.paymentRequests, "payment request");
+  append(counts.productionOrders, "production order");
+  append(counts.productionMemory, "production-memory record");
+  append(counts.protectedTerms, "protected term");
+  append(counts.exportReminders, "export reminder");
+  append(counts.decisions, "decision");
+  append(counts.promotedCaptures, "promoted capture");
   return parts.join(", ");
 }
 // Sprint 3 (CRM Lead Workspace — fast activity quick-log): a small fixed
