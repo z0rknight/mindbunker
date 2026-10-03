@@ -72,7 +72,12 @@ export function inspectableEntityFromHref(href: string): InspectableEntity | nul
   const project = /^\/projects\/(\d+)\/?$/u.exec(parsed.pathname);
   if (project) return { type: "project", id: Number(project[1]) };
   const videoId = parsed.searchParams.get("video");
-  if ((parsed.pathname === "/productivity" || parsed.pathname === "/mindbunker/productivity") && videoId) {
+  if ((
+    parsed.pathname === "/productivity" ||
+    parsed.pathname === "/mindbunker/productivity" ||
+    parsed.pathname === "/war-room/workspace" ||
+    parsed.pathname === "/mindbunker/war-room/workspace"
+  ) && videoId) {
     const entity = { type: "video", id: Number(videoId) } as const;
     return isInspectableEntity(entity) ? entity : null;
   }

@@ -36,12 +36,30 @@ import { getClientProjectCommercialAttribution } from "@/modules/finance/actions
 import { getOpenSensorSessionOverview } from "@/modules/sensor/data";
 import { selectRestaurantClients, buildRestaurantViewModel } from "@/modules/war-room/restaurant-core";
 import { WarRoomRestaurantStage } from "./restaurant/WarRoomRestaurantStage";
+import { selectExecutionQueue } from "@/modules/productivity/queue";
+import { QuickBlock, QuickNote } from "@/components/work-sessions/QuickVideoActions";
+import { PlanVideoButton } from "@/components/ui/QuickActions";
+import { WarRoomCaptureButton } from "./WarRoomCaptureButton";
+import { WarRoomExecutionQueue } from "./WarRoomExecutionQueue";
 
 export const dynamic = "force-dynamic";
 
 const WAR_ROOM_COMMITMENT_LIMIT = 5;
 
-export default async function WarRoomPage() {
+export default async function WarRoomPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    planVideo?: string | string[];
+    projectId?: string | string[];
+    workspaceError?: string | string[];
+  }>;
+}) {
+  const query = await searchParams;
+  const initialProjectId =
+    typeof query.projectId === "string" && /^\d+$/u.test(query.projectId)
+      ? Number(query.projectId)
+      : null;
   const today = todayISO();
   const now = new Date();
   // Incident fix (2026-09-08): getOpenCommitmentsWithContext() used to be
@@ -130,6 +148,11 @@ export default async function WarRoomPage() {
         blockersByVideo: blockerMap,
         commitmentsByVideo: commitmentMap,
       }, "/war-room");
+  const executionQueue = selectExecutionQueue(videos, {
+    blockedVideoIds: new Set(blockerMap.keys()),
+    blockerCategoryByVideoId: blockerMap,
+    soonestCommitmentDueAtByVideoId: commitmentMap,
+  });
 
   return (
     <div className={OPERATOR_WORKSPACE_CLASS}>
@@ -146,10 +169,9 @@ export default async function WarRoomPage() {
             Recorded business facts · restrained derived context
           </p>
         </div>
-        <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-end">
-          {/* RMEDIA LET'S COOK Wave 1: one CTA into the order surface,
-              same restrained-CTA treatment as the rest of this header --
-              no War Room order list/widget, just the entry point. */}
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
+          <PlanVideoButton initialProjectId={initialProjectId} initiallyOpen={query.planVideo === "1"} compact />
+          <WarRoomCaptureButton />
           <Link
             href="/productivity/orders"
             className="rounded-lg border border-emerald-800/60 bg-black px-3 py-2 font-mono text-xs font-bold text-emerald-400 hover:border-emerald-500"
@@ -160,31 +182,34 @@ export default async function WarRoomPage() {
         </div>
       </header>
 
-      {/* War Room Restaurant View V1: War Room is the live command center
-          Emmanuel leaves open while operating -- LEFT is current
-          situation/command, CENTER is the 16:9 Restaurant View stage
-          (clients as tables, open Production Orders as the comanda rail,
-          the canonical Work Session as the editor station), RIGHT is the
-          bounded queue/supporting signals. Every side section below is
-          the exact same existing component with the exact same props as
-          before -- only their position in the grid changed. */}
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.6fr)_minmax(300px,0.95fr)]" data-testid="war-room-command-grid">
-        <div className="space-y-4">
-          <NowFocusPanel
-            current={currentExecution}
-            recommended={recommended}
-            variant="dominant"
-          />
-          <DecisionsSection decisions={openDecisions} />
+      {query.workspaceError === "invalid-video" && (
+        <div className="mb-4 rounded-xl border border-amber-800/60 bg-amber-950/15 px-4 py-3 text-sm text-amber-200" role="status">
+          The old Productivity link did not contain a valid video id. You are back in the canonical War Room.
         </div>
+      )}
 
-        <WarRoomRestaurantStage viewModel={restaurantViewModel} />
+      <NowFocusPanel current={currentExecution} recommended={recommended} variant="dominant">
+        {currentExecution && (
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+            <QuickNote videoId={currentExecution.video.id} />
+            <QuickBlock videoId={currentExecution.video.id} />
+          </div>
+        )}
+      </NowFocusPanel>
 
-        <div className="space-y-4">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.9fr)]" data-testid="war-room-command-grid">
+        <div>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400">Live context</p>
+          <WarRoomRestaurantStage viewModel={restaurantViewModel} />
+        </div>
+        <aside className="space-y-4" aria-label="Active operational signals">
           <ActiveCommitmentsSection commitments={relevantCommitments} nowIso={now.toISOString()} />
           <ActiveSignalsSection signals={signals} />
-        </div>
+          <DecisionsSection decisions={openDecisions} />
+        </aside>
       </div>
+
+      <WarRoomExecutionQueue queue={executionQueue} current={currentExecution} recommended={recommended} />
       {/* House Cleaning Wave 2 §12: the research found this 7-day, 5-column
           table (each cell often packing 2-4 sub-values) too dense for a
           glanceable, always-open COMANDA screen -- closer to a spreadsheet
@@ -206,8 +231,8 @@ export default async function WarRoomPage() {
           currently owns all of it, so per the brief it stays accessible
           here rather than being deleted or half-moved -- just collapsed
           by default so it is no longer command-dominant, reusing the same
-          <details> disclosure primitive already used on the Productivity
-          page rather than inventing a new one. */}
+          existing <details> disclosure primitive rather than inventing a
+          new one. */}
       <details className="group mt-2 rounded-2xl border border-zinc-800 bg-zinc-950/35 p-4 sm:p-5">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-zinc-400">
           <span><span className="mr-2 inline-block transition group-open:rotate-90">▸</span>Business &amp; health analytics (historical · not live ops)</span>
@@ -791,7 +816,7 @@ function ActiveCommitmentsSection({
     <section className="mb-8">
       <SectionHeader label="ACTIVE COMMITMENTS" icon="⏰" />
       <p className="mb-3 text-xs text-zinc-600">
-        Overdue or due within 48h. Same commitment record Productivity uses -- act here or there, both update the same row.
+        Overdue or due within 48h. This is the same canonical commitment record used throughout the operation.
       </p>
       <div className="space-y-2">
         {commitments.map((commitment) => (

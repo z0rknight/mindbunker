@@ -704,6 +704,7 @@ export async function reorderExecutionQueueItem(
 
   revalidatePath("/");
   revalidatePath("/productivity");
+  revalidatePath("/war-room");
   return { success: true, message: "Queue updated." };
 }
 
@@ -745,6 +746,7 @@ export async function moveExecutionQueueItemBefore(
   await db.batch(statements as unknown as [(typeof statements)[number], ...(typeof statements)[number][]]);
   revalidatePath("/");
   revalidatePath("/productivity");
+  revalidatePath("/war-room");
   return { success: true, message: "Queue updated." };
 }
 

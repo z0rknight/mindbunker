@@ -29,7 +29,7 @@ test("inspection href preserves surface state and adds one centralized parameter
 test("full page destinations remain separate from inspection state", () => {
   assert.equal(entityFullPageHref({ type: "client", id: 2 }), "/crm/2");
   assert.equal(entityFullPageHref({ type: "project", id: 7 }), "/projects/7");
-  assert.equal(entityFullPageHref({ type: "video", id: 11 }), "/productivity?video=11");
+  assert.equal(entityFullPageHref({ type: "video", id: 11 }), "/war-room/workspace?video=11");
   assert.equal(entityFullPageHref({ type: "session", id: 13 }), "/productivity/sessions?view=table#session-13");
 });
 
@@ -37,6 +37,7 @@ test("canonical management hrefs can be promoted to inspection references", () =
   assert.deepEqual(inspectableEntityFromHref("/crm/2"), { type: "client", id: 2 });
   assert.deepEqual(inspectableEntityFromHref("/projects/7"), { type: "project", id: 7 });
   assert.deepEqual(inspectableEntityFromHref("/productivity?video=11"), { type: "video", id: 11 });
+  assert.deepEqual(inspectableEntityFromHref("/war-room/workspace?video=11"), { type: "video", id: 11 });
   assert.deepEqual(inspectableEntityFromHref("/productivity/sessions?view=table#session-13"), { type: "session", id: 13 });
   assert.equal(inspectableEntityFromHref("https://example.com"), null);
 });

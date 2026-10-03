@@ -171,11 +171,11 @@ test("isUnassignedClientVideo identifies real client deliverables with no projec
   assert.equal(isUnassignedClientVideo({ ...base, cancelledAt: new Date() }), false, "cancelled work is history, not a discovery gap");
 });
 
-test("Project and Productivity links target the canonical individual workspace URL", () => {
-  assert.equal(videoWorkspaceHref(27), "/productivity?video=27");
+test("Project and War Room links target the canonical individual workspace URL", () => {
+  assert.equal(videoWorkspaceHref(27), "/war-room/workspace?video=27");
   assert.equal(
     videoWorkspaceHref(27, "/projects/8"),
-    "/productivity?video=27&returnTo=%2Fprojects%2F8",
+    "/war-room/workspace?video=27&returnTo=%2Fprojects%2F8",
   );
 });
 
@@ -186,7 +186,7 @@ test("Project and Productivity links target the canonical individual workspace U
 test("projectVideoCardHref: an ordinary deliverable still opens its own video workspace", () => {
   assert.equal(
     projectVideoCardHref({ id: 27, isOperationalContainer: false, productionOrderId: 9 }, "/projects/8"),
-    "/productivity?video=27&returnTo=%2Fprojects%2F8",
+    "/war-room/workspace?video=27&returnTo=%2Fprojects%2F8",
   );
 });
 
@@ -199,7 +199,7 @@ test("projectVideoCardHref: a container routes to its Production Order, never a 
 test("projectVideoCardHref: a container with no productionOrderId falls back to the honest video-not-found state rather than a broken link", () => {
   assert.equal(
     projectVideoCardHref({ id: 41, isOperationalContainer: true, productionOrderId: null }),
-    "/productivity?video=41",
+    "/war-room/workspace?video=41",
   );
 });
 

@@ -644,7 +644,7 @@ export function getVideoWorkspaceDisclosureState(
 }
 
 export function videoWorkspaceHref(videoId: number, returnTo?: string) {
-  const base = `/productivity?video=${videoId}`;
+  const base = `/war-room/workspace?video=${videoId}`;
   return returnTo ? `${base}&returnTo=${encodeURIComponent(returnTo)}` : base;
 }
 

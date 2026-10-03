@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { PixelEmptyState, PixelIcon } from "@/components/ui/PixelVisuals";
 import { VideoStatusBadge } from "@/components/ui/VideoStatusBadge";
 import { resolveCoverUrl } from "@/modules/media/core";
@@ -36,8 +36,20 @@ function formatCommitmentDue(value: Date | string | null) {
   }).format(new Date(value));
 }
 
-export function ExecutionQueueSection({ queue, activeVideoId }: { queue: QueueRow[]; activeVideoId: number | null }) {
+export function ExecutionQueueSection({ queue, activeVideoId, interactiveFilters = false }: { queue: QueueRow[]; activeVideoId: number | null; interactiveFilters?: boolean }) {
+  const [search, setSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState<StageKey | "ALL">("ALL");
   const firstExecutableId = queue.find((item) => item.isExecutable)?.id ?? null;
+  const visibleQueue = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    return queue.filter((item) => {
+      if (stageFilter !== "ALL" && stageFor(item) !== stageFilter) return false;
+      if (!query) return true;
+      return [item.title, item.clientName, item.projectName]
+        .filter(Boolean)
+        .some((value) => value!.toLocaleLowerCase().includes(query));
+    });
+  }, [queue, search, stageFilter]);
 
   return (
     <section aria-labelledby="execution-queue" className="mb-7">
@@ -53,6 +65,33 @@ export function ExecutionQueueSection({ queue, activeVideoId }: { queue: QueueRo
         </div>
         <Link href="/productivity/orders" className="text-xs font-black text-emerald-400 hover:text-emerald-300">Open batches →</Link>
       </div>
+
+      {interactiveFilters && (
+        <div className="mb-4 grid gap-3 rounded-xl border border-zinc-800 bg-black/25 p-3 sm:grid-cols-[1fr_auto]">
+          <label className="sr-only" htmlFor="production-queue-search">Search production queue</label>
+          <input
+            id="production-queue-search"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search video, client, or project…"
+            className="min-h-11 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-cyan-500"
+          />
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Filter queue stage">
+            {(["ALL", "PLANNED", "MAKING", "REVIEW"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setStageFilter(value)}
+                aria-pressed={stageFilter === value}
+                className={`min-h-11 rounded-lg border px-3 text-[10px] font-black ${stageFilter === value ? "border-cyan-500 bg-cyan-950/30 text-cyan-200" : "border-zinc-800 text-zinc-500"}`}
+              >
+                {value === "ALL" ? "All" : value === "PLANNED" ? "Queued" : value === "MAKING" ? "Making" : "Review"}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {queue.length === 0 ? (
         <PixelEmptyState icon="stack" title="Queue clear" className="rounded-2xl">
@@ -73,7 +112,7 @@ export function ExecutionQueueSection({ queue, activeVideoId }: { queue: QueueRo
         // stage from N rows to ceil(N/3) rows.
         <div className="space-y-6" data-testid="horizontal-video-pipeline">
           {STAGES.map((stage) => {
-            const items = queue.filter((item) => stageFor(item) === stage.key);
+            const items = visibleQueue.filter((item) => stageFor(item) === stage.key);
             return (
               <section key={stage.key} className={`min-w-0 rounded-2xl border p-3 sm:p-4 ${stage.tone}`}>
                 <header className="mb-3 flex items-start justify-between gap-2 border-b border-white/5 pb-3">
@@ -132,7 +171,7 @@ function QueueTile({ item, isFirstExecutable, isActive, isFirst, isLast }: { ite
   function start() {
     startTransition(async () => {
       const result = await startWork(item.id, DEFAULT_WORK_SESSION_ACTIVITY);
-      if (result.success) router.push(videoWorkspaceHref(item.id));
+      if (result.success) router.refresh();
     });
   }
 

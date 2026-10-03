@@ -26,7 +26,7 @@ test("the resulting video link round-trips through the existing returnTo gate", 
   const returnTo = new URL(href, "https://x.test").searchParams.get("returnTo");
   assert.equal(returnTo, origin);
   assert.equal(isSafeInternalPath(returnTo), true);
-  assert.equal(videoWorkspaceHref(12, undefined), "/productivity?video=12", "no origin -> unchanged default link");
+  assert.equal(videoWorkspaceHref(12, undefined), "/war-room/workspace?video=12", "no origin -> canonical War Room workspace");
 });
 
 const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");

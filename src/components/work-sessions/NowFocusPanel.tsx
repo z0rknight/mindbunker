@@ -155,6 +155,9 @@ function ActiveSessionCard({
               stale ? "text-amber-300" : "text-emerald-300"
             }`}
           >
+            <span className={`rounded border px-2 py-0.5 text-[9px] font-black tracking-widest ${current.blocker ? "border-red-500/40 bg-red-500/10 text-red-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}`}>
+              {current.blocker ? "BLOCKED" : "ACTIVE"}
+            </span>
             {stale ? (
               <span className="mb-system-label">SESSION CHECK · RUNNING LONG</span>
             ) : (
@@ -174,6 +177,9 @@ function ActiveSessionCard({
           </p>
           <p className="mt-1 text-xs text-zinc-500">
             {WORK_SESSION_ACTIVITY_LABELS[current.activityType]}
+          </p>
+          <p className="mt-2 text-xs font-bold text-cyan-200">
+            NEXT → {current.nextAction}
           </p>
           {current.blocker && (
             <p className="mt-1 text-xs font-semibold text-amber-300">
@@ -245,6 +251,7 @@ function NoActiveWorkCard({
     <section className={`pixel-frame rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40 p-4 sm:p-5 ${compact ? "mb-8" : "mb-7"}`}>
       <p className="mb-system-label flex items-center gap-2 text-zinc-500">
         <PixelIcon name="flag" className="h-3.5 w-3.5" />
+        <span className="rounded border border-zinc-700 px-2 py-0.5 text-[9px] font-black tracking-widest text-zinc-400">IDLE</span>
         Next objective
       </p>
       {recommended ? (
@@ -258,7 +265,12 @@ function NoActiveWorkCard({
             <EntityInspectionTrigger entity={{ type: "video", id: recommended.videoId }} className="truncate text-left hover:text-cyan-200">{recommended.title}</EntityInspectionTrigger>
           </h2>
           <p className="mt-1 text-xs text-zinc-500">{recommended.nextAction}</p>
-          <p className="mt-1 text-[11px] text-zinc-600">{recommended.signals[0]?.message}</p>
+          <div className="mt-3 rounded-lg border border-cyan-900/50 bg-cyan-950/10 p-3">
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-cyan-400">WHY NOW</p>
+            {recommended.signals.slice(0, 2).map((signal) => (
+              <p key={`${signal.kind}-${signal.message}`} className="mt-1 text-[11px] leading-4 text-zinc-400">{signal.message}</p>
+            ))}
+          </div>
           {error && <p aria-live="polite" className="mt-2 text-xs text-red-300">{error}</p>}
           <button
             type="button"

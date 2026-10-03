@@ -29,10 +29,10 @@ export default function ProjectNotFound() {
             Back to Projects
           </Link>
           <Link
-            href="/productivity"
+            href="/war-room"
             className="min-h-10 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-black text-zinc-200 hover:border-violet-500/60"
           >
-            Back to Productivity
+            Back to War Room
           </Link>
         </div>
       </section>

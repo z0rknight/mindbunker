@@ -10,6 +10,16 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Wave 3 — War Room Consolidation / Productivity absorption (2026-10-03, local candidate)**
+  - [x] Made War Room the sole primary execution surface: dominant canonical IDLE / ACTIVE / BLOCKED objective, visible WHY NOW, compact live context, actionable signals, bounded NOW / NEXT / LATER queue, collapsed daily ledger, and collapsed historical intelligence
+  - [x] Retired `/productivity` as a page while preserving compatibility: the old root redirects to `/war-room`, old video deep links redirect to `/war-room/workspace`, and Plan Video / project context survives the transition
+  - [x] Preserved full production administration inside a large War Room queue sheet with search, stage filters, canonical reorder, Start Work, Orders, Backfill, and Capture Inbox; no second recommendation, queue, or lifecycle owner was created
+  - [x] Preserved VideoEditor as deep management in `/war-room/workspace`; client, project, video, and session context remains drawer-first through the Wave 2 global inspection contract
+  - [x] Removed Productivity from desktop/mobile navigation and changed specialist return paths and shared quick-action labeling to War Room without moving structural Project management into execution UX
+  - [x] Visual QA passed desktop and 390×844 for IDLE, ACTIVE, End → IDLE, full queue/search, Client/Project/Video/Session drawers, workspace, old-route compatibility, and six-item mobile nav; the exact synthetic local QA session and its two events were guard-deleted afterward
+  - [x] No migration, schema change, production D1 write, deploy, duplicate business logic, or unrelated cleanup; migration head remains 0053 by repository contract
+  - [x] 1551/1551 tests, typecheck, production build, diff check, and lint with 0 errors / 3 pre-existing warnings pass
+
 - [x] **Wave 2 — Global Entity Inspection / App Shell (2026-10-03, local candidate)**
   - [x] Added one App Shell-owned, URL-addressable Entity Drawer for canonical Client, Project, Video, and Work Session inspection; `?inspect=type:id` survives refresh, Back/Forward closes/reopens, Escape restores trigger focus, and full pages remain the management destinations
   - [x] Kept business truth in canonical owners: CRM identity/integrity, Projects progress, Productivity lifecycle, Execution recommendation, Work Sessions, Sensor evidence, and Finance received value are composed on demand into read-only inspection DTOs

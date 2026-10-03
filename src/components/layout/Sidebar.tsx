@@ -7,41 +7,38 @@ import { logoutAction } from "@/app/login/actions";
 // FX + Business Operating Cash Patch §13: the sidebar outgrew a flat list,
 // so each item now carries a lightweight `group` label used only to add
 // small muted uppercase section headings in the desktop rail below --
-// this is NOT a navigation redesign: every href, every desktopOnly flag,
-// and the mobile bottom tab bar's flat rendering (filtered the same way
-// as before, entirely blind to `group`) are unchanged.
+// Wave 3 removes the retired Productivity primary item; group labels remain
+// presentation-only and the mobile tab bar still renders the same flat subset.
 const navItems = [
   { href: "/war-room", label: "War Room", mobileLabel: "War", icon: "💎", group: "OPERATIONS" },
   { href: "/", label: "Dashboard", mobileLabel: "Home", icon: "⬛", group: "OPERATIONS" },
-  { href: "/productivity", label: "Productivity", mobileLabel: "Work", icon: "🎬", group: "OPERATIONS" },
   // Brief C ("Final Local Ingest / Live Readiness") §1A: real QA showed the
   // operator forgot where Projects was TWICE and naturally tried
-  // Projects -> New Project -> Add Multiple Videos right after
-  // Productivity. Moved immediately adjacent to Productivity rather than
-  // retraining the human -- no other reordering, this is the one change.
+  // Projects -> New Project -> Add Multiple Videos. It stays immediately
+  // beside the War Room execution surface rather than being buried.
   { href: "/projects", label: "Projects", mobileLabel: "Projects", icon: "📁", group: "OPERATIONS" },
   // RMEDIA LET'S COOK Wave 1: batch-order intake/tracking, grouped with
   // OPERATIONS immediately after Projects -- same "adjacent to where the
   // operator already is" placement Brief C used for Projects itself.
   // desktopOnly, same mobile-tab-count discipline as Sessions/Equipment
-  // above (the bottom tab bar stays at its fixed 7 destinations).
+  // above (the bottom tab bar stays at its bounded six destinations).
   { href: "/productivity/orders", label: "LET'S COOK", mobileLabel: "Orders", icon: "🔥", desktopOnly: true, group: "OPERATIONS" },
   // Monday Local Intelligence Lab §B: the Work Session Ledger already
   // exists at /productivity/sessions but had no nav entry anywhere --
   // discoverable only by URL. Desktop sidebar only, so the mobile bottom
-  // tab bar keeps its current fixed 7-destination slot count.
+  // tab bar keeps its current bounded six-destination slot count.
   { href: "/productivity/sessions", label: "Sessions", mobileLabel: "Sessions", icon: "📜", desktopOnly: true, group: "OPERATIONS" },
   // Equipment Wave 1 §4: the physical/patrimonial asset registry --
   // grouped with OPERATIONS (it's the infrastructure operations depends
   // on, not a cash concept -- see brief §10 on why Equipment's money
   // fields stay conceptually separate from Finance's MONEY group).
-  // desktopOnly, same "protect the mobile tab bar's fixed 7-slot count"
+  // desktopOnly, same "protect the bounded mobile tab bar" discipline
   // discipline as Sessions/Pricing Lab/Subscriptions/Debts/Contracts/All
   // History above.
   { href: "/equipment", label: "Equipment", mobileLabel: "Equipment", icon: "🧰", desktopOnly: true, group: "OPERATIONS" },
   { href: "/crm", label: "CRM", mobileLabel: "CRM", icon: "👥", group: "COMMERCIAL" },
   // Internal sales tool, occasional use -- desktop sidebar only, kept out
-  // of the mobile bottom tab bar so that bar stays at its fixed 7 destinations.
+  // of the mobile bottom tab bar so that bar stays bounded.
   { href: "/pricing-lab", label: "Pricing Lab", mobileLabel: "Pricing", icon: "🧪", desktopOnly: true, group: "COMMERCIAL" },
   { href: "/finance", label: "Finance", mobileLabel: "Money", icon: "💰", group: "MONEY" },
   // FX + Business Operating Cash Patch §12: direct canonical link, same
@@ -68,7 +65,7 @@ const navItems = [
 // no longer competes with daily navigation. Nothing was deleted: the
 // route, module, tables, and tests are all untouched -- only the sidebar
 // entry is gone, since a one-time reconciliation artifact doesn't belong
-// next to War Room/Productivity/CRM in primary nav. Reachable via the
+// next to War Room/CRM in primary nav. Reachable via the
 // small contextual link on Sessions (see productivity/sessions/page.tsx)
 // if ever needed again.
 
@@ -185,7 +182,7 @@ export function Sidebar() {
       </div>
       </aside>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-zinc-800 bg-zinc-950/95 px-1 pb-safe backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-zinc-800 bg-zinc-950/95 px-1 pb-safe backdrop-blur md:hidden">
         {navItems.filter((item) => !item.desktopOnly).map((item) => {
           const isActive =
             pathname === item.href ||

@@ -129,11 +129,12 @@ test("Projects uses visual cards grouped by operational stage with client and ex
   assert.doesNotMatch(projects, /min-h-12 w-full items-center justify-center rounded-xl bg-cyan-700/u);
 });
 
-test("Dashboard and Productivity put operator capture before secondary evidence", () => {
+test("Dashboard and the consolidated War Room put operator capture before secondary evidence", () => {
   const dashboard = source("../../app/page.tsx");
-  const productivity = source("../../app/productivity/page.tsx");
+  const warRoom = source("../../app/war-room/page.tsx");
   assert.ok(dashboard.indexOf("dashboard-quick-actions") < dashboard.indexOf("dashboard-attention"));
-  assert.ok(productivity.indexOf("Quick actions") < productivity.indexOf("<NeedsAttentionSection"));
+  assert.ok(warRoom.indexOf("WarRoomCaptureButton") < warRoom.indexOf("<ActiveSignalsSection"));
+  assert.doesNotMatch(warRoom, /NeedsAttentionSection/u);
   assert.doesNotMatch(dashboard, /<details open/u);
 });
 
@@ -254,15 +255,12 @@ test("All History is off the primary sidebar but still reachable from Sessions",
 // modules/productivity/core.test.mjs) -- this guard is specifically for
 // the page-level parsing boundary that decides whether a value counted as
 // "present" in the first place.
-test("Productivity page treats a malformed ?video= value as an explicit invalid state, not a silent fallback", () => {
-  const page = source("../../app/productivity/page.tsx");
-  assert.match(page, /const videoParamWasSent =/u);
-  assert.match(page, /const malformedVideoParam = videoParamWasSent && initialVideoId === null;/u);
-  assert.match(page, /malformedVideoParam\s*\?[\s\S]{0,200}malformed and does not point/u);
-  // The invalid-state section must render for EITHER a numeric id that
-  // resolved to no group OR a malformed param -- not only the former.
-  assert.match(
-    page,
-    /\(initialVideoId !== null && requestedWorkspaceGroup === null\) \|\| malformedVideoParam/u,
-  );
+test("retired Productivity sends malformed video links to an explicit War Room compatibility state", () => {
+  const compatibility = source("../../app/productivity/page.tsx");
+  const warRoom = source("../../app/war-room/page.tsx");
+  assert.match(compatibility, /rawVideo !== undefined/u);
+  assert.match(compatibility, /workspaceError/u);
+  assert.match(compatibility, /redirect\(next\.size > 0 \? `\/war-room\?/u);
+  assert.match(warRoom, /query\.workspaceError === "invalid-video"/u);
+  assert.match(warRoom, /old Productivity link did not contain a valid video id/u);
 });

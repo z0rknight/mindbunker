@@ -9,6 +9,7 @@ import {
   VIDEO_STATUS_LABELS,
   isVideoDirectlyFinishable,
 } from "@/modules/productivity/config";
+import { videoWorkspaceHref } from "@/modules/productivity/core";
 import { PROJECT_STATUS_GROUPS } from "@/modules/projects/config";
 import { startWork } from "@/modules/work-sessions/actions";
 import {
@@ -44,7 +45,7 @@ function ActionSheet({
         <div className="mb-5 flex items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">
-              Productivity
+              War Room
             </p>
             <h2 className="mt-1 text-lg font-black text-white">{title}</h2>
           </div>
@@ -133,7 +134,7 @@ export function PlanVideoButton({
 
   function closePlan() {
     setOpen(false);
-    if (initiallyOpen) router.replace("/productivity", { scroll: false });
+    if (initiallyOpen) router.replace("/war-room", { scroll: false });
   }
 
   useEffect(() => {
@@ -169,7 +170,7 @@ export function PlanVideoButton({
       setNotes("");
       setOpen(false);
       if (initiallyOpen) {
-        router.replace("/productivity", { scroll: false });
+        router.replace("/war-room", { scroll: false });
       } else {
         router.refresh();
       }
@@ -177,7 +178,7 @@ export function PlanVideoButton({
   }
 
   const createProjectHref = createUnderClientId
-    ? `/crm/${createUnderClientId}?tab=projects&createProject=1&returnTo=${encodeURIComponent("/productivity?planVideo=1")}`
+    ? `/crm/${createUnderClientId}?tab=projects&createProject=1&returnTo=${encodeURIComponent("/war-room?planVideo=1")}`
     : "/crm";
 
   return (
@@ -388,7 +389,7 @@ export function StartWorkButton() {
         return;
       }
       setOpen(false);
-      router.push(`/productivity?video=${selectedVideoId}`);
+      router.push(videoWorkspaceHref(selectedVideoId, "/war-room"));
     });
   }
 
@@ -569,8 +570,12 @@ export function NewWorkButton() {
         setFeedback(result.error);
         return;
       }
+      if (!result.videoId) {
+        setFeedback("Video created, but its workspace id was not returned. Refresh the War Room.");
+        return;
+      }
       setOpen(false);
-      router.push(`/productivity?video=${result.videoId}`);
+      router.push(videoWorkspaceHref(result.videoId, "/war-room"));
     });
   }
 

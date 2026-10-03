@@ -104,10 +104,10 @@ export default async function WorkSessionHistoryPage({
       <div className={OPERATOR_WORKSPACE_CLASS}>
         <div className="mb-6">
           <Link
-            href="/productivity"
+            href="/war-room"
             className="text-xs font-bold text-cyan-400 hover:text-cyan-300"
           >
-            ← Productivity
+            ← War Room
           </Link>
           <h1 className="mt-2 text-2xl font-bold text-white">🗂️ Work Session Ledger</h1>
           <p className="mt-1 text-sm text-zinc-500">
@@ -225,10 +225,10 @@ export default async function WorkSessionHistoryPage({
     <div className={OPERATOR_WORKSPACE_CLASS}>
       <div className="mb-6">
         <Link
-          href="/productivity"
+          href="/war-room"
           className="text-xs font-bold text-cyan-400 hover:text-cyan-300"
         >
-          ← Productivity
+          ← War Room
         </Link>
         <h1 className="mt-2 text-2xl font-bold text-white">🗂️ Sessions</h1>
         <p className="mt-1 text-sm text-zinc-500">

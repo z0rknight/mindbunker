@@ -68,9 +68,9 @@ test("linkify: only well-formed HTTPS URLs become links; punctuation and text ar
 test("video -> batch link returns to THAT video and carries the video's own origin; the value is a safe internal path", () => {
   const videoHref = videoWorkspaceHref(9, "/war-room");
   const href = batchLinkFromVideo(4, videoHref);
-  assert.equal(href, `/productivity/orders/4?returnTo=${encodeURIComponent("/productivity?video=9&returnTo=%2Fwar-room")}`);
+  assert.equal(href, `/productivity/orders/4?returnTo=${encodeURIComponent("/war-room/workspace?video=9&returnTo=%2Fwar-room")}`);
   const returnTo = new URL(href, "https://x.test").searchParams.get("returnTo");
-  assert.equal(returnTo, "/productivity?video=9&returnTo=%2Fwar-room");
+  assert.equal(returnTo, "/war-room/workspace?video=9&returnTo=%2Fwar-room");
   assert.equal(isSafeInternalPath(returnTo), true, "the order page will honour it");
   assert.equal(isSafeInternalPath(new URL(videoHref, "https://x.test").searchParams.get("returnTo")), true);
 });

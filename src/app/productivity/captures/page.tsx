@@ -74,7 +74,7 @@ export default async function CaptureInboxPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:p-8">
-      <Link href="/productivity" className="text-xs font-bold text-cyan-400">← Productivity</Link>
+      <Link href="/war-room" className="text-xs font-bold text-cyan-400">← War Room</Link>
       <h1 className="mt-2 text-2xl font-black text-white">📥 Capture Inbox</h1>
       <p className="mt-1 max-w-2xl text-sm text-zinc-500">
         Real operational facts captured before they earned full Client / Project / Video structure — a Moritz-shaped

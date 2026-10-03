@@ -52,15 +52,15 @@ export default async function BackfillDayPage({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-5 sm:px-6 md:p-8">
-      <Link href="/productivity" className="inline-flex min-h-10 items-center text-sm font-bold text-zinc-500 transition hover:text-zinc-300">
-        ← Productivity
+      <Link href="/war-room" className="inline-flex min-h-10 items-center text-sm font-bold text-zinc-500 transition hover:text-zinc-300">
+        ← War Room
       </Link>
       <header className="mt-2 mb-6">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">Backfill Day</p>
         <h1 className="mt-1 text-2xl font-black text-white">Fill in a day you skipped</h1>
         <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">
           Choose a past date, see what&apos;s already recorded for it, and add what&apos;s missing -- work time, capacity, and a
-          short note. Everything here writes through the same facts Productivity and Health already use; nothing is
+          short note. Everything here writes through the same facts War Room and Health already use; nothing is
           invented just to fill this screen.
         </p>
       </header>

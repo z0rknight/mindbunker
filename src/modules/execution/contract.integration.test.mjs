@@ -14,16 +14,17 @@ function sliceFunction(contents, signature) {
   return next === -1 ? contents.slice(start) : contents.slice(start, next);
 }
 
-test("Dashboard, Productivity and War Room consume the canonical execution read API", () => {
+test("Dashboard and the sole War Room execution surface consume the canonical execution read API", () => {
   const dashboard = source("..", "..", "app", "page.tsx");
   const productivity = source("..", "..", "app", "productivity", "page.tsx");
   const warRoom = source("..", "..", "app", "war-room", "page.tsx");
 
   assert.match(dashboard, /getExecutionSnapshot/u);
-  assert.match(productivity, /getCurrentExecution/u);
-  assert.match(productivity, /getExecutionRecommendation/u);
+  assert.match(productivity, /redirect/u);
+  assert.doesNotMatch(productivity, /getCurrentExecution|ExecutionQueueSection/u);
   assert.match(warRoom, /getCurrentExecution/u);
   assert.match(warRoom, /getExecutionRecommendation/u);
+  assert.match(warRoom, /selectExecutionQueue/u);
   assert.doesNotMatch(dashboard, /selectDashboardNow/u);
 });
 

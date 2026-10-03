@@ -30,15 +30,15 @@ test("NowFocusPanel opens the shared entity inspection contract without rebuildi
   );
 });
 
-test("canonical execution projections preserve each caller's return path", () => {
+test("canonical execution projections preserve the Dashboard and sole War Room return paths", () => {
   const dashboard = source("../../app/page.tsx");
   const warRoom = source("../../app/war-room/page.tsx");
   const productivity = source("../../app/productivity/page.tsx");
   assert.match(dashboard, /getExecutionSnapshot\("\/"\)/u);
   assert.match(warRoom, /getCurrentExecution\("\/war-room"\)/u);
   assert.match(warRoom, /getExecutionRecommendation\([\s\S]{0,400}"\/war-room"\)/u);
-  assert.match(productivity, /getCurrentExecution\("\/productivity"\)/u);
-  assert.match(productivity, /getExecutionRecommendation\([\s\S]{0,400}"\/productivity"\)/u);
+  assert.match(productivity, /redirect/u);
+  assert.doesNotMatch(productivity, /getCurrentExecution|getExecutionRecommendation/u);
 });
 
 // Fix 2: LET'S COOK's "New Production Order" form re-asked for a client

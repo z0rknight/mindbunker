@@ -152,8 +152,9 @@ export function VideoEditor({
     setOpen(false);
     // Brief C §8: honor an already-validated internal returnTo (e.g. the
     // Project this video was opened from) when present; otherwise keep the
-    // exact previous behavior of returning to Productivity.
-    if (initiallyOpen) router.replace(returnTo ?? "/productivity", { scroll: false });
+    // Wave 3: deep management returns to the sole execution surface unless
+    // the caller supplied a validated, more specific origin.
+    if (initiallyOpen) router.replace(returnTo ?? "/war-room", { scroll: false });
   }
 
   function saveMetadata(event: React.FormEvent) {
@@ -614,7 +615,7 @@ export function VideoEditor({
                   ))}
                 </select>
                 <p className="mt-1.5 text-[11px] leading-4 text-zinc-600">
-                  Only Client work counts toward production stats (Productivity, CRM, Projects, War Room). Sample and Internal videos keep their full history but are excluded from those counts.
+                  Only Client work counts toward production stats (War Room, CRM, and Projects). Sample and Internal videos keep their full history but are excluded from those counts.
                 </p>
               </div>
 

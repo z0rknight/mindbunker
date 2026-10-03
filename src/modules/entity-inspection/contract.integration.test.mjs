@@ -72,9 +72,13 @@ test("high-friction surfaces use the global trigger and the old Session drawer i
   );
 });
 
-test("Productivity route remains present and its canonical execution contract is unchanged", () => {
-  const page = source("..", "..", "app", "productivity", "page.tsx");
-  assert.match(page, /getCurrentExecution/u);
-  assert.match(page, /getExecutionRecommendation/u);
-  assert.match(page, /ExecutionQueueSection/u);
+test("Productivity is compatibility-only while War Room owns execution and deep management", () => {
+  const compatibility = source("..", "..", "app", "productivity", "page.tsx");
+  const warRoom = source("..", "..", "app", "war-room", "page.tsx");
+  const workspace = source("..", "..", "app", "war-room", "workspace", "page.tsx");
+  assert.match(compatibility, /redirect/u);
+  assert.doesNotMatch(compatibility, /getCurrentExecution/u);
+  assert.match(warRoom, /getCurrentExecution/u);
+  assert.match(warRoom, /WarRoomExecutionQueue/u);
+  assert.match(workspace, /VideoOperationsCard/u);
 });
