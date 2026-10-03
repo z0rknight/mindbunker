@@ -10,10 +10,19 @@ import {
   GUIDED_INTAKE_EVENT_TYPE,
   GUIDED_STARTING_PATH_LABELS,
   isGuidedIntakePayload,
+  isGuidedIntakePayloadV1,
   serviceInterestForGuidedIntake,
   validateGuidedIntakeSubmission,
   type GuidedStartingPath,
 } from "./core";
+import {
+  buildGuidedIntakeV2Description,
+  buildGuidedIntakeV2Payload,
+  GUIDED_INTAKE_V2_PATH_LABELS,
+  serviceInterestForGuidedIntakeV2,
+  validateGuidedIntakeV2Submission,
+  type GuidedIntakeV2StartingPath,
+} from "./v2";
 import {
   referralDescriptionPrefix,
   resolveReferral,
@@ -26,6 +35,15 @@ export type GuidedIntakeSubmitResult =
       success: true;
       deduped: boolean;
       recommendedStartingPath: GuidedStartingPath;
+      publicStartingPath: string;
+    }
+  | { success: false; status: 400 | 500; message: string; errors?: Record<string, string> };
+
+export type GuidedIntakeV2SubmitResult =
+  | {
+      success: true;
+      deduped: boolean;
+      recommendedStartingPath: GuidedIntakeV2StartingPath;
       publicStartingPath: string;
     }
   | { success: false; status: 400 | 500; message: string; errors?: Record<string, string> };
@@ -68,7 +86,7 @@ export async function submitGuidedIntake(value: unknown): Promise<GuidedIntakeSu
   if (existingRequest[0]?.payloadJson) {
     try {
       const payload: unknown = JSON.parse(existingRequest[0].payloadJson);
-      if (isGuidedIntakePayload(payload)) {
+      if (isGuidedIntakePayloadV1(payload)) {
         return {
           success: true,
           deduped: true,
@@ -151,5 +169,122 @@ export async function submitGuidedIntake(value: unknown): Promise<GuidedIntakeSu
     deduped: insertedEvent.length === 0,
     recommendedStartingPath: payload.recommendedStartingPath,
     publicStartingPath: GUIDED_STARTING_PATH_LABELS[payload.recommendedStartingPath],
+  };
+}
+
+export async function submitGuidedIntakeV2(value: unknown): Promise<GuidedIntakeV2SubmitResult> {
+  if (isRecord(value) && typeof value.company_website === "string" && value.company_website.trim() !== "") {
+    return {
+      success: true,
+      deduped: true,
+      recommendedStartingPath: "HUMAN_REVIEW_REQUIRED",
+      publicStartingPath: GUIDED_INTAKE_V2_PATH_LABELS.HUMAN_REVIEW_REQUIRED,
+    };
+  }
+
+  const validation = validateGuidedIntakeV2Submission(value);
+  if (!validation.success) {
+    return {
+      success: false,
+      status: 400,
+      message: "Check the highlighted details and try again.",
+      errors: validation.errors,
+    };
+  }
+
+  const data = validation.data;
+  const referral = resolveReferral(data.ref);
+  const db = await getDb();
+
+  const existingRequest = await db
+    .select({ payloadJson: crmEvents.payloadJson })
+    .from(crmEvents)
+    .where(eq(crmEvents.idempotencyKey, data.idempotencyKey))
+    .limit(1);
+  if (existingRequest[0]?.payloadJson) {
+    try {
+      const payload: unknown = JSON.parse(existingRequest[0].payloadJson);
+      if (isGuidedIntakePayload(payload) && payload.modelVersion === "rmedia-guided-intake-v2") {
+        return {
+          success: true,
+          deduped: true,
+          recommendedStartingPath: payload.leadIntent.likelyPath,
+          publicStartingPath: GUIDED_INTAKE_V2_PATH_LABELS[payload.leadIntent.likelyPath],
+        };
+      }
+    } catch {
+      // The unique key remains authoritative. Never create a second event
+      // when the stored replay evidence cannot be decoded.
+    }
+    return { success: false, status: 500, message: "We could not verify this submission. Please contact Emmanuel directly." };
+  }
+
+  const now = new Date();
+  const payload = buildGuidedIntakeV2Payload(data, referral);
+  const description = buildGuidedIntakeV2Description(payload);
+  const existingClient = await db
+    .select({ id: clients.id, source: clients.source })
+    .from(clients)
+    .where(sql`lower(${clients.email}) = ${data.answers.contact.email}`)
+    .limit(1);
+
+  let clientId: number;
+  if (existingClient[0]) {
+    clientId = existingClient[0].id;
+    await db
+      .update(clients)
+      .set({
+        lastInteractionAt: now,
+        ...(referral && shouldAdoptReferralSource(existingClient[0].source)
+          ? { source: referral.source }
+          : {}),
+      })
+      .where(eq(clients.id, clientId));
+  } else {
+    const inserted = await db
+      .insert(clients)
+      .values({
+        name: data.answers.contact.name,
+        status: "lead",
+        opportunityStage: "new",
+        email: data.answers.contact.email,
+        serviceInterest: serviceInterestForGuidedIntakeV2(data.answers.contentShape),
+        source: sourceForNewLead("startvideo", referral),
+        contacted: false,
+        converted: false,
+        lastInteractionAt: now,
+      })
+      .returning({ id: clients.id });
+    if (!inserted[0]) return { success: false, status: 500, message: "Something went wrong. Please try again." };
+    clientId = inserted[0].id;
+    await db.insert(crmEvents).values({
+      clientId,
+      type: "lead_created",
+      actor: "gateway",
+      description: `${referralDescriptionPrefix(referral)}Lead created from /startvideo: ${data.answers.contact.name}`,
+    });
+  }
+
+  const insertedEvent = await db
+    .insert(crmEvents)
+    .values({
+      clientId,
+      type: GUIDED_INTAKE_EVENT_TYPE,
+      actor: "gateway",
+      description,
+      payloadJson: JSON.stringify(payload),
+      idempotencyKey: data.idempotencyKey,
+    })
+    .onConflictDoNothing({ target: crmEvents.idempotencyKey })
+    .returning({ id: crmEvents.id });
+
+  revalidatePath(`/crm/${clientId}`);
+  revalidatePath("/crm");
+  revalidatePath("/crm/inbound");
+  return {
+    success: true,
+    deduped: insertedEvent.length === 0,
+    recommendedStartingPath: payload.leadIntent.likelyPath,
+    publicStartingPath: GUIDED_INTAKE_V2_PATH_LABELS[payload.leadIntent.likelyPath],
   };
 }

@@ -290,22 +290,27 @@ export function ClientTabs({
                     </p>
                   </div>
                   <span className="rounded-full bg-violet-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-violet-300">
-                    Evidence
+                    {latestGuidedIntake.surface}
                   </span>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
+                  <BriefingField label="Intake version" value={latestGuidedIntake.intakeVersion} />
                   <BriefingField label="What they want" value={latestGuidedIntake.whatTheyWant} />
                   <BriefingField label="Volume" value={latestGuidedIntake.volume} />
                   <BriefingField label="Recurrence" value={latestGuidedIntake.recurrence} />
+                  <BriefingField label="Cadence / workload" value={latestGuidedIntake.cadenceWorkload} />
                   <BriefingField label="What is ready" value={latestGuidedIntake.readiness} />
                   <BriefingField label="How defined the work is" value={latestGuidedIntake.definition} />
                   <BriefingField label="Timing" value={latestGuidedIntake.timing} />
                   <BriefingField label="Recommended starting path" value={latestGuidedIntake.startingPath} />
                   <BriefingField label="Relationship shape" value={latestGuidedIntake.relationshipShape} />
                   <BriefingField label="Content shape" value={latestGuidedIntake.contentShape} />
+                  <BriefingField label="Need character" value={latestGuidedIntake.needCharacter} />
                   <BriefingField label="Primary need" value={latestGuidedIntake.primaryNeed} />
                   <BriefingField label="Supported priority" value={latestGuidedIntake.priority} />
                   <BriefingField label="Format maturity" value={latestGuidedIntake.formatMaturity} />
+                  <BriefingField label="Specialist context" value={latestGuidedIntake.specialistContext} />
+                  <BriefingField label="Interpretation confidence" value={latestGuidedIntake.confidence} />
                   <BriefingField label="Referral source" value={latestGuidedIntake.referralSource} />
                   {latestGuidedIntake.leadIntentEvidence.length > 0 && (
                     <div className="md:col-span-2">
@@ -315,6 +320,19 @@ export function ClientTabs({
                   <div className="md:col-span-2">
                     <BriefingField label="Additional context" value={latestGuidedIntake.freeformContext} />
                   </div>
+                  <details className="md:col-span-2 rounded-lg border border-zinc-800 bg-zinc-950/35 p-4">
+                    <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                      Raw intake answers
+                    </summary>
+                    <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {latestGuidedIntake.rawAnswers.map((answer) => (
+                        <div key={answer.label} className="rounded-lg bg-zinc-800/50 p-3">
+                          <dt className="text-xs text-zinc-500">{answer.label}</dt>
+                          <dd className="mt-1 text-sm capitalize text-zinc-200">{answer.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </details>
                 </div>
               </section>
             )}

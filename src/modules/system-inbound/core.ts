@@ -50,7 +50,7 @@ export function projectSystemIntakePayload(
 }
 
 export function systemIntakeSourceLabel(projection: GuidedIntakeProjection | null) {
-  return projection?.referralSource ?? "RMEDIA /start";
+  return projection?.referralSource ?? (projection?.surface === "STARTVIDEO V2" ? "RMEDIA /startvideo" : "RMEDIA /start");
 }
 
 export type SystemInboundRow = {

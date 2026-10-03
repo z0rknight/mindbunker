@@ -68,12 +68,16 @@ export default async function SystemInboundPage() {
                     <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                       <div><dt className="text-xs text-zinc-600">Received</dt><dd className="mt-1 text-zinc-300">{formatReceivedAt(group.latestReceivedAt)}</dd></div>
                       <div><dt className="text-xs text-zinc-600">Source</dt><dd className="mt-1 text-zinc-300">{group.latestSourceLabel}</dd></div>
+                      <div><dt className="text-xs text-zinc-600">Intake</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.surface} · {group.latestProjection.intakeVersion}</dd></div>
                       <div><dt className="text-xs text-zinc-600">What they want</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.whatTheyWant} · {group.latestProjection.volume}</dd></div>
                       <div><dt className="text-xs text-zinc-600">Starting path</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.startingPath}</dd></div>
                       <div><dt className="text-xs text-zinc-600">Relationship</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.relationshipShape}</dd></div>
                       <div><dt className="text-xs text-zinc-600">Primary need</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.primaryNeed}</dd></div>
+                      <div><dt className="text-xs text-zinc-600">Workload</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.cadenceWorkload}</dd></div>
                       <div><dt className="text-xs text-zinc-600">Priority</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.priority}</dd></div>
                       <div><dt className="text-xs text-zinc-600">Format maturity</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.formatMaturity}</dd></div>
+                      <div><dt className="text-xs text-zinc-600">Specialist signal</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.specialistContext}</dd></div>
+                      <div><dt className="text-xs text-zinc-600">Confidence</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.confidence}</dd></div>
                     </dl>
                     {group.intakeCount > 1 && (
                       <details className="mt-4 border-t border-zinc-800 pt-3">

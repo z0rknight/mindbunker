@@ -1,5 +1,11 @@
 import { cleanEmail } from "../booking/core.ts";
 import type { ReferralProgram } from "../referrals/core.ts";
+import {
+  deriveLeadIntentV2,
+  GUIDED_INTAKE_V2_PATH_LABELS,
+  isGuidedIntakePayloadV2,
+  type GuidedIntakePayloadV2,
+} from "./v2.ts";
 
 export const GUIDED_INTAKE_EVENT_TYPE = "guided_intake.submitted";
 export const GUIDED_INTAKE_PAYLOAD_SCHEMA_VERSION = 1 as const;
@@ -89,6 +95,8 @@ export type GuidedIntakePayloadV1 = {
   freeformContext: string | null;
   submissionContext: { channel: "start" };
 };
+
+export type GuidedIntakePayload = GuidedIntakePayloadV1 | GuidedIntakePayloadV2;
 
 export type ValidatedGuidedIntakeSubmission = {
   answers: GuidedIntakeAnswers;
@@ -380,7 +388,7 @@ export function buildGuidedIntakePayload(
   };
 }
 
-export function isGuidedIntakePayload(value: unknown): value is GuidedIntakePayloadV1 {
+export function isGuidedIntakePayloadV1(value: unknown): value is GuidedIntakePayloadV1 {
   if (
     !isRecord(value) ||
     value.schemaVersion !== 1 ||
@@ -396,6 +404,10 @@ export function isGuidedIntakePayload(value: unknown): value is GuidedIntakePayl
     ref: null,
     company_website: "",
   }).success;
+}
+
+export function isGuidedIntakePayload(value: unknown): value is GuidedIntakePayload {
+  return isGuidedIntakePayloadV2(value) || isGuidedIntakePayloadV1(value);
 }
 
 const VOLUME_LABELS: Record<GuidedIntakeAnswers["deliverableCountBand"], string> = {
@@ -432,45 +444,116 @@ export function serviceInterestForGuidedIntake(
 }
 
 export type GuidedIntakeProjection = {
+  surface: "START V1" | "STARTVIDEO V2";
+  intakeVersion: string;
   whatTheyWant: string;
   volume: string;
   recurrence: string;
+  cadenceWorkload: string;
   readiness: string;
   definition: string;
   timing: string;
   startingPath: string;
   relationshipShape: string;
   contentShape: string;
+  needCharacter: string;
   primaryNeed: string;
   priority: string;
   formatMaturity: string;
+  specialistContext: string;
+  confidence: string;
   leadIntentEvidence: string[];
   referralSource: string | null;
   freeformContext: string | null;
+  rawAnswers: Array<{ label: string; value: string }>;
 };
 
-export function projectGuidedIntakePayload(payload: GuidedIntakePayloadV1): GuidedIntakeProjection {
+const readable = (value: string) => value.replaceAll("_", " ");
+
+export function projectGuidedIntakePayload(payload: GuidedIntakePayload): GuidedIntakeProjection {
+  if (payload.modelVersion === "rmedia-guided-intake-v2") {
+    // Raw answers remain evidence; the read model is always recomputed so a
+    // stored interpretation can never become an independent source of truth.
+    const intent = deriveLeadIntentV2(payload.answers);
+    return {
+      surface: "STARTVIDEO V2",
+      intakeVersion: "Flow 2 · answers 2 · intent 2",
+      whatTheyWant: payload.answers.situation === "steady_flow" ? "A reliable ongoing editing flow"
+        : payload.answers.situation === "defined_project" ? "A defined project finished"
+          : payload.answers.situation === "backlog" ? "A backlog cleared"
+            : payload.answers.situation === "specialist" ? "Help with something specific"
+              : "Help working out the right starting point",
+      volume: readable(intent.workload),
+      recurrence: intent.relationshipShape === "RECURRING" ? "recurring" : intent.relationshipShape === "PROJECT" ? "bounded" : "not established",
+      cadenceWorkload: readable(intent.workload),
+      readiness: "Not asked in V2; confirm during human scope review",
+      definition: readable(intent.formatMaturity),
+      timing: intent.priority === "SPEED" ? "Speed is the stated priority" : "No delivery promise made in intake",
+      startingPath: GUIDED_INTAKE_V2_PATH_LABELS[intent.likelyPath],
+      relationshipShape: readable(intent.relationshipShape),
+      contentShape: readable(intent.contentShape),
+      needCharacter: readable(intent.needCharacter),
+      primaryNeed: readable(intent.primaryNeed),
+      priority: readable(intent.priority),
+      formatMaturity: readable(intent.formatMaturity),
+      specialistContext: readable(intent.specialistSignal),
+      confidence: intent.confidence,
+      leadIntentEvidence: intent.evidence,
+      referralSource: payload.referralContext?.key === "pdbm"
+        ? "Perfect Day Business Mentorship (PDBM)"
+        : payload.referralContext?.source ?? null,
+      freeformContext: payload.freeformContext,
+      rawAnswers: [
+        { label: "Situation", value: readable(payload.answers.situation) },
+        { label: "Content", value: readable(payload.answers.contentShape) },
+        { label: "Workload", value: readable(payload.answers.workload) },
+        { label: "Priority", value: readable(payload.answers.priority) },
+        { label: "Format", value: readable(payload.answers.formatMaturity) },
+        { label: "Specialist context", value: readable(payload.answers.specialistContext) },
+      ],
+    };
+  }
   // Recompute the read model from immutable raw answers. Historical v0
   // events therefore gain the same readable intent projection without a
   // rewrite, while new v1 events also persist the server-derived snapshot.
   const leadIntent = deriveLeadIntent(payload.answers);
   return {
+    surface: "START V1",
+    intakeVersion: payload.modelVersion === LEGACY_GUIDED_INTAKE_MODEL_VERSION ? "Legacy model v0" : "Flow 1 · intent 1",
     whatTheyWant: payload.answers.contentType === "short" ? "Short clips" : payload.answers.contentType === "long" ? "Long-form video" : payload.answers.contentType === "both" ? "Long-form and short clips" : "Needs help choosing a format",
     volume: VOLUME_LABELS[payload.answers.deliverableCountBand],
     recurrence: RECURRENCE_LABELS[payload.answers.recurrence],
+    cadenceWorkload: `${VOLUME_LABELS[payload.answers.deliverableCountBand]} · ${RECURRENCE_LABELS[payload.answers.recurrence]}`,
     readiness: payload.derivedDimensions.productionReadiness === "ready" ? "Materials and editorial direction ready" : payload.derivedDimensions.productionReadiness === "needs_definition" ? "Needs help defining what is required" : "Some inputs or decisions are still open",
     definition: payload.answers.creativeFlexibility === "formula" ? "Clear, repeatable direction" : payload.answers.creativeFlexibility === "high" ? "Exploration is part of the work" : payload.answers.creativeFlexibility === "some" ? "Direction with room to adjust" : "Working style still open",
     timing: payload.answers.deadlineType === "specific" ? "Specific date" : payload.answers.deadlineType === "window" ? "Flexible window" : payload.answers.deadlineType === "cadence" ? "Ongoing cadence" : payload.answers.deadlineType === "urgent" ? "Urgent — feasibility review needed" : "Timing not decided",
     startingPath: GUIDED_STARTING_PATH_LABELS[payload.recommendedStartingPath],
     relationshipShape: leadIntent.relationshipShape.replaceAll("_", " "),
     contentShape: leadIntent.contentShape.replaceAll("_", " "),
+    needCharacter: leadIntent.primaryNeed.replaceAll("_", " "),
     primaryNeed: leadIntent.primaryNeed.replaceAll("_", " "),
     priority: leadIntent.priority.replaceAll("_", " "),
     formatMaturity: leadIntent.formatMaturity.replaceAll("_", " "),
+    specialistContext: payload.answers.technicalComplexityFlags.filter((item) => item !== "none").map(readable).join(", ") || "NONE",
+    confidence: payload.derivedDimensions.uncertaintyLevel === "low" ? "SUPPORTED" : "PARTIAL",
     leadIntentEvidence: leadIntent.evidence,
     referralSource: payload.referralContext?.key === "pdbm"
       ? "Perfect Day Business Mentorship (PDBM)"
       : payload.referralContext?.source ?? null,
     freeformContext: payload.freeformContext,
+    rawAnswers: [
+      { label: "Content type", value: readable(payload.answers.contentType) },
+      { label: "Duration", value: readable(payload.answers.durationBand) },
+      { label: "Volume", value: readable(payload.answers.deliverableCountBand) },
+      { label: "Recurrence", value: readable(payload.answers.recurrence) },
+      { label: "Format maturity", value: readable(payload.answers.formatMaturity) },
+      { label: "Source readiness", value: readable(payload.answers.sourceReadiness) },
+      { label: "Editorial readiness", value: readable(payload.answers.editorialReadiness) },
+      { label: "Creative flexibility", value: readable(payload.answers.creativeFlexibility) },
+      { label: "Technical signals", value: payload.answers.technicalComplexityFlags.map(readable).join(", ") || "none" },
+      { label: "Review", value: readable(payload.answers.reviewComplexity) },
+      { label: "Timing", value: readable(payload.answers.deadlineType) },
+      { label: "Dependencies", value: payload.answers.dependencyFlags.map(readable).join(", ") || "none" },
+    ],
   };
 }
