@@ -9,6 +9,7 @@ import { InstagramProfileCard } from "./InstagramProfileCard";
 import { CoverUploadField } from "@/components/media/CoverUploadField";
 import { resolveCoverUrl } from "@/modules/media/core";
 import { PaymentRequestPanel } from "@/components/client-portal/PaymentRequestPanel";
+import type { GuidedIntakeProjection } from "@/modules/guided-intake/core";
 
 interface ClientTabsProps {
   client: {
@@ -60,17 +61,7 @@ interface ClientTabsProps {
     actor: "admin" | "gateway" | "system" | "client";
     description: string;
     createdAt: Date | null;
-    guidedIntake: {
-      whatTheyWant: string;
-      volume: string;
-      recurrence: string;
-      readiness: string;
-      definition: string;
-      timing: string;
-      startingPath: string;
-      referralSource: string | null;
-      freeformContext: string | null;
-    } | null;
+    guidedIntake: GuidedIntakeProjection | null;
   }>;
   projects: ClientProjectView[];
   instagramImportConfigured: boolean;
@@ -310,7 +301,17 @@ export function ClientTabs({
                   <BriefingField label="How defined the work is" value={latestGuidedIntake.definition} />
                   <BriefingField label="Timing" value={latestGuidedIntake.timing} />
                   <BriefingField label="Recommended starting path" value={latestGuidedIntake.startingPath} />
+                  <BriefingField label="Relationship shape" value={latestGuidedIntake.relationshipShape} />
+                  <BriefingField label="Content shape" value={latestGuidedIntake.contentShape} />
+                  <BriefingField label="Primary need" value={latestGuidedIntake.primaryNeed} />
+                  <BriefingField label="Supported priority" value={latestGuidedIntake.priority} />
+                  <BriefingField label="Format maturity" value={latestGuidedIntake.formatMaturity} />
                   <BriefingField label="Referral source" value={latestGuidedIntake.referralSource} />
+                  {latestGuidedIntake.leadIntentEvidence.length > 0 && (
+                    <div className="md:col-span-2">
+                      <BriefingField label="Why the system inferred this" value={latestGuidedIntake.leadIntentEvidence.join(" ")} />
+                    </div>
+                  )}
                   <div className="md:col-span-2">
                     <BriefingField label="Additional context" value={latestGuidedIntake.freeformContext} />
                   </div>

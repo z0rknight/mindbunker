@@ -404,9 +404,15 @@ export async function getClientReality(clientId: number, periodMonthKey = shiftM
   ]);
 
   const commercial = deriveCommercialPosition({
-    contracts: contracts.map((row) => ({ id: row.id, billingType: row.billing_type, hourlyRate: row.hourly_rate, currency: row.currency, status: row.status })),
+    contracts: contracts.map((row) => ({ id: row.id, billingType: row.billing_type, hourlyRate: row.hourly_rate, currency: row.currency, status: row.status, platform: row.platform })),
     requests: requests.map((row) => ({ id: row.id, amountCents: row.amount_cents, currency: row.currency, status: row.status, createdAt: row.created_at, note: row.note })),
     sessions: sessions.map((row) => ({ startedAt: row.started_at, endedAt: row.ended_at })),
+    billingEvidence: billingRows.map((row) => ({
+      periodEnd: row.period_end,
+      grossAmount: row.gross_amount,
+      currency: row.currency,
+      earningDate: row.earning_date,
+    })),
     paidTransactions: paid.map((row) => ({ amount: row.amount, currency: row.currency, occurredAt: Math.floor(Date.parse(`${row.date}T23:59:59-03:00`) / 1000) })),
     nowSeconds: Math.floor(Date.now() / 1000),
   });

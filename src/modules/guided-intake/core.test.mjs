@@ -5,6 +5,7 @@ import { resolveReferral } from "../referrals/core.ts";
 import {
   buildGuidedIntakePayload,
   deriveGuidedIntake,
+  deriveLeadIntent,
   GUIDED_INTAKE_EVENT_TYPE,
   GUIDED_INTAKE_PAYLOAD_SCHEMA_VERSION,
   isGuidedIntakePayload,
@@ -54,6 +55,8 @@ test("payload V1 is built from validated raw answers and round-trips", () => {
   assert.equal(payload.schemaVersion, 1);
   assert.equal(payload.answers.contact.email, "qa@example.com");
   assert.equal(payload.recommendedStartingPath, "DEFINED_PROJECT");
+  assert.equal(payload.modelVersion, "rmedia-guided-intake-v1");
+  assert.equal(payload.leadIntent.relationshipShape, "PROJECT");
   assert.equal(payload.freeformContext, "A useful starting point.");
   assert.equal(isGuidedIntakePayload(JSON.parse(JSON.stringify(payload))), true);
   assert.equal(GUIDED_INTAKE_EVENT_TYPE, "guided_intake.submitted");
@@ -94,6 +97,53 @@ test("all six canonical model scenarios remain deterministic", () => {
   assert.equal(pdbm.referralContext.source, "referral:pdbm");
 });
 
+test("lead intent distinguishes recurring capacity, defined one-off and exploratory specialized demand without persona labels", () => {
+  const recurring = deriveLeadIntent(validate(submission({
+    deliverableCountBand: "ongoing",
+    recurrence: "recurring",
+    deadlineType: "cadence",
+  })).answers);
+  assert.deepEqual(
+    { relationship: recurring.relationshipShape, need: recurring.primaryNeed, priority: recurring.priority, path: recurring.likelyPath },
+    { relationship: "RECURRING", need: "CAPACITY", priority: "CONSISTENCY", path: "REPEATABLE_PRODUCTION" },
+  );
+
+  const defined = deriveLeadIntent(validate(submission()).answers);
+  assert.deepEqual(
+    { relationship: defined.relationshipShape, need: defined.primaryNeed, format: defined.formatMaturity, path: defined.likelyPath },
+    { relationship: "PROJECT", need: "DEFINED_DELIVERY", format: "DEFINED", path: "DEFINED_PROJECT" },
+  );
+
+  const exploratory = deriveLeadIntent(validate(submission({
+    contentType: "long",
+    durationBand: "over_10m",
+    formatMaturity: "discover",
+    creativeFlexibility: "high",
+    technicalComplexityFlags: ["motion", "research"],
+  })).answers);
+  assert.deepEqual(
+    { relationship: exploratory.relationshipShape, need: exploratory.primaryNeed, priority: exploratory.priority, path: exploratory.likelyPath },
+    { relationship: "EXPLORATORY", need: "TECHNICAL_SOLUTION", priority: "FLEXIBILITY", path: "FLEXIBLE_COLLABORATION" },
+  );
+
+  const unclear = deriveLeadIntent(validate(submission({
+    contentType: "unsure",
+    deliverableCountBand: "unsure",
+    recurrence: "unsure",
+    formatMaturity: "unsure",
+    sourceReadiness: "needs_help",
+    editorialReadiness: "unsure",
+    creativeFlexibility: "unsure",
+    technicalComplexityFlags: ["unsure"],
+    deadlineType: "unsure",
+    reviewComplexity: "unclear",
+  })).answers);
+  assert.deepEqual(
+    { relationship: unclear.relationshipShape, content: unclear.contentShape, need: unclear.primaryNeed, priority: unclear.priority },
+    { relationship: "UNCLEAR", content: "UNCLEAR", need: "UNCLEAR", priority: "NOT_ESTABLISHED" },
+  );
+});
+
 test("strict validation rejects malformed answer structures and invalid values", () => {
   const extraAnswer = submission({ debugPayload: true });
   assert.equal(validateGuidedIntakeSubmission(extraAnswer).success, false);
@@ -107,6 +157,8 @@ test("CRM projection is readable and does not require raw JSON", () => {
   const projection = projectGuidedIntakePayload(payload);
   assert.equal(projection.whatTheyWant, "Short clips");
   assert.equal(projection.startingPath, "Defined project");
+  assert.equal(projection.relationshipShape, "PROJECT");
+  assert.equal(projection.primaryNeed, "DEFINED DELIVERY");
   assert.match(projection.referralSource, /PDBM/u);
   assert.equal(projection.freeformContext, "A useful starting point.");
 });

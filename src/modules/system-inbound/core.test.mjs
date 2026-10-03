@@ -78,6 +78,8 @@ test("multiple legitimate intakes group under one canonical Lead and preserve ev
   assert.equal(result.groups[0].unreadCount, 2);
   assert.equal(result.unreadEventCount, 2);
   assert.equal(result.groups[0].latestSourceLabel, "Perfect Day Business Mentorship (PDBM)");
+  assert.equal(result.groups[0].latestProjection.relationshipShape, "RECURRING");
+  assert.equal(result.groups[0].latestProjection.primaryNeed, "CAPACITY");
   assert.deepEqual(result.groups[0].intakes.map((item) => item.eventId), [12, 10]);
 });
 

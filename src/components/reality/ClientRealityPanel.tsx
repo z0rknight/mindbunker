@@ -18,6 +18,14 @@ function timestamp(seconds: number | null) {
   }).format(new Date(seconds * 1000));
 }
 
+const AUTHORITY_LABELS = {
+  DIRECT_TIME: "Direct · tracked-time estimate",
+  EXTERNAL_PLATFORM: "External platform evidence",
+  FIXED_SCOPE: "Fixed scope",
+  MIXED: "Mixed · separated components required",
+  UNKNOWN: "Unknown",
+} as const;
+
 function Money({ amount, currency }: { amount: number | null; currency: string | null }) {
   return <>{amount === null || !currency ? "Unknown" : formatCurrency(amount, currency)}</>;
 }
@@ -38,7 +46,7 @@ export function ClientRealityPanel({ reality }: { reality: ClientReality }) {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400">Reality · evidence-backed</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400">Commercial · evidence-backed</p>
           <h2 className="mt-1 text-lg font-bold text-white">{reality.canonicalName}</h2>
           <p className="mt-1 text-xs text-zinc-500">
             {reality.activeRelationship ? "Active relationship" : "Inactive relationship"} · {reality.projectCount} active projects · {reality.productionOrderCount} open orders
@@ -51,31 +59,54 @@ export function ClientRealityPanel({ reality }: { reality: ClientReality }) {
 
       <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Fact label="Commercial model">
-          {commercial.model}{commercial.hourlyRate && currency ? ` · ${formatCurrency(commercial.hourlyRate, currency)}/h` : ""}
+          {commercial.model}{commercial.platform ? ` · ${commercial.platform}` : ""}
+          <span className="mt-0.5 block text-[10px] font-normal text-zinc-600">{AUTHORITY_LABELS[commercial.valueAuthority]}</span>
         </Fact>
-        <Fact label="Previous request">
-          <Money amount={commercial.previousRequest ? commercial.previousRequest.amountCents / 100 : null} currency={commercial.previousRequest?.currency ?? currency} />
-          <span className="mt-0.5 block text-[10px] font-normal text-zinc-600">{commercial.previousRequest ? timestamp(commercial.previousRequest.createdAt) : "No prior request"}</span>
+        <Fact label="Rate evidence">
+          {commercial.hourlyRate && currency ? `${formatCurrency(commercial.hourlyRate, currency)}/h` : "Scope-controlled or unknown"}
+          <span className="mt-0.5 block text-[10px] font-normal text-zinc-600">Hours never increase a fixed-price scope</span>
         </Fact>
-        <Fact label="Paid against current">
+        <Fact label="Last request">
+          <Money amount={commercial.lastRequest ? commercial.lastRequest.amountCents / 100 : null} currency={commercial.lastRequest?.currency ?? currency} />
+          <span className="mt-0.5 block text-[10px] font-normal text-zinc-600">{commercial.lastRequest ? `${commercial.lastRequest.status} · ${timestamp(commercial.lastRequest.createdAt)}` : "No request recorded"}</span>
+        </Fact>
+        <Fact label="Unpaid requested">
+          <Money amount={commercial.unpaidRequested} currency={currency} />
+          <span className="mt-0.5 block text-[10px] font-normal text-zinc-600">Confirmed ask · not revenue</span>
+        </Fact>
+        <Fact label="Paid since current request">
           <Money amount={commercial.paidAgainstCurrent} currency={currency} />
-          <span className="mt-0.5 block text-[10px] font-normal text-zinc-600">Payment request ≠ payment</span>
+          <span className="mt-0.5 block text-[10px] font-normal text-zinc-600">Candidate receipts · payment request ≠ payment</span>
         </Fact>
-        <Fact label="Current open total">
-          <Money amount={commercial.currentOpenTotal} currency={currency} />
-          <span className="mt-0.5 block text-[10px] font-normal text-zinc-600">Confirmed/requested only</span>
+        <Fact label="Expected new value · Level 1">
+          <Money amount={commercial.expectedNewValue} currency={currency} />
+          <span className="mt-0.5 block text-[10px] font-normal text-zinc-600">
+            {commercial.expectedValueState.replaceAll("_", " ")} · {hours(commercial.expectedMinutes)}
+          </span>
         </Fact>
-        <Fact label="Supported delta in request">
+        <Fact label="Supported inside current request">
           <Money amount={commercial.supportedDeltaInCurrent} currency={currency} />
-          <span className="mt-0.5 block text-[10px] font-normal text-zinc-600">{hours(commercial.includedMinutes)}</span>
+          <span className="mt-0.5 block text-[10px] font-normal text-zinc-600">Historical verification only · {hours(commercial.includedMinutes)}</span>
         </Fact>
-        <Fact label="Draft after request">
-          <Money amount={commercial.draftDeltaAfterCurrent} currency={currency} />
-          <span className="mt-0.5 block text-[10px] font-normal text-zinc-600">Internal only · {hours(commercial.draftMinutes)}</span>
+        <Fact label="Current commercial position">
+          <span>{commercial.unpaidRequested > 0 ? <><Money amount={commercial.unpaidRequested} currency={currency} /> requested</> : "No open request"}</span>
+          <span className="mt-0.5 block text-[10px] font-normal text-zinc-600">
+            {commercial.expectedNewValue === null ? "Expected value controlled elsewhere" : `+ ${formatCurrency(commercial.expectedNewValue, currency ?? "USD")} expected · never auto-added`}
+          </span>
         </Fact>
-        <Fact label="Evidence through">{timestamp(commercial.evidenceCutoff)}</Fact>
+        <Fact label="Evidence through">{commercial.externalEvidenceThrough ?? timestamp(commercial.evidenceCutoff)}</Fact>
         <Fact label="Delivery / review">{reality.deliveryCount} delivered · {reality.reviewCount} review events</Fact>
       </div>
+
+      <details className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/30">
+        <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold uppercase tracking-[0.14em] text-zinc-400">Expected value derivation</summary>
+        <div className="border-t border-zinc-800 px-3 py-3 text-xs leading-5 text-zinc-400">
+          <p>{commercial.expectedValueBasis}</p>
+          <p className="mt-2 text-zinc-600">
+            Level 2 request preparation: {commercial.requestDraftReadiness.replaceAll("_", " ")}. No payment request is created or sent automatically; the current request model is client-visible and has no safe draft state.
+          </p>
+        </div>
+      </details>
 
       {(reality.registeredMinutes !== null || reality.dfyMinutes > 0 || reality.weekly.length > 0) && (
         <details className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900/40" open>

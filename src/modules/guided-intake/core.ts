@@ -3,7 +3,8 @@ import type { ReferralProgram } from "../referrals/core.ts";
 
 export const GUIDED_INTAKE_EVENT_TYPE = "guided_intake.submitted";
 export const GUIDED_INTAKE_PAYLOAD_SCHEMA_VERSION = 1 as const;
-export const GUIDED_INTAKE_MODEL_VERSION = "rmedia-guided-intake-v0";
+export const GUIDED_INTAKE_MODEL_VERSION = "rmedia-guided-intake-v1";
+export const LEGACY_GUIDED_INTAKE_MODEL_VERSION = "rmedia-guided-intake-v0";
 
 export const GUIDED_STARTING_PATHS = [
   "REPEATABLE_PRODUCTION",
@@ -67,12 +68,23 @@ export type GuidedDerivedDimensions = {
   uncertaintyLevel: "low" | "medium" | "high";
 };
 
+export type LeadIntentDimensions = {
+  relationshipShape: "RECURRING" | "PROJECT" | "EXPLORATORY" | "UNCLEAR";
+  contentShape: "SHORT_FORM" | "LONG_FORM" | "MIXED" | "UNCLEAR";
+  primaryNeed: "CAPACITY" | "CONSISTENCY" | "CREATIVE_DEVELOPMENT" | "TECHNICAL_SOLUTION" | "DEFINED_DELIVERY" | "UNCLEAR";
+  priority: "SPEED" | "CONSISTENCY" | "FLEXIBILITY" | "NOT_ESTABLISHED";
+  formatMaturity: "DEFINED" | "DEVELOPING" | "DISCOVERY" | "UNCLEAR";
+  likelyPath: GuidedStartingPath;
+  evidence: string[];
+};
+
 export type GuidedIntakePayloadV1 = {
   schemaVersion: 1;
-  modelVersion: typeof GUIDED_INTAKE_MODEL_VERSION;
+  modelVersion: typeof GUIDED_INTAKE_MODEL_VERSION | typeof LEGACY_GUIDED_INTAKE_MODEL_VERSION;
   answers: GuidedIntakeAnswers;
   derivedDimensions: GuidedDerivedDimensions;
   recommendedStartingPath: GuidedStartingPath;
+  leadIntent?: LeadIntentDimensions;
   referralContext: { key: string; source: string } | null;
   freeformContext: string | null;
   submissionContext: { channel: "start" };
@@ -275,6 +287,81 @@ export function deriveGuidedIntake(answers: GuidedIntakeAnswers): {
   };
 }
 
+export function deriveLeadIntent(answers: GuidedIntakeAnswers): LeadIntentDimensions {
+  const guided = deriveGuidedIntake(answers);
+  const evidence: string[] = [];
+  const technicalSignals = answers.technicalComplexityFlags.filter(
+    (item) => item !== "none" && item !== "unsure",
+  );
+
+  let relationshipShape: LeadIntentDimensions["relationshipShape"] = "UNCLEAR";
+  if (answers.recurrence === "recurring" || answers.deliverableCountBand === "ongoing") {
+    relationshipShape = "RECURRING";
+    evidence.push("Recurring cadence or ongoing volume selected.");
+  } else if (
+    answers.creativeFlexibility === "high" ||
+    answers.formatMaturity === "discover"
+  ) {
+    relationshipShape = "EXPLORATORY";
+    evidence.push("The format or creative direction still needs discovery.");
+  } else if (
+    answers.recurrence === "one_off" ||
+    answers.recurrence === "campaign" ||
+    ["one", "small_batch", "batch_5_10"].includes(answers.deliverableCountBand)
+  ) {
+    relationshipShape = "PROJECT";
+    evidence.push("A bounded piece, batch, or campaign was selected.");
+  }
+
+  const contentShape: LeadIntentDimensions["contentShape"] =
+    answers.contentType === "short" ? "SHORT_FORM"
+      : answers.contentType === "long" ? "LONG_FORM"
+        : answers.contentType === "both" ? "MIXED"
+          : "UNCLEAR";
+
+  let primaryNeed: LeadIntentDimensions["primaryNeed"] = "UNCLEAR";
+  if (technicalSignals.length > 0) {
+    primaryNeed = "TECHNICAL_SOLUTION";
+    evidence.push(`Specialized production signal: ${technicalSignals.join(", ")}.`);
+  } else if (answers.formatMaturity === "discover" || answers.creativeFlexibility === "high") {
+    primaryNeed = "CREATIVE_DEVELOPMENT";
+  } else if (relationshipShape === "RECURRING" && answers.formatMaturity === "established") {
+    primaryNeed = "CAPACITY";
+  } else if (
+    answers.recurrence === "campaign" ||
+    ["small_batch", "batch_5_10"].includes(answers.deliverableCountBand)
+  ) {
+    primaryNeed = "CONSISTENCY";
+  } else if (relationshipShape === "PROJECT") {
+    primaryNeed = "DEFINED_DELIVERY";
+  }
+
+  const priority: LeadIntentDimensions["priority"] =
+    answers.deadlineType === "urgent" ? "SPEED"
+      : answers.deadlineType === "cadence" || relationshipShape === "RECURRING" ? "CONSISTENCY"
+        : answers.creativeFlexibility === "high" || answers.creativeFlexibility === "some" ? "FLEXIBILITY"
+          : "NOT_ESTABLISHED";
+  if (priority === "SPEED") evidence.push("Urgent feasibility review selected.");
+  if (priority === "CONSISTENCY") evidence.push("Ongoing cadence makes consistency the supported priority signal.");
+  if (priority === "FLEXIBILITY") evidence.push("The requested working style preserves room to adjust.");
+
+  const formatMaturity: LeadIntentDimensions["formatMaturity"] =
+    answers.formatMaturity === "established" ? "DEFINED"
+      : answers.formatMaturity === "references" ? "DEVELOPING"
+        : answers.formatMaturity === "discover" ? "DISCOVERY"
+          : "UNCLEAR";
+
+  return {
+    relationshipShape,
+    contentShape,
+    primaryNeed,
+    priority,
+    formatMaturity,
+    likelyPath: guided.recommendedStartingPath,
+    evidence,
+  };
+}
+
 export function buildGuidedIntakePayload(
   data: ValidatedGuidedIntakeSubmission,
   referral: ReferralProgram | null,
@@ -286,6 +373,7 @@ export function buildGuidedIntakePayload(
     answers: data.answers,
     derivedDimensions: derived.derivedDimensions,
     recommendedStartingPath: derived.recommendedStartingPath,
+    leadIntent: deriveLeadIntent(data.answers),
     referralContext: referral ? { key: referral.key, source: referral.source } : null,
     freeformContext: data.freeformContext,
     submissionContext: { channel: "start" },
@@ -293,11 +381,21 @@ export function buildGuidedIntakePayload(
 }
 
 export function isGuidedIntakePayload(value: unknown): value is GuidedIntakePayloadV1 {
-  if (!isRecord(value) || value.schemaVersion !== 1 || value.modelVersion !== GUIDED_INTAKE_MODEL_VERSION) return false;
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== 1 ||
+    ![GUIDED_INTAKE_MODEL_VERSION, LEGACY_GUIDED_INTAKE_MODEL_VERSION].includes(String(value.modelVersion))
+  ) return false;
   if (!GUIDED_STARTING_PATHS.includes(value.recommendedStartingPath as GuidedStartingPath)) return false;
   if (!isRecord(value.answers) || !isRecord(value.derivedDimensions)) return false;
   if (!isRecord(value.submissionContext) || value.submissionContext.channel !== "start") return false;
-  return true;
+  if (value.modelVersion === GUIDED_INTAKE_MODEL_VERSION && !isRecord(value.leadIntent)) return false;
+  return validateGuidedIntakeSubmission({
+    answers: value.answers,
+    idempotencyKey: "historical-intake",
+    ref: null,
+    company_website: "",
+  }).success;
 }
 
 const VOLUME_LABELS: Record<GuidedIntakeAnswers["deliverableCountBand"], string> = {
@@ -341,11 +439,21 @@ export type GuidedIntakeProjection = {
   definition: string;
   timing: string;
   startingPath: string;
+  relationshipShape: string;
+  contentShape: string;
+  primaryNeed: string;
+  priority: string;
+  formatMaturity: string;
+  leadIntentEvidence: string[];
   referralSource: string | null;
   freeformContext: string | null;
 };
 
 export function projectGuidedIntakePayload(payload: GuidedIntakePayloadV1): GuidedIntakeProjection {
+  // Recompute the read model from immutable raw answers. Historical v0
+  // events therefore gain the same readable intent projection without a
+  // rewrite, while new v1 events also persist the server-derived snapshot.
+  const leadIntent = deriveLeadIntent(payload.answers);
   return {
     whatTheyWant: payload.answers.contentType === "short" ? "Short clips" : payload.answers.contentType === "long" ? "Long-form video" : payload.answers.contentType === "both" ? "Long-form and short clips" : "Needs help choosing a format",
     volume: VOLUME_LABELS[payload.answers.deliverableCountBand],
@@ -354,6 +462,12 @@ export function projectGuidedIntakePayload(payload: GuidedIntakePayloadV1): Guid
     definition: payload.answers.creativeFlexibility === "formula" ? "Clear, repeatable direction" : payload.answers.creativeFlexibility === "high" ? "Exploration is part of the work" : payload.answers.creativeFlexibility === "some" ? "Direction with room to adjust" : "Working style still open",
     timing: payload.answers.deadlineType === "specific" ? "Specific date" : payload.answers.deadlineType === "window" ? "Flexible window" : payload.answers.deadlineType === "cadence" ? "Ongoing cadence" : payload.answers.deadlineType === "urgent" ? "Urgent — feasibility review needed" : "Timing not decided",
     startingPath: GUIDED_STARTING_PATH_LABELS[payload.recommendedStartingPath],
+    relationshipShape: leadIntent.relationshipShape.replaceAll("_", " "),
+    contentShape: leadIntent.contentShape.replaceAll("_", " "),
+    primaryNeed: leadIntent.primaryNeed.replaceAll("_", " "),
+    priority: leadIntent.priority.replaceAll("_", " "),
+    formatMaturity: leadIntent.formatMaturity.replaceAll("_", " "),
+    leadIntentEvidence: leadIntent.evidence,
     referralSource: payload.referralContext?.key === "pdbm"
       ? "Perfect Day Business Mentorship (PDBM)"
       : payload.referralContext?.source ?? null,

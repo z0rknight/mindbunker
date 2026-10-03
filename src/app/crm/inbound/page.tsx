@@ -70,6 +70,10 @@ export default async function SystemInboundPage() {
                       <div><dt className="text-xs text-zinc-600">Source</dt><dd className="mt-1 text-zinc-300">{group.latestSourceLabel}</dd></div>
                       <div><dt className="text-xs text-zinc-600">What they want</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.whatTheyWant} · {group.latestProjection.volume}</dd></div>
                       <div><dt className="text-xs text-zinc-600">Starting path</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.startingPath}</dd></div>
+                      <div><dt className="text-xs text-zinc-600">Relationship</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.relationshipShape}</dd></div>
+                      <div><dt className="text-xs text-zinc-600">Primary need</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.primaryNeed}</dd></div>
+                      <div><dt className="text-xs text-zinc-600">Priority</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.priority}</dd></div>
+                      <div><dt className="text-xs text-zinc-600">Format maturity</dt><dd className="mt-1 text-zinc-300">{group.latestProjection.formatMaturity}</dd></div>
                     </dl>
                     {group.intakeCount > 1 && (
                       <details className="mt-4 border-t border-zinc-800 pt-3">

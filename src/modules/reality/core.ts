@@ -7,6 +7,14 @@ export type ContractFact = {
   hourlyRate: number | null;
   currency: string;
   status: "ACTIVE" | "PAUSED" | "ENDED";
+  platform?: string | null;
+};
+
+export type BillingEvidenceFact = {
+  periodEnd: string;
+  grossAmount: number;
+  currency: string;
+  earningDate: string | null;
 };
 
 export type PaymentRequestFact = {
@@ -24,15 +32,25 @@ export type CommercialPosition = {
   model: CommercialModel;
   currency: string | null;
   hourlyRate: number | null;
+  platform: string | null;
+  valueAuthority: "DIRECT_TIME" | "EXTERNAL_PLATFORM" | "FIXED_SCOPE" | "MIXED" | "UNKNOWN";
+  lastRequest: PaymentRequestFact | null;
   previousRequest: PaymentRequestFact | null;
   currentRequest: PaymentRequestFact | null;
   paidAgainstCurrent: number;
+  unpaidRequested: number;
   supportedDeltaInCurrent: number | null;
   draftDeltaAfterCurrent: number | null;
+  expectedNewValue: number | null;
+  expectedMinutes: number | null;
+  expectedValueState: "ESTIMATED" | "EXTERNAL_SOURCE" | "FIXED_SCOPE" | "MIXED_MODEL" | "INSUFFICIENT_EVIDENCE";
+  expectedValueBasis: string;
+  requestDraftReadiness: "CAN_PREPARE" | "NOTHING_NEW" | "UNSUPPORTED";
   currentOpenTotal: number;
   includedMinutes: number | null;
   draftMinutes: number | null;
   evidenceCutoff: number | null;
+  externalEvidenceThrough: string | null;
   readiness: "REQUESTED" | "READY_TO_REQUEST" | "PARTIAL" | "UNKNOWN";
 };
 
@@ -86,15 +104,21 @@ function completeMinutesBetween(
   };
 }
 
+function isExternallyMeteredPlatform(platform: string | null | undefined) {
+  return platform?.trim().toLowerCase() === "upwork";
+}
+
 export function deriveCommercialPosition(input: {
   contracts: readonly ContractFact[];
   requests: readonly PaymentRequestFact[];
   sessions: readonly SessionFact[];
+  billingEvidence?: readonly BillingEvidenceFact[];
   paidTransactions: readonly { amount: number; currency: string; occurredAt: number }[];
   nowSeconds: number;
 }): CommercialPosition {
   const model = classifyCommercialModel(input.contracts);
   const sortedRequests = [...input.requests].sort((a, b) => a.createdAt - b.createdAt || a.id - b.id);
+  const lastRequest = sortedRequests.at(-1) ?? null;
   const currentRequest = [...sortedRequests].reverse().find((request) => request.status === "OPEN") ?? null;
   const previousRequest = currentRequest
     ? [...sortedRequests].reverse().find((request) => request.createdAt < currentRequest.createdAt) ?? null
@@ -102,6 +126,9 @@ export function deriveCommercialPosition(input: {
   const activeHourly = input.contracts.find(
     (contract) => contract.status === "ACTIVE" && contract.billingType === "HOURLY",
   );
+  const activeContract = input.contracts.find((contract) => contract.status === "ACTIVE") ?? null;
+  const platform = activeContract?.platform ?? null;
+  const externalPlatform = model === "HOURLY" && isExternallyMeteredPlatform(platform);
   const currency = currentRequest?.currency ?? activeHourly?.currency ?? input.contracts[0]?.currency ?? null;
   const paidAgainstCurrent = currentRequest
     ? roundMoney(input.paidTransactions
@@ -114,17 +141,57 @@ export function deriveCommercialPosition(input: {
   let includedMinutes: number | null = null;
   let draftMinutes: number | null = null;
   let evidenceCutoff: number | null = null;
+  let externalEvidenceThrough: string | null = null;
+  let valueAuthority: CommercialPosition["valueAuthority"] = "UNKNOWN";
+  let expectedValueState: CommercialPosition["expectedValueState"] = "INSUFFICIENT_EVIDENCE";
+  let expectedValueBasis = "No supported commercial basis.";
 
-  if (model === "HOURLY" && activeHourly?.hourlyRate != null && (currentRequest !== null || previousRequest !== null)) {
+  if (externalPlatform) {
+    valueAuthority = "EXTERNAL_PLATFORM";
+    expectedValueState = "EXTERNAL_SOURCE";
+    expectedValueBasis = `${platform} billing evidence controls commercial value; tracked time is operational context only.`;
+    externalEvidenceThrough = [...(input.billingEvidence ?? [])]
+      .map((row) => row.periodEnd)
+      .sort()
+      .at(-1) ?? null;
+  } else if (model === "HOURLY" && activeHourly?.hourlyRate != null) {
+    valueAuthority = "DIRECT_TIME";
+    expectedValueState = "ESTIMATED";
+    expectedValueBasis = "Completed tracked minutes after the latest effective payment-request cutoff, multiplied by the active hourly rate.";
     const previousCutoff = previousRequest?.createdAt ?? 0;
-    const currentCutoff = currentRequest?.createdAt ?? input.nowSeconds;
+    const latestEffectiveRequest = [...sortedRequests]
+      .reverse()
+      .find((request) => request.status !== "CANCELLED") ?? null;
+    const currentCutoff = currentRequest?.createdAt ?? latestEffectiveRequest?.createdAt ?? 0;
     const included = completeMinutesBetween(input.sessions, previousCutoff, currentCutoff);
-    const draft = completeMinutesBetween(input.sessions, currentCutoff, input.nowSeconds);
-    includedMinutes = included.minutes;
-    draftMinutes = draft.minutes;
-    supportedDeltaInCurrent = roundMoney((included.minutes / 60) * activeHourly.hourlyRate);
-    draftDeltaAfterCurrent = roundMoney((draft.minutes / 60) * activeHourly.hourlyRate);
-    evidenceCutoff = draft.cutoff ?? included.cutoff ?? currentCutoff;
+    const expected = completeMinutesBetween(input.sessions, currentCutoff, input.nowSeconds);
+    includedMinutes = currentRequest && previousRequest ? included.minutes : null;
+    draftMinutes = expected.minutes;
+    supportedDeltaInCurrent = currentRequest && previousRequest
+      ? roundMoney((included.minutes / 60) * activeHourly.hourlyRate)
+      : null;
+    draftDeltaAfterCurrent = roundMoney((expected.minutes / 60) * activeHourly.hourlyRate);
+    evidenceCutoff = expected.cutoff ?? currentRequest?.createdAt ?? null;
+  } else if (model === "FIXED") {
+    valueAuthority = "FIXED_SCOPE";
+    expectedValueState = "FIXED_SCOPE";
+    expectedValueBasis = "Fixed-price scope controls value; tracked time never increases the amount owed.";
+  } else if (model === "MIXED") {
+    valueAuthority = "MIXED";
+    expectedValueState = "MIXED_MODEL";
+    expectedValueBasis = "Hourly and fixed components must remain separate before an estimate is supported.";
+  }
+
+  /*
+   * Compatibility aliases: the first reality patch called post-request
+   * expected value a "draft delta". Keep the fields stable for existing
+   * readers while exposing the explicit commercial vocabulary above.
+   */
+  if (valueAuthority !== "DIRECT_TIME") {
+    includedMinutes = null;
+    draftMinutes = null;
+    supportedDeltaInCurrent = null;
+    draftDeltaAfterCurrent = null;
   }
 
   const currentOpenTotal = currentRequest
@@ -132,25 +199,40 @@ export function deriveCommercialPosition(input: {
     : 0;
   const readiness = currentRequest
     ? "REQUESTED"
-    : model === "HOURLY" && (draftDeltaAfterCurrent ?? supportedDeltaInCurrent ?? 0) > 0
+    : valueAuthority === "DIRECT_TIME" && (draftDeltaAfterCurrent ?? 0) > 0
       ? "READY_TO_REQUEST"
-      : model === "FIXED" || model === "MIXED"
+      : valueAuthority === "FIXED_SCOPE" || valueAuthority === "MIXED" || valueAuthority === "EXTERNAL_PLATFORM"
         ? "PARTIAL"
         : "UNKNOWN";
+  const requestDraftReadiness = valueAuthority !== "DIRECT_TIME"
+    ? "UNSUPPORTED"
+    : (draftDeltaAfterCurrent ?? 0) > 0
+      ? "CAN_PREPARE"
+      : "NOTHING_NEW";
 
   return {
     model,
     currency,
     hourlyRate: activeHourly?.hourlyRate ?? null,
+    platform,
+    valueAuthority,
+    lastRequest,
     previousRequest,
     currentRequest,
     paidAgainstCurrent,
+    unpaidRequested: currentOpenTotal,
     supportedDeltaInCurrent,
     draftDeltaAfterCurrent,
+    expectedNewValue: draftDeltaAfterCurrent,
+    expectedMinutes: draftMinutes,
+    expectedValueState,
+    expectedValueBasis,
+    requestDraftReadiness,
     currentOpenTotal,
     includedMinutes,
     draftMinutes,
     evidenceCutoff,
+    externalEvidenceThrough,
     readiness,
   };
 }
