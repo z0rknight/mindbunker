@@ -3,23 +3,24 @@
 import { useState } from "react";
 import { PixelIcon } from "@/components/ui/PixelVisuals";
 
-export function ProjectCover({ url, projectName, clientName }: {
+export function ProjectCover({ url, projectName, clientName, compact = false }: {
   url: string | null;
   projectName: string;
   clientName: string;
+  compact?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const showImage = Boolean(url) && !failed;
 
   return (
-    <div className="relative aspect-[16/9] overflow-hidden bg-gradient-to-br from-cyan-950 via-zinc-900 to-violet-950">
+    <div className={`relative overflow-hidden bg-gradient-to-br from-cyan-950 via-zinc-900 to-violet-950 ${compact ? "h-24" : "aspect-[16/9]"}`}>
       {!showImage && (
-        <div className="absolute inset-0 flex flex-col justify-between p-4" aria-hidden="true">
+        <div className={`absolute inset-0 flex flex-col justify-between ${compact ? "p-3" : "p-4"}`} aria-hidden="true">
           <span className="flex items-center gap-2 font-mono text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/70">
             <PixelIcon name="project" className="h-3.5 w-3.5" /> RMEDIA / PROJECT
           </span>
           <div>
-            <p className="line-clamp-2 text-lg font-black leading-tight text-white/90">{projectName}</p>
+            <p className={`${compact ? "line-clamp-1 text-sm" : "line-clamp-2 text-lg"} font-black leading-tight text-white/90`}>{projectName}</p>
             <p className="mt-1 truncate text-xs font-bold uppercase tracking-wide text-zinc-500">{clientName}</p>
           </div>
         </div>

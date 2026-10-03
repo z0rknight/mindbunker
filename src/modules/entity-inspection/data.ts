@@ -259,8 +259,17 @@ async function projectInspection(ref: InspectableEntity): Promise<EntityInspecti
     inactive: project.status === "archived" || client.archivalState === "GELADEIRA",
     client: client.identity,
     status: project.status,
+    condition: project.openBlockerCount > 0
+      ? "BLOCKED"
+      : project.status === "review"
+        ? "WAITING"
+        : project.status === "delivered" || project.status === "archived"
+          ? "CLOSED"
+          : "CLEAR",
+    workClass: project.workClass,
     deadline: project.deadline,
     progress: { done: project.doneVideos, total: project.totalVideos, percent: progress },
+    explicitBatchCount: project.explicitBatchCount,
     activeDeliverables: deliverables.map((video) => ({
       id: video.id,
       title: video.title ?? `Video ${video.date}`,

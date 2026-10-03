@@ -188,7 +188,11 @@ function ProjectBody({ inspection }: { inspection: Extract<EntityInspection, { k
     <div className="space-y-5">
       <dl className="grid grid-cols-2 gap-4">
         <Fact label="Client"><ClientIdentity client={inspection.client} /></Fact>
+        <Fact label="Work class">{inspection.workClass}</Fact>
+        <Fact label="Lifecycle">{inspection.status}</Fact>
+        <Fact label="Condition">{inspection.condition}</Fact>
         <Fact label="Progress">{inspection.progress.done}/{inspection.progress.total} · {inspection.progress.percent}%</Fact>
+        <Fact label="Explicit batches">{inspection.explicitBatchCount}</Fact>
         <Fact label="Deadline">{inspection.deadline ? formatDate(inspection.deadline) : "Not set"}</Fact>
         <Fact label="Recorded time">{formatClosedDuration(inspection.recordedSeconds)}</Fact>
       </dl>

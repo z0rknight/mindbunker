@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   classifyUnassignedDelivery,
   filterProjectsBySearch,
+  filterProjectsByView,
   getProjectException,
   getProjectGroup,
   getProjectNextAction,
@@ -11,6 +12,7 @@ import {
   groupProjectsByClient,
   groupProjectsForOverview,
   isPositiveId,
+  isProjectCurrent,
   isProjectOverdue,
   naturalCompare,
   resolveCurrentWorkVideo,
@@ -98,18 +100,25 @@ function project(overrides = {}) {
     id: 1,
     clientId: 1,
     clientName: "Fictitious Client",
+    canonicalClientId: 1,
+    canonicalClientName: "Fictitious Client",
+    workMode: "UNCLASSIFIED",
+    workClass: "CLIENT",
     clientDefaultCoverUrl: null,
     clientAvatarUrl: null,
     name: "Fictitious Project",
     status: "active",
     deadline: null,
     notes: null,
+    createdAt: new Date("2026-08-01T12:00:00Z"),
     updatedAt: new Date("2026-08-20T12:00:00Z"),
     totalVideos: 5,
     doneVideos: 1,
     inFlightVideos: 3,
     plannedVideos: 1,
     openBlockerCount: 0,
+    explicitBatchCount: 0,
+    deliverableTitles: [],
     ...overrides,
   };
 }
@@ -335,8 +344,8 @@ test("getProjectException: overdue outranks blocked outranks planned; normal act
 test("groupProjectsByClient: client groups with a real exception sort before groups without one", () => {
   const groups = groupProjectsByClient(
     [
-      project({ id: 1, clientId: 1, clientName: "Alice", status: "active" }),
-      project({ id: 2, clientId: 2, clientName: "Zeke", deadline: "2026-01-01", status: "active" }),
+      project({ id: 1, clientId: 1, clientName: "Alice", canonicalClientId: 1, canonicalClientName: "Alice", status: "active" }),
+      project({ id: 2, clientId: 2, clientName: "Zeke", canonicalClientId: 2, canonicalClientName: "Zeke", deadline: "2026-01-01", status: "active" }),
     ],
     "2026-09-08",
   );
@@ -368,6 +377,16 @@ test("groupProjectsByClient: no project is duplicated or dropped across groups",
   assert.equal(total, input.length);
 });
 
+test("groupProjectsByClient resolves operational aliases into one canonical relationship", () => {
+  const groups = groupProjectsByClient([
+    project({ id: 1, clientId: 2, clientName: "Taryn Dubreuil", canonicalClientId: 2, canonicalClientName: "Taryn Dubreuil", workMode: "DIRECT" }),
+    project({ id: 2, clientId: 12, clientName: "Taryn DFY", canonicalClientId: 2, canonicalClientName: "Taryn Dubreuil", workMode: "DFY" }),
+  ], "2026-10-03");
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].clientId, 2);
+  assert.deepEqual(groups[0].projects.map((item) => item.id).sort(), [1, 2]);
+});
+
 test("filterProjectsBySearch matches project name or client name, case-insensitively", () => {
   const input = [
     project({ id: 1, name: "Meta Ads", clientName: "Dave" }),
@@ -377,4 +396,36 @@ test("filterProjectsBySearch matches project name or client name, case-insensiti
   assert.deepEqual(filterProjectsBySearch(input, "TARYN").map((p) => p.id), [2]);
   assert.deepEqual(filterProjectsBySearch(input, "").map((p) => p.id), [1, 2]);
   assert.deepEqual(filterProjectsBySearch(input, "nonexistent"), []);
+});
+
+test("search finds a Project through canonical Client and contained Deliverable", () => {
+  const input = [project({
+    clientName: "Taryn DFY",
+    canonicalClientName: "Taryn Dubreuil",
+    deliverableTitles: ["Bonnie Front Door Cut 01"],
+  })];
+  assert.equal(filterProjectsBySearch(input, "Dubreuil").length, 1);
+  assert.equal(filterProjectsBySearch(input, "Front Door").length, 1);
+});
+
+test("Current membership requires real present context and excludes completed history", () => {
+  assert.equal(isProjectCurrent(project({ totalVideos: 4, doneVideos: 2 })), true);
+  assert.equal(isProjectCurrent(project({ status: "review", totalVideos: 2, doneVideos: 2 })), true);
+  assert.equal(isProjectCurrent(project({ status: "active", totalVideos: 0, doneVideos: 0, deadline: null })), false);
+  assert.equal(isProjectCurrent(project({ status: "delivered" })), false);
+});
+
+test("semantic views keep lifecycle, condition, and work class separate", () => {
+  const rows = [
+    project({ id: 1, status: "active", totalVideos: 3, doneVideos: 1 }),
+    project({ id: 2, status: "review", totalVideos: 1, doneVideos: 1 }),
+    project({ id: 3, status: "delivered" }),
+    project({ id: 4, workClass: "INTERNAL", totalVideos: 1, doneVideos: 0 }),
+  ];
+  assert.deepEqual(filterProjectsByView(rows, "current").map((item) => item.id), [1, 2, 4]);
+  assert.deepEqual(filterProjectsByView(rows, "client").map((item) => item.id), [1, 2, 4]);
+  assert.deepEqual(filterProjectsByView(rows, "waiting").map((item) => item.id), [2]);
+  assert.deepEqual(filterProjectsByView(rows, "completed").map((item) => item.id), [3]);
+  assert.deepEqual(filterProjectsByView(rows, "internal").map((item) => item.id), [4]);
+  assert.deepEqual(filterProjectsByView(rows, "all").map((item) => item.id), [1, 2, 3, 4]);
 });

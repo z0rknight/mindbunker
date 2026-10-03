@@ -9,12 +9,19 @@ import { validateCoverUrl } from "../productivity/core.ts";
 
 export type ProjectOverviewItem = {
   id: number;
+  // Operational ownership stays intact for auditability. Canonical identity
+  // is a read projection used for portfolio grouping and filters.
   clientId: number;
   clientName: string;
+  canonicalClientId: number;
+  canonicalClientName: string;
+  workMode: "DIRECT" | "DFY" | "UNCLASSIFIED";
+  workClass: "CLIENT" | "INTERNAL";
   name: string;
   status: ProjectStatus;
   deadline: string | null;
   notes: string | null;
+  createdAt: Date | null;
   updatedAt: Date | null;
   totalVideos: number;
   doneVideos: number;
@@ -33,6 +40,10 @@ export type ProjectOverviewItem = {
   // project-level primitive; blockers stay video-scoped, this just rolls
   // them up for display).
   openBlockerCount: number;
+  // Explicit only: a production order wins; otherwise a stored batch label
+  // is counted. Project/video names never create a batch.
+  explicitBatchCount: number;
+  deliverableTitles: string[];
 };
 
 export type ProjectOverviewGroups = Record<
@@ -165,6 +176,48 @@ const EXCEPTION_RANK: Record<ProjectExceptionKind | "NONE", number> = {
 
 export type ProjectSortMode = "attention" | "recent";
 
+export type ProjectViewPreset =
+  | "current"
+  | "client"
+  | "waiting"
+  | "completed"
+  | "internal"
+  | "all";
+
+export type ProjectLayout = "cards" | "rows";
+
+export function isProjectViewPreset(value: unknown): value is ProjectViewPreset {
+  return ["current", "client", "waiting", "completed", "internal", "all"].includes(String(value));
+}
+
+export function isProjectCurrent(
+  project: Pick<ProjectOverviewItem, "status" | "deadline" | "totalVideos" | "doneVideos" | "openBlockerCount">,
+): boolean {
+  if (getProjectGroup(project.status) === "completed") return false;
+  const openDeliverables = Math.max(0, project.totalVideos - project.doneVideos);
+  return (
+    openDeliverables > 0 ||
+    project.status === "review" ||
+    project.deadline !== null ||
+    project.openBlockerCount > 0
+  );
+}
+
+export function filterProjectsByView(
+  projects: readonly ProjectOverviewItem[],
+  view: ProjectViewPreset,
+): ProjectOverviewItem[] {
+  if (view === "completed") return projects.filter((project) => getProjectGroup(project.status) === "completed");
+  if (view === "internal") {
+    return projects.filter((project) => project.workClass === "INTERNAL" && getProjectGroup(project.status) !== "completed");
+  }
+  if (view === "waiting") return projects.filter((project) => project.status === "review");
+  if (view === "all") return [...projects];
+  // By Client is a relationship-oriented lens over the same relevant
+  // working set as Current, not an excuse to reintroduce archived history.
+  return projects.filter(isProjectCurrent);
+}
+
 export type UnassignedDeliveryClassification =
   | "SYNTHETIC_QA"
   | "UNASSIGNED_WITH_EVIDENCE"
@@ -206,13 +259,15 @@ export function groupProjectsByClient(
 ): ClientProjectGroup[] {
   const byClient = new Map<number, ClientProjectGroup>();
   for (const project of projectList) {
-    const existing = byClient.get(project.clientId);
+    const groupClientId = project.canonicalClientId ?? project.clientId;
+    const groupClientName = project.canonicalClientName ?? project.clientName;
+    const existing = byClient.get(groupClientId);
     if (existing) {
       existing.projects.push(project);
     } else {
-      byClient.set(project.clientId, {
-        clientId: project.clientId,
-        clientName: project.clientName,
+      byClient.set(groupClientId, {
+        clientId: groupClientId,
+        clientName: groupClientName,
         clientDefaultCoverUrl: project.clientDefaultCoverUrl,
         clientAvatarUrl: project.clientAvatarUrl,
         hasException: false,
@@ -252,7 +307,9 @@ export function filterProjectsBySearch(
   return projectList.filter(
     (project) =>
       project.name.toLowerCase().includes(needle) ||
-      project.clientName.toLowerCase().includes(needle),
+      project.clientName.toLowerCase().includes(needle) ||
+      (project.canonicalClientName ?? "").toLowerCase().includes(needle) ||
+      (project.deliverableTitles ?? []).some((title) => title.toLowerCase().includes(needle)),
   );
 }
 

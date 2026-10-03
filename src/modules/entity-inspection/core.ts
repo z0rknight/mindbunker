@@ -46,8 +46,11 @@ export type ProjectInspection = InspectionBase & {
   kind: "project";
   client: InspectionClientIdentity;
   status: string;
+  condition: "BLOCKED" | "WAITING" | "CLEAR" | "CLOSED";
+  workClass: "CLIENT" | "INTERNAL";
   deadline: string | null;
   progress: { done: number; total: number; percent: number };
+  explicitBatchCount: number;
   activeDeliverables: Array<{ id: number; title: string; status: string }>;
   nextMilestone: string | null;
   blocker: string | null;

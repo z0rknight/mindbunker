@@ -10,6 +10,17 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Wave 4 — Projects Structural Convergence (2026-10-03, local candidate)**
+  - [x] Reframed Projects as the structural owner — Client → Project → explicit Batch when present → Deliverable — while War Room remains the sole execution surface and full Project pages remain the management surface
+  - [x] Added URL-state semantic views (Current default, By Client, Waiting, Completed, Internal, All) plus Cards/Rows density; Recurring is deliberately deferred because no canonical Project recurrence primitive exists
+  - [x] Canonicalized portfolio grouping through the Wave 0 identity registry, preserving Taryn DIRECT/DFY work mode while presenting one Taryn relationship; project search now matches canonical Client and contained Deliverable titles
+  - [x] Derived Client/Internal work class from exact canonical ownership, kept lifecycle separate from condition, fixed DONE progress to count all deliverable kinds, and counted batches only from explicit production order / stored batch-label evidence
+  - [x] Evolved Unassigned Client Work into a Data Integrity inbox composed with the Wave 0 scanner; no Project, Batch, cycle, estimate, commercial, or activity fact was fabricated
+  - [x] Enriched the existing Global Project Drawer with work class, lifecycle, condition and explicit batch count; Project → Deliverable drawer switching and Open full page remain intact
+  - [x] Authenticated local QA passed Current, By Client, Cards, Rows, deliverable search, empty Completed/Internal states, structural inbox, Project Drawer, Deliverable Drawer, desktop and 390×844 mobile; Current showed 4 projects / 34 open deliverables / 5 structural issues in the local evidence set
+  - [x] 1559/1559 tests, typecheck/build, diff check and lint with 0 errors / 3 pre-existing warnings pass; no production deploy, production D1 write, schema change, or new migration
+  - [ ] Repository migration head remains 0053, but this pre-existing local dev D1 is only applied through 0052; Wave 4 did not mutate it
+
 - [x] **Wave 3 — War Room Consolidation / Productivity absorption (2026-10-03, local candidate)**
   - [x] Made War Room the sole primary execution surface: dominant canonical IDLE / ACTIVE / BLOCKED objective, visible WHY NOW, compact live context, actionable signals, bounded NOW / NEXT / LATER queue, collapsed daily ledger, and collapsed historical intelligence
   - [x] Retired `/productivity` as a page while preserving compatibility: the old root redirects to `/war-room`, old video deep links redirect to `/war-room/workspace`, and Plan Video / project context survives the transition

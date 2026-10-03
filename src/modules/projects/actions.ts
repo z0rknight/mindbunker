@@ -5,6 +5,11 @@ import "server-only";
 import { getAuthenticatedDb } from "@/db";
 import { blockers, clients, crmEvents, projects, videoLogs } from "@/db/schema";
 import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
+import {
+  canonicalClientId,
+  clientWorkMode,
+  isInternalClientName,
+} from "@/lib/client-identity";
 import { getLastActiveByProject } from "../work-sessions/data";
 import { revalidatePath } from "next/cache";
 import {
@@ -148,7 +153,7 @@ export async function getProjectsForClient(clientId: number) {
 
 export async function getProjectsOverview() {
   const db = await getAuthenticatedDb();
-  const [rows, lastActiveByProject] = await Promise.all([
+  const [rows, lastActiveByProject, clientIdentityRows] = await Promise.all([
     db
     .select({
       id: projects.id,
@@ -161,6 +166,7 @@ export async function getProjectsOverview() {
       deadline: projects.deadline,
       notes: projects.notes,
       coverUrl: projects.coverUrl,
+      createdAt: projects.createdAt,
       updatedAt: projects.updatedAt,
       // Solo-Operator Health round: every count below excludes a LET'S
       // COOK operational container (never a deliverable) and a cancelled
@@ -170,7 +176,7 @@ export async function getProjectsOverview() {
       // clause: videoLogs is LEFT JOINed so a project with zero real
       // videos must still return 0, not disappear from the result set.
       totalVideos: sql<number>`coalesce(sum(case when ${videoLogs.id} is not null and ${videoLogs.isOperationalContainer} = 0 and ${videoLogs.cancelledAt} is null then 1 else 0 end), 0)`,
-      doneVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'DONE' and ${videoLogs.videoKind} = 'CLIENT_WORK' and ${videoLogs.isOperationalContainer} = 0 and ${videoLogs.cancelledAt} is null then 1 else 0 end), 0)`,
+      doneVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'DONE' and ${videoLogs.isOperationalContainer} = 0 and ${videoLogs.cancelledAt} is null then 1 else 0 end), 0)`,
       inFlightVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} in ('IN_PROGRESS', 'READY_FOR_REVIEW', 'CHANGES_REQUESTED') and ${videoLogs.isOperationalContainer} = 0 and ${videoLogs.cancelledAt} is null then 1 else 0 end), 0)`,
       plannedVideos: sql<number>`coalesce(sum(case when ${videoLogs.status} = 'PLANNED' and ${videoLogs.isOperationalContainer} = 0 and ${videoLogs.cancelledAt} is null then 1 else 0 end), 0)`,
       // Tuesday Patch Priority 2: a project-level exception the redesigned
@@ -184,6 +190,16 @@ export async function getProjectsOverview() {
         inner join ${videoLogs} as blocked_video on blocked_video.id = ${blockers.videoId}
         where blocked_video.project_id = ${projects.id} and ${blockers.resolvedAt} is null
       )`,
+      explicitBatchCount: sql<number>`count(distinct case
+        when ${videoLogs.isOperationalContainer} = 0 and ${videoLogs.cancelledAt} is null and ${videoLogs.productionOrderId} is not null
+          then 'production-order:' || ${videoLogs.productionOrderId}
+        when ${videoLogs.isOperationalContainer} = 0 and ${videoLogs.cancelledAt} is null and nullif(trim(${videoLogs.batchLabel}), '') is not null
+          then 'batch-label:' || trim(${videoLogs.batchLabel})
+        else null end)`,
+      deliverableSearchText: sql<string | null>`group_concat(case
+        when ${videoLogs.isOperationalContainer} = 0 and ${videoLogs.cancelledAt} is null
+          then ${videoLogs.title}
+        else null end, char(31))`,
     })
     .from(projects)
     .innerJoin(clients, eq(projects.clientId, clients.id))
@@ -206,20 +222,40 @@ export async function getProjectsOverview() {
     .groupBy(projects.id, clients.id)
     .orderBy(desc(projects.updatedAt), desc(projects.id)),
     getLastActiveByProject(),
+    db.select({
+      id: clients.id,
+      name: clients.name,
+      defaultCoverUrl: clients.defaultCoverUrl,
+      avatarUrl: clients.instagramProfilePictureUrl,
+    }).from(clients),
   ]);
 
-  return rows.map((row) => ({
-    ...row,
-    totalVideos: Number(row.totalVideos),
-    doneVideos: Number(row.doneVideos),
-    inFlightVideos: Number(row.inFlightVideos),
-    plannedVideos: Number(row.plannedVideos),
-    openBlockerCount: Number(row.openBlockerCount),
+  const clientById = new Map(clientIdentityRows.map((client) => [client.id, client]));
+
+  return rows.map((row) => {
+    const canonicalId = canonicalClientId(row.clientId);
+    const canonical = clientById.get(canonicalId);
+    return {
+      ...row,
+      canonicalClientId: canonicalId,
+      canonicalClientName: canonical?.name ?? row.clientName,
+      workMode: clientWorkMode(row.clientId),
+      workClass: isInternalClientName(canonical?.name ?? row.clientName) ? "INTERNAL" as const : "CLIENT" as const,
+      clientDefaultCoverUrl: canonical?.defaultCoverUrl ?? row.clientDefaultCoverUrl,
+      clientAvatarUrl: canonical?.avatarUrl ?? row.clientAvatarUrl,
+      totalVideos: Number(row.totalVideos),
+      doneVideos: Number(row.doneVideos),
+      inFlightVideos: Number(row.inFlightVideos),
+      plannedVideos: Number(row.plannedVideos),
+      openBlockerCount: Number(row.openBlockerCount),
+      explicitBatchCount: Number(row.explicitBatchCount),
+      deliverableTitles: row.deliverableSearchText?.split(String.fromCharCode(31)).filter(Boolean) ?? [],
     // MICRO PATCH §2: derived from explicit attributable Work Sessions
     // only, unbounded lookback (a project touched 40+ days ago must still
     // report its real date) -- never a persisted counter.
-    lastActiveAt: lastActiveByProject.get(row.id) ?? null,
-  }));
+      lastActiveAt: lastActiveByProject.get(row.id) ?? null,
+    };
+  });
 }
 
 // QA fix (2026-09-14): Projects is entirely project-centric -- filtering
@@ -236,7 +272,7 @@ export async function getProjectsOverview() {
 // (Productivity, via the existing videoWorkspaceHref canonical URL).
 export async function getUnassignedClientVideos() {
   const db = await getAuthenticatedDb();
-  const rows = await db
+  const [rows, clientIdentityRows] = await Promise.all([db
     .select({
       id: videoLogs.id,
       title: videoLogs.title,
@@ -263,7 +299,10 @@ export async function getUnassignedClientVideos() {
         and ${videoLogs.cancelledAt} is null
         and ${clients.archivalState} <> 'GELADEIRA'`,
     )
-    .orderBy(desc(videoLogs.createdAt), desc(videoLogs.id));
+    .orderBy(desc(videoLogs.createdAt), desc(videoLogs.id)),
+    db.select({ id: clients.id, name: clients.name }).from(clients),
+  ]);
+  const clientById = new Map(clientIdentityRows.map((client) => [client.id, client]));
 
   // clientId is nullable in the schema, but the WHERE clause above
   // guarantees it's set on every returned row -- coerce so callers don't
@@ -277,9 +316,14 @@ export async function getUnassignedClientVideos() {
         publishedUrl: row.publishedUrl,
       });
     if (classification === "SYNTHETIC_QA") return [];
+    const operationalClientId = row.clientId as number;
+    const canonicalId = canonicalClientId(operationalClientId);
     return [{
       ...row,
-      clientId: row.clientId as number,
+      clientId: operationalClientId,
+      canonicalClientId: canonicalId,
+      canonicalClientName: clientById.get(canonicalId)?.name ?? row.clientName,
+      workMode: clientWorkMode(operationalClientId),
       sessionCount: Number(row.sessionCount),
       classification,
     }];
