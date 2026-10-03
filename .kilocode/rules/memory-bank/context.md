@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **October Commercial Intelligence Train — production closure (2026-10-03)**
+  - [x] Added fail-closed Expected Commercial Value Level 1: Direct hourly work starts after the strongest effective request cutoff; fixed, mixed, unknown and external-platform relationships never derive new owed value from hours
+  - [x] Accepted Dave at USD 468.33 OPEN with USD 0 new expected / 0m after cutoff and USD 68.33 / 2h44m historical support inside the current request; preserved Taryn/Upwork as external value authority without double counting Direct/DFY time
+  - [x] Derived compact Lead Intent from existing `/start` answers only, persisted immutable `rmedia-guided-intake-v1` evidence, and preserved legacy-v0 readability without a persona question or Card UX change
+  - [x] Kept client feedback at contract-only because 0 revision rows / 0 delivery rows / 28 finish events were insufficient evidence; no form, taxonomy or automatic memory promotion shipped
+  - [x] Focused 32/32, full 1508/1508, typecheck/build green, lint 0 errors/3 pre-existing warnings; September USD 611.54 / BRL -523.48 regression green
+  - [x] Operator source `235c9a3`, Worker `26ba5530-84d8-4d7c-ab1c-17f5c40ad35a`; Public, Client and Sensor untouched; no migration, head 0053 and FK clean
+  - [x] Production PDBM E2E proved Lead 13/events 303–304, server recomputation, idempotent replay, CRM/Inbound readability and zero downstream relationships; guarded cleanup restored 9 Leads / 293 CRM events
+
 - [x] **October Admin Reality Patch — production closure (2026-10-02)**
   - [x] Added concise October operating summaries to Dashboard/Productivity, a readable weekly Sessions strip, and explicit captured-versus-Unknown Health semantics
   - [x] Preserved six real Taryn HF deliverables as unassigned while excluding `RELEASE_TEST` fixtures from Unassigned, Productivity, Projects, CRM, and aggregate Project counts without deleting canonical rows
