@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/ProductivityQuickActions";
 import { NowFocusPanel } from "@/components/work-sessions/NowFocusPanel";
 import { QuickBlock, QuickNote } from "@/components/work-sessions/QuickVideoActions";
-import type { OpenWorkSession } from "@/modules/work-sessions/core";
+import type { CurrentExecution, ExecutionRecommendation } from "@/modules/execution/core";
 
 // Dashboard entry point for the Client -> Project -> Video -> Activity ->
 // Start flow (Sprint 1.2.x local dogfooding round). When nothing is
@@ -29,37 +29,37 @@ import type { OpenWorkSession } from "@/modules/work-sessions/core";
 // already reads, so Emmanuel never has to leave Home (or open
 // ChatGPT/Notion) just to jot down what happened mid-session.
 export function HomeTrackingPanel({
-  openSession,
-  openSessionElapsedSeconds,
+  current,
+  recommendation,
 }: {
-  openSession: OpenWorkSession | null;
-  openSessionElapsedSeconds: number;
+  current: CurrentExecution | null;
+  recommendation: ExecutionRecommendation | null;
 }) {
-  if (openSession) {
+  if (current) {
     return (
       <NowFocusPanel
-        openSession={openSession}
-        openSessionElapsedSeconds={openSessionElapsedSeconds}
+        current={current}
         variant="compact"
-        returnTo="/"
       >
         <div className="mt-4 flex flex-wrap gap-2 border-t border-emerald-500/15 pt-4">
-          <QuickNote videoId={openSession.videoId} />
-          <QuickBlock videoId={openSession.videoId} />
+          <QuickNote videoId={current.video.id} />
+          <QuickBlock videoId={current.video.id} />
         </div>
       </NowFocusPanel>
     );
   }
 
   return (
-    <section className="mb-8">
-      <h2 className="mb-3 text-zinc-400 text-xs font-semibold uppercase tracking-widest">Primary Actions</h2>
-      <div className="grid grid-cols-2 gap-3 sm:max-w-lg sm:grid-cols-3">
-        <NewWorkButton />
-        <StartWorkButton />
-        <FinishedVideoButton />
-      </div>
-    </section>
+    <>
+      <NowFocusPanel current={null} recommended={recommendation} variant="compact" />
+      <section className="mb-8">
+        <h2 className="mb-3 text-zinc-400 text-xs font-semibold uppercase tracking-widest">Primary Actions</h2>
+        <div className="grid grid-cols-2 gap-3 sm:max-w-lg sm:grid-cols-3">
+          <NewWorkButton />
+          <StartWorkButton />
+          <FinishedVideoButton />
+        </div>
+      </section>
+    </>
   );
 }
-

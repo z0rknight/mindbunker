@@ -4,15 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type ReactNode, useRef } from "react";
 import { LiveIndicator, PixelIcon } from "@/components/ui/PixelVisuals";
-import { videoWorkspaceHref } from "@/modules/productivity/core";
-import { startWorkSession, stopWorkSession } from "@/modules/work-sessions/actions";
+import type { CurrentExecution, ExecutionRecommendation } from "@/modules/execution/core";
+import { startWork, endWorkSession } from "@/modules/work-sessions/actions";
 import {
   DEFAULT_WORK_SESSION_ACTIVITY,
   OPERATOR_NAME,
   WORK_SESSION_ACTIVITY_LABELS,
   formatElapsedClock,
   isSessionStale,
-  type OpenWorkSession,
 } from "@/modules/work-sessions/core";
 
 // P0.1 (Tuesday Reality & Usability Patch): the single canonical NOW/FOCUS
@@ -21,74 +20,44 @@ import {
 // productivity/page.tsx -- two components reading the same
 // getWorkSessionOverview() data but drawn twice, able to drift in copy and
 // styling. This component is the one read model's one view; both callers
-// pass the same openSession/openSessionElapsedSeconds props through.
+// pass the same CurrentExecution projection through.
 //
-// Deliberately does NOT implement Pause: work_sessions has no pause concept
-// (only startedAt/endedAt -- see db/schema.ts), so a Pause button here would
-// simulate state the canonical model doesn't have. Finish Session is the one
-// real transition out of an open session (stopWorkSession).
-export type RecommendedNextItem = {
-  id: number;
-  title: string;
-  clientName: string | null;
-  projectName: string | null;
-  nextAction: string;
-};
+// "End Session" closes only the active interval. Finish Video and
+// Deliver/Approve remain separate domain actions on their owning surfaces.
 
 export function NowFocusPanel({
-  openSession,
-  openSessionElapsedSeconds,
+  current,
   recommended = null,
   variant = "dominant",
-  returnTo,
   children,
 }: {
-  openSession: OpenWorkSession | null;
-  openSessionElapsedSeconds: number;
-  recommended?: RecommendedNextItem | null;
+  current: CurrentExecution | null;
+  recommended?: ExecutionRecommendation | null;
   variant?: "dominant" | "compact";
-  // Sep 18 Afternoon Readiness Refinement: this is the one shared "what am
-  // I working on right now" surface -- Dashboard, War Room, and
-  // Productivity all render the same component (see the module comment
-  // above), and none of its own links carried the caller's page back as
-  // returnTo. From War Room specifically, "Open Workspace"/"Start Working"
-  // used to drop the operator into Productivity's generic video-not-found
-  // fallback with no way back to War Room -- the same lost-context pattern
-  // fixed for Sensor/Production-Order navigation earlier today. Each
-  // caller passes its own path; Productivity's own `?video=` deep link
-  // already validates this the same way as every other returnTo in the app
-  // (isSafeInternalPath), so a plain literal here is safe.
-  returnTo?: string;
   // Extra content shown inside the active-session card only (e.g.
   // Dashboard's Quick Note). Ignored in the no-active-work state.
   children?: ReactNode;
 }) {
-  if (openSession) {
+  if (current) {
     return (
       <ActiveSessionCard
-        openSession={openSession}
-        initialElapsedSeconds={openSessionElapsedSeconds}
+        current={current}
         variant={variant}
-        returnTo={returnTo}
       >
         {children}
       </ActiveSessionCard>
     );
   }
-  return <NoActiveWorkCard recommended={recommended} variant={variant} returnTo={returnTo} />;
+  return <NoActiveWorkCard recommended={recommended} variant={variant} />;
 }
 
 function ActiveSessionCard({
-  openSession,
-  initialElapsedSeconds,
+  current,
   variant,
-  returnTo,
   children,
 }: {
-  openSession: OpenWorkSession;
-  initialElapsedSeconds: number;
+  current: CurrentExecution;
   variant: "dominant" | "compact";
-  returnTo?: string;
   children?: ReactNode;
 }) {
   const router = useRouter();
@@ -107,7 +76,7 @@ function ActiveSessionCard({
   // render time). 0 keeps first paint on both sides equal to
   // initialElapsedSeconds; only the post-mount effect below (WorkSessionPanel
   // uses the identical setTimeout(0) + setInterval pair) starts the real tick.
-  const startedAtMs = Date.parse(openSession.startedAt);
+  const startedAtMs = Date.parse(current.startedAt);
   const [nowMs, setNowMs] = useState(0);
 
   useEffect(() => {
@@ -117,7 +86,7 @@ function ActiveSessionCard({
       window.clearTimeout(initialTick);
       window.clearInterval(interval);
     };
-  }, [openSession.id]);
+  }, [current.sessionId]);
 
   // Operating-Intelligence train (Sep 19): the ticker above only counts UP from
   // startedAt, so a session stopped on another device (or window) kept
@@ -140,25 +109,29 @@ function ActiveSessionCard({
       document.removeEventListener("visibilitychange", resync);
       window.removeEventListener("focus", resync);
     };
-  }, [router, openSession.id]);
+  }, [router, current.sessionId]);
 
   const elapsedSeconds =
     nowMs > 0 && Number.isFinite(startedAtMs)
       ? Math.max(0, Math.floor((nowMs - startedAtMs) / 1_000))
-      : initialElapsedSeconds;
+      : current.elapsedSeconds;
   const stale = isSessionStale(elapsedSeconds);
 
   const contextParts = [
     OPERATOR_NAME,
-    openSession.deviceName,
-    openSession.clientName,
-    openSession.projectName,
+    current.deviceName,
+    current.client
+      ? current.client.workMode === "DFY"
+        ? `${current.client.canonicalName} · DFY via ${current.client.operationalName}`
+        : current.client.canonicalName
+      : null,
+    current.project?.name,
   ].filter((part): part is string => Boolean(part));
 
-  function finishSession() {
+  function endSession() {
     setError("");
     startTransition(async () => {
-      const result = await stopWorkSession(openSession.videoId);
+      const result = await endWorkSession(current.video.id);
       if (!result.success) {
         setError(result.error);
         return;
@@ -194,27 +167,35 @@ function ActiveSessionCard({
             </p>
           )}
           <h2 className={`mt-2 truncate font-black text-white ${compact ? "text-lg" : "text-xl sm:text-2xl"}`}>
-            {openSession.videoTitle}
+            {current.video.title}
           </h2>
           <p className={`mb-timer mt-1 font-mono text-zinc-200 ${compact ? "text-lg" : "text-2xl sm:text-3xl"}`}>
             {formatElapsedClock(elapsedSeconds)}
           </p>
           <p className="mt-1 text-xs text-zinc-500">
-            {WORK_SESSION_ACTIVITY_LABELS[openSession.activityType]}
+            {WORK_SESSION_ACTIVITY_LABELS[current.activityType]}
           </p>
+          {current.blocker && (
+            <p className="mt-1 text-xs font-semibold text-amber-300">
+              Blocked: {current.blocker.category}
+            </p>
+          )}
+          {current.integrityIssues?.map((issue) => (
+            <p key={issue} className="mt-1 text-xs font-semibold text-amber-300">Integrity: {issue}</p>
+          ))}
           {error && <p aria-live="polite" className="mt-2 text-xs text-red-300">{error}</p>}
         </div>
         <div className="flex flex-col gap-2 sm:items-end">
           <button
             type="button"
-            onClick={finishSession}
+            onClick={endSession}
             disabled={isPending}
             className="min-h-11 rounded-xl bg-zinc-100 px-4 py-3 text-center text-sm font-black text-zinc-950 transition hover:bg-white disabled:opacity-50"
           >
-            {isPending ? "Finishing…" : "Finish Session"}
+            {isPending ? "Ending…" : "End Session"}
           </button>
           <Link
-            href={videoWorkspaceHref(openSession.videoId, returnTo)}
+            href={current.video.href}
             className={`min-h-11 rounded-xl px-4 py-3 text-center text-sm font-black text-zinc-950 ${
               stale ? "bg-amber-500 hover:bg-amber-400" : "bg-emerald-500 hover:bg-emerald-400"
             }`}
@@ -231,11 +212,9 @@ function ActiveSessionCard({
 function NoActiveWorkCard({
   recommended,
   variant,
-  returnTo,
 }: {
-  recommended: RecommendedNextItem | null;
+  recommended: ExecutionRecommendation | null;
   variant: "dominant" | "compact";
-  returnTo?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -246,12 +225,12 @@ function NoActiveWorkCard({
     if (!recommended) return;
     setError("");
     startTransition(async () => {
-      const result = await startWorkSession(recommended.id, DEFAULT_WORK_SESSION_ACTIVITY);
+      const result = await startWork(recommended.videoId, DEFAULT_WORK_SESSION_ACTIVITY);
       if (!result.success) {
         setError(result.error);
         return;
       }
-      router.push(videoWorkspaceHref(recommended.id, returnTo));
+      router.push(recommended.videoHref);
     });
   }
 
@@ -265,13 +244,14 @@ function NoActiveWorkCard({
         <>
           <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
             Recommended next
-            {[recommended.clientName, recommended.projectName].filter(Boolean).length > 0 &&
-              ` · ${[recommended.clientName, recommended.projectName].filter(Boolean).join(" / ")}`}
+            {[recommended.client?.canonicalName, recommended.project?.name].filter(Boolean).length > 0 &&
+              ` · ${[recommended.client?.canonicalName, recommended.project?.name].filter(Boolean).join(" / ")}`}
           </p>
           <h2 className={`mt-1 truncate font-black text-white ${compact ? "text-base" : "text-lg sm:text-xl"}`}>
             {recommended.title}
           </h2>
           <p className="mt-1 text-xs text-zinc-500">{recommended.nextAction}</p>
+          <p className="mt-1 text-[11px] text-zinc-600">{recommended.signals[0]?.message}</p>
           {error && <p aria-live="polite" className="mt-2 text-xs text-red-300">{error}</p>}
           <button
             type="button"

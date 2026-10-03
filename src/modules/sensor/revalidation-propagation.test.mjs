@@ -1,7 +1,7 @@
 // P1 POST-AUDIT FIX (DR-1) -- structural regression guard.
 //
 // approveSensorSession writes the same canonical work_sessions fact a
-// manual stopWorkSession/stopWorkSessionAt writes, but before this round
+// manual endWorkSession/endWorkSessionAt writes, but before this round
 // only revalidated its own Sensor admin surfaces -- Dashboard, War Room,
 // CRM, and Projects could show stale tracked-time numbers after an
 // approval until a hard reload. The fix reuses the existing shared
@@ -42,7 +42,7 @@ test("approveSensorSession reuses the shared revalidateWorkSessionSurfaces helpe
   assert.match(
     fn,
     /revalidateWorkSessionSurfaces\(await getVideoAttribution\(/u,
-    "approveSensorSession must reuse the same shared helper stopWorkSession/correctWorkSession use for downstream propagation",
+    "approveSensorSession must reuse the same shared helper endWorkSession/correctWorkSession use for downstream propagation",
   );
   // Its own pre-existing Sensor-specific admin surfaces must still be
   // revalidated too -- this fix adds parity with manual stop/correct, it

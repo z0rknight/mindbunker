@@ -9,7 +9,7 @@ import { resolveCoverUrl } from "@/modules/media/core";
 import { reorderExecutionQueueItem } from "@/modules/productivity/actions";
 import { videoWorkspaceHref } from "@/modules/productivity/core";
 import { stageForQueueItem, type QueueEntry, type QueueEligibleVideo, type QueueMoveDirection } from "@/modules/productivity/queue";
-import { startWorkSession } from "@/modules/work-sessions/actions";
+import { startWork } from "@/modules/work-sessions/actions";
 import { DEFAULT_WORK_SESSION_ACTIVITY } from "@/modules/work-sessions/core";
 import { formatDate } from "@/utils/date";
 
@@ -131,7 +131,7 @@ function QueueTile({ item, isFirstExecutable, isActive, isFirst, isLast }: { ite
 
   function start() {
     startTransition(async () => {
-      const result = await startWorkSession(item.id, DEFAULT_WORK_SESSION_ACTIVITY);
+      const result = await startWork(item.id, DEFAULT_WORK_SESSION_ACTIVITY);
       if (result.success) router.push(videoWorkspaceHref(item.id));
     });
   }

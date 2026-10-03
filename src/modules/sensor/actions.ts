@@ -198,7 +198,7 @@ export async function approveSensorSession(id: number) {
   revalidatePath(`/productivity/sensor/sessions/${id}`);
   revalidatePath("/productivity/sessions");
   // P1 POST-AUDIT FIX (DR-1): approveSensorSession writes the exact same
-  // canonical work_sessions fact a manual stopWorkSession/stopWorkSessionAt
+  // canonical work_sessions fact a manual endWorkSession/endWorkSessionAt
   // write (SENSOR_SESSION_APPROVE_INSERT_SQL inserts one real work_sessions
   // row), but before this fix only revalidated its own Sensor admin
   // surfaces above -- Dashboard, War Room, CRM, and Projects could show

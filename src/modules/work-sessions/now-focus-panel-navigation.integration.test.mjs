@@ -18,30 +18,26 @@ function source(relativePath) {
 // (master-qa-wave1.integration.test.mjs), since this codebase has no
 // component-render test harness.
 
-test("NowFocusPanel: both video links use the canonical videoWorkspaceHref helper, never a raw template string", () => {
+test("NowFocusPanel: both video links consume the app-shell href projected by the canonical execution API", () => {
   const panel = source("../../components/work-sessions/NowFocusPanel.tsx");
-  assert.match(panel, /import \{ videoWorkspaceHref \} from "@\/modules\/productivity\/core"/u);
+  assert.match(panel, /href=\{current\.video\.href\}/u);
+  assert.match(panel, /router\.push\(recommended\.videoHref\)/u);
   assert.doesNotMatch(
     panel,
-    /href=\{`\/productivity\?video=\$\{openSession\.videoId\}`\}/u,
-    "the active-session link must route through videoWorkspaceHref(id, returnTo), not a bare template string that can never carry a return path",
+    /`\/productivity\?video=/u,
+    "the shared panel must not rebuild entity routes locally",
   );
-  assert.doesNotMatch(
-    panel,
-    /router\.push\(`\/productivity\?video=\$\{recommended\.id\}`\)/u,
-    "the Start Working redirect must route through videoWorkspaceHref(id, returnTo) too",
-  );
-  assert.match(panel, /videoWorkspaceHref\(openSession\.videoId, returnTo\)/u);
-  assert.match(panel, /videoWorkspaceHref\(recommended\.id, returnTo\)/u);
 });
 
-test("NowFocusPanel: all three real callers (Dashboard, War Room, Productivity) pass their own returnTo", () => {
-  const dashboard = source("../../app/HomeTrackingPanel.tsx");
+test("canonical execution projections preserve each caller's return path", () => {
+  const dashboard = source("../../app/page.tsx");
   const warRoom = source("../../app/war-room/page.tsx");
   const productivity = source("../../app/productivity/page.tsx");
-  assert.match(dashboard, /<NowFocusPanel[\s\S]{0,300}returnTo="\/"/u);
-  assert.match(warRoom, /<NowFocusPanel[\s\S]{0,300}returnTo="\/war-room"/u);
-  assert.match(productivity, /<NowFocusPanel[\s\S]{0,300}returnTo="\/productivity"/u);
+  assert.match(dashboard, /getExecutionSnapshot\("\/"\)/u);
+  assert.match(warRoom, /getCurrentExecution\("\/war-room"\)/u);
+  assert.match(warRoom, /getExecutionRecommendation\([\s\S]{0,400}"\/war-room"\)/u);
+  assert.match(productivity, /getCurrentExecution\("\/productivity"\)/u);
+  assert.match(productivity, /getExecutionRecommendation\([\s\S]{0,400}"\/productivity"\)/u);
 });
 
 // Fix 2: LET'S COOK's "New Production Order" form re-asked for a client

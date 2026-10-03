@@ -12,14 +12,13 @@ import {
   getVideoStats,
 } from "@/modules/productivity/actions";
 import {
-  getVideoNextAction,
   getVideoWorkspaceDisclosureState,
   getVideoWorkspaceGroup,
   groupOperationalVideos,
   selectVideoWorkspaceLogs,
   type ProductivityGroup,
 } from "@/modules/productivity/core";
-import { selectExecutionQueue, selectNextExecutable } from "@/modules/productivity/queue";
+import { selectExecutionQueue } from "@/modules/productivity/queue";
 import { ExecutionQueueSection } from "./ExecutionQueueSection";
 import { getWorkSessionHistory, getWorkSessionOverview } from "@/modules/work-sessions/data";
 import {
@@ -32,7 +31,8 @@ import { currentMonthKey, currentMonthName, todayISO } from "@/utils/date";
 import Link from "next/link";
 import { VideoOperationsCard } from "./VideoOperationsCard";
 import { isSafeInternalPath } from "@/utils/navigation";
-import { NowFocusPanel, type RecommendedNextItem } from "@/components/work-sessions/NowFocusPanel";
+import { NowFocusPanel } from "@/components/work-sessions/NowFocusPanel";
+import { getCurrentExecution, getExecutionRecommendation } from "@/modules/execution/data";
 import { QuickBlock, QuickNote } from "@/components/work-sessions/QuickVideoActions";
 import { NeedsAttentionSection } from "./NeedsAttentionSection";
 import { selectProductivityAttention } from "@/modules/productivity/attention";
@@ -113,7 +113,7 @@ export default async function ProductivityPage({
     typeof rawReturnTo === "string" && isSafeInternalPath(rawReturnTo)
       ? rawReturnTo
       : undefined;
-  const [stats, logs, options, workSessionOverview, sessionHistory, activeSignals, openBlockersByVideo, soonestCommitmentByVideo, monthlyReality] =
+  const [stats, logs, options, workSessionOverview, sessionHistory, activeSignals, openBlockersByVideo, soonestCommitmentByVideo, monthlyReality, currentExecution] =
     await Promise.all([
       getVideoStats(),
       getAllVideoLogs(),
@@ -134,6 +134,7 @@ export default async function ProductivityPage({
       getOpenBlockersByVideo(),
       getSoonestOpenCommitmentByVideo(),
       getMonthlyReality(currentMonthKey()),
+      getCurrentExecution("/productivity"),
     ]);
   const attentionGroups = selectProductivityAttention(activeSignals);
   const recentLogs = selectVideoWorkspaceLogs(logs, initialVideoId);
@@ -146,7 +147,6 @@ export default async function ProductivityPage({
   const sessionSummaryByVideo = new Map(
     workSessionOverview.summaries.map((summary) => [summary.videoId, summary]),
   );
-  const { openSessionElapsedSeconds } = workSessionOverview;
   // P0.4: the execution queue is built from the FULL video list (not the
   // 50-row recentLogs slice the grouped sections below use), so an older
   // eligible video is never silently dropped from the queue projection.
@@ -155,20 +155,13 @@ export default async function ProductivityPage({
     blockerCategoryByVideoId: openBlockersByVideo,
     soonestCommitmentDueAtByVideoId: soonestCommitmentByVideo,
   });
-  // ONE SOURCE FOR NEXT (Tuesday Patch instruction): NOW/FOCUS's
-  // recommendation, when no session is open, is exactly the execution
-  // queue's first non-blocked, non-awaiting-review item -- no separate
-  // ranking is maintained after the queue exists.
-  const nextExecutable = selectNextExecutable(executionQueue);
-  const recommended: RecommendedNextItem | null = nextExecutable
-    ? {
-        id: nextExecutable.id,
-        title: nextExecutable.title ?? `Video ${nextExecutable.date}`,
-        clientName: nextExecutable.clientName,
-        projectName: nextExecutable.projectName,
-        nextAction: getVideoNextAction(nextExecutable.status),
-      }
-    : null;
+  const recommended = currentExecution
+    ? null
+    : await getExecutionRecommendation({
+        videos: logs,
+        blockersByVideo: openBlockersByVideo,
+        commitmentsByVideo: soonestCommitmentByVideo,
+      }, "/productivity");
   const sessionDays = groupWorkSessionsByDay(sessionHistory);
   const sessionWeeks = groupWorkSessionDaysByWeek(sessionDays);
   const today = todayISO();
@@ -329,23 +322,21 @@ export default async function ProductivityPage({
       <NeedsAttentionSection groups={attentionGroups} />
 
       <NowFocusPanel
-        openSession={workSessionOverview.openSession}
-        openSessionElapsedSeconds={openSessionElapsedSeconds}
+        current={currentExecution}
         recommended={recommended}
         variant="dominant"
-        returnTo="/productivity"
       >
-        {workSessionOverview.openSession && (
+        {currentExecution && (
           <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
-            <QuickNote videoId={workSessionOverview.openSession.videoId} />
-            <QuickBlock videoId={workSessionOverview.openSession.videoId} />
+            <QuickNote videoId={currentExecution.video.id} />
+            <QuickBlock videoId={currentExecution.video.id} />
           </div>
         )}
       </NowFocusPanel>
 
       <ExecutionQueueSection
         queue={executionQueue}
-        activeVideoId={workSessionOverview.openSession?.videoId ?? null}
+        activeVideoId={currentExecution?.video.id ?? null}
       />
 
       {/* Global Health Audit — Productivity density root cause: current,

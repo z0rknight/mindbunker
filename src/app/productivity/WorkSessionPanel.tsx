@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
-  startWorkSession,
-  stopWorkSession,
-  stopWorkSessionAt,
+  startWork,
+  endWorkSession,
+  endWorkSessionAt,
 } from "@/modules/work-sessions/actions";
 import {
   DEFAULT_WORK_SESSION_ACTIVITY,
@@ -141,7 +141,7 @@ export function WorkSessionPanel({
     setError("");
     setFeedback("");
     startTransition(async () => {
-      const result = await startWorkSession(videoId, activityType);
+      const result = await startWork(videoId, activityType);
       if (!result.success) {
         if (result.state) setState(result.state);
         setError(result.error);
@@ -159,7 +159,7 @@ export function WorkSessionPanel({
     setError("");
     setFeedback("");
     startTransition(async () => {
-      const result = await stopWorkSession(videoId);
+      const result = await endWorkSession(videoId);
       if (!result.success) {
         if (result.state) setState(result.state);
         setError(result.error);
@@ -180,7 +180,7 @@ export function WorkSessionPanel({
     setError("");
     setFeedback("");
     startTransition(async () => {
-      const result = await stopWorkSessionAt(
+      const result = await endWorkSessionAt(
         videoId,
         new Date(customEndTime).toISOString(),
       );

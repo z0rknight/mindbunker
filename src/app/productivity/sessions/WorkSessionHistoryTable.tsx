@@ -247,7 +247,7 @@ function SessionRow({
 
   return (
     <>
-    <tr className="os-flash border-b border-zinc-800/50" data-flash={rowFlash}>
+    <tr id={`session-${session.id}`} className="os-flash border-b border-zinc-800/50" data-flash={rowFlash}>
       <td className="os-flash px-4 py-3 text-white" data-flash={cellFlash("start", "end")}>
         {formatTime(session.startedAt)}
         {session.endedAt && (

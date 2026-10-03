@@ -25,9 +25,8 @@ import {
   getOpenBlockersByVideo,
   getSoonestOpenCommitmentByVideo,
 } from "@/modules/productivity/actions";
-import { selectExecutionQueue, selectNextExecutable } from "@/modules/productivity/queue";
-import { getVideoNextAction } from "@/modules/productivity/core";
 import { NowFocusPanel } from "@/components/work-sessions/NowFocusPanel";
+import { getCurrentExecution, getExecutionRecommendation } from "@/modules/execution/data";
 import { PixelDivider, PixelIcon } from "@/components/ui/PixelVisuals";
 import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
 import { getProductionOrders } from "@/modules/production-orders/data";
@@ -67,6 +66,7 @@ export default async function WarRoomPage() {
     productionOrders,
     lastActiveByClient,
     sensorOverview,
+    currentExecution,
   ] = await Promise.all([
     getWarRoomData(),
     openCommitmentsPromise.then((rows) => getActiveSignals(rows)),
@@ -84,6 +84,7 @@ export default async function WarRoomPage() {
     getProductionOrders(),
     getLastActiveByClient(),
     getOpenSensorSessionOverview(),
+    getCurrentExecution("/war-room"),
   ]);
   const { openSensorSession, openSensorSessionElapsedSeconds } = sensorOverview;
 
@@ -121,21 +122,13 @@ export default async function WarRoomPage() {
   const relevantCommitments = rankOpenCommitments(openCommitments, now)
     .filter((c) => c.dueAt.getTime() < now.getTime() + 48 * 60 * 60 * 1_000)
     .slice(0, WAR_ROOM_COMMITMENT_LIMIT);
-  const queue = selectExecutionQueue(videos, {
-    blockedVideoIds: new Set(blockerMap.keys()),
-    blockerCategoryByVideoId: blockerMap,
-    soonestCommitmentDueAtByVideoId: commitmentMap,
-  });
-  const next = selectNextExecutable(queue);
-  const recommended = next
-    ? {
-        id: next.id,
-        title: next.title ?? `Video ${next.date}`,
-        clientName: next.clientName,
-        projectName: next.projectName,
-        nextAction: getVideoNextAction(next.status),
-      }
-    : null;
+  const recommended = currentExecution
+    ? null
+    : await getExecutionRecommendation({
+        videos,
+        blockersByVideo: blockerMap,
+        commitmentsByVideo: commitmentMap,
+      }, "/war-room");
 
   return (
     <div className={OPERATOR_WORKSPACE_CLASS}>
@@ -177,11 +170,9 @@ export default async function WarRoomPage() {
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.6fr)_minmax(300px,0.95fr)]" data-testid="war-room-command-grid">
         <div className="space-y-4">
           <NowFocusPanel
-            openSession={workSessionOverview.openSession}
-            openSessionElapsedSeconds={workSessionOverview.openSessionElapsedSeconds}
+            current={currentExecution}
             recommended={recommended}
             variant="dominant"
-            returnTo="/war-room"
           />
           <DecisionsSection decisions={openDecisions} />
         </div>

@@ -6,7 +6,6 @@ import {
   moveInOrder,
   resequencePositions,
   selectExecutionQueue,
-  selectNextExecutable,
   stageForQueueItem,
 } from "./queue.ts";
 
@@ -122,34 +121,6 @@ test("READY_FOR_REVIEW is visible in the queue, not hidden, but never executable
   assert.equal(queue.length, 1);
   assert.equal(queue[0].isAwaitingReview, true);
   assert.equal(queue[0].isExecutable, false);
-});
-
-test("next executable skips blocked and awaiting-review items in position order", () => {
-  const queue = selectExecutionQueue(
-    [
-      video({ id: 1, queuePosition: 1000 }),
-      video({ id: 2, queuePosition: 2000, status: "READY_FOR_REVIEW" }),
-      video({ id: 3, queuePosition: 3000 }),
-    ],
-    { blockedVideoIds: new Set([1]) },
-  );
-  const next = selectNextExecutable(queue);
-  assert.equal(next.id, 3);
-});
-
-test("next executable is null when every eligible item is blocked or awaiting review", () => {
-  const queue = selectExecutionQueue(
-    [
-      video({ id: 1, queuePosition: 1000, status: "READY_FOR_REVIEW" }),
-      video({ id: 2, queuePosition: 2000 }),
-    ],
-    { blockedVideoIds: new Set([2]) },
-  );
-  assert.equal(selectNextExecutable(queue), null);
-});
-
-test("next executable is null on an empty queue", () => {
-  assert.equal(selectNextExecutable(selectExecutionQueue([], { blockedVideoIds: new Set() })), null);
 });
 
 test("resolving a blocker changes only isBlocked, never queue position/rank", () => {

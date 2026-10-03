@@ -22,7 +22,7 @@ import {
 } from "@/modules/video-operations/core";
 import { addVideoOperationalNote } from "@/modules/video-memory/actions";
 import { VIDEO_OPERATIONAL_NOTE_MAX_LENGTH } from "@/modules/video-memory/core";
-import { logManualWorkSession, startWorkSession } from "@/modules/work-sessions/actions";
+import { logManualWorkSession, startWork } from "@/modules/work-sessions/actions";
 import {
   DEFAULT_WORK_SESSION_ACTIVITY,
   WORK_SESSION_ACTIVITY_LABELS,
@@ -294,7 +294,7 @@ function VideoScopedAction({
         <button
           type="button"
           disabled={isPending || !hasVideo}
-          onClick={() => run(() => startWorkSession(videoId, DEFAULT_WORK_SESSION_ACTIVITY))}
+          onClick={() => run(() => startWork(videoId, DEFAULT_WORK_SESSION_ACTIVITY))}
           className={primaryButtonClass}
         >
           {isPending ? "Starting…" : "Start Work"}

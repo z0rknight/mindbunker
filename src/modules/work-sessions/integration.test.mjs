@@ -8,6 +8,8 @@ import { Worker } from "node:worker_threads";
 
 import {
   CORRECT_WORK_SESSION_SQL,
+  LOG_WORK_SESSION_ENDED_SQL,
+  LOG_WORK_SESSION_STARTED_SQL,
   LOG_MANUAL_WORK_SESSION_SQL,
   OPEN_WORK_SESSION_SQL,
   START_WORK_SESSION_SQL,
@@ -73,6 +75,16 @@ function createFixtureDatabase(path = ":memory:") {
       id INTEGER PRIMARY KEY,
       approved_work_session_id INTEGER
     );
+    CREATE TABLE crm_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id INTEGER REFERENCES clients(id),
+      video_id INTEGER REFERENCES video_logs(id),
+      type TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      description TEXT NOT NULL,
+      created_at INTEGER,
+      idempotency_key TEXT UNIQUE
+    );
     INSERT INTO clients VALUES (1, 'Client A'), (2, 'Client B');
     INSERT INTO projects VALUES
       (10, 1, 'Project A'),
@@ -120,6 +132,33 @@ test("valid Start and Stop preserve video lifecycle and raw timestamps", () => {
     activity_type: "EDITING",
     note: null,
   });
+  assert.deepEqual(
+    plain(db.prepare("SELECT status, started_at FROM video_logs WHERE id = 100").get()),
+    lifecycleBefore,
+  );
+  db.close();
+});
+
+test("Start/End operational events are minimal, idempotent, and do not change Video lifecycle", () => {
+  const db = createFixtureDatabase();
+  const lifecycleBefore = plain(
+    db.prepare("SELECT status, started_at FROM video_logs WHERE id = 100").get(),
+  );
+
+  assert.ok(start(db, 100, 1_000));
+  const startedEvent = db.prepare(LOG_WORK_SESSION_STARTED_SQL);
+  startedEvent.run(100, 1, 1_000, "EDITING", "Started EDITING", "work-session-start:100:1000");
+  startedEvent.run(100, 1, 1_000, "EDITING", "Started EDITING", "work-session-start:100:1000");
+
+  assert.ok(stop(db, 100, 2_000));
+  const endedEvent = db.prepare(LOG_WORK_SESSION_ENDED_SQL);
+  endedEvent.run(100, 1, 2_000, "Ended session", "work-session-end:100:2000");
+  endedEvent.run(100, 1, 2_000, "Ended session", "work-session-end:100:2000");
+
+  assert.deepEqual(
+    [...db.prepare("SELECT type FROM crm_events ORDER BY id").all()].map(plain),
+    [{ type: "work_session.started" }, { type: "work_session.ended" }],
+  );
   assert.deepEqual(
     plain(db.prepare("SELECT status, started_at FROM video_logs WHERE id = 100").get()),
     lifecycleBefore,
@@ -183,6 +222,21 @@ test("the partial unique index structurally allows only one global open session"
     db.prepare("SELECT COUNT(*) AS count FROM work_sessions WHERE ended_at IS NULL").get().count,
     1,
   );
+  db.close();
+});
+
+test("resume after End creates a new interval for the same Video", () => {
+  const db = createFixtureDatabase();
+  assert.ok(start(db, 100, 1_000, "EDITING"));
+  assert.ok(stop(db, 100, 2_000));
+  assert.ok(start(db, 100, 2_500, "REVIEW"));
+  const rows = [...db.prepare(
+    "SELECT started_at, ended_at, activity_type FROM work_sessions WHERE video_id = 100 ORDER BY id",
+  ).all()].map(plain);
+  assert.deepEqual(rows, [
+    { started_at: 1_000, ended_at: 2_000, activity_type: "EDITING" },
+    { started_at: 2_500, ended_at: null, activity_type: "REVIEW" },
+  ]);
   db.close();
 });
 

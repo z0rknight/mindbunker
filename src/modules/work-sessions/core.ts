@@ -159,6 +159,23 @@ export const START_WORK_SESSION_SQL = `
   RETURNING id, video_id, started_at, ended_at, activity_type, note
 `;
 
+// Executed in the same D1 batch as START_WORK_SESSION_SQL. The exact
+// started_at/activity match means a blocked start cannot manufacture an
+// event; the idempotency key makes a same-request replay harmless.
+export const LOG_WORK_SESSION_STARTED_SQL = `
+  INSERT OR IGNORE INTO crm_events (
+    client_id, video_id, type, actor, description, created_at, idempotency_key
+  )
+  SELECT ?2, ?1, 'work_session.started', 'admin', ?5, ?3, ?6
+  FROM work_sessions
+  WHERE video_id = ?1
+    AND ended_at IS NULL
+    AND started_at = ?3
+    AND activity_type = ?4
+    AND source = 'WEB_TIMER'
+  LIMIT 1
+`;
+
 export const STOP_WORK_SESSION_SQL = `
   UPDATE work_sessions
   SET ended_at = ?2
@@ -166,6 +183,20 @@ export const STOP_WORK_SESSION_SQL = `
     AND ended_at IS NULL
     AND ?2 > started_at
   RETURNING id, video_id, started_at, ended_at, activity_type, note
+`;
+
+// Paired with STOP_WORK_SESSION_SQL in one D1 batch. "End" only closes the
+// interval; it never changes Video status, delivery, approval or revenue.
+export const LOG_WORK_SESSION_ENDED_SQL = `
+  INSERT OR IGNORE INTO crm_events (
+    client_id, video_id, type, actor, description, created_at, idempotency_key
+  )
+  SELECT ?2, ?1, 'work_session.ended', 'admin', ?4, ?3, ?5
+  FROM work_sessions
+  WHERE video_id = ?1
+    AND ended_at = ?3
+  ORDER BY id DESC
+  LIMIT 1
 `;
 
 // Stale-session recovery (Sprint 1.2.1 Ledger P1, §6 model B): stops the

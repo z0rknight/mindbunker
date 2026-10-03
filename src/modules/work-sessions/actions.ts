@@ -3,11 +3,13 @@
 import "server-only";
 
 import { getAuthenticatedDb } from "@/db";
-import { crmEvents, videoLogs } from "@/db/schema";
+import { clients, crmEvents, projects, videoLogs } from "@/db/schema";
+import { canonicalClientId, clientWorkMode } from "@/lib/client-identity";
 import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 import {
   CORRECT_WORK_SESSION_SQL,
+  LOG_WORK_SESSION_ENDED_SQL,
+  LOG_WORK_SESSION_STARTED_SQL,
   LOG_MANUAL_WORK_SESSION_SQL,
   START_WORK_SESSION_SQL,
   STOP_WORK_SESSION_AT_SQL,
@@ -40,6 +42,7 @@ type WorkSessionActionResult =
       success: true;
       message: string;
       state: VideoWorkSessionState;
+      changed: boolean;
     }
   | {
       success: false;
@@ -65,6 +68,95 @@ async function videoExists(videoId: number) {
   return Boolean(rows[0]);
 }
 
+type StartTarget = {
+  videoId: number;
+  title: string;
+  canonicalClientId: number | null;
+  workMode: ReturnType<typeof clientWorkMode> | null;
+};
+
+async function validateStartTarget(videoId: number): Promise<
+  | { success: true; target: StartTarget }
+  | { success: false; error: string }
+> {
+  const db = await getAuthenticatedDb();
+  const row = (
+    await db
+      .select({
+        id: videoLogs.id,
+        title: videoLogs.title,
+        date: videoLogs.date,
+        status: videoLogs.status,
+        videoKind: videoLogs.videoKind,
+        cancelledAt: videoLogs.cancelledAt,
+        clientId: videoLogs.clientId,
+        clientName: clients.name,
+        clientStatus: clients.status,
+        clientArchivalState: clients.archivalState,
+        projectId: videoLogs.projectId,
+        projectClientId: projects.clientId,
+        projectStatus: projects.status,
+      })
+      .from(videoLogs)
+      .leftJoin(projects, eq(videoLogs.projectId, projects.id))
+      .leftJoin(clients, eq(videoLogs.clientId, clients.id))
+      .where(eq(videoLogs.id, videoId))
+      .limit(1)
+  )[0] ?? null;
+
+  if (!row) return { success: false, error: "Video not found." };
+  if (row.cancelledAt) return { success: false, error: "Cancelled work cannot be started." };
+  if (row.status === "DONE") return { success: false, error: "Finished work cannot be started again without reopening the Video." };
+
+  const hasClient = row.clientId !== null;
+  const hasProject = row.projectId !== null;
+  if (hasClient !== hasProject) {
+    return { success: false, error: "This Video has an incomplete Client / Project assignment." };
+  }
+  if (row.videoKind === "CLIENT_WORK" && (!hasClient || !hasProject)) {
+    return { success: false, error: "Client work must reference both a Client and a Project before Start Work." };
+  }
+  if (row.projectId !== null && row.projectClientId === null) {
+    return { success: false, error: "Assigned Project was not found." };
+  }
+  if (row.clientId !== null && row.clientName === null) {
+    return { success: false, error: "Assigned Client was not found." };
+  }
+  if (row.clientId !== null && row.projectClientId !== row.clientId) {
+    return { success: false, error: "Video Client does not match its Project Client." };
+  }
+  if (row.projectStatus === "archived") {
+    return { success: false, error: "Archived Projects cannot start new work." };
+  }
+  if (row.clientArchivalState === "GELADEIRA" || row.clientStatus === "inactive") {
+    return { success: false, error: "Inactive or archived Clients cannot start new work." };
+  }
+
+  const resolvedCanonicalClientId = row.clientId === null ? null : canonicalClientId(row.clientId);
+  if (resolvedCanonicalClientId !== null && resolvedCanonicalClientId !== row.clientId) {
+    const canonical = (
+      await db
+        .select({ id: clients.id })
+        .from(clients)
+        .where(eq(clients.id, resolvedCanonicalClientId))
+        .limit(1)
+    )[0] ?? null;
+    if (!canonical) {
+      return { success: false, error: "Canonical Client for this operational alias was not found." };
+    }
+  }
+
+  return {
+    success: true,
+    target: {
+      videoId: row.id,
+      title: row.title ?? `Video ${row.date}`,
+      canonicalClientId: resolvedCanonicalClientId,
+      workMode: row.clientId === null ? null : clientWorkMode(row.clientId),
+    },
+  };
+}
+
 function activeSessionMessage(state: VideoWorkSessionState) {
   if (!state.openSession) return "Another work session could not be started.";
   return `Work is already running on ${state.openSession.videoTitle}.`;
@@ -77,9 +169,9 @@ function activeSessionMessage(state: VideoWorkSessionState) {
 // neither of these was ever meant to be a remotely-invocable action in
 // the first place; they are internal helpers reused by
 // sensor/actions.ts's approveSensorSession (DR-1) and by this file's own
-// stopWorkSession/stopWorkSessionAt/correctWorkSession below.
+// endWorkSession/endWorkSessionAt/correctWorkSession below.
 
-export async function startWorkSession(
+export async function startWork(
   videoId: number,
   activityType: WorkSessionActivityType,
 ): Promise<WorkSessionActionResult> {
@@ -90,17 +182,35 @@ export async function startWorkSession(
     return { success: false, error: "Choose a valid activity." };
   }
 
+  const validation = await validateStartTarget(videoId);
+  if (!validation.success) return validation;
+
   const db = await getAuthenticatedDb();
-  const inserted = await db.$client
-    .prepare(START_WORK_SESSION_SQL)
-    .bind(videoId, toUnixSeconds(new Date()), activityType)
-    .first<RawMutationRow>();
+  const startedAt = toUnixSeconds(new Date());
+  const eventKey = `work-session-start:${videoId}:${startedAt}`;
+  const [startResult] = await db.$client.batch<RawMutationRow>([
+    db.$client.prepare(START_WORK_SESSION_SQL).bind(videoId, startedAt, activityType),
+    db.$client.prepare(LOG_WORK_SESSION_STARTED_SQL).bind(
+      videoId,
+      validation.target.canonicalClientId,
+      startedAt,
+      activityType,
+      `Started ${activityType} on ${validation.target.title}${validation.target.workMode ? ` (${validation.target.workMode})` : ""}`,
+      eventKey,
+    ),
+  ]);
+  const inserted = startResult.results[0] ?? null;
 
   if (!inserted) {
-    if (!(await videoExists(videoId))) {
-      return { success: false, error: "Video not found." };
-    }
     const state = await getVideoWorkSessionState(videoId);
+    if (state.openSession?.videoId === videoId) {
+      return {
+        success: true,
+        changed: false,
+        message: "Work is already running on this Video.",
+        state,
+      };
+    }
     return {
       success: false,
       error: activeSessionMessage(state),
@@ -108,15 +218,27 @@ export async function startWorkSession(
     };
   }
 
-  revalidatePath("/productivity");
+  const attribution = await getVideoAttribution(videoId);
+  revalidateWorkSessionSurfaces(attribution);
+  if (
+    attribution?.clientId &&
+    validation.target.canonicalClientId &&
+    attribution.clientId !== validation.target.canonicalClientId
+  ) {
+    revalidateWorkSessionSurfaces({
+      clientId: validation.target.canonicalClientId,
+      projectId: null,
+    });
+  }
   return {
     success: true,
+    changed: true,
     message: "Work session started.",
     state: await getVideoWorkSessionState(videoId),
   };
 }
 
-export async function stopWorkSession(
+export async function endWorkSession(
   videoId: number,
 ): Promise<WorkSessionActionResult> {
   if (!isWorkSessionVideoId(videoId)) {
@@ -125,10 +247,20 @@ export async function stopWorkSession(
 
   const db = await getAuthenticatedDb();
   const endedAt = toUnixSeconds(new Date());
-  const stopped = await db.$client
-    .prepare(STOP_WORK_SESSION_SQL)
-    .bind(videoId, endedAt)
-    .first<RawMutationRow>();
+  const attribution = await getVideoAttribution(videoId);
+  const [stopResult] = await db.$client.batch<RawMutationRow>([
+    db.$client.prepare(STOP_WORK_SESSION_SQL).bind(videoId, endedAt),
+    db.$client.prepare(LOG_WORK_SESSION_ENDED_SQL).bind(
+      videoId,
+      attribution?.clientId === null || attribution?.clientId === undefined
+        ? null
+        : canonicalClientId(attribution.clientId),
+      endedAt,
+      "Ended work session without changing Video status.",
+      `work-session-end:${videoId}:${endedAt}`,
+    ),
+  ]);
+  const stopped = stopResult.results[0] ?? null;
 
   if (!stopped) {
     if (!(await videoExists(videoId))) {
@@ -151,9 +283,16 @@ export async function stopWorkSession(
     };
   }
 
-  revalidateWorkSessionSurfaces(await getVideoAttribution(videoId));
+  revalidateWorkSessionSurfaces(attribution);
+  if (attribution?.clientId) {
+    const resolvedClientId = canonicalClientId(attribution.clientId);
+    if (resolvedClientId !== attribution.clientId) {
+      revalidateWorkSessionSurfaces({ clientId: resolvedClientId, projectId: null });
+    }
+  }
   return {
     success: true,
+    changed: true,
     message: "Work session stopped.",
     state: await getVideoWorkSessionState(videoId),
   };
@@ -165,7 +304,7 @@ export async function stopWorkSession(
 // already-closed row — so it is not logged as a work_session.corrected
 // audit event; pressing Stop with a chosen time is exactly as authoritative
 // as pressing Stop with the implicit "now".
-export async function stopWorkSessionAt(
+export async function endWorkSessionAt(
   videoId: number,
   endedAtIso: string,
 ): Promise<WorkSessionActionResult> {
@@ -179,10 +318,22 @@ export async function stopWorkSessionAt(
 
   const db = await getAuthenticatedDb();
   const now = new Date();
-  const stopped = await db.$client
-    .prepare(STOP_WORK_SESSION_AT_SQL)
-    .bind(videoId, toUnixSeconds(endedAt), toUnixSeconds(now))
-    .first<RawMutationRow>();
+  const endedAtSeconds = toUnixSeconds(endedAt);
+  const attribution = await getVideoAttribution(videoId);
+  const [stopResult] = await db.$client.batch<RawMutationRow>([
+    db.$client.prepare(STOP_WORK_SESSION_AT_SQL)
+      .bind(videoId, endedAtSeconds, toUnixSeconds(now)),
+    db.$client.prepare(LOG_WORK_SESSION_ENDED_SQL).bind(
+      videoId,
+      attribution?.clientId === null || attribution?.clientId === undefined
+        ? null
+        : canonicalClientId(attribution.clientId),
+      endedAtSeconds,
+      "Ended work session at an operator-confirmed time without changing Video status.",
+      `work-session-end:${videoId}:${endedAtSeconds}`,
+    ),
+  ]);
+  const stopped = stopResult.results[0] ?? null;
 
   if (!stopped) {
     if (!(await videoExists(videoId))) {
@@ -205,9 +356,16 @@ export async function stopWorkSessionAt(
     return { success: false, error: "End time cannot be in the future.", state };
   }
 
-  revalidateWorkSessionSurfaces(await getVideoAttribution(videoId));
+  revalidateWorkSessionSurfaces(attribution);
+  if (attribution?.clientId) {
+    const resolvedClientId = canonicalClientId(attribution.clientId);
+    if (resolvedClientId !== attribution.clientId) {
+      revalidateWorkSessionSurfaces({ clientId: resolvedClientId, projectId: null });
+    }
+  }
   return {
     success: true,
+    changed: true,
     message: "Work session stopped.",
     state: await getVideoWorkSessionState(videoId),
   };

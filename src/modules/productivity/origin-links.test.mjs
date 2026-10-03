@@ -33,7 +33,7 @@ const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 
 test("the four inspection surfaces now build their video links with an origin", () => {
   const dashboard = src("../../app/page.tsx");
-  assert.match(dashboard, /videoWorkspaceHref\(target\.videoId, "\/"\)/u);
+  assert.match(dashboard, /getExecutionSnapshot\("\/"\)/u);
   assert.match(dashboard, /videoWorkspaceHref\(first\.videoId, "\/"\)/u);
   const crm = src("../../app/crm/[id]/ClientIntelligencePanel.tsx");
   assert.match(crm, /videoWorkspaceHref\(note\.videoId, returnTo\)/u);

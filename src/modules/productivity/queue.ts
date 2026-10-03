@@ -11,8 +11,12 @@ export function isQueueEligible(video: {
   videoKind: VideoKind;
   status: VideoStatus;
   isOperationalContainer?: boolean;
+  cancelledAt?: Date | string | null;
 }): boolean {
-  return video.videoKind === "CLIENT_WORK" && video.status !== "DONE" && !video.isOperationalContainer;
+  return video.videoKind === "CLIENT_WORK" &&
+    video.status !== "DONE" &&
+    !video.isOperationalContainer &&
+    !video.cancelledAt;
 }
 
 // QA fix (2026-09-14): the three Execution Board stages, pulled out of
@@ -50,6 +54,8 @@ export type QueueEligibleVideo = {
   clientAvatarUrl: string | null;
   orientation: VideoOrientation | null;
   isOperationalContainer: boolean;
+  isPriority: boolean;
+  cancelledAt: Date | string | null;
   queuePosition: number | null;
   createdAt: Date | string | null;
   updatedAt: Date | string | null;
@@ -113,15 +119,6 @@ export function selectExecutionQueue<T extends QueueEligibleVideo>(
       queueRank: index,
     };
   });
-}
-
-// ONE SOURCE FOR NEXT (per the Tuesday Patch): this is the only function
-// that may decide what NOW/FOCUS recommends when no work session is open.
-// First item in queue order that is neither blocked nor awaiting review.
-export function selectNextExecutable<T extends QueueEligibleVideo>(
-  queue: readonly QueueEntry<T>[],
-): QueueEntry<T> | null {
-  return queue.find((item) => item.isExecutable) ?? null;
 }
 
 // ─── Reordering ──────────────────────────────────────────────────────────

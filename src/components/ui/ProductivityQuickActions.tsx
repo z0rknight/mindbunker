@@ -10,7 +10,7 @@ import {
   isVideoDirectlyFinishable,
 } from "@/modules/productivity/config";
 import { PROJECT_STATUS_GROUPS } from "@/modules/projects/config";
-import { startWorkSession } from "@/modules/work-sessions/actions";
+import { startWork } from "@/modules/work-sessions/actions";
 import {
   DEFAULT_WORK_SESSION_ACTIVITY,
   WORK_SESSION_ACTIVITY_LABELS,
@@ -319,7 +319,7 @@ export function PlanVideoButton({
 // round): the same Client → Project → Video → Activity → Start flow that
 // used to sit permanently exposed on the Dashboard as HomeTrackingPanel's
 // inline form, now behind a compact modal so the Dashboard's default state
-// is two buttons, not a four-field form. Reuses startWorkSession() and the
+// is two buttons, not a four-field form. Reuses startWork() and the
 // single-open-session database guard exactly as before -- no new timer, no
 // new work-session table, no new activity subsystem. HomeTrackingPanel
 // still owns the "a session is already active" surfacing (the Tracking Now
@@ -382,7 +382,7 @@ export function StartWorkButton() {
     }
     setFeedback("");
     startTransition(async () => {
-      const result = await startWorkSession(selectedVideoId, activityType);
+      const result = await startWork(selectedVideoId, activityType);
       if (!result.success) {
         setFeedback(result.error);
         return;

@@ -6,7 +6,7 @@ import { QuickCaptureModal } from "./QuickCaptureModal";
 // P0.5 (Tuesday Reality & Usability Patch): global Quick Capture. A
 // convenience layer over already-canonical actions (createVideoCommitment,
 // recordDetailedRevision, openVideoBlocker, updateOpportunity,
-// addVideoOperationalNote, startWorkSession, reorderExecutionQueueItem) --
+// addVideoOperationalNote, startWork, reorderExecutionQueueItem) --
 // no new write paths, no AI parsing, no second follow-up/task model. See
 // QuickCaptureModal for the action list itself.
 export type QuickCaptureTarget = {

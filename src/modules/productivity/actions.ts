@@ -579,6 +579,8 @@ export async function getAllVideoLogs() {
       updatedAt: videoLogs.updatedAt,
       queuePosition: videoLogs.queuePosition,
       isOperationalContainer: videoLogs.isOperationalContainer,
+      isPriority: videoLogs.isPriority,
+      cancelledAt: videoLogs.cancelledAt,
       visibleToClient: videoLogs.visibleToClient,
       // House Cleaning Wave 2 §3: surfaced read-only in the simplified
       // video workspace's Identity section ("Batch, if relevant") -- was

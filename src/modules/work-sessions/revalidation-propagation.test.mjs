@@ -40,20 +40,20 @@ function sliceFunction(source, exportSignature) {
   return next === -1 ? source.slice(start) : source.slice(start, next);
 }
 
-test("stopWorkSession revalidates the full downstream surface, not just /productivity", () => {
+test("endWorkSession revalidates the full downstream surface, not just /productivity", () => {
   const source = readSource("actions.ts");
-  const fn = sliceFunction(source, "export async function stopWorkSession(");
+  const fn = sliceFunction(source, "export async function endWorkSession(");
   assert.match(fn, /revalidateWorkSessionSurfaces\(/u);
   assert.doesNotMatch(
     fn,
     /revalidatePath\("\/productivity"\);\s*\n\s*return \{\s*\n\s*success: true,\s*\n\s*message: "Work session stopped\."/u,
-    "stopWorkSession regressed back to a bare /productivity-only revalidate",
+    "endWorkSession regressed back to a bare /productivity-only revalidate",
   );
 });
 
-test("stopWorkSessionAt revalidates the full downstream surface, not just /productivity", () => {
+test("endWorkSessionAt revalidates the full downstream surface, not just /productivity", () => {
   const source = readSource("actions.ts");
-  const fn = sliceFunction(source, "export async function stopWorkSessionAt(");
+  const fn = sliceFunction(source, "export async function endWorkSessionAt(");
   assert.match(fn, /revalidateWorkSessionSurfaces\(/u);
 });
 

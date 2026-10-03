@@ -18,7 +18,6 @@ import {
 import {
   getProjectStreaks,
   getTodayWorkSessionStats,
-  getWorkSessionOverview,
 } from "@/modules/work-sessions/data";
 import { formatClosedDuration, formatLastActive } from "@/modules/work-sessions/core";
 import { getHealthSummary } from "@/modules/health/actions";
@@ -30,7 +29,8 @@ import { HomeTrackingPanel } from "./HomeTrackingPanel";
 import { CoffeeQuickLogButton } from "@/components/ui/HealthQuickActions";
 import { getDashboardOperatorIntelligence } from "@/modules/operator-intelligence/data";
 import { getTodaySensorOperationalStats } from "@/modules/sensor/data";
-import { selectDashboardNow, type AttentionReason } from "@/modules/operator-intelligence/core";
+import { type AttentionReason } from "@/modules/operator-intelligence/core";
+import { getExecutionSnapshot } from "@/modules/execution/data";
 import { isInternalClientName, splitIntentionalWork } from "@/lib/client-identity";
 import { getOpenCommitmentsWithContext, rankOpenCommitments } from "@/modules/signals";
 import { ActiveCommitmentCard } from "@/components/commitments/ActiveCommitmentCard";
@@ -55,7 +55,7 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const [
     health,
-    workSessionOverview,
+    execution,
     caffeineSummary,
     projectStreaks,
     todayWorkStats,
@@ -70,7 +70,7 @@ export default async function DashboardPage() {
     monthlyReality,
   ] = await Promise.all([
     getHealthSummary(),
-    getWorkSessionOverview(),
+    getExecutionSnapshot("/"),
     getCaffeineSummary(),
     getProjectStreaks(3),
     getTodayWorkSessionStats(),
@@ -94,10 +94,6 @@ export default async function DashboardPage() {
   const mostUrgentCommitment = rankOpenCommitments(openCommitments, now)[0] ?? null;
   const greeting =
     now.getHours() < 12 ? "Good morning" : now.getHours() < 18 ? "Good afternoon" : "Good evening";
-  const dashboardNow = selectDashboardNow(
-    workSessionOverview.openSession,
-    operatorIntelligence.recentCurrentTargets,
-  );
   const todayWorkSplit = splitIntentionalWork(todayWorkStats, todaySensorOperational);
 
   return (
@@ -120,8 +116,8 @@ export default async function DashboardPage() {
       </div>
 
       <HomeTrackingPanel
-        openSession={workSessionOverview.openSession}
-        openSessionElapsedSeconds={workSessionOverview.openSessionElapsedSeconds}
+        current={execution.current}
+        recommendation={execution.recommendation}
       />
 
       <DashboardRealitySummary reality={monthlyReality} />
@@ -162,32 +158,6 @@ export default async function DashboardPage() {
             nowIso={now.toISOString()}
           />
         </div>
-      )}
-
-      {dashboardNow.mode === "RECENT" && dashboardNow.targets.length > 0 && (
-        <section className="mb-6" data-testid="dashboard-now">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-400">Now</h2>
-            <span className="text-[11px] text-zinc-600">Recent in-progress work</span>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {dashboardNow.targets.map((target) => (
-              <Link
-                key={target.videoId}
-                href={videoWorkspaceHref(target.videoId, "/")}
-                className="rounded-xl border border-zinc-700 bg-zinc-900/60 p-4 transition hover:border-red-700"
-              >
-                <p className="truncate text-sm font-black text-white">{target.videoTitle}</p>
-                <p className="mt-1 truncate text-xs text-zinc-500">
-                  {[target.clientName, target.projectName].filter(Boolean).join(" / ") || "Unattributed video"}
-                </p>
-                <p className="mt-2 text-[11px] font-bold text-zinc-300">
-                  Last worked {formatLastActive(target.lastWorkedAt, now.toISOString())} · Continue →
-                </p>
-              </Link>
-            ))}
-          </div>
-        </section>
       )}
 
       {operatorIntelligence.attentionGroups.length > 0 && (
