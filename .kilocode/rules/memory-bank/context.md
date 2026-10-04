@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Wave 5 — Dashboard / Operating Reality (2026-10-04, local candidate)**
+  - [x] Replaced the action-heavy Home dashboard with one observational Operating Reality composition; War Room remains the sole execution owner and Dashboard exposes only bounded links and global entity drawers
+  - [x] Composed canonical Wave 1 execution, Wave 4 Project membership/progress/integrity, Finance received/receivable/expected evidence, Work Sessions, Sensor observation, timestamped output events and War Room signals without introducing a second source of truth
+  - [x] Kept received cash, open payment requests and expected/registered billing separate; kept recorded Sessions, observed Sensor activity and telemetry coverage separate; availability remains explicitly unknown instead of becoming a fabricated capacity score
+  - [x] Rendered explicit no-evidence states, provenance/coverage disclosures, Client load, individual Project progress and drawer-first Client/Project/Video/Session inspection; Taryn DIRECT/DFY work continues to roll up to canonical Taryn
+  - [x] Authenticated local QA passed IDLE, canonical ACTIVE session reflection, Project and Client drawers, refresh, desktop and 390×844 with zero horizontal overflow and no console warnings/errors; the exact QA session/event were guard-deleted and baseline returned to 8 Work Sessions / 33 CRM events
+  - [x] Applied existing migration 0053 locally only after a recoverable D1 checkpoint; local head is `0053_slow_shen.sql`, `crm_events.payload_json` exists, FK check is empty and integrity is `ok`
+  - [x] 1563/1563 tests, typecheck, production build, diff check and lint with 0 errors / 3 pre-existing warnings pass; no deploy, remote D1 write, new migration, schema design, or feature expansion
+
 - [x] **Wave 4 — Projects Structural Convergence (2026-10-03, local candidate)**
   - [x] Reframed Projects as the structural owner — Client → Project → explicit Batch when present → Deliverable — while War Room remains the sole execution surface and full Project pages remain the management surface
   - [x] Added URL-state semantic views (Current default, By Client, Waiting, Completed, Internal, All) plus Cards/Rows density; Recurring is deliberately deferred because no canonical Project recurrence primitive exists

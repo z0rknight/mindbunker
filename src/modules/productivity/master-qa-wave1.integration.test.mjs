@@ -129,10 +129,12 @@ test("Projects uses visual cards grouped by operational stage with client and ex
   assert.doesNotMatch(projects, /min-h-12 w-full items-center justify-center rounded-xl bg-cyan-700/u);
 });
 
-test("Dashboard and the consolidated War Room put operator capture before secondary evidence", () => {
+test("Dashboard delegates capture to the consolidated War Room before secondary evidence", () => {
   const dashboard = source("../../app/page.tsx");
+  const dashboardReality = source("../../components/operating-reality/DashboardOperatingReality.tsx");
   const warRoom = source("../../app/war-room/page.tsx");
-  assert.ok(dashboard.indexOf("dashboard-quick-actions") < dashboard.indexOf("dashboard-attention"));
+  assert.match(dashboardReality, /Open War Room/u);
+  assert.doesNotMatch(dashboard + dashboardReality, /dashboard-quick-actions|StartWorkButton|FinishedVideoButton/u);
   assert.ok(warRoom.indexOf("WarRoomCaptureButton") < warRoom.indexOf("<ActiveSignalsSection"));
   assert.doesNotMatch(warRoom, /NeedsAttentionSection/u);
   assert.doesNotMatch(dashboard, /<details open/u);
@@ -209,13 +211,14 @@ test("CRM list no longer renders the row-level ClientWorkbench duplicate action 
   assert.doesNotMatch(crmList, /ClientWorkbench/u);
 });
 
-test("Dashboard states the three-part intentional-work invariant and labels internal momentum", () => {
-  const dashboard = source("../../app/page.tsx");
-  assert.match(dashboard, /label="Client Production"/u);
-  assert.match(dashboard, /label="Internal Operations"/u);
-  assert.match(dashboard, /label="Total Intentional"/u);
-  assert.match(dashboard, /Internal operations/u);
-  assert.match(dashboard, /Client production/u);
+test("Dashboard separates recorded work classes from Sensor observation", () => {
+  const dashboard = source("../../components/operating-reality/DashboardOperatingReality.tsx");
+  assert.match(dashboard, /label="Recorded work"/u);
+  assert.match(dashboard, /\["Client", reality\.work\.clientSeconds\]/u);
+  assert.match(dashboard, /\["Internal", reality\.work\.internalSeconds\]/u);
+  assert.match(dashboard, /\["Admin", reality\.work\.adminSeconds\]/u);
+  assert.match(dashboard, /\["Lead", reality\.work\.leadSeconds\]/u);
+  assert.match(dashboard, /Recorded and observed values are intentionally separate/u);
 });
 
 // House Cleaning Wave 2 §22: Pricing Lab may carry a calculation's numbers

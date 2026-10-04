@@ -14,6 +14,10 @@ const ledgerCard = readFileSync(
   new URL("../../components/finance/EconomicLedgerCard.tsx", import.meta.url),
   "utf8",
 );
+const operatingReality = readFileSync(
+  new URL("../../components/operating-reality/DashboardOperatingReality.tsx", import.meta.url),
+  "utf8",
+);
 
 // House Cleaning Wave 2 §11 (RMEDIA_SYSTEM_SIMPLIFICATION_RESEARCH_2026_09.md):
 // Dashboard no longer restates Finance's own numbers (that whole section
@@ -36,16 +40,15 @@ test("the economic ledger card explicitly labels itself as all-time history, not
   assert.match(ledgerCard, /all time history/iu);
 });
 
-// Sunday QA Patch — Bug 2 regression: "Faturado hoje" disappeared (or
-// silently read as $0) on a day with no recorded income. Verifies the
-// exact guard is still present: an empty todayIncome array renders "—",
-// never a fabricated zero, and the value comes from a length check on
-// real rows, not a falsy-number check that would misread a genuine $0.
-test("Faturado hoje renders an em dash on a day with no recorded income, never a fabricated zero", () => {
-  assert.match(dashboard, /label="Faturado hoje"/u);
-  assert.match(
-    dashboard,
-    /todayIncome\.length > 0[\s\S]{0,200}:\s*"—"/u,
-    "the empty-income fallback must be a length check on the real income rows, not `amount || 0` or similar",
-  );
+// Wave 5 intentionally retires the isolated daily-income card. The
+// replacement keeps Finance semantics stronger: cash received, open
+// receivable and registered/expected billing are three visible categories,
+// while a currency with no evidence is omitted instead of fabricated.
+test("Operating Reality keeps received, receivable and expected evidence visibly separate", () => {
+  assert.match(dashboard, /getOperatingReality/u);
+  assert.match(operatingReality, /label="Received"/u);
+  assert.match(operatingReality, /label="Receivable"/u);
+  assert.match(operatingReality, /label="Expected \/ registered"/u);
+  assert.match(operatingReality, /No current-month money evidence/u);
+  assert.doesNotMatch(operatingReality, /Faturado hoje/u);
 });

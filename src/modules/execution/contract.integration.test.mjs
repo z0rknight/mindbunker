@@ -16,16 +16,18 @@ function sliceFunction(contents, signature) {
 
 test("Dashboard and the sole War Room execution surface consume the canonical execution read API", () => {
   const dashboard = source("..", "..", "app", "page.tsx");
+  const dashboardData = source("..", "operating-reality", "data.ts");
   const productivity = source("..", "..", "app", "productivity", "page.tsx");
   const warRoom = source("..", "..", "app", "war-room", "page.tsx");
 
-  assert.match(dashboard, /getExecutionSnapshot/u);
+  assert.match(dashboard, /getOperatingReality/u);
+  assert.match(dashboardData, /getExecutionSnapshot\("\/"\)/u);
   assert.match(productivity, /redirect/u);
   assert.doesNotMatch(productivity, /getCurrentExecution|ExecutionQueueSection/u);
   assert.match(warRoom, /getCurrentExecution/u);
   assert.match(warRoom, /getExecutionRecommendation/u);
   assert.match(warRoom, /selectExecutionQueue/u);
-  assert.doesNotMatch(dashboard, /selectDashboardNow/u);
+  assert.doesNotMatch(dashboard + dashboardData, /selectDashboardNow/u);
 });
 
 test("Start Work is one server-owned operation and records its event in the same batch", () => {

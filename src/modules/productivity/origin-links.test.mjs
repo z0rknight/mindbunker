@@ -32,9 +32,12 @@ test("the resulting video link round-trips through the existing returnTo gate", 
 const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 
 test("deep management links preserve origin while global inspection owns Sessions", () => {
-  const dashboard = src("../../app/page.tsx");
-  assert.match(dashboard, /getExecutionSnapshot\("\/"\)/u);
-  assert.match(dashboard, /videoWorkspaceHref\(first\.videoId, "\/"\)/u);
+  const dashboard = src("../../components/operating-reality/DashboardOperatingReality.tsx");
+  const dashboardData = src("../operating-reality/data.ts");
+  assert.match(dashboardData, /getExecutionSnapshot\("\/"\)/u);
+  assert.match(dashboard, /EntityInspectionTrigger/u);
+  assert.match(dashboard, /type: "session"/u);
+  assert.match(dashboard, /type: "video"/u);
   const crm = src("../../app/crm/[id]/ClientIntelligencePanel.tsx");
   assert.match(crm, /videoWorkspaceHref\(note\.videoId, returnTo\)/u);
   assert.match(src("../../app/crm/[id]/page.tsx"), /returnTo=\{`\/crm\/\$\{client\.id\}`\}/u);
@@ -42,7 +45,7 @@ test("deep management links preserve origin while global inspection owns Session
   assert.match(sessions, /EntityInspectionTrigger/u);
   assert.match(sessions, /type: "video"/u);
   assert.match(sessions, /type: "session"/u);
-  for (const rel of ["../../app/page.tsx", "../../app/crm/[id]/ClientIntelligencePanel.tsx", "../../app/productivity/sessions/WorkSessionHistoryTable.tsx"]) {
+  for (const rel of ["../../components/operating-reality/DashboardOperatingReality.tsx", "../../app/crm/[id]/ClientIntelligencePanel.tsx", "../../app/productivity/sessions/WorkSessionHistoryTable.tsx"]) {
     assert.doesNotMatch(src(rel), /href=\{`\/productivity\?video=\$\{/u, `${rel} has no raw origin-less video link left`);
   }
 });
