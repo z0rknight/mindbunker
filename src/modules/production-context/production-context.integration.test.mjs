@@ -186,10 +186,13 @@ test("revision cause UI: optional, defaults to UNKNOWN, no new category/minutes 
   // Intake release legitimately adds 0053 for crm_events.payload_json, so a
   // global migration-count assertion would make this regression test reject
   // every future additive migration.
-  const latestMigration = fs.readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort().at(-1);
-  assert.equal(latestMigration, "0053_slow_shen.sql");
-  assert.doesNotMatch(
-    fs.readFileSync(path.join(migrationsDir, latestMigration), "utf8"),
-    /revision|caused_by|minutes_rework/iu,
-  );
+  const laterMigrations = fs.readdirSync(migrationsDir)
+    .filter((f) => f.endsWith(".sql") && f >= "0054_")
+    .sort();
+  for (const migration of laterMigrations) {
+    assert.doesNotMatch(
+      fs.readFileSync(path.join(migrationsDir, migration), "utf8"),
+      /revision|caused_by|minutes_rework/iu,
+    );
+  }
 });

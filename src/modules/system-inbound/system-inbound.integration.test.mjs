@@ -37,7 +37,11 @@ test("seen acknowledgement is idempotent and never mutates the source intake", (
   });
 });
 
-test("no migration beyond 0053 is introduced", () => {
+test("System Inbound's schema owner remains 0053; later migrations do not alter its contract", () => {
   const files = fs.readdirSync(migrations).filter((name) => name.endsWith(".sql")).sort();
-  assert.equal(files.at(-1), "0053_slow_shen.sql");
+  assert.ok(files.includes("0053_slow_shen.sql"));
+  for (const file of files.filter((name) => name >= "0054_")) {
+    const sql = fs.readFileSync(path.join(migrations, file), "utf8");
+    assert.doesNotMatch(sql, /system_intake|guided_intake|payload_json/iu);
+  }
 });

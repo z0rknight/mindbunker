@@ -103,7 +103,11 @@ test("V2 replay and honeypot remain exact no-ops", () => {
   assert.equal(database.prepare("SELECT count(*) n FROM crm_events").get().n, before);
 });
 
-test("V2 needs no migration beyond 0053", () => {
+test("V2's schema owner remains migration 0053; later migrations do not alter Guided Intake", () => {
   const files = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
-  assert.equal(files.at(-1), "0053_slow_shen.sql");
+  assert.ok(files.includes("0053_slow_shen.sql"));
+  for (const file of files.filter((name) => name >= "0054_")) {
+    const sql = fs.readFileSync(path.join(migrationsDir, file), "utf8");
+    assert.doesNotMatch(sql, /guided_intake|intake_submissions|payload_json/iu);
+  }
 });

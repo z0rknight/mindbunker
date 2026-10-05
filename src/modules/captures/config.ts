@@ -17,7 +17,7 @@
 
 // LEVEL 1 attribution (Wave 1 §12). What kind of counterparty/domain
 // this Capture is about -- the one field that is always required.
-export const CAPTURE_CONTEXTS = ["CLIENT", "LEAD", "INTERNAL", "ADMIN"] as const;
+export const CAPTURE_CONTEXTS = ["CLIENT", "LEAD", "INTERNAL", "ADMIN", "UNKNOWN"] as const;
 export type CaptureContext = (typeof CAPTURE_CONTEXTS)[number];
 
 export const CAPTURE_CONTEXT_LABELS: Record<CaptureContext, string> = {
@@ -25,6 +25,7 @@ export const CAPTURE_CONTEXT_LABELS: Record<CaptureContext, string> = {
   LEAD: "Lead",
   INTERNAL: "Internal",
   ADMIN: "Admin",
+  UNKNOWN: "Unknown",
 };
 
 // "What happened" -- deliberately separate from `outcome` ("what was

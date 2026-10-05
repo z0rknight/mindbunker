@@ -2768,6 +2768,18 @@ export const captures = sqliteTable(
       onDelete: "set null",
     }),
     localCaptureId: text("local_capture_id"),
+    // RMEDIA App Context Engine: immutable factual evidence captured on the
+    // Mac. This is deliberately JSON text rather than duplicated domain
+    // columns: the FK below is the only canonical relationship; every other
+    // field keeps its own provenance inside the versioned snapshot.
+    contextSnapshotJson: text("context_snapshot_json"),
+    // Session that was demonstrably active at occurred_at. Unlike
+    // promotedWorkSessionId this is capture-time context, not a later
+    // conversion/promotion result. Many captures may reference one session.
+    canonicalWorkSessionId: integer("canonical_work_session_id").references(
+      () => workSessions.id,
+      { onDelete: "set null" },
+    ),
     // Wave 2.1 (Promotion Custody release gate): promoteCapture claims
     // this Capture atomically (conditional UPDATE, WHERE this column is
     // NULL or older than the staleness window) before doing any external
@@ -2815,6 +2827,7 @@ export const captures = sqliteTable(
       table.sensorDeviceId,
       table.localCaptureId,
     ),
+    index("captures_canonical_work_session_idx").on(table.canonicalWorkSessionId),
     uniqueIndex("captures_promoted_work_session_unique").on(
       table.promotedWorkSessionId,
     ),

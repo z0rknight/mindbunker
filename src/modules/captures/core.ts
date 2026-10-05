@@ -13,8 +13,9 @@ import {
 } from "./config.ts";
 
 // Wave 1.5 Decision E: CLIENT/INTERNAL/ADMIN Captures default straight
-// to NOT_APPLICABLE ("conversion" has no meaning for them) -- only LEAD
-// starts UNRESOLVED and actually drives the Inbox. This is the one
+// to NOT_APPLICABLE ("conversion" has no meaning for them). LEAD and the
+// RMEDIA App's honest UNKNOWN (no canonical Session at capture time) start
+// UNRESOLVED and drive the Inbox. This is the one
 // place that decision is encoded; every write path must call this
 // rather than hard-coding "UNRESOLVED" as a default.
 export function isPositiveId(value: unknown): value is number {
@@ -22,7 +23,7 @@ export function isPositiveId(value: unknown): value is number {
 }
 
 export function defaultOutcomeForContext(context: CaptureContext): CaptureOutcome {
-  return context === "LEAD" ? "UNRESOLVED" : "NOT_APPLICABLE";
+  return context === "LEAD" || context === "UNKNOWN" ? "UNRESOLVED" : "NOT_APPLICABLE";
 }
 
 export function isTerminalOutcome(outcome: CaptureOutcome): boolean {

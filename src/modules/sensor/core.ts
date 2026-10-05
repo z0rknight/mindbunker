@@ -36,6 +36,98 @@ export const SENSOR_SCOPES = [
 ] as const;
 export type SensorScope = (typeof SENSOR_SCOPES)[number];
 
+export type CanonicalExecutionStartInput = {
+  videoId: number;
+  activityType: WorkSessionActivityType;
+};
+
+export type CanonicalExecutionEndInput = { workSessionId: number };
+
+export type SensorCaptureInput = {
+  localCaptureId: string;
+  eventType: "SAMPLE" | "PROPOSAL" | "MEETING" | "INTERNAL_WORK" | "ADMIN_TASK" | "OTHER";
+  note: string;
+  occurredAt: number;
+  schemaVersion: 1;
+  contextSnapshot: Record<string, unknown>;
+  claimedWorkSessionId: number | null;
+};
+
+export type CaptureSessionInterval = {
+  id: number;
+  startedAt: number;
+  endedAt: number | null;
+};
+
+export function resolveCaptureSessionAtOccurredAt<T extends CaptureSessionInterval>(
+  claimedWorkSessionId: number | null,
+  occurredAt: number,
+  session: T | null,
+): { session: T | null; integrityIssue: string | null } {
+  if (claimedWorkSessionId === null) return { session: null, integrityIssue: null };
+  if (!session || session.id !== claimedWorkSessionId) {
+    return { session: null, integrityIssue: "SERVER_WORK_SESSION_NOT_FOUND" };
+  }
+  if (occurredAt < session.startedAt || (session.endedAt !== null && occurredAt > session.endedAt)) {
+    return { session: null, integrityIssue: "SERVER_WORK_SESSION_NOT_ACTIVE_AT_CAPTURE" };
+  }
+  return { session, integrityIssue: null };
+}
+
+export function enrichContextSnapshot(
+  snapshot: Record<string, unknown>,
+  serverResolution: Record<string, unknown> | null,
+  integrityIssues: readonly string[],
+) {
+  return {
+    ...snapshot,
+    integrityIssues: [...new Set(integrityIssues)],
+    serverResolution,
+  };
+}
+
+export const SENSOR_CAPTURE_INSERT_SQL = `
+  INSERT INTO captures
+    (context, event_type, note, started_at, outcome, source, sensor_device_id,
+     local_capture_id, context_snapshot_json, canonical_work_session_id)
+  VALUES (?1, ?2, ?3, ?4, 'UNRESOLVED', 'MAC_SENSOR', ?5, ?6, ?7, ?8)
+  ON CONFLICT(sensor_device_id, local_capture_id) DO NOTHING
+  RETURNING id
+`;
+
+export const RMEDIA_CANONICAL_START_SQL = `
+  INSERT INTO work_sessions (video_id, started_at, activity_type, source, sensor_device_id)
+  SELECT ?1, ?2, ?3, 'MAC_SENSOR', ?4
+  WHERE NOT EXISTS (SELECT 1 FROM work_sessions WHERE ended_at IS NULL)
+  RETURNING id AS work_session_id, video_id, '' AS video_title, NULL AS project_id,
+    NULL AS project_name, NULL AS client_id, NULL AS client_name, '' AS video_kind,
+    activity_type, started_at
+`;
+
+export const RMEDIA_CANONICAL_START_EVENT_SQL = `
+  INSERT OR IGNORE INTO crm_events
+    (client_id, video_id, type, actor, description, created_at, idempotency_key)
+  SELECT ?2, ?1, 'work_session.started', 'admin', ?4, ?3, ?5
+  FROM work_sessions
+  WHERE video_id = ?1 AND ended_at IS NULL AND started_at = ?3
+    AND activity_type = ?6 AND source = 'MAC_SENSOR' AND sensor_device_id = ?7
+  LIMIT 1
+`;
+
+export const RMEDIA_CANONICAL_END_SQL = `
+  UPDATE work_sessions SET ended_at = ?2
+  WHERE id = ?1 AND ended_at IS NULL AND ?2 > started_at
+  RETURNING id
+`;
+
+export const RMEDIA_CANONICAL_END_EVENT_SQL = `
+  INSERT OR IGNORE INTO crm_events
+    (client_id, video_id, type, actor, description, created_at, idempotency_key)
+  SELECT ?2, video_id, 'work_session.ended', 'admin',
+    'Ended work session from RMEDIA App without changing Video status.', ?3, ?4
+  FROM work_sessions WHERE id = ?1 AND ended_at = ?3
+`;
+
 const encoder = new TextEncoder();
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
@@ -114,6 +206,86 @@ function unixSeconds(value: unknown) {
   if (typeof value !== "string") return null;
   const milliseconds = Date.parse(value);
   return Number.isFinite(milliseconds) ? Math.floor(milliseconds / 1_000) : null;
+}
+
+export function validateCanonicalExecutionStart(
+  value: unknown,
+): { success: true; data: CanonicalExecutionStartInput } | { success: false; error: string } {
+  if (!value || typeof value !== "object") return { success: false, error: "Invalid Start Work payload." };
+  const input = value as Record<string, unknown>;
+  if (!positiveInteger(input.video_id)) return { success: false, error: "Invalid video." };
+  if (!WORK_SESSION_ACTIVITY_TYPES.includes(input.activity_type as WorkSessionActivityType)) {
+    return { success: false, error: "Choose a valid activity." };
+  }
+  return {
+    success: true,
+    data: { videoId: Number(input.video_id), activityType: input.activity_type as WorkSessionActivityType },
+  };
+}
+
+export function validateCanonicalExecutionEnd(
+  value: unknown,
+): { success: true; data: CanonicalExecutionEndInput } | { success: false; error: string } {
+  if (!value || typeof value !== "object") return { success: false, error: "Invalid End Session payload." };
+  const workSessionId = (value as Record<string, unknown>).work_session_id;
+  return positiveInteger(workSessionId)
+    ? { success: true, data: { workSessionId: Number(workSessionId) } }
+    : { success: false, error: "Invalid Work Session." };
+}
+
+const SENSOR_CAPTURE_EVENT_TYPES = new Set([
+  "SAMPLE", "PROPOSAL", "MEETING", "INTERNAL_WORK", "ADMIN_TASK", "OTHER",
+]);
+
+export function validateSensorCapture(
+  value: unknown,
+  nowSeconds = Math.floor(Date.now() / 1_000),
+): { success: true; data: SensorCaptureInput } | { success: false; error: string } {
+  if (!value || typeof value !== "object") return { success: false, error: "Invalid capture payload." };
+  const input = value as Record<string, unknown>;
+  const occurredAt = unixSeconds(input.occurred_at);
+  const snapshot = input.context_snapshot;
+  const note = typeof input.note === "string" ? input.note : null;
+  if (!validUUID(input.local_capture_id)) return { success: false, error: "Invalid local capture ID." };
+  if (!SENSOR_CAPTURE_EVENT_TYPES.has(String(input.event_type))) return { success: false, error: "Invalid capture event type." };
+  if (!note || note.trim().length === 0 || note.length > 4_000) return { success: false, error: "Capture text is required and must be under 4,000 characters." };
+  if (occurredAt === null || occurredAt > nowSeconds + 300 || occurredAt < nowSeconds - 90 * 86_400) {
+    return { success: false, error: "Invalid capture time." };
+  }
+  if (input.schema_version !== 1 || !snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    return { success: false, error: "Unsupported Context Snapshot." };
+  }
+  const contextSnapshot = snapshot as Record<string, unknown>;
+  if (contextSnapshot.schemaVersion !== 1) return { success: false, error: "Unsupported Context Snapshot version." };
+  const serialized = JSON.stringify(contextSnapshot);
+  if (new TextEncoder().encode(serialized).byteLength > 32_000) {
+    return { success: false, error: "Context Snapshot is too large." };
+  }
+  // Privacy boundary: a future client may add aggregate counters, but raw
+  // input contents, screenshots and recordings are never valid snapshot
+  // fields at this API boundary.
+  if (/"(?:typedText|keystrokeContent|pressedKeys|screenshot|audioRecording)"\s*:/u.test(serialized)) {
+    return { success: false, error: "Context Snapshot contains prohibited raw input data." };
+  }
+  const execution = contextSnapshot.canonicalExecution;
+  const claimed = execution && typeof execution === "object" && !Array.isArray(execution)
+    ? (execution as Record<string, unknown>).workSessionID
+    : null;
+  if (claimed !== null && claimed !== undefined && !positiveInteger(claimed)) {
+    return { success: false, error: "Invalid canonical execution reference." };
+  }
+  return {
+    success: true,
+    data: {
+      localCaptureId: String(input.local_capture_id),
+      eventType: input.event_type as SensorCaptureInput["eventType"],
+      note,
+      occurredAt,
+      schemaVersion: 1,
+      contextSnapshot,
+      claimedWorkSessionId: claimed === null || claimed === undefined ? null : Number(claimed),
+    },
+  };
 }
 
 export type SensorSessionInput = {

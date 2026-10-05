@@ -6,12 +6,17 @@ import {
   computeTodaySensorOperationalStats,
   createSensorCredential,
   extractBearerToken,
+  enrichContextSnapshot,
   hashSensorToken,
   parseScopes,
   parseSensorToken,
+  resolveCaptureSessionAtOccurredAt,
   resolveSensorConnectivityStatus,
   selectLongSessionCandidates,
   validateObservationBatch,
+  validateCanonicalExecutionEnd,
+  validateCanonicalExecutionStart,
+  validateSensorCapture,
   validateSensorSessionCorrection,
   validateSensorSessionInput,
   validateSensorStopInput,
@@ -265,6 +270,119 @@ test("observation privacy contract accepts aggregates but no raw input fields", 
   assert.equal(validateObservationBatch({ observations: [{ ...row, coordinates: [10, 20] }] }, now).success, false);
   assert.equal(validateObservationBatch({ observations: [{ ...row, ended_at: new Date((now - 61) * 1_000).toISOString() }] }, now).success, false);
   assert.equal(validateObservationBatch({ observations: [] }, now).success, false);
+});
+
+test("RMEDIA canonical execution commands accept only canonical ids and activity vocabulary", () => {
+  assert.deepEqual(
+    validateCanonicalExecutionStart({ video_id: 42, activity_type: "EDITING" }),
+    { success: true, data: { videoId: 42, activityType: "EDITING" } },
+  );
+  assert.equal(validateCanonicalExecutionStart({ video_id: 0, activity_type: "EDITING" }).success, false);
+  assert.equal(validateCanonicalExecutionStart({ video_id: 42, activity_type: "BROWSING" }).success, false);
+  assert.deepEqual(
+    validateCanonicalExecutionEnd({ work_session_id: 91 }),
+    { success: true, data: { workSessionId: 91 } },
+  );
+  assert.equal(validateCanonicalExecutionEnd({ work_session_id: null }).success, false);
+});
+
+test("RMEDIA capture preserves human text and factual snapshot without requiring a Session", () => {
+  const now = 2_000_000_000;
+  const payload = {
+    local_capture_id: "52dd6ad8-770e-4bc9-a200-c453fea749cf",
+    event_type: "OTHER",
+    note: "Researching reference footage.",
+    occurred_at: new Date(now * 1_000).toISOString(),
+    schema_version: 1,
+    context_snapshot: {
+      schemaVersion: 1,
+      capturedAt: new Date(now * 1_000).toISOString(),
+      machineState: "INTERACTIVE",
+      foregroundApplication: "Safari",
+      canonicalExecution: null,
+      provenance: { foreground_application: "SYSTEM_OBSERVED" },
+    },
+  };
+  const parsed = validateSensorCapture(payload, now);
+  assert.equal(parsed.success, true);
+  assert.equal(parsed.data.note, payload.note);
+  assert.equal(parsed.data.claimedWorkSessionId, null);
+  assert.equal(parsed.data.contextSnapshot.foregroundApplication, "Safari");
+});
+
+test("RMEDIA capture extracts Session identity but rejects raw input content and oversized snapshots", () => {
+  const now = 2_000_000_000;
+  const base = {
+    local_capture_id: "52dd6ad8-770e-4bc9-a200-c453fea749cf",
+    event_type: "OTHER",
+    note: "Client requested a music change.",
+    occurred_at: new Date(now * 1_000).toISOString(),
+    schema_version: 1,
+    context_snapshot: {
+      schemaVersion: 1,
+      canonicalExecution: { workSessionID: 392 },
+    },
+  };
+  const parsed = validateSensorCapture(base, now);
+  assert.equal(parsed.success, true);
+  assert.equal(parsed.data.claimedWorkSessionId, 392);
+  assert.equal(validateSensorCapture({
+    ...base,
+    context_snapshot: { schemaVersion: 1, typedText: "secret" },
+  }, now).success, false);
+  assert.equal(validateSensorCapture({
+    ...base,
+    context_snapshot: { schemaVersion: 1, filler: "x".repeat(33_000) },
+  }, now).success, false);
+});
+
+test("capture correlation uses occurred_at, including delayed ingest after Session end", () => {
+  const session = { id: 392, startedAt: 1_000, endedAt: 1_600, videoId: 44 };
+  assert.deepEqual(resolveCaptureSessionAtOccurredAt(392, 1_300, session), {
+    session,
+    integrityIssue: null,
+  });
+  assert.equal(resolveCaptureSessionAtOccurredAt(392, 1_700, session).session, null);
+  assert.equal(
+    resolveCaptureSessionAtOccurredAt(392, 1_700, session).integrityIssue,
+    "SERVER_WORK_SESSION_NOT_ACTIVE_AT_CAPTURE",
+  );
+});
+
+test("capture correlation never guesses missing or mismatched Session identity", () => {
+  const session = { id: 392, startedAt: 1_000, endedAt: null, videoId: 44 };
+  assert.deepEqual(resolveCaptureSessionAtOccurredAt(null, 1_300, session), {
+    session: null,
+    integrityIssue: null,
+  });
+  assert.equal(
+    resolveCaptureSessionAtOccurredAt(999, 1_300, session).integrityIssue,
+    "SERVER_WORK_SESSION_NOT_FOUND",
+  );
+  assert.equal(
+    resolveCaptureSessionAtOccurredAt(392, 900, session).integrityIssue,
+    "SERVER_WORK_SESSION_NOT_ACTIVE_AT_CAPTURE",
+  );
+});
+
+test("server canonical resolution wins while mismatched Mac hints remain provenance evidence", () => {
+  const localSnapshot = {
+    schemaVersion: 1,
+    captureFreshnessSeconds: 75,
+    canonicalExecution: { workSessionID: 392, videoID: 999, projectID: 998, clientID: 997 },
+  };
+  const serverResolution = {
+    provenance: "CANONICAL_RESOLVED",
+    workSessionID: 392,
+    videoID: 44,
+    projectID: 20,
+    clientID: 2,
+  };
+  const enriched = enrichContextSnapshot(localSnapshot, serverResolution, ["STALE_SENSOR_EVIDENCE"]);
+  assert.equal(enriched.canonicalExecution.clientID, 997, "local hint remains preserved, not rewritten as if observed differently");
+  assert.equal(enriched.serverResolution.clientID, 2, "server resolution is the canonical identity consumers must use");
+  assert.equal(enriched.captureFreshnessSeconds, 75, "stale observed evidence remains stored without becoming canonical");
+  assert.deepEqual(enriched.integrityIssues, ["STALE_SENSOR_EVIDENCE"]);
 });
 
 test("Sensor Operational Ledger: correction validation preserves the same non-CLIENT rules as Start", () => {
