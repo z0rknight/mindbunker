@@ -17,7 +17,7 @@ The original February 2026 visual design is the canonical interface. The separat
   - [x] Confirmed `work_sessions.source = MANUAL` is the existing canonical untracked-time path; no duplicate adjustment table added
   - [x] Audited native permission behavior as truthful/privacy-preserving and added bundle version/build/source provenance plus a documented deliberate candidate-update path; 52/52 native tests and stable-signed release build pass
   - [x] Added local-only Film Rolls reference inventory with month/search/rating filters and counted subjects, backed by additive migration 0055; no media hosting and no production migration
-  - [x] Human local Safari QA passed for Film Rolls list/form and Pricing Lab evidence/override; MindBunker source `77866f1`, Sensor source `496f42a`, stable-signed build 15 SHA-256 `384ceae…c8cb`
+  - [x] Human local Safari QA passed for Film Rolls list/form and Pricing Lab evidence/override; implementation commit `fca957d`, Sensor source `496f42a`, stable-signed build 15 SHA-256 `384ceae…c8cb`
   - [x] Classified current Dashboard redundancy as NOT A BUG; deferred Before/After approval, native URL mutation and updater network infrastructure until their canonical contracts can be implemented coherently
   - [x] Production stayed at migration 0054; no deploy, remote write, installed-app replacement or credential change
 
