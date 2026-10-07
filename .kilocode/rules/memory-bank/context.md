@@ -10,6 +10,16 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Taryn legacy cleanup + passwordless portal alignment (2026-10-07, production)**
+  - [x] Archived the five exact historical Taryn projects (1, 4, 5, 15, 16), including all three Content Waterfalls, and removed 41 preserved legacy videos from client visibility, priority, and active queue placement without deleting rows or rewriting editorial status
+  - [x] Preserved current DFY execution: Videos 85 `Front Door Video 11` and 86 `Offer Doc` remain IN_PROGRESS and visible in active Project 19
+  - [x] Extended the explicit Taryn canonical identity registry so Client 2 portal projections include owned work under operational alias 12; archived projects and unrelated clients remain excluded, and client actions fail closed on archived work
+  - [x] Made active operator queue membership require a non-archived Project, keeping historical unassigned Taryn rows in evidence/history rather than execution
+  - [x] Promoted the existing expiring, revocable Gateway capability URL as the simple no-password portal path that can be sent manually through Slack/email; password login remains a fallback and no Slack bot/OTP subsystem was added
+  - [x] Deployed source `9b94855`: Operator Worker `b74835a8-c22e-4243-bb02-98f65a016bc0`, Client Worker `313a3368-a8c3-43af-8cd2-918a163fc043`
+  - [x] Pre-write D1 export SHA-256 `b55f802e5e96b75d649d0f8a7ea3e2422246be84d056448ec78c87b378df6222`; production head stayed 0054, no migration, FK check empty, quick check ok
+  - [x] 1584/1584 tests, typecheck, operator/client builds, lint 0 errors / 3 pre-existing warnings and public HTTP smoke pass
+
 - [x] **Pre-Wave 1 — RMEDIA capture custody and operator-flow reconciliation (2026-10-07, local candidate)**
   - [x] Added a read-only RMEDIA Quick Captures lane that preserves occurred time versus ingestion time, canonical Session association, captured Client/Project/Video path, observed app, and fail-closed integrity warnings
   - [x] Removed native operational notes from generic promotion actions and stale unresolved-capture signaling without rewriting or promoting any evidence
