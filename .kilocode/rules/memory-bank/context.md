@@ -16,6 +16,7 @@ The original February 2026 visual design is the canonical interface. The separat
   - [x] Added explicit Bulk Add guidance separating Project Source Media from delivery, review, and published URLs; confirmed `Source Media = 0` was caused by source footage being entered as `published_url`, not a projection defect
   - [x] Added a visible native Notes route plus sync-state and canonical Session evidence; capture, credential, privacy, API, and sync contracts remain unchanged
   - [x] Deferred universal internal-work execution because canonical Start still accepts only `video_id`; no speculative entity or schema was added
+  - [x] Read-only production reconciliation proved Session 105 closed at 5,423s against Offer Doc, the Video remained IN_PROGRESS, Quick Capture 8 preserved occurred-at versus ingestion and the canonical relationship path, Source Media stayed zero because the Drive source was stored in `published_url`, and D1 FK/quick checks were green; writes remained zero
   - [x] 1581/1581 web tests, typecheck, production build, lint with 0 errors / 3 pre-existing warnings, 52/52 native tests, debug/release native builds, isolated migrations through 0054, FK and integrity checks pass
   - [x] Separate signed candidate executable SHA-256 `69978acc06c375eac7f21058a9de63a390e69b6df4406246d30ee06e0065a419`; installed app, production Worker/D1, credentials, and production migration state untouched
 

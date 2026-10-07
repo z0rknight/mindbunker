@@ -48,6 +48,21 @@ The Bulk Add helper copy now makes the boundary explicit:
 
 Existing data was not rewritten.
 
+### Session 105 read-only reconciliation
+
+A final remote read-only query (`changes=0`, `changed_db=false`, `rows_written=0`) confirmed the real operation after it ended:
+
+- Session `105` targets Video `86`, **Offer Doc**, Project `19`, **GEOFF - September Long Form Videos**, canonical Taryn client `2`;
+- Session source is `MAC_SENSOR`, activity is `EDITING`, and the interval is closed at **5,423 seconds / 1h30m23s**;
+- Offer Doc remains `IN_PROGRESS`; ending the Session did not finish the Video;
+- the Video has one closed canonical Session totaling the same 5,423 seconds;
+- Quick Capture `8`, “terminei a limpeza no video”, is associated with Session `105` and preserves its occurrence one second before ingestion;
+- the snapshot resolves the same Client → Project → Video → Session path with zero recorded integrity issues;
+- the Project still has zero canonical Source Media references while the source-like Drive file sits in `published_url`, confirming the semantic data-entry mismatch;
+- production foreign-key check returned no rows and `quick_check` returned `ok`.
+
+This verification read production state but performed no mutation.
+
 ### Internal work
 
 The domain already recognizes INTERNAL and ADMIN work contexts, but the canonical Start API still accepts only a `video_id`. A universal execution target would therefore be a new contract, not a small UI patch. It is deliberately deferred until the Live Editing Lab and at least one real internal operation provide enough repeated evidence.
