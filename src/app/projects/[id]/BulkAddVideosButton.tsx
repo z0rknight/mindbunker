@@ -305,6 +305,9 @@ export function BulkAddVideosButton({ projectId }: { projectId: number }) {
                       </button>
                       {row.detailsOpen && (
                         <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <p className="sm:col-span-2 text-[11px] leading-4 text-zinc-500">
+                            Source footage does not belong in these fields. After creating the Videos, record the client&apos;s Drive, Dropbox, NAS or camera source under Project → Source Media.
+                          </p>
                           <div>
                             <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-600">Status (row override)</label>
                             <select
@@ -329,6 +332,7 @@ export function BulkAddVideosButton({ projectId }: { projectId: number }) {
                                   placeholder="https://…"
                                   className="w-full min-w-0 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white text-xs focus:outline-none focus:border-violet-500"
                                 />
+                                <p className="mt-1 text-[10px] leading-4 text-zinc-600">Delivered file or private watch link visible to the client.</p>
                               </div>
                               <div>
                                 <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-600">Review URL</label>
@@ -339,6 +343,7 @@ export function BulkAddVideosButton({ projectId }: { projectId: number }) {
                                   placeholder="https://…"
                                   className="w-full min-w-0 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white text-xs focus:outline-none focus:border-violet-500"
                                 />
+                                <p className="mt-1 text-[10px] leading-4 text-zinc-600">The destination used for feedback, usually Frame.io.</p>
                               </div>
                               <div>
                                 <label className="mb-1 block text-[10px] font-bold uppercase text-zinc-600">Published URL</label>
@@ -349,6 +354,7 @@ export function BulkAddVideosButton({ projectId }: { projectId: number }) {
                                   placeholder="https://…"
                                   className="w-full min-w-0 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white text-xs focus:outline-none focus:border-violet-500"
                                 />
+                                <p className="mt-1 text-[10px] leading-4 text-zinc-600">Final public destination only — not the source file.</p>
                               </div>
                             </>
                           )}

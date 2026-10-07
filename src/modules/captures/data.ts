@@ -2,7 +2,7 @@ import "server-only";
 
 import { getAuthenticatedDb } from "@/db";
 import { captures } from "@/db/schema";
-import { and, desc, eq, isNull, isNotNull, lt } from "drizzle-orm";
+import { and, desc, eq, isNull, isNotNull, lt, ne, or } from "drizzle-orm";
 import { CAPTURE_UNRESOLVED_SIGNAL_DAYS } from "./config";
 import { isCaptureResolved } from "./core";
 
@@ -72,6 +72,10 @@ export async function countStaleUnresolvedCaptures(now: Date): Promise<number> {
         eq(captures.outcome, "UNRESOLVED"),
         isNull(captures.dismissedAt),
         lt(captures.createdAt, new Date(thresholdMs)),
+        // Native RMEDIA Quick Captures are immutable operational notes, not
+        // unattended promotion decisions. They remain visible in their own
+        // read-only Inbox section but must not generate a stale lead signal.
+        or(ne(captures.source, "MAC_SENSOR"), isNull(captures.localCaptureId)),
       ),
     );
   return rows.length;

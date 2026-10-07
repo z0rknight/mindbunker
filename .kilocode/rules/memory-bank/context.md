@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Pre-Wave 1 — RMEDIA capture custody and operator-flow reconciliation (2026-10-07, local candidate)**
+  - [x] Added a read-only RMEDIA Quick Captures lane that preserves occurred time versus ingestion time, canonical Session association, captured Client/Project/Video path, observed app, and fail-closed integrity warnings
+  - [x] Removed native operational notes from generic promotion actions and stale unresolved-capture signaling without rewriting or promoting any evidence
+  - [x] Added explicit Bulk Add guidance separating Project Source Media from delivery, review, and published URLs; confirmed `Source Media = 0` was caused by source footage being entered as `published_url`, not a projection defect
+  - [x] Added a visible native Notes route plus sync-state and canonical Session evidence; capture, credential, privacy, API, and sync contracts remain unchanged
+  - [x] Deferred universal internal-work execution because canonical Start still accepts only `video_id`; no speculative entity or schema was added
+  - [x] 1581/1581 web tests, typecheck, production build, lint with 0 errors / 3 pre-existing warnings, 52/52 native tests, debug/release native builds, isolated migrations through 0054, FK and integrity checks pass
+  - [x] Separate signed candidate executable SHA-256 `69978acc06c375eac7f21058a9de63a390e69b6df4406246d30ee06e0065a419`; installed app, production Worker/D1, credentials, and production migration state untouched
+
 - [x] **Wave 5 — Dashboard / Operating Reality (2026-10-04, local candidate)**
   - [x] Replaced the action-heavy Home dashboard with one observational Operating Reality composition; War Room remains the sole execution owner and Dashboard exposes only bounded links and global entity drawers
   - [x] Composed canonical Wave 1 execution, Wave 4 Project membership/progress/integrity, Finance received/receivable/expected evidence, Work Sessions, Sensor observation, timestamped output events and War Room signals without introducing a second source of truth
