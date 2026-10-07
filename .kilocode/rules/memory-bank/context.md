@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Pré-Wave 1 human QA closeout (2026-10-07, BLOCKED / no corrective implementation)**
+  - [x] Proved the exact native candidate `69978acc…a419` launches under the normal user context, reads the current Offer Doc catalog, preserves local Quick Notes across relaunch, and leaves canonical execution idle when no Work Session is active
+  - [x] Read-only D1 checks reconfirmed Capture 8 → Session 105 → Offer Doc, occurred-at one second before recorded-at, 5,423s canonical tracked time, no promotion links, no active Session, and Offer Doc still IN_PROGRESS
+  - [x] Human UI found the direct Notes control absent from Home and found synchronized notes omitting both `Synced` and canonical Session association despite those values existing in local SQLite
+  - [x] Launching the separate candidate repeatedly co-launched the installed app because both share the same bundle identity; exact-process isolation was required to avoid inspecting the wrong binary
+  - [x] Source-authority audit proved `ef42ed0` and `a3cca63` are ancestors of deployed housekeeping source `9b94855`; therefore the MindBunker Pré-Wave code is already present in the current production Worker and the stated non-deployed premise cannot be certified
+  - [x] Start/ACTIVE/End, a new meaningful Offer Doc capture, Pending/Failed/Local-only visual states, and the MindBunker browser surface remain unproven; no synthetic editing Session was created and the saved browser policy blocked the production page
+  - [x] No product code, schema, migration, deploy, rollback, or production cleanup performed during closeout
+
 - [x] **Taryn legacy cleanup + passwordless portal alignment (2026-10-07, production)**
   - [x] Archived the five exact historical Taryn projects (1, 4, 5, 15, 16), including all three Content Waterfalls, and removed 41 preserved legacy videos from client visibility, priority, and active queue placement without deleting rows or rewriting editorial status
   - [x] Preserved current DFY execution: Videos 85 `Front Door Video 11` and 86 `Offer Doc` remain IN_PROGRESS and visible in active Project 19
