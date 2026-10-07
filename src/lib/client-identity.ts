@@ -50,6 +50,24 @@ export function isOperationalAliasClientId(clientId: number): boolean {
 }
 
 /**
+ * Every operational Client row that belongs to one canonical relationship.
+ *
+ * This is intentionally backed by the same small explicit registry as
+ * canonicalClientId/clientWorkMode. It does not discover or infer aliases
+ * from names, notes, or activity, so a client-facing authorization scope can
+ * include Taryn's established DFY surface without widening to an unrelated
+ * row that merely has a similar label.
+ */
+export function operationalClientIdsForCanonical(clientId: number): number[] {
+  const canonicalId = canonicalClientId(clientId);
+  const ids = new Set<number>([canonicalId]);
+  for (const [operationalId, context] of CLIENT_RELATIONSHIP_CONTEXT) {
+    if (context.canonicalClientId === canonicalId) ids.add(operationalId);
+  }
+  return [...ids].sort((a, b) => a - b);
+}
+
+/**
  * True when `name` is one of RMEDIA's known exact internal labels (exact
  * match, case/whitespace-insensitive). The parenthesized label is retained
  * for existing local/prod rows; neither branch is fuzzy, so an external

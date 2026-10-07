@@ -8,6 +8,7 @@ import { validateDeliveryUrl, validateCoverUrl } from "../productivity/core.ts";
 import type { ProjectStatus } from "../projects/config.ts";
 import { resolveCoverUrl, toClientWorkerCoverUrl } from "../media/core.ts";
 import type { ClientQuoteSummary } from "../quotes/core.ts";
+import { canonicalClientId } from "../../lib/client-identity.ts";
 
 export const CLIENT_VIDEO_STATUS_LABELS: Record<VideoStatus, string> = {
   PLANNED: "Planned",
@@ -117,7 +118,7 @@ export function buildClientPortalProjects(
   videoRows: readonly ClientPortalVideoRow[],
 ): ClientPortalProject[] {
   const ownedProjects = projectRows
-    .filter((project) => project.clientId === authenticatedClientId)
+    .filter((project) => canonicalClientId(project.clientId) === authenticatedClientId)
     .toSorted((a, b) => {
       const statusDifference =
         PROJECT_STATUS_ORDER[a.status] - PROJECT_STATUS_ORDER[b.status];
@@ -137,8 +138,9 @@ export function buildClientPortalProjects(
         (video) =>
           video.projectId === project.id &&
           ownedProjectIds.has(project.id) &&
-          video.clientId === authenticatedClientId &&
-          video.projectClientId === authenticatedClientId,
+          video.clientId !== null &&
+          canonicalClientId(video.clientId) === authenticatedClientId &&
+          canonicalClientId(video.projectClientId) === authenticatedClientId,
       )
       .map((video) => {
         const deliveryUrl = validateDeliveryUrl(video.deliveryUrl);
@@ -402,7 +404,7 @@ export function buildClientDashboard(
   now: Date,
 ): ClientDashboard {
   const ownedProjects = projectRows.filter(
-    (project) => project.clientId === authenticatedClientId,
+    (project) => canonicalClientId(project.clientId) === authenticatedClientId,
   );
   const projectNameById = new Map(
     ownedProjects.map((project) => [project.id, project.name]),
@@ -411,8 +413,9 @@ export function buildClientDashboard(
 
   const ownedVideos = videoRows.filter(
     (video) =>
-      video.clientId === authenticatedClientId &&
-      video.projectClientId === authenticatedClientId &&
+      video.clientId !== null &&
+      canonicalClientId(video.clientId) === authenticatedClientId &&
+      canonicalClientId(video.projectClientId) === authenticatedClientId &&
       (video.projectId === null || ownedProjectIds.has(video.projectId)),
   );
   const ownedVideoIds = new Set(ownedVideos.map((video) => video.id));

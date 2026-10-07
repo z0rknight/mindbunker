@@ -53,6 +53,9 @@ export default async function ClientLoginPage() {
           <p className="mt-2 max-w-sm text-sm leading-6 text-zinc-500">
             Your content. Your projects. Your reviews.
           </p>
+          <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-600">
+            If RMEDIA sent you a secure portal link, open that link directly — no password is required.
+          </p>
         </div>
 
         <ClientLoginForm />

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   canonicalClientId,
   clientWorkMode,
+  operationalClientIdsForCanonical,
   displayClientName,
   getClientAccent,
   isInternalClientName,
@@ -11,6 +12,12 @@ import {
   resolveVideoKindForClient,
   splitIntentionalWork,
 } from "./client-identity.ts";
+
+test("canonical relationship scope includes Taryn DIRECT and DFY only", () => {
+  assert.deepEqual(operationalClientIdsForCanonical(2), [2, 12]);
+  assert.deepEqual(operationalClientIdsForCanonical(12), [2, 12]);
+  assert.deepEqual(operationalClientIdsForCanonical(99), [99]);
+});
 
 test("Taryn DFY is a structured work mode under one canonical Taryn relationship", () => {
   assert.equal(canonicalClientId(2), 2);

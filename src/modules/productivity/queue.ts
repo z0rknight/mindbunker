@@ -1,4 +1,5 @@
 import type { VideoKind, VideoOrientation, VideoStatus } from "./config";
+import type { ProjectStatus } from "../projects/config";
 
 // P0.4 (Tuesday Reality & Usability Patch): the solo-operator global
 // execution queue. video_logs is already the canonical executable work
@@ -10,11 +11,15 @@ import type { VideoKind, VideoOrientation, VideoStatus } from "./config";
 export function isQueueEligible(video: {
   videoKind: VideoKind;
   status: VideoStatus;
+  projectId: number | null;
+  projectStatus: ProjectStatus | null;
   isOperationalContainer?: boolean;
   cancelledAt?: Date | string | null;
 }): boolean {
   return video.videoKind === "CLIENT_WORK" &&
     video.status !== "DONE" &&
+    video.projectId !== null &&
+    video.projectStatus !== "archived" &&
     !video.isOperationalContainer &&
     !video.cancelledAt;
 }
@@ -44,6 +49,7 @@ export type QueueEligibleVideo = {
   clientName: string | null;
   projectId: number | null;
   projectName: string | null;
+  projectStatus: ProjectStatus | null;
   projectDeadline: string | null;
   coverUrl: string | null;
   // Sep 16 Operational Reality Patch: same fallback chain Projects

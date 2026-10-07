@@ -385,8 +385,11 @@ export function OpportunityPanel({
 
               <div className="space-y-2 rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-3">
                 <label htmlFor="generatedClientPortalUrl" className="text-xs font-bold text-cyan-300">
-                  The Vault · delivery status
+                  Secure portal link · no password
                 </label>
+                <p className="text-[11px] leading-5 text-zinc-500">
+                  Send this private, revocable link by Slack or email. The client opens the portal directly without creating or remembering a password.
+                </p>
                 <textarea
                   id="generatedClientPortalUrl"
                   readOnly
@@ -400,7 +403,7 @@ export function OpportunityPanel({
                     onClick={() => copyPrivateLink(clientPortalUrl, "Vault")}
                     className="min-h-12 flex-1 rounded-xl bg-cyan-500 px-4 text-sm font-black text-zinc-950 transition hover:bg-cyan-400 active:scale-[0.99]"
                   >
-                    Copy Vault link
+                    Copy secure portal link
                   </button>
                   <a
                     href={clientPortalUrl}

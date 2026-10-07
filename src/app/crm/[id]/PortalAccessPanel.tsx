@@ -84,7 +84,7 @@ export function PortalAccessPanel({
           <p className="mt-1 text-sm text-zinc-300">
             {hasAccess
               ? `Active since ${formatDate(portalPasswordSetAt) ?? "an earlier date"}`
-              : "No persistent login set up yet — the client can still use a Vault link."}
+              : "No persistent login set up — use a secure portal link when the client should not manage a password."}
           </p>
         </div>
         <div className="flex gap-2">

@@ -37,14 +37,16 @@ function buildMigratedDb() {
 // Mirrors data.ts's getClientPortalView project/video SELECT verbatim
 // (minus the token->clientId resolution, which is gateway/auth-data's job,
 // not this module's).
-function selectPortalRowsForClient(db, clientId) {
+function selectPortalRowsForClient(db, clientId, clientScope = [clientId]) {
+  const placeholders = clientScope.map(() => "?").join(", ");
   const projectRows = db
     .prepare(
       `SELECT id, client_id as clientId, name, status, deadline
-       FROM projects WHERE client_id = ? AND visible_to_client = 1
+       FROM projects WHERE client_id IN (${placeholders}) AND visible_to_client = 1
+         AND status <> 'archived'
        ORDER BY updated_at DESC, id DESC`,
     )
-    .all(clientId);
+    .all(...clientScope);
   const videoRows = db
     .prepare(
       `SELECT
@@ -65,12 +67,13 @@ function selectPortalRowsForClient(db, clientId) {
          v.updated_at as updatedAt
        FROM video_logs v
        INNER JOIN projects p ON v.project_id = p.id
-       WHERE v.client_id = ? AND p.client_id = ?
+       WHERE v.client_id IN (${placeholders}) AND p.client_id IN (${placeholders})
          AND p.visible_to_client = 1 AND v.visible_to_client = 1
+         AND p.status <> 'archived'
          AND v.is_operational_container = 0 AND v.cancelled_at IS NULL
        ORDER BY v.updated_at DESC, v.created_at DESC`,
     )
-    .all(clientId, clientId)
+    .all(...clientScope, ...clientScope)
     .map((row) => ({
       ...row,
       createdAt: row.createdAt ? new Date(row.createdAt * 1000) : null,
@@ -83,14 +86,16 @@ function selectPortalRowsForClient(db, clientId) {
 // SELECT verbatim -- unlike getClientPortalView's video SELECT above, this
 // one also carries orientation/contentType/isPriority (ClientDashboardVideoRow
 // needs them; ClientPortalVideoRow doesn't).
-function selectDashboardRowsForClient(db, clientId) {
+function selectDashboardRowsForClient(db, clientId, clientScope = [clientId]) {
+  const placeholders = clientScope.map(() => "?").join(", ");
   const projectRows = db
     .prepare(
       `SELECT id, client_id as clientId, name, status, deadline
-       FROM projects WHERE client_id = ? AND visible_to_client = 1
+       FROM projects WHERE client_id IN (${placeholders}) AND visible_to_client = 1
+         AND status <> 'archived'
        ORDER BY updated_at DESC, id DESC`,
     )
-    .all(clientId);
+    .all(...clientScope);
   const videoRows = db
     .prepare(
       `SELECT
@@ -114,12 +119,13 @@ function selectDashboardRowsForClient(db, clientId) {
          v.updated_at as updatedAt
        FROM video_logs v
        INNER JOIN projects p ON v.project_id = p.id
-       WHERE v.client_id = ? AND p.client_id = ?
+       WHERE v.client_id IN (${placeholders}) AND p.client_id IN (${placeholders})
          AND p.visible_to_client = 1 AND v.visible_to_client = 1
+         AND p.status <> 'archived'
          AND v.is_operational_container = 0 AND v.cancelled_at IS NULL
        ORDER BY v.updated_at DESC, v.created_at DESC`,
     )
-    .all(clientId, clientId)
+    .all(...clientScope, ...clientScope)
     .map((row) => ({
       ...row,
       isPriority: Boolean(row.isPriority),
@@ -130,10 +136,10 @@ function selectDashboardRowsForClient(db, clientId) {
     .prepare(
       `SELECT video_id as videoId, created_at as createdAt
        FROM crm_events
-       WHERE client_id = ? AND type = 'video.finished'
+       WHERE client_id IN (${placeholders}) AND type = 'video.finished'
        ORDER BY created_at DESC LIMIT 100`,
     )
-    .all(clientId)
+    .all(...clientScope)
     .map((row) => ({
       ...row,
       createdAt: row.createdAt ? new Date(row.createdAt * 1000) : null,
@@ -263,6 +269,32 @@ test("explicit project/video visibility controls remove rows from both client pr
   assert.equal(dashboard.projectRows.some((row) => row.id === 11), false);
   assert.equal(dashboard.videoRows.some((row) => row.id === 201), false);
   assert.equal(dashboard.videoRows.some((row) => row.projectId === 11), false);
+});
+
+test("canonical Taryn portal hides archived history and includes only the active DFY surface", () => {
+  const db = buildMigratedDb();
+  db.exec(`
+    INSERT INTO clients (id, name, status) VALUES
+      (2, 'Taryn Dubreuil', 'active'),
+      (12, 'Taryn DFY', 'active'),
+      (99, 'Other Client', 'active');
+    INSERT INTO projects (id, client_id, name, status, visible_to_client) VALUES
+      (20, 2, 'September Content Waterfall', 'archived', 1),
+      (21, 12, 'GEOFF - September Long Form Videos', 'active', 1),
+      (22, 99, 'Other Client Secret', 'active', 1);
+    INSERT INTO video_logs (id, project_id, client_id, title, date, status) VALUES
+      (200, 20, 2, 'Old waterfall', '2026-09-10', 'DONE'),
+      (201, 21, 12, 'Offer Doc', '2026-10-06', 'IN_PROGRESS'),
+      (202, 22, 99, 'Secret', '2026-10-06', 'IN_PROGRESS');
+  `);
+
+  const rows = selectDashboardRowsForClient(db, 2, [2, 12]);
+  const result = buildClientDashboard(2, rows.projectRows, rows.videoRows, rows.completionEventRows, new Date("2026-10-07T12:00:00Z"));
+
+  assert.deepEqual(result.allVideos.map((video) => video.title), ["Offer Doc"]);
+  assert.equal(result.activeProjectsCount, 1);
+  assert.equal(JSON.stringify(result).includes("Old waterfall"), false);
+  assert.equal(JSON.stringify(result).includes("Secret"), false);
 });
 
 // Dave Monday Release: getClientDashboardView's server-side financial gate

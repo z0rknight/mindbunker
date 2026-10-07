@@ -20,6 +20,7 @@ function video(overrides) {
     clientName: "Client",
     projectId: 1,
     projectName: "Project",
+    projectStatus: "active",
     projectDeadline: null,
     coverUrl: null,
     orientation: null,
@@ -32,19 +33,31 @@ function video(overrides) {
 }
 
 test("eligibility: only CLIENT_WORK and not DONE", () => {
-  assert.equal(isQueueEligible({ videoKind: "CLIENT_WORK", status: "PLANNED" }), true);
-  assert.equal(isQueueEligible({ videoKind: "CLIENT_WORK", status: "DONE" }), false);
-  assert.equal(isQueueEligible({ videoKind: "SAMPLE", status: "PLANNED" }), false);
-  assert.equal(isQueueEligible({ videoKind: "INTERNAL", status: "IN_PROGRESS" }), false);
+  const activeProject = { projectId: 1, projectStatus: "active" };
+  assert.equal(isQueueEligible({ ...activeProject, videoKind: "CLIENT_WORK", status: "PLANNED" }), true);
+  assert.equal(isQueueEligible({ ...activeProject, videoKind: "CLIENT_WORK", status: "DONE" }), false);
+  assert.equal(isQueueEligible({ ...activeProject, videoKind: "SAMPLE", status: "PLANNED" }), false);
+  assert.equal(isQueueEligible({ ...activeProject, videoKind: "INTERNAL", status: "IN_PROGRESS" }), false);
+});
+
+test("archived and unassigned client work stays in history, never the active queue", () => {
+  assert.equal(
+    isQueueEligible({ projectId: 5, projectStatus: "archived", videoKind: "CLIENT_WORK", status: "PLANNED" }),
+    false,
+  );
+  assert.equal(
+    isQueueEligible({ projectId: null, projectStatus: null, videoKind: "CLIENT_WORK", status: "PLANNED" }),
+    false,
+  );
 });
 
 test("operational batch containers never appear as executable videos", () => {
   assert.equal(
-    isQueueEligible({ videoKind: "CLIENT_WORK", status: "PLANNED", isOperationalContainer: true }),
+    isQueueEligible({ projectId: 1, projectStatus: "active", videoKind: "CLIENT_WORK", status: "PLANNED", isOperationalContainer: true }),
     false,
   );
   assert.equal(
-    isQueueEligible({ videoKind: "CLIENT_WORK", status: "PLANNED", isOperationalContainer: false }),
+    isQueueEligible({ projectId: 1, projectStatus: "active", videoKind: "CLIENT_WORK", status: "PLANNED", isOperationalContainer: false }),
     true,
   );
 });

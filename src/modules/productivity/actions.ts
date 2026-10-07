@@ -4,6 +4,7 @@ import "server-only";
 
 import { getAuthenticatedDb, getDb } from "@/db";
 import { isClientAuthenticated } from "@/lib/client-portal-session";
+import { canonicalClientId } from "@/lib/client-identity";
 import {
   billingAllocations,
   blockers,
@@ -664,12 +665,15 @@ export async function reorderExecutionQueueItem(
       id: videoLogs.id,
       status: videoLogs.status,
       videoKind: videoLogs.videoKind,
+      projectId: videoLogs.projectId,
+      projectStatus: projects.status,
       isOperationalContainer: videoLogs.isOperationalContainer,
       queuePosition: videoLogs.queuePosition,
       createdAt: videoLogs.createdAt,
       updatedAt: videoLogs.updatedAt,
     })
-    .from(videoLogs);
+    .from(videoLogs)
+    .leftJoin(projects, eq(videoLogs.projectId, projects.id));
 
   const eligible = rows.filter(isQueueEligible);
   const positioned = eligible
@@ -721,12 +725,15 @@ export async function moveExecutionQueueItemBefore(
       id: videoLogs.id,
       status: videoLogs.status,
       videoKind: videoLogs.videoKind,
+      projectId: videoLogs.projectId,
+      projectStatus: projects.status,
       isOperationalContainer: videoLogs.isOperationalContainer,
       queuePosition: videoLogs.queuePosition,
       createdAt: videoLogs.createdAt,
       updatedAt: videoLogs.updatedAt,
     })
-    .from(videoLogs);
+    .from(videoLogs)
+    .leftJoin(projects, eq(videoLogs.projectId, projects.id));
   const eligible = rows.filter(isQueueEligible);
   const orderedIds = [
     ...eligible.filter((row) => row.queuePosition !== null).sort((a, b) => (a.queuePosition as number) - (b.queuePosition as number)),
@@ -1045,6 +1052,7 @@ export async function transitionVideoStatusAsClient(
   ) {
     return { success: false, error: "Invalid request." };
   }
+  const canonicalAuthenticatedClientId = canonicalClientId(clientId);
 
   const db = await getDb();
   const current = await db
@@ -1052,26 +1060,37 @@ export async function transitionVideoStatusAsClient(
       id: videoLogs.id,
       title: videoLogs.title,
       clientId: videoLogs.clientId,
+      projectClientId: projects.clientId,
+      projectStatus: projects.status,
       status: videoLogs.status,
       startedAt: videoLogs.startedAt,
       visibleToClient: videoLogs.visibleToClient,
       projectVisibleToClient: projects.visibleToClient,
-      clientCanReview: clients.portalCanReview,
     })
     .from(videoLogs)
     .leftJoin(projects, eq(videoLogs.projectId, projects.id))
-    .leftJoin(clients, eq(videoLogs.clientId, clients.id))
     .where(eq(videoLogs.id, videoId))
     .limit(1);
+  const clientPermission = (
+    await db
+      .select({ canReview: clients.portalCanReview })
+      .from(clients)
+      .where(eq(clients.id, canonicalAuthenticatedClientId))
+      .limit(1)
+  )[0];
   // Deliberately identical "not found" error whether the video doesn't
   // exist or belongs to a different client -- never confirm to a client
   // that a given videoId exists in someone else's account.
   if (
     !current[0] ||
-    current[0].clientId !== clientId ||
+    current[0].clientId === null ||
+    current[0].projectClientId === null ||
+    canonicalClientId(current[0].clientId) !== canonicalAuthenticatedClientId ||
+    canonicalClientId(current[0].projectClientId) !== canonicalAuthenticatedClientId ||
+    current[0].projectStatus === "archived" ||
     !current[0].visibleToClient ||
     !current[0].projectVisibleToClient ||
-    !current[0].clientCanReview
+    !clientPermission?.canReview
   ) {
     return { success: false, error: "Video not found." };
   }
@@ -1107,6 +1126,7 @@ export async function setVideoPriorityAsClient(
   if (!isPositiveId(videoId) || typeof makePriority !== "boolean") {
     return { success: false, error: "Invalid request." };
   }
+  const canonicalAuthenticatedClientId = canonicalClientId(clientId);
 
   // Client authentication above is the authority for this public-facing
   // action. Requiring the operator session here would make the control appear
@@ -1116,25 +1136,36 @@ export async function setVideoPriorityAsClient(
     .select({
       id: videoLogs.id,
       clientId: videoLogs.clientId,
+      projectClientId: projects.clientId,
+      projectStatus: projects.status,
       projectId: videoLogs.projectId,
       visibleToClient: videoLogs.visibleToClient,
       projectVisibleToClient: projects.visibleToClient,
-      clientCanSetPriority: clients.portalCanSetPriority,
     })
     .from(videoLogs)
     .leftJoin(projects, eq(videoLogs.projectId, projects.id))
-    .leftJoin(clients, eq(videoLogs.clientId, clients.id))
     .where(eq(videoLogs.id, videoId))
     .limit(1);
+  const clientPermission = (
+    await db
+      .select({ canSetPriority: clients.portalCanSetPriority })
+      .from(clients)
+      .where(eq(clients.id, canonicalAuthenticatedClientId))
+      .limit(1)
+  )[0];
   // Deliberately identical "not found" error whether the video doesn't
   // exist or belongs to a different client -- see
   // transitionVideoStatusAsClient above for the same convention.
   if (
     !current[0] ||
-    current[0].clientId !== clientId ||
+    current[0].clientId === null ||
+    current[0].projectClientId === null ||
+    canonicalClientId(current[0].clientId) !== canonicalAuthenticatedClientId ||
+    canonicalClientId(current[0].projectClientId) !== canonicalAuthenticatedClientId ||
+    current[0].projectStatus === "archived" ||
     !current[0].visibleToClient ||
     !current[0].projectVisibleToClient ||
-    !current[0].clientCanSetPriority
+    !clientPermission?.canSetPriority
   ) {
     return { success: false, error: "Video not found." };
   }

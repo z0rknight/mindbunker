@@ -12,7 +12,8 @@ import {
   videoLogs,
 } from "@/db/schema";
 import { getGatewayContext } from "@/modules/gateway/data";
-import { and, eq, desc, inArray, isNull } from "drizzle-orm";
+import { and, eq, desc, inArray, isNull, ne } from "drizzle-orm";
+import { canonicalClientId, operationalClientIdsForCanonical } from "@/lib/client-identity";
 import { deriveProductionOrderPhase, sumBilledByCurrency } from "@/modules/production-orders/core";
 import type { VideoStatus } from "@/modules/productivity/config";
 import { validateDeliveryUrl } from "@/modules/productivity/core";
@@ -63,6 +64,8 @@ export async function getClientPortalView(
   }
 
   const db = await getDb();
+  const canonicalId = canonicalClientId(identity.clientId);
+  const clientScope = operationalClientIdsForCanonical(canonicalId);
   const [projectRows, videoRows, clientSettings, batches] = await Promise.all([
     db
       .select({
@@ -75,8 +78,9 @@ export async function getClientPortalView(
       .from(projects)
       .where(
         and(
-          eq(projects.clientId, identity.clientId),
+          inArray(projects.clientId, clientScope),
           eq(projects.visibleToClient, true),
+          ne(projects.status, "archived"),
         ),
       )
       .orderBy(desc(projects.updatedAt), desc(projects.id)),
@@ -107,9 +111,10 @@ export async function getClientPortalView(
       .innerJoin(clients, eq(projects.clientId, clients.id))
       .where(
         and(
-          eq(videoLogs.clientId, identity.clientId),
-          eq(projects.clientId, identity.clientId),
+          inArray(videoLogs.clientId, clientScope),
+          inArray(projects.clientId, clientScope),
           eq(projects.visibleToClient, true),
+          ne(projects.status, "archived"),
           CLIENT_VISIBLE_VIDEO,
         ),
       )
@@ -117,7 +122,7 @@ export async function getClientPortalView(
     db
       .select({ canSeeFinancials: clients.portalCanSeeFinancials })
       .from(clients)
-      .where(eq(clients.id, identity.clientId))
+      .where(eq(clients.id, canonicalId))
       .limit(1),
     getClientBatchViews(identity.clientId),
   ]);
@@ -129,7 +134,7 @@ export async function getClientPortalView(
       ? batches
       : batches.map((batch) => ({ ...batch, expectedValue: null, billed: [] })),
     projects: buildClientPortalProjects(
-      identity.clientId,
+      canonicalId,
       projectRows,
       videoRows,
     ),
@@ -194,6 +199,7 @@ export type ClientBatchView = {
 
 async function getClientBatchViews(clientId: number): Promise<ClientBatchView[]> {
   const db = await getDb();
+  const clientScope = operationalClientIdsForCanonical(clientId);
   const orders = await db
     .select({
       id: productionOrders.id,
@@ -207,7 +213,12 @@ async function getClientBatchViews(clientId: number): Promise<ClientBatchView[]>
     })
     .from(productionOrders)
     .innerJoin(projects, eq(projects.id, productionOrders.projectId))
-    .where(and(eq(productionOrders.clientId, clientId), eq(projects.clientId, clientId), eq(projects.visibleToClient, true)))
+    .where(and(
+      inArray(productionOrders.clientId, clientScope),
+      inArray(projects.clientId, clientScope),
+      eq(projects.visibleToClient, true),
+      ne(projects.status, "archived"),
+    ))
     .orderBy(desc(productionOrders.receivedAt), desc(productionOrders.id));
   if (orders.length === 0) return [];
 
@@ -228,9 +239,10 @@ async function getClientBatchViews(clientId: number): Promise<ClientBatchView[]>
       .innerJoin(projects, eq(projects.id, videoLogs.projectId))
       .where(and(
         inArray(videoLogs.productionOrderId, orderIds),
-        eq(videoLogs.clientId, clientId),
-        eq(projects.clientId, clientId),
+        inArray(videoLogs.clientId, clientScope),
+        inArray(projects.clientId, clientScope),
         eq(projects.visibleToClient, true),
+        ne(projects.status, "archived"),
         CLIENT_VISIBLE_VIDEO,
       )),
     db
@@ -238,7 +250,7 @@ async function getClientBatchViews(clientId: number): Promise<ClientBatchView[]>
       .from(videoLogs)
       .where(and(
         inArray(videoLogs.productionOrderId, orderIds),
-        eq(videoLogs.clientId, clientId),
+        inArray(videoLogs.clientId, clientScope),
         eq(videoLogs.isOperationalContainer, true),
       )),
   ]);
@@ -296,6 +308,8 @@ export async function getClientDashboardView(
   authenticatedClientId: number,
 ): Promise<ClientDashboardView> {
   const db = await getDb();
+  const canonicalId = canonicalClientId(authenticatedClientId);
+  const clientScope = operationalClientIdsForCanonical(canonicalId);
   const clientRow = await db
     .select({
       id: clients.id,
@@ -314,7 +328,7 @@ export async function getClientDashboardView(
       portalShowVideoLibrary: clients.portalShowVideoLibrary,
     })
     .from(clients)
-    .where(eq(clients.id, authenticatedClientId))
+    .where(eq(clients.id, canonicalId))
     .limit(1);
   if (!clientRow[0]) {
     return { status: "unavailable" };
@@ -332,8 +346,9 @@ export async function getClientDashboardView(
       .from(projects)
       .where(
         and(
-          eq(projects.clientId, authenticatedClientId),
+          inArray(projects.clientId, clientScope),
           eq(projects.visibleToClient, true),
+          ne(projects.status, "archived"),
         ),
       )
       .orderBy(desc(projects.updatedAt), desc(projects.id)),
@@ -366,9 +381,10 @@ export async function getClientDashboardView(
       .innerJoin(projects, eq(videoLogs.projectId, projects.id))
       .where(
         and(
-          eq(videoLogs.clientId, authenticatedClientId),
-          eq(projects.clientId, authenticatedClientId),
+          inArray(videoLogs.clientId, clientScope),
+          inArray(projects.clientId, clientScope),
           eq(projects.visibleToClient, true),
+          ne(projects.status, "archived"),
           CLIENT_VISIBLE_VIDEO,
         ),
       )
@@ -378,7 +394,7 @@ export async function getClientDashboardView(
       .from(crmEvents)
       .where(
         and(
-          eq(crmEvents.clientId, authenticatedClientId),
+          inArray(crmEvents.clientId, clientScope),
           eq(crmEvents.type, "video.finished"),
         ),
       )
@@ -393,7 +409,7 @@ export async function getClientDashboardView(
     // client-scoped), but gated to null below when portalCanSeeFinancials
     // is false -- server-side, not left to the page's render logic. See
     // the same hardening already applied to `batches` a few lines down.
-    getOpenPaymentRequestForClient(authenticatedClientId),
+    getOpenPaymentRequestForClient(canonicalId),
   ]);
 
   return {
@@ -430,7 +446,7 @@ export async function getClientDashboardView(
       ? batches
       : batches.map((batch) => ({ ...batch, expectedValue: null, billed: [] })),
     ...buildClientDashboard(
-      authenticatedClientId,
+      canonicalId,
       projectRows,
       videoRows.map((video) => ({
         ...video,
@@ -462,6 +478,8 @@ export async function getClientVideoDetailView(
   videoId: number,
 ): Promise<ClientVideoDetailView> {
   const db = await getDb();
+  const canonicalId = canonicalClientId(authenticatedClientId);
+  const clientScope = operationalClientIdsForCanonical(canonicalId);
   const clientRow = await db
     .select({
       id: clients.id,
@@ -472,7 +490,7 @@ export async function getClientVideoDetailView(
       portalCanSetPriority: clients.portalCanSetPriority,
     })
     .from(clients)
-    .where(eq(clients.id, authenticatedClientId))
+    .where(eq(clients.id, canonicalId))
     .limit(1);
   if (!clientRow[0]) {
     return { status: "unavailable" };
@@ -505,9 +523,10 @@ export async function getClientVideoDetailView(
     .where(
       and(
         eq(videoLogs.id, videoId),
-        eq(videoLogs.clientId, authenticatedClientId),
-        eq(projects.clientId, authenticatedClientId),
+        inArray(videoLogs.clientId, clientScope),
+        inArray(projects.clientId, clientScope),
         eq(projects.visibleToClient, true),
+        ne(projects.status, "archived"),
         CLIENT_VISIBLE_VIDEO,
       ),
     )
@@ -543,7 +562,7 @@ export async function getClientVideoDetailView(
             .where(
               and(
                 eq(videoLogs.projectId, video.projectId),
-                eq(videoLogs.clientId, authenticatedClientId),
+                inArray(videoLogs.clientId, clientScope),
                 CLIENT_VISIBLE_VIDEO,
               ),
             )
@@ -576,11 +595,13 @@ export async function getClientBillingSummary(
   authenticatedClientId: number,
 ): Promise<ClientBillingSummary> {
   const db = await getDb();
+  const canonicalId = canonicalClientId(authenticatedClientId);
+  const clientScope = operationalClientIdsForCanonical(canonicalId);
 
   const permission = await db
     .select({ canSeeFinancials: clients.portalCanSeeFinancials })
     .from(clients)
-    .where(eq(clients.id, authenticatedClientId))
+    .where(eq(clients.id, canonicalId))
     .limit(1);
   if (!permission[0]?.canSeeFinancials) {
     return {
@@ -601,7 +622,7 @@ export async function getClientBillingSummary(
         hourlyRate: commercialContracts.hourlyRate,
       })
       .from(commercialContracts)
-      .where(eq(commercialContracts.clientId, authenticatedClientId)),
+      .where(eq(commercialContracts.clientId, canonicalId)),
     db
       .select({
         contractId: billingEvidence.contractId,
@@ -612,7 +633,7 @@ export async function getClientBillingSummary(
       })
       .from(billingEvidence)
       .innerJoin(commercialContracts, eq(billingEvidence.contractId, commercialContracts.id))
-      .where(eq(commercialContracts.clientId, authenticatedClientId)),
+      .where(eq(commercialContracts.clientId, canonicalId)),
     db
       .select({
         contractClientId: commercialContracts.clientId,
@@ -631,11 +652,11 @@ export async function getClientBillingSummary(
       .innerJoin(billingEvidence, eq(billingAllocations.billingEvidenceId, billingEvidence.id))
       .innerJoin(commercialContracts, eq(billingEvidence.contractId, commercialContracts.id))
       .leftJoin(videoLogs, eq(billingAllocations.videoId, videoLogs.id))
-      .where(eq(commercialContracts.clientId, authenticatedClientId)),
+      .where(eq(commercialContracts.clientId, canonicalId)),
     db
       .select({ id: projects.id, name: projects.name })
       .from(projects)
-      .where(eq(projects.clientId, authenticatedClientId)),
+      .where(inArray(projects.clientId, clientScope)),
   ]);
 
   const projectNameById = new Map(projectRows.map((project) => [project.id, project.name]));
@@ -647,14 +668,16 @@ export async function getClientBillingSummary(
     currency: row.currency,
     videoId: row.videoId,
     projectId:
-      row.videoId !== null && row.videoClientId === authenticatedClientId
+      row.videoId !== null &&
+      row.videoClientId !== null &&
+      canonicalClientId(row.videoClientId) === canonicalId
         ? row.videoProjectId
         : null,
   }));
 
   return {
     ...buildClientBillingSummary(
-      authenticatedClientId,
+      canonicalId,
       contractRows,
       evidenceRows,
       safeAllocationRows,
