@@ -53,6 +53,7 @@ import {
   REVISION_CATEGORIES,
   REVISION_CAUSES,
 } from "../modules/video-operations/config";
+import { FILM_ROLL_STATUSES } from "../modules/film-rolls/config";
 
 // ─── PRIVATE ACCESS ──────────────────────────────────────────────────────────
 
@@ -2033,6 +2034,53 @@ export const assets = sqliteTable(
     index("assets_video_idx").on(table.videoId),
     check("assets_type_check", sql`${table.type} in ('FINAL_DELIVERABLE', 'CLIENT_REVIEW', 'UTILITY_ASSET', 'AI_INPUT', 'SOURCE_PREP', 'BONUS_EXTRA')`),
     check("assets_status_check", sql`${table.status} in ('DRAFT', 'READY', 'DELIVERED')`),
+  ],
+);
+
+// 07 Oct backstage intelligence: a Film Roll is a curated, reusable group
+// of Emmanuel's own footage. MindBunker stores only descriptive inventory
+// and an external/NAS reference — never media bytes. Subjects are separate
+// counted rows so “coffee in October” can return an honest shot count rather
+// than treating a free-text tag as quantity evidence.
+export const filmRolls = sqliteTable(
+  "film_rolls",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    status: text("status", { enum: FILM_ROLL_STATUSES }).notNull().default("BUILDING"),
+    capturedFrom: text("captured_from").notNull(),
+    capturedTo: text("captured_to"),
+    rating: integer("rating").notNull().default(0),
+    aesthetic: text("aesthetic"),
+    tags: text("tags"),
+    soundtrack: text("soundtrack"),
+    storageReference: text("storage_reference"),
+    notes: text("notes"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("film_rolls_captured_rating_idx").on(table.capturedFrom, table.rating),
+    check("film_rolls_status_check", sql`${table.status} in ('BUILDING', 'READY', 'ARCHIVED')`),
+    check("film_rolls_rating_check", sql`${table.rating} >= 0 and ${table.rating} <= 5`),
+  ],
+);
+
+export const filmRollSubjects = sqliteTable(
+  "film_roll_subjects",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    filmRollId: integer("film_roll_id")
+      .notNull()
+      .references(() => filmRolls.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    shotCount: integer("shot_count").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("film_roll_subjects_roll_label_unique").on(table.filmRollId, table.label),
+    index("film_roll_subjects_label_idx").on(table.label),
+    check("film_roll_subjects_shot_count_check", sql`${table.shotCount} > 0`),
   ],
 );
 

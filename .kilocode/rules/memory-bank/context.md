@@ -10,6 +10,17 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **07 Oct Reality / Intelligence / Client Proof Pass (2026-10-07, local candidate / no deploy)**
+  - [x] Reconciled the 07 Oct dump, 48 scanned notebook pages, repository/source authority and read-only production D1 before implementation; ambiguous handwriting stayed qualitative/uncertain and produced no writes
+  - [x] Added a read-only Pricing Lab reality dataset over canonical closed Work Sessions with recorded-vs-inferred content classification, completed/active sample counts, confidence disclosure and an explicit operator hour override; formula and config remain unchanged
+  - [x] Proved Geoff Front Door Video 1 at 14.37 canonical hours / 11 Sessions / still IN_PROGRESS; the reported extra Upwork hour and ~20h final remain non-canonical context/forecast until manually reconciled and completed
+  - [x] Confirmed `work_sessions.source = MANUAL` is the existing canonical untracked-time path; no duplicate adjustment table added
+  - [x] Audited native permission behavior as truthful/privacy-preserving and added bundle version/build/source provenance plus a documented deliberate candidate-update path; 52/52 native tests and stable-signed release build pass
+  - [x] Added local-only Film Rolls reference inventory with month/search/rating filters and counted subjects, backed by additive migration 0055; no media hosting and no production migration
+  - [x] Human local Safari QA passed for Film Rolls list/form and Pricing Lab evidence/override; MindBunker source `77866f1`, Sensor source `496f42a`, stable-signed build 15 SHA-256 `384ceae…c8cb`
+  - [x] Classified current Dashboard redundancy as NOT A BUG; deferred Before/After approval, native URL mutation and updater network infrastructure until their canonical contracts can be implemented coherently
+  - [x] Production stayed at migration 0054; no deploy, remote write, installed-app replacement or credential change
+
 - [x] **Pré-Wave 1 human QA closeout (2026-10-07, BLOCKED / no corrective implementation)**
   - [x] Proved the exact native candidate `69978acc…a419` launches under the normal user context, reads the current Offer Doc catalog, preserves local Quick Notes across relaunch, and leaves canonical execution idle when no Work Session is active
   - [x] Read-only D1 checks reconfirmed Capture 8 → Session 105 → Offer Doc, occurred-at one second before recorded-at, 5,423s canonical tracked time, no promotion links, no active Session, and Offer Doc still IN_PROGRESS

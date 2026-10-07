@@ -1,0 +1,23 @@
+import { OPERATOR_WORKSPACE_CLASS } from "@/components/layout/workspace";
+import { getFilmRolls } from "@/modules/film-rolls/actions";
+import { FILM_ROLL_STATUS_LABELS } from "@/modules/film-rolls/config";
+import { FilmRollForm } from "./FilmRollForm";
+
+export const dynamic = "force-dynamic";
+
+export default async function FilmRollsPage({ searchParams }: { searchParams: Promise<{ q?: string; month?: string; rating?: string }> }) {
+  const query = await searchParams;
+  const rolls = await getFilmRolls({ query: query.q, month: query.month, minRating: Number(query.rating ?? 0) });
+  const totalShots = rolls.reduce((sum, roll) => sum + roll.subjects.reduce((count, subject) => count + subject.shotCount, 0), 0);
+  return <div className={OPERATOR_WORKSPACE_CLASS}>
+    <header className="mb-6 flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-bold text-white">🎞️ Film Rolls</h1><p className="mt-1 max-w-2xl text-sm text-zinc-500">Reusable backstage and everyday footage, organized as creative inventory. References only — video stays on disk or NAS.</p></div><FilmRollForm /></header>
+    <form className="mb-6 grid gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 sm:grid-cols-[1fr_170px_140px_auto]">
+      <input name="q" defaultValue={query.q} placeholder="Coffee, October, warm grain…" className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white" />
+      <input name="month" type="month" defaultValue={query.month} className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white" />
+      <select name="rating" defaultValue={query.rating ?? "0"} className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white">{[0,1,2,3,4,5].map((rating) => <option key={rating} value={rating}>{rating === 0 ? "Any rating" : `${rating}+ stars`}</option>)}</select>
+      <button className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-xs font-bold text-white">Search</button>
+    </form>
+    <div className="mb-5 grid grid-cols-3 gap-3"><div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3"><p className="text-[10px] uppercase text-zinc-600">Rolls shown</p><p className="mt-1 text-xl font-black text-white">{rolls.length}</p></div><div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3"><p className="text-[10px] uppercase text-zinc-600">Counted shots</p><p className="mt-1 text-xl font-black text-white">{totalShots}</p></div><div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3"><p className="text-[10px] uppercase text-zinc-600">5-star rolls</p><p className="mt-1 text-xl font-black text-white">{rolls.filter((roll) => roll.rating === 5).length}</p></div></div>
+    {rolls.length === 0 ? <div className="rounded-xl border border-dashed border-zinc-800 py-16 text-center text-sm text-zinc-600">No Film Rolls match this view. Register the roll after the footage has been reviewed enough to count honestly.</div> : <div className="grid gap-4 lg:grid-cols-2">{rolls.map((roll) => <article key={roll.id} className="rounded-xl border border-zinc-800 bg-zinc-900/55 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-widest text-red-400">{FILM_ROLL_STATUS_LABELS[roll.status]}</p><h2 className="mt-1 text-base font-black text-white">{roll.name}</h2><p className="mt-1 text-xs text-zinc-600">{roll.capturedFrom}{roll.capturedTo ? ` → ${roll.capturedTo}` : ""}</p></div><div className="text-amber-300" aria-label={`${roll.rating} of 5 stars`}>{"★".repeat(roll.rating)}<span className="text-zinc-800">{"★".repeat(5-roll.rating)}</span></div></div>{roll.aesthetic && <p className="mt-3 text-sm text-zinc-300">{roll.aesthetic}</p>}{roll.subjects.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{roll.subjects.map((subject) => <span key={subject.id} className="rounded-full border border-zinc-700 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-300">{subject.label} · <strong>{subject.shotCount}</strong></span>)}</div>}{roll.tags && <p className="mt-3 text-[11px] text-zinc-600">Tags · {roll.tags}</p>}{roll.storageReference && <p className="mt-3 break-all rounded-lg border border-zinc-800 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">📦 {roll.storageReference}</p>}</article>)}</div>}
+  </div>;
+}

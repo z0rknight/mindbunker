@@ -36,6 +36,7 @@ const navItems = [
   // discipline as Sessions/Pricing Lab/Subscriptions/Debts/Contracts/All
   // History above.
   { href: "/equipment", label: "Equipment", mobileLabel: "Equipment", icon: "🧰", desktopOnly: true, group: "OPERATIONS" },
+  { href: "/film-rolls", label: "Film Rolls", mobileLabel: "Film", icon: "🎞️", desktopOnly: true, group: "OPERATIONS" },
   { href: "/crm", label: "CRM", mobileLabel: "CRM", icon: "👥", group: "COMMERCIAL" },
   // Internal sales tool, occasional use -- desktop sidebar only, kept out
   // of the mobile bottom tab bar so that bar stays bounded.

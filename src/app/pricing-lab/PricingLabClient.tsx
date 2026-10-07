@@ -25,6 +25,7 @@ import {
   A_LA_CARTE_REVISION_ROUND_HOURS,
   A_LA_CARTE_THUMBNAIL_UNIT_PRICE_CENTS,
 } from "@/modules/pricing/config";
+import type { PricingReality } from "@/modules/pricing/reality";
 
 const MAX_QUANTITY = 99;
 const MAX_REVISION_ROUNDS = 10;
@@ -485,13 +486,16 @@ function ClientPresentationPanel({
 
 function ALaCarteHourlyCalculator({
   hourlyConfig,
+  reality,
 }: {
   hourlyConfig: ALaCarteHourlyConfig;
+  reality: PricingReality;
 }) {
   const [contentTypeId, setContentTypeId] = useState<string>(
     A_LA_CARTE_CONTENT_TYPES[0].id,
   );
   const [customHours, setCustomHours] = useState("5");
+  const [operatorHoursOverride, setOperatorHoursOverride] = useState("");
   const [complexityId, setComplexityId] = useState<string>("standard");
   const [includeRush, setIncludeRush] = useState(false);
   const [extraRevisionRounds, setExtraRevisionRounds] = useState(0);
@@ -510,10 +514,16 @@ function ALaCarteHourlyCalculator({
   const complexity = A_LA_CARTE_COMPLEXITY_LEVELS.find(
     (c) => c.id === complexityId,
   )!;
-  const estimatedHours =
+  const baselineHours =
     contentType.id === "custom"
       ? Number(customHours) || 0
       : contentType.estimatedHours;
+  const parsedOverride = Number(operatorHoursOverride);
+  const hasOperatorOverride =
+    operatorHoursOverride.trim() !== "" &&
+    Number.isFinite(parsedOverride) &&
+    parsedOverride >= 0;
+  const estimatedHours = hasOperatorOverride ? parsedOverride : baselineHours;
 
   const breakdown = useMemo(
     () =>
@@ -623,6 +633,37 @@ function ALaCarteHourlyCalculator({
           )}
         </div>
 
+        <div className="rounded-xl border border-cyan-900/60 bg-cyan-950/15 p-4">
+          <label className="block text-xs font-black uppercase tracking-wider text-cyan-300">
+            Operator hour override
+          </label>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">
+            Optional and local to this calculation. The {baselineHours}h configured baseline remains visible and unchanged.
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.5"
+              min="0"
+              value={operatorHoursOverride}
+              onChange={(event) => setOperatorHoursOverride(event.target.value)}
+              placeholder={String(baselineHours)}
+              className="w-32 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-cyan-500 focus:outline-none"
+            />
+            <span className="text-xs text-zinc-500">hours before complexity</span>
+            {hasOperatorOverride && (
+              <button
+                type="button"
+                onClick={() => setOperatorHoursOverride("")}
+                className="ml-auto text-xs font-bold text-cyan-400 hover:text-cyan-300"
+              >
+                Use baseline
+              </button>
+            )}
+          </div>
+        </div>
+
         <div>
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Complexity (experimental adjustment)
@@ -675,6 +716,65 @@ function ALaCarteHourlyCalculator({
           max={MAX_REVISION_ROUNDS}
         />
       </div>
+
+      <section className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950/55 p-4" data-testid="pricing-reality-evidence">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-400">Observed operation</p>
+            <h3 className="mt-1 text-sm font-black text-white">Evidence beside the estimate</h3>
+          </div>
+          <span className={`rounded-full border px-2 py-1 text-[10px] font-black ${
+            reality.confidence === "HIGH"
+              ? "border-emerald-700/50 text-emerald-300"
+              : reality.confidence === "MEDIUM"
+                ? "border-amber-700/50 text-amber-300"
+                : "border-rose-800/50 text-rose-300"
+          }`}>
+            {reality.confidence} CONFIDENCE
+          </span>
+        </div>
+        <p className="mt-2 text-xs leading-5 text-zinc-500">{reality.note}</p>
+        <p className="mt-1 text-[11px] leading-4 text-zinc-600">
+          Closed canonical Work Sessions only. Manual sessions are included and identified; notes and off-system recollection are not silently added.
+        </p>
+        {reality.rows.length > 0 ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[680px] text-left text-xs">
+              <thead className="text-[10px] uppercase tracking-wide text-zinc-600">
+                <tr>
+                  <th className="pb-2 pr-3">Work</th>
+                  <th className="pb-2 pr-3">Type evidence</th>
+                  <th className="pb-2 pr-3">State</th>
+                  <th className="pb-2 pr-3 text-right">Tracked</th>
+                  <th className="pb-2 text-right">Sessions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-900">
+                {reality.rows.map((row) => (
+                  <tr key={row.videoId}>
+                    <td className="py-2.5 pr-3">
+                      <span className="block font-bold text-zinc-200">{row.title}</span>
+                      <span className="block text-[10px] text-zinc-600">{[row.clientName, row.projectName].filter(Boolean).join(" · ")}</span>
+                    </td>
+                    <td className="py-2.5 pr-3 text-zinc-400">
+                      {row.contentType}
+                      <span className="block text-[9px] text-zinc-700">{row.classification === "RECORDED" ? "recorded metadata" : "inferred from project/title"}</span>
+                    </td>
+                    <td className="py-2.5 pr-3 text-zinc-400">{row.status.replaceAll("_", " ")}</td>
+                    <td className="py-2.5 pr-3 text-right font-mono font-bold text-white">
+                      {row.trackedHours.toFixed(2)}h
+                      {row.manualHours > 0 && <span className="block text-[9px] font-normal text-cyan-500">{row.manualHours.toFixed(2)}h manual</span>}
+                    </td>
+                    <td className="py-2.5 text-right text-zinc-500">{row.sessionCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-4 rounded-lg border border-dashed border-zinc-800 p-4 text-xs text-zinc-600">No comparable canonical work evidence yet.</p>
+        )}
+      </section>
 
       {/* Quick Morning Reality Patch (26 Aug 2026) §10: "One engine. Two
           views" now means side by side, not a tab you have to click
@@ -776,7 +876,7 @@ function ALaCarteHourlyCalculator({
   );
 }
 
-export function PricingLabClient({ config }: { config: PricingConfig }) {
+export function PricingLabClient({ config, reality }: { config: PricingConfig; reality: PricingReality }) {
   const [tab, setTab] = useState<Tab>("a-la-carte");
   const [quantities, setQuantities] = useState<ProductQuantities>({});
   const [copied, setCopied] = useState(false);
@@ -842,7 +942,7 @@ export function PricingLabClient({ config }: { config: PricingConfig }) {
       </div>
 
       {tab === "a-la-carte" && (
-        <ALaCarteHourlyCalculator hourlyConfig={hourlyConfig} />
+          <ALaCarteHourlyCalculator hourlyConfig={hourlyConfig} reality={reality} />
       )}
 
       {tab === "monthly-package" && (
