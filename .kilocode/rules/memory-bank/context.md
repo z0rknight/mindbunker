@@ -10,14 +10,16 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
-- [ ] **Great Reset Commercial Operating Layer (2026-10-08, release candidate)**
+- [x] **Great Reset Commercial Operating Layer (2026-10-08, production / pre-dogfood ready)**
   - [x] Added one canonical commercial path from segment landing context through `/start`, immutable Lead evidence, human Offer-fit decision, canonical Quote, optional public Offer projection, and existing Quote → Project/Video/Recipe production conversion
   - [x] Added additive migration `0058_commercial_operating_layer.sql`: one manually owned capacity singleton plus revocable/expiring public projection fields on canonical Quotes; no automatic capacity, pricing, payment, acceptance, Lead promotion, or Finance mutation
   - [x] Added operator CRM surfaces that keep acquisition context, user evidence, derived suggestion, and human commercial decision distinct; capacity exposes OPEN/LIMITED/WAITLIST/PAUSED, recurring 0–3, Hero 0–1, actor/reason/timestamp
   - [x] Added anonymous token-gated `/offer/[token]` projection with explicit price, scope, assumptions, expiry and optional external HTTPS payment link; only token hashes persist and external clicks do not imply payment or acceptance
   - [x] `/start` now preserves allowlisted landing/offer/ref context, desired outcome, approval owner and budget readiness/range as immutable intake evidence while retaining one canonical Lead by email
-  - [x] 1,614 tests, typecheck, production build, migration `0057 → 0058`, FK/quick checks, and ESLint with 0 errors / 3 pre-existing warnings GREEN; automated localhost visual QA remained unavailable due saved browser policy
-  - [ ] Production backup, migration, deploy, smoke, Notion release closure and real-world dogfood remain pending
+  - [x] 1,614 tests, typecheck, production build, migration `0057 → 0058`, FK/quick checks, and ESLint with 0 errors / 3 pre-existing warnings GREEN; automated browser visual QA remained unavailable due saved browser policy
+  - [x] Production D1 backed up before writes (`218ffd97014b68355c5cbc2e6ba57ce64cdaabbc8e6bd2d206e5ca2093d36094`), migrated once to `0058`, and verified with empty `foreign_key_check`, `quick_check = ok`, unchanged Client/CRM-event/Quote counts and zero public Offers
+  - [x] MindBunker commit `cc477692545074bec757ec741cad19d1c04e5240` deployed as Worker version `85a7dfcf-aec2-4455-8bc7-b47853c44b44`; public commit `a1443e3c4efc16774178a45c6e3d070b895d6974` deployed as Worker version `ae3be0b7-574c-4e65-a411-f5425144e869`; HTTP/runtime smoke GREEN and rollback was not required
+  - [ ] Human visual QA and real-world commercial dogfood remain the next gate; no further coding wave is authorized by this closure
 
 - [ ] **Delivery Recipe / Quality Custody Wave 1 (2026-10-08, local candidate / real dogfood pending)**
   - [x] Added additive migration `0057_delivery_recipes.sql`: reusable Recipe templates, ordered/enabled steps, immutable per-Video snapshots and append-only transition history with actor/source/provenance
