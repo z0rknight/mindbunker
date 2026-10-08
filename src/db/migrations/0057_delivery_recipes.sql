@@ -14,7 +14,7 @@ CREATE TABLE `delivery_recipe_events` (
 	CONSTRAINT "delivery_recipe_events_previous_state_check" CHECK("delivery_recipe_events"."previous_state" in ('NOT_STARTED', 'ACTIVE', 'DONE', 'N_A')),
 	CONSTRAINT "delivery_recipe_events_new_state_check" CHECK("delivery_recipe_events"."new_state" in ('NOT_STARTED', 'ACTIVE', 'DONE', 'N_A')),
 	CONSTRAINT "delivery_recipe_events_actor_check" CHECK("delivery_recipe_events"."actor" in ('admin', 'system')),
-	CONSTRAINT "delivery_recipe_events_source_check" CHECK("delivery_recipe_events"."source" in ('MINDBUNKER_WEB', 'SYSTEM'))
+	CONSTRAINT "delivery_recipe_events_source_check" CHECK("delivery_recipe_events"."source" in ('MINDBUNKER_WEB', 'RMEDIA_APP', 'SYSTEM'))
 );
 --> statement-breakpoint
 CREATE INDEX `delivery_recipe_events_video_occurred_idx` ON `delivery_recipe_events` (`video_id`,`occurred_at`);--> statement-breakpoint

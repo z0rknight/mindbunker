@@ -31,5 +31,5 @@ export type DeliveryRecipeInstanceStatus = (typeof DELIVERY_RECIPE_INSTANCE_STAT
 export const DELIVERY_RECIPE_EVENT_ACTORS = ["admin", "system"] as const;
 export type DeliveryRecipeEventActor = (typeof DELIVERY_RECIPE_EVENT_ACTORS)[number];
 
-export const DELIVERY_RECIPE_EVENT_SOURCES = ["MINDBUNKER_WEB", "SYSTEM"] as const;
+export const DELIVERY_RECIPE_EVENT_SOURCES = ["MINDBUNKER_WEB", "RMEDIA_APP", "SYSTEM"] as const;
 export type DeliveryRecipeEventSource = (typeof DELIVERY_RECIPE_EVENT_SOURCES)[number];

@@ -50,6 +50,8 @@ delivery_recipes + delivery_recipe_steps
 
 Template edits never rewrite a Video's instantiated snapshot. Recipe timestamps are custody evidence, not work-duration evidence; stage time remains unknown until a defensible Recipe-state × canonical-Work-Session attribution exists. The legacy fixed production checklist remains historical and is not a second Recipe owner.
 
+The standalone RMEDIA App reuses this exact Recipe instance through the scoped Sensor API. It may read only the Recipe owned by the Video in the one open canonical Work Session and may submit only a guarded state transition for that Recipe. Native events record `RMEDIA_APP` plus device provenance. Recipe transitions are online-only, never enter the Sensor outbox and never mutate Work Sessions.
+
 `src/db/index.ts` creates a D1-backed Drizzle client per request using the `DB` binding. Data-backed pages are dynamic, and Server Actions perform mutations followed by route revalidation.
 
 ## Key Design Patterns

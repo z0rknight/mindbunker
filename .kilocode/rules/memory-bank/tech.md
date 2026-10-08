@@ -148,6 +148,7 @@ bun deploy         # Build and deploy to Cloudflare Workers
 - `ASSETS`: OpenNext static-asset binding
 - Bindings are declared in `wrangler.jsonc` and typed in `cloudflare-env.d.ts`
 - Repository candidate migration head: `0057_delivery_recipes.sql`; production remains at `0056_chief_vance_astro.sql` until separately authorized
+- Candidate `0057` permits `RMEDIA_APP` as an auditable Delivery Recipe event source; existing web/system sources remain unchanged
 
 ### Native Sensor bridge (local candidate)
 
@@ -157,6 +158,7 @@ bun deploy         # Build and deploy to Cloudflare Workers
 - Narrow Next Route Handler API under `/api/sensor/v1`; revocable token hashes stored in D1
 - Additive `0020_sensor_inbox_p11.sql` separates native Sensor review evidence from canonical Work Sessions; explicit approval uses `MAC_SENSOR_APPROVED`
 - Native startup repairs historical closed unsynced observations into the durable outbox and exposes local/uploaded/pending/rejected/last-success diagnostics
+- Delivery Recipe execution adds device-authenticated current-Recipe read and guarded step transition routes; native Recipe transitions are intentionally not queued offline
 
 ### Deployment
 

@@ -1158,7 +1158,7 @@ export const deliveryRecipeEvents = sqliteTable(
     check("delivery_recipe_events_previous_state_check", sql`${table.previousState} in ('NOT_STARTED', 'ACTIVE', 'DONE', 'N_A')`),
     check("delivery_recipe_events_new_state_check", sql`${table.newState} in ('NOT_STARTED', 'ACTIVE', 'DONE', 'N_A')`),
     check("delivery_recipe_events_actor_check", sql`${table.actor} in ('admin', 'system')`),
-    check("delivery_recipe_events_source_check", sql`${table.source} in ('MINDBUNKER_WEB', 'SYSTEM')`),
+    check("delivery_recipe_events_source_check", sql`${table.source} in ('MINDBUNKER_WEB', 'RMEDIA_APP', 'SYSTEM')`),
   ],
 );
 

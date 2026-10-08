@@ -4,28 +4,23 @@ import "server-only";
 
 import { getAuthenticatedDb } from "@/db";
 import {
-  deliveryRecipeEvents,
   deliveryRecipes,
   deliveryRecipeSteps,
-  projects,
-  videoLogs,
-  videoRecipeInstances,
-  videoRecipeInstanceSteps,
-  workSessions,
 } from "@/db/schema";
-import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import type { DeliveryRecipeStepState } from "./config";
 import {
-  canTransitionRecipeStep,
   cleanRecipeText,
   isPositiveId,
   isRecipeGate,
-  isRecipeStepState,
-  summarizeRecipeSteps,
-  type RecipeStepSnapshot,
-  type RecipeTransition,
 } from "./core";
+import {
+  getVideoRecipeSafety,
+  getVideoRecipeWorkspaceWithDb,
+  transitionDeliveryRecipeStepWithDb,
+  videoRecipeMutationError,
+} from "./service";
 
 type ActionResult =
   | { success: true; message: string; id?: number }
@@ -35,13 +30,6 @@ function revalidateRecipeViews(videoId?: number) {
   revalidatePath("/recipes");
   revalidatePath("/war-room/workspace");
   if (videoId) revalidatePath(`/client/dashboard/videos/${videoId}`);
-}
-
-function toIso(value: Date | string | number | null | undefined): string {
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "number") return new Date(value * 1_000).toISOString();
-  if (typeof value === "string") return new Date(value).toISOString();
-  return new Date(0).toISOString();
 }
 
 export async function getRecipeManagement() {
@@ -166,31 +154,6 @@ export async function setDeliveryRecipeStepEnabled(
   return { success: true, message: enabled ? "Step enabled." : "Step disabled." };
 }
 
-async function getVideoSafety(videoId: number) {
-  const db = await getAuthenticatedDb();
-  const rows = await db
-    .select({
-      id: videoLogs.id,
-      title: videoLogs.title,
-      status: videoLogs.status,
-      isOperationalContainer: videoLogs.isOperationalContainer,
-      projectStatus: projects.status,
-    })
-    .from(videoLogs)
-    .leftJoin(projects, eq(videoLogs.projectId, projects.id))
-    .where(eq(videoLogs.id, videoId))
-    .limit(1);
-  return rows[0] ?? null;
-}
-
-function videoMutationError(video: Awaited<ReturnType<typeof getVideoSafety>>): string | null {
-  if (!video) return "Video not found.";
-  if (video.isOperationalContainer) return "Production containers cannot own a Delivery Recipe.";
-  if (video.status === "DONE") return "Completed Videos are historical and cannot start or change a Recipe.";
-  if (video.projectStatus === "archived") return "Archived Project Videos are read-only.";
-  return null;
-}
-
 export async function attachDeliveryRecipeToVideo(
   videoId: number,
   recipeId: number,
@@ -198,10 +161,10 @@ export async function attachDeliveryRecipeToVideo(
   if (!isPositiveId(videoId) || !isPositiveId(recipeId)) {
     return { success: false, error: "Invalid Video or Recipe." };
   }
-  const video = await getVideoSafety(videoId);
-  const safetyError = videoMutationError(video);
-  if (safetyError) return { success: false, error: safetyError };
   const db = await getAuthenticatedDb();
+  const video = await getVideoRecipeSafety(db, videoId);
+  const safetyError = videoRecipeMutationError(video);
+  if (safetyError) return { success: false, error: safetyError };
   const result = await db.$client.batch([
     db.$client.prepare(`INSERT INTO video_recipe_instances
       (video_id, recipe_id, recipe_name_snapshot, status, created_at, updated_at)
@@ -235,160 +198,19 @@ export async function transitionDeliveryRecipeStep(
   stepId: number,
   nextState: DeliveryRecipeStepState,
 ): Promise<ActionResult> {
-  if (!isPositiveId(videoId) || !isPositiveId(stepId) || !isRecipeStepState(nextState)) {
-    return { success: false, error: "Invalid Recipe transition." };
-  }
-  const video = await getVideoSafety(videoId);
-  const safetyError = videoMutationError(video);
-  if (safetyError) return { success: false, error: safetyError };
   const db = await getAuthenticatedDb();
-  const rows = await db
-    .select({
-      id: videoRecipeInstanceSteps.id,
-      instanceId: videoRecipeInstanceSteps.instanceId,
-      state: videoRecipeInstanceSteps.state,
-      archivedAt: videoRecipeInstances.archivedAt,
-    })
-    .from(videoRecipeInstanceSteps)
-    .innerJoin(videoRecipeInstances, eq(videoRecipeInstanceSteps.instanceId, videoRecipeInstances.id))
-    .where(and(eq(videoRecipeInstanceSteps.id, stepId), eq(videoRecipeInstances.videoId, videoId), isNull(videoRecipeInstances.archivedAt)))
-    .limit(1);
-  const current = rows[0];
-  if (!current || current.archivedAt) return { success: false, error: "Current Recipe step not found." };
-  if (!canTransitionRecipeStep(current.state, nextState)) {
-    return { success: false, error: `Cannot move ${current.state.replaceAll("_", " ")} to ${nextState.replaceAll("_", " ")}.` };
-  }
-  if (nextState === "ACTIVE") {
-    const active = await db
-      .select({ id: videoRecipeInstanceSteps.id })
-      .from(videoRecipeInstanceSteps)
-      .where(and(
-        eq(videoRecipeInstanceSteps.instanceId, current.instanceId),
-        eq(videoRecipeInstanceSteps.state, "ACTIVE"),
-        ne(videoRecipeInstanceSteps.id, stepId),
-      ))
-      .limit(1);
-    if (active[0]) return { success: false, error: "Finish or mark the current active step N/A first." };
-  }
-  const now = Math.floor(Date.now() / 1_000);
-  const result = await db.$client.batch([
-    db.$client.prepare(`UPDATE video_recipe_instance_steps
-      SET state = ?1, updated_at = ?2
-      WHERE id = ?3 AND instance_id = ?4 AND state = ?5
-      RETURNING id`).bind(nextState, now, stepId, current.instanceId, current.state),
-    db.$client.prepare(`INSERT INTO delivery_recipe_events
-      (video_id, instance_id, instance_step_id, previous_state, new_state,
-       occurred_at, actor, source, provenance)
-      SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'admin', 'MINDBUNKER_WEB', 'operator_click'
-      WHERE changes() = 1`).bind(videoId, current.instanceId, stepId, current.state, nextState, now),
-    db.$client.prepare(`UPDATE video_recipe_instances
-      SET status = CASE
-            WHEN EXISTS (SELECT 1 FROM video_recipe_instance_steps s WHERE s.instance_id = ?1 AND s.state NOT IN ('DONE', 'N_A'))
-              THEN 'ACTIVE' ELSE 'COMPLETED' END,
-          completed_at = CASE
-            WHEN EXISTS (SELECT 1 FROM video_recipe_instance_steps s WHERE s.instance_id = ?1 AND s.state NOT IN ('DONE', 'N_A'))
-              THEN NULL ELSE ?2 END,
-          updated_at = ?2
-      WHERE id = ?1`).bind(current.instanceId, now),
-  ]);
-  if (!result[0].results[0]) return { success: false, error: "Recipe changed before this transition. Refresh and try again." };
-  revalidateRecipeViews(videoId);
-  return { success: true, message: nextState === "DONE" ? "Step completed." : "Recipe updated." };
+  const result = await transitionDeliveryRecipeStepWithDb(db, {
+    videoId,
+    stepId,
+    nextState,
+    source: "MINDBUNKER_WEB",
+    provenance: "operator_click",
+  });
+  if (result.success) revalidateRecipeViews(videoId);
+  return result;
 }
 
 export async function getVideoRecipeWorkspace(videoId: number) {
-  if (!isPositiveId(videoId)) return { success: false as const, error: "Invalid Video." };
   const db = await getAuthenticatedDb();
-  const video = await getVideoSafety(videoId);
-  if (!video) return { success: false as const, error: "Video not found." };
-  const templates = await db
-    .select({
-      id: deliveryRecipes.id,
-      name: deliveryRecipes.name,
-      applicability: deliveryRecipes.applicability,
-      stepCount: sql<number>`count(${deliveryRecipeSteps.id})`,
-    })
-    .from(deliveryRecipes)
-    .innerJoin(deliveryRecipeSteps, and(eq(deliveryRecipeSteps.recipeId, deliveryRecipes.id), eq(deliveryRecipeSteps.enabled, true)))
-    .where(eq(deliveryRecipes.isActive, true))
-    .groupBy(deliveryRecipes.id)
-    .orderBy(asc(deliveryRecipes.name));
-  const instances = await db
-    .select()
-    .from(videoRecipeInstances)
-    .where(and(eq(videoRecipeInstances.videoId, videoId), isNull(videoRecipeInstances.archivedAt)))
-    .limit(1);
-  const instance = instances[0];
-  if (!instance) {
-    return {
-      success: true as const,
-      data: {
-        video: { id: video.id, title: video.title, mutable: videoMutationError(video) === null },
-        templates: templates.map((template) => ({ ...template, stepCount: Number(template.stepCount) })),
-        instance: null,
-      },
-    };
-  }
-  const [stepRows, eventRows, workRows] = await Promise.all([
-    db.select().from(videoRecipeInstanceSteps).where(eq(videoRecipeInstanceSteps.instanceId, instance.id)).orderBy(asc(videoRecipeInstanceSteps.positionSnapshot), asc(videoRecipeInstanceSteps.id)),
-    db
-      .select({
-        id: deliveryRecipeEvents.id,
-        stepId: deliveryRecipeEvents.instanceStepId,
-        stepLabel: videoRecipeInstanceSteps.labelSnapshot,
-        previousState: deliveryRecipeEvents.previousState,
-        newState: deliveryRecipeEvents.newState,
-        occurredAt: deliveryRecipeEvents.occurredAt,
-        actor: deliveryRecipeEvents.actor,
-        source: deliveryRecipeEvents.source,
-        provenance: deliveryRecipeEvents.provenance,
-      })
-      .from(deliveryRecipeEvents)
-      .innerJoin(videoRecipeInstanceSteps, eq(deliveryRecipeEvents.instanceStepId, videoRecipeInstanceSteps.id))
-      .where(eq(deliveryRecipeEvents.instanceId, instance.id))
-      .orderBy(desc(deliveryRecipeEvents.occurredAt), desc(deliveryRecipeEvents.id))
-      .limit(20),
-    db
-      .select({
-        sessionCount: sql<number>`count(*)`,
-        closedSeconds: sql<number>`coalesce(sum(${workSessions.endedAt} - ${workSessions.startedAt}), 0)`,
-      })
-      .from(workSessions)
-      .where(and(eq(workSessions.videoId, videoId), sql`${workSessions.endedAt} is not null`)),
-  ]);
-  const steps: RecipeStepSnapshot[] = stepRows.map((step) => ({
-    id: step.id,
-    label: step.labelSnapshot,
-    gate: step.gateSnapshot,
-    position: step.positionSnapshot,
-    qualityStandard: step.qualityStandardSnapshot,
-    state: step.state,
-    updatedAt: toIso(step.updatedAt),
-  }));
-  const events: RecipeTransition[] = eventRows.map((event) => ({
-    ...event,
-    occurredAt: toIso(event.occurredAt),
-  }));
-  return {
-    success: true as const,
-    data: {
-      video: { id: video.id, title: video.title, mutable: videoMutationError(video) === null },
-      templates: templates.map((template) => ({ ...template, stepCount: Number(template.stepCount) })),
-      instance: {
-        id: instance.id,
-        recipeId: instance.recipeId,
-        recipeName: instance.recipeNameSnapshot,
-        status: instance.status,
-        createdAt: toIso(instance.createdAt),
-        completedAt: instance.completedAt ? toIso(instance.completedAt) : null,
-        steps,
-        events,
-        summary: summarizeRecipeSteps(steps),
-        work: {
-          sessionCount: Number(workRows[0]?.sessionCount ?? 0),
-          closedSeconds: Number(workRows[0]?.closedSeconds ?? 0),
-        },
-      },
-    },
-  };
+  return getVideoRecipeWorkspaceWithDb(db, videoId);
 }

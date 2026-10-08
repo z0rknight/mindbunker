@@ -3408,7 +3408,7 @@
         },
         "delivery_recipe_events_source_check": {
           "name": "delivery_recipe_events_source_check",
-          "value": "\"delivery_recipe_events\".\"source\" in ('MINDBUNKER_WEB', 'SYSTEM')"
+          "value": "\"delivery_recipe_events\".\"source\" in ('MINDBUNKER_WEB', 'RMEDIA_APP', 'SYSTEM')"
         }
       }
     },

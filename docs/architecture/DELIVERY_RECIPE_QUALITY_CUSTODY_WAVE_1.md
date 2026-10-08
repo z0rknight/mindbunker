@@ -88,3 +88,18 @@ Internal step names, quality standards, transition history, Work Sessions and Se
 One real active Video must still be attached to a real Recipe and naturally progress during editing, including a reopen only if actual rework occurs. This is the only acceptable proof of negligible tracking friction.
 
 No deploy and no production migration were performed.
+
+## Wave 2 — RMEDIA App execution candidate
+
+The standalone RMEDIA App now reads and mutates this same execution model through two device-authenticated routes:
+
+```text
+GET  /api/sensor/v1/recipes/current
+POST /api/sensor/v1/recipes/current/steps/:stepId
+```
+
+Both routes derive the Video exclusively from the one open canonical Work Session. The app cannot supply an arbitrary Video ID, attach a template, edit a template or write time. Reads reuse `CATALOG_READ`; transitions reuse `SESSION_WRITE`. The POST calls the same guarded transition service as the web Video Workspace and records `source = RMEDIA_APP` with the device public ID in provenance.
+
+Native interaction is intentionally online-only. The app shows an optimistic step marker while the request is in flight and rolls it back on failure. Recipe transitions are not added to the offline outbox because replaying ordered production-state mutations after the editing context has changed could fabricate operational truth.
+
+Production remains on `0056`; this Wave 2 candidate requires the still-unreleased `0057` schema and routes. No deploy or production migration was performed.

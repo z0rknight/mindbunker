@@ -128,3 +128,23 @@ test("guarded transition SQL writes one event only when the expected previous st
   assert.equal(runGuarded("NOT_STARTED", "ACTIVE", 101), undefined, "stale replay cannot change the step");
   assert.equal(db.prepare("SELECT COUNT(*) n FROM delivery_recipe_events").get().n, 1, "stale replay creates no duplicate event");
 });
+
+test("0057 accepts RMEDIA App as an auditable transition source", () => {
+  const db = exact0056();
+  seedVideo(db);
+  db.exec(migration);
+  db.exec(`
+    INSERT INTO delivery_recipes (id, name, applicability) VALUES (1, 'Native', 'RMEDIA App QA');
+    INSERT INTO delivery_recipe_steps (id, recipe_id, label, gate, position) VALUES (1, 1, 'Assembly', 'STRUCTURE', 0);
+  `);
+  const instanceId = attachSnapshot(db);
+  const stepId = Number(db.prepare("SELECT id FROM video_recipe_instance_steps WHERE instance_id = ?").get(instanceId).id);
+  db.prepare(`INSERT INTO delivery_recipe_events
+    (video_id, instance_id, instance_step_id, previous_state, new_state, actor, source, provenance)
+    VALUES (11, ?, ?, 'NOT_STARTED', 'ACTIVE', 'admin', 'RMEDIA_APP', 'native_operator_click:device:test')`)
+    .run(instanceId, stepId);
+  assert.deepEqual({ ...db.prepare("SELECT source, provenance FROM delivery_recipe_events").get() }, {
+    source: "RMEDIA_APP",
+    provenance: "native_operator_click:device:test",
+  });
+});
