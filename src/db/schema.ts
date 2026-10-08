@@ -54,6 +54,11 @@ import {
   REVISION_CAUSES,
 } from "../modules/video-operations/config";
 import { FILM_ROLL_STATUSES } from "../modules/film-rolls/config";
+import {
+  EMAIL_CONTACT_CLIENT_TYPES,
+  EMAIL_CONTACT_ORIGINS,
+  EMAIL_CONTACT_STATUSES,
+} from "../modules/email-list/config";
 
 // ─── PRIVATE ACCESS ──────────────────────────────────────────────────────────
 
@@ -2081,6 +2086,33 @@ export const filmRollSubjects = sqliteTable(
     uniqueIndex("film_roll_subjects_roll_label_unique").on(table.filmRollId, table.label),
     index("film_roll_subjects_label_idx").on(table.label),
     check("film_roll_subjects_shot_count_check", sql`${table.shotCount} > 0`),
+  ],
+);
+
+// Commercial outreach custody stays separate from CRM identity. A person
+// who bought once belongs in this list without silently becoming a current
+// lead/client, acquiring an opportunity stage, or appearing in production.
+export const emailContacts = sqliteTable(
+  "email_contacts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    clientType: text("client_type", { enum: EMAIL_CONTACT_CLIENT_TYPES }).notNull().default("UNCLASSIFIED"),
+    status: text("status", { enum: EMAIL_CONTACT_STATUSES }).notNull().default("ACTIVE"),
+    relationshipOrigin: text("relationship_origin", { enum: EMAIL_CONTACT_ORIGINS }).notNull().default("MANUAL"),
+    source: text("source").notNull(),
+    notes: text("notes"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    uniqueIndex("email_contacts_email_unique").on(table.email),
+    index("email_contacts_type_status_idx").on(table.clientType, table.status),
+    check("email_contacts_client_type_check", sql`${table.clientType} in ('UNCLASSIFIED', 'EXPERT_EDUCATOR', 'BRAND_LIFESTYLE', 'AGENCY_STUDIO', 'REAL_ESTATE_ARCHITECTURE', 'SAAS_TECH', 'OTHER')`),
+    check("email_contacts_status_check", sql`${table.status} in ('ACTIVE', 'DO_NOT_CONTACT', 'BOUNCED', 'ARCHIVED')`),
+    check("email_contacts_origin_check", sql`${table.relationshipOrigin} in ('PAST_CLIENT', 'INBOUND', 'MANUAL')`),
+    check("email_contacts_normalized_email_check", sql`${table.email} = lower(trim(${table.email})) and ${table.email} like '%_@_%._%'`),
   ],
 );
 

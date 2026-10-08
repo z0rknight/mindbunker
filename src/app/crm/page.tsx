@@ -117,6 +117,9 @@ export default async function CRMPage() {
             {systemInbound.unreadEventCount}
           </span>
         </Link>
+        <Link href="/crm/email-list" className="px-3 py-2 text-sm font-semibold text-zinc-400 hover:text-white">
+          Email List
+        </Link>
       </nav>
 
       <details
