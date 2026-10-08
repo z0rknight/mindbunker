@@ -23,6 +23,13 @@ export type QuoteRow = {
   projectId: number | null;
   videoId: number | null;
   origin: "INTAKE" | "MANUAL";
+  offerType: "RECURRING_PARTNERSHIP" | "HERO_EDIT" | "VSL_LAUNCH" | "NEEDS_DISCOVERY" | "NOT_A_FIT" | null;
+  publicPublishedAt: Date | null;
+  publicExpiresAt: Date | null;
+  publicRevokedAt: Date | null;
+  paymentUrl: string | null;
+  paymentLabel: string | null;
+  strategicExceptionNote: string | null;
 };
 
 const QUOTE_COLUMNS = {
@@ -43,6 +50,13 @@ const QUOTE_COLUMNS = {
   projectId: quotes.projectId,
   videoId: quotes.videoId,
   origin: quotes.origin,
+  offerType: quotes.offerType,
+  publicPublishedAt: quotes.publicPublishedAt,
+  publicExpiresAt: quotes.publicExpiresAt,
+  publicRevokedAt: quotes.publicRevokedAt,
+  paymentUrl: quotes.paymentUrl,
+  paymentLabel: quotes.paymentLabel,
+  strategicExceptionNote: quotes.strategicExceptionNote,
 } as const;
 
 export async function getQuotesForClient(clientId: number): Promise<QuoteRow[]> {

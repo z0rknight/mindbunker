@@ -46,7 +46,7 @@ export function classifyAppShellRoute(pathname: string): AppShellRouteClassifica
   const isLogin = normalizedPath === "/login";
   const isPublicGateway = normalizedPath.startsWith("/g/");
   const isClientPortal = normalizedPath === "/client" || normalizedPath.startsWith("/client/");
-  const isPublicIntake = normalizedPath === "/quoteavideo" || normalizedPath === "/book";
+  const isPublicIntake = normalizedPath === "/quoteavideo" || normalizedPath === "/book" || normalizedPath.startsWith("/offer/");
 
   return {
     normalizedPath,

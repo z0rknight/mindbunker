@@ -34,3 +34,21 @@ export const QUOTE_STATUS_TRANSITIONS: Record<QuoteStatus, QuoteStatus[]> = {
 };
 
 export const DEFAULT_QUOTE_CURRENCY = "USD";
+
+export const COMMERCIAL_OFFER_TYPES = [
+  "RECURRING_PARTNERSHIP",
+  "HERO_EDIT",
+  "VSL_LAUNCH",
+  "NEEDS_DISCOVERY",
+  "NOT_A_FIT",
+] as const;
+
+export type CommercialOfferType = (typeof COMMERCIAL_OFFER_TYPES)[number];
+
+export const COMMERCIAL_OFFER_LABELS: Record<CommercialOfferType, string> = {
+  RECURRING_PARTNERSHIP: "Recurring Post-Production Partnership",
+  HERO_EDIT: "Cinematic Brand Story / Hero Edit",
+  VSL_LAUNCH: "VSL / Launch Film",
+  NEEDS_DISCOVERY: "Needs discovery",
+  NOT_A_FIT: "Not a fit",
+};

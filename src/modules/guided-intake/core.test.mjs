@@ -163,6 +163,28 @@ test("CRM projection is readable and does not require raw JSON", () => {
   assert.equal(projection.freeformContext, "A useful starting point.");
 });
 
+test("commercial entry remains evidence while the suggested Offer remains derived", () => {
+  const data = validate(submission({
+    desiredOutcome: "Publish one defining brand story",
+    budgetReadiness: "range_in_mind",
+    budgetRange: "USD 1,000–2,000",
+  }, {
+    ref: "portfolio-note",
+    acquisitionContext: {
+      entryContext: "brands",
+      landingSource: "brands",
+      offerContext: "hero_edit",
+      offerRef: null,
+      rawRef: "portfolio-note",
+    },
+  }));
+  const projection = projectGuidedIntakePayload(buildGuidedIntakePayload(data, null));
+  assert.equal(projection.acquisitionContext.landingSource, "brands");
+  assert.equal(projection.desiredOutcome, "Publish one defining brand story");
+  assert.match(projection.budgetReadiness, /range in mind/u);
+  assert.equal(projection.suggestedOffer, "Cinematic Brand Story / Hero Edit");
+});
+
 test("malformed historical payloads fail closed", () => {
   assert.equal(isGuidedIntakePayload(null), false);
   assert.equal(isGuidedIntakePayload({ schemaVersion: 1 }), false);

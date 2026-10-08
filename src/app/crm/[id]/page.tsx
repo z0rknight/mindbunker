@@ -16,6 +16,7 @@ import { GeladeiraControl } from "./GeladeiraControl";
 import { OpportunityPanel } from "./OpportunityPanel";
 import { QuotePanel } from "./QuotePanel";
 import { getQuotesForClient } from "@/modules/quotes/data";
+import { getLatestCommercialOfferDecision } from "@/modules/commercial-operating/data";
 import { computeClientCommercialValue } from "@/modules/quotes/core";
 import { ClientCommercialValuePanel } from "./ClientCommercialValuePanel";
 import { getClientCustody } from "@/modules/custody/data";
@@ -33,6 +34,7 @@ import { filterVideosForClient, selectActiveContractForClient } from "@/modules/
 import { indexClientBillingByProject } from "@/modules/client-portal/core";
 import { getClientReality } from "@/modules/reality/data";
 import { ClientRealityPanel } from "@/components/reality/ClientRealityPanel";
+import { CommercialContextPanel } from "./CommercialContextPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -108,6 +110,7 @@ export default async function ClientDetailPage({
     referenceVideoOptions,
     clientQa,
     clientReality,
+    commercialOfferDecision,
   ] = await Promise.all([
     getAdminGatewayWorkspace(clientId),
     getAdminBookingConfiguration(),
@@ -139,6 +142,7 @@ export default async function ClientDetailPage({
     // Wave 4: client-owned protected terms + export reminders (operator-only).
     getClientQaForClient(clientId),
     getClientReality(clientId),
+    getLatestCommercialOfferDecision(clientId),
   ]);
   const weekEstimateForClient = weekEstimates.find((row) => row.clientId === clientId) ?? null;
   const unassignedVideos = filterVideosForClient(allUnassignedVideos, clientId);
@@ -161,6 +165,13 @@ export default async function ClientDetailPage({
     projectId: quote.projectId,
     videoId: quote.videoId,
     createdAt: quote.createdAt ? quote.createdAt.toISOString() : null,
+    offerType: quote.offerType,
+    publicPublishedAt: quote.publicPublishedAt ? quote.publicPublishedAt.toISOString() : null,
+    publicExpiresAt: quote.publicExpiresAt ? quote.publicExpiresAt.toISOString() : null,
+    publicRevokedAt: quote.publicRevokedAt ? quote.publicRevokedAt.toISOString() : null,
+    paymentUrl: quote.paymentUrl,
+    paymentLabel: quote.paymentLabel,
+    strategicExceptionNote: quote.strategicExceptionNote,
   }));
   const commercialValue = computeClientCommercialValue(quotes);
 
@@ -247,6 +258,12 @@ export default async function ClientDetailPage({
               }
             : null
         }
+      />
+
+      <CommercialContextPanel
+        clientId={client.id}
+        intake={workspace.events.find((event) => event.guidedIntake)?.guidedIntake ?? null}
+        decision={commercialOfferDecision}
       />
 
       <GeladeiraControl

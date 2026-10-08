@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [ ] **Great Reset Commercial Operating Layer (2026-10-08, release candidate)**
+  - [x] Added one canonical commercial path from segment landing context through `/start`, immutable Lead evidence, human Offer-fit decision, canonical Quote, optional public Offer projection, and existing Quote → Project/Video/Recipe production conversion
+  - [x] Added additive migration `0058_commercial_operating_layer.sql`: one manually owned capacity singleton plus revocable/expiring public projection fields on canonical Quotes; no automatic capacity, pricing, payment, acceptance, Lead promotion, or Finance mutation
+  - [x] Added operator CRM surfaces that keep acquisition context, user evidence, derived suggestion, and human commercial decision distinct; capacity exposes OPEN/LIMITED/WAITLIST/PAUSED, recurring 0–3, Hero 0–1, actor/reason/timestamp
+  - [x] Added anonymous token-gated `/offer/[token]` projection with explicit price, scope, assumptions, expiry and optional external HTTPS payment link; only token hashes persist and external clicks do not imply payment or acceptance
+  - [x] `/start` now preserves allowlisted landing/offer/ref context, desired outcome, approval owner and budget readiness/range as immutable intake evidence while retaining one canonical Lead by email
+  - [x] 1,614 tests, typecheck, production build, migration `0057 → 0058`, FK/quick checks, and ESLint with 0 errors / 3 pre-existing warnings GREEN; automated localhost visual QA remained unavailable due saved browser policy
+  - [ ] Production backup, migration, deploy, smoke, Notion release closure and real-world dogfood remain pending
+
 - [ ] **Delivery Recipe / Quality Custody Wave 1 (2026-10-08, local candidate / real dogfood pending)**
   - [x] Added additive migration `0057_delivery_recipes.sql`: reusable Recipe templates, ordered/enabled steps, immutable per-Video snapshots and append-only transition history with actor/source/provenance
   - [x] Preserved canonical ownership: Video owns the deliverable; Work Sessions own time; review/revisions own client feedback; Sensor and Quick Capture are unchanged

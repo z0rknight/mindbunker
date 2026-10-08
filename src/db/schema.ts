@@ -16,7 +16,8 @@ import {
   CAPTURE_EVENT_TYPES,
   CAPTURE_OUTCOMES,
 } from "../modules/captures/config";
-import { QUOTE_STATUSES, DEFAULT_QUOTE_CURRENCY } from "../modules/quotes/config";
+import { COMMERCIAL_OFFER_TYPES, QUOTE_STATUSES, DEFAULT_QUOTE_CURRENCY } from "../modules/quotes/config";
+import { COMMERCIAL_CAPACITY_STATES } from "../modules/commercial-operating/config";
 import {
   BOOKING_STATUSES,
   CALENDAR_PROVIDERS,
@@ -438,12 +439,42 @@ export const quotes = sqliteTable(
     origin: text("origin", { enum: ["INTAKE", "MANUAL"] })
       .notNull()
       .default("INTAKE"),
+    offerType: text("offer_type", { enum: COMMERCIAL_OFFER_TYPES }),
+    publicTokenHash: text("public_token_hash"),
+    publicPublishedAt: integer("public_published_at", { mode: "timestamp" }),
+    publicExpiresAt: integer("public_expires_at", { mode: "timestamp" }),
+    publicRevokedAt: integer("public_revoked_at", { mode: "timestamp" }),
+    paymentUrl: text("payment_url"),
+    paymentLabel: text("payment_label"),
+    strategicExceptionNote: text("strategic_exception_note"),
   },
   (table) => [
     index("quotes_client_id_idx").on(table.clientId),
     index("quotes_status_idx").on(table.status),
     index("quotes_video_id_idx").on(table.videoId),
+    uniqueIndex("quotes_public_token_hash_unique").on(table.publicTokenHash),
+    index("quotes_public_expiry_idx").on(table.publicExpiresAt),
     check("quotes_origin_check", sql`${table.origin} in ('INTAKE', 'MANUAL')`),
+    check("quotes_offer_type_check", sql`${table.offerType} is null or ${table.offerType} in ('RECURRING_PARTNERSHIP', 'HERO_EDIT', 'VSL_LAUNCH', 'NEEDS_DISCOVERY', 'NOT_A_FIT')`),
+  ],
+);
+
+export const commercialCapacityState = sqliteTable(
+  "commercial_capacity_state",
+  {
+    id: integer("id").primaryKey().default(1),
+    state: text("state", { enum: COMMERCIAL_CAPACITY_STATES }).notNull().default("OPEN"),
+    recurringSeats: integer("recurring_seats").notNull().default(1),
+    heroProjects: integer("hero_projects").notNull().default(0),
+    reason: text("reason"),
+    actor: text("actor").notNull().default("operator"),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [
+    check("commercial_capacity_singleton_check", sql`${table.id} = 1`),
+    check("commercial_capacity_state_check", sql`${table.state} in ('OPEN', 'LIMITED', 'WAITLIST', 'PAUSED')`),
+    check("commercial_capacity_recurring_check", sql`${table.recurringSeats} between 0 and 3`),
+    check("commercial_capacity_hero_check", sql`${table.heroProjects} between 0 and 1`),
   ],
 );
 

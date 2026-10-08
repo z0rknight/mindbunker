@@ -10,6 +10,8 @@ import {
 import { QuoteCreateForm, type QuoteCreateFormPrefill } from "@/components/crm/QuoteCreateForm";
 import { QuickFollowUpForm } from "@/components/crm/QuickFollowUpForm";
 import { createVideoCommitment } from "@/modules/video-operations/actions";
+import { publishPublicOffer, revokePublicOffer } from "@/modules/commercial-operating/actions";
+import { COMMERCIAL_OFFER_LABELS, type CommercialOfferType } from "@/modules/quotes/config";
 
 // Client Service Reality Patch (25 Aug 2026) -- Quote Approval (brief §6).
 // V1 is manual: Emmanuel logs a quote from a Pricing Lab calculation he
@@ -32,6 +34,13 @@ export type QuotePanelRow = {
   projectId: number | null;
   videoId: number | null;
   createdAt: string | null;
+  offerType: CommercialOfferType | null;
+  publicPublishedAt: string | null;
+  publicExpiresAt: string | null;
+  publicRevokedAt: string | null;
+  paymentUrl: string | null;
+  paymentLabel: string | null;
+  strategicExceptionNote: string | null;
 };
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -98,6 +107,52 @@ function ProductionForm({ quoteId, onDone }: { quoteId: number; onDone: () => vo
       >
         {isPending ? "Creating…" : "Create production work"}
       </button>
+    </div>
+  );
+}
+
+function PublicOfferForm({ quote, onDone }: { quote: QuotePanelRow; onDone: () => void }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [offerType, setOfferType] = useState<Exclude<CommercialOfferType, "NEEDS_DISCOVERY" | "NOT_A_FIT">>(
+    quote.offerType === "HERO_EDIT" || quote.offerType === "VSL_LAUNCH" ? quote.offerType : "RECURRING_PARTNERSHIP",
+  );
+  const [expiresAt, setExpiresAt] = useState(quote.publicExpiresAt?.slice(0, 10) ?? "");
+  const [paymentUrl, setPaymentUrl] = useState(quote.paymentUrl ?? "");
+  const [paymentLabel, setPaymentLabel] = useState(quote.paymentLabel ?? "Pay with Wise");
+  const [exceptionNote, setExceptionNote] = useState(quote.strategicExceptionNote ?? "");
+  const [feedback, setFeedback] = useState("");
+  const [publicUrl, setPublicUrl] = useState("");
+
+  const publish = () => startTransition(async () => {
+    setFeedback("");
+    const result = await publishPublicOffer(quote.id, { offerType, expiresAt: `${expiresAt}T23:59:59.000Z`, paymentUrl, paymentLabel, strategicExceptionNote: exceptionNote });
+    if (!result.success) return setFeedback(result.error);
+    const url = `${window.location.origin}${result.publicPath}`;
+    setPublicUrl(url);
+    setFeedback(result.message);
+    router.refresh();
+  });
+
+  return (
+    <div className="mt-3 space-y-2 rounded-xl border border-red-900/50 bg-red-950/10 p-3">
+      <p className="text-[10px] font-black uppercase tracking-widest text-red-300">Public Offer projection</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <select value={offerType} onChange={(event) => setOfferType(event.target.value as typeof offerType)} className="min-h-10 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-xs text-white">
+          {(["RECURRING_PARTNERSHIP", "HERO_EDIT", "VSL_LAUNCH"] as const).map((value) => <option key={value} value={value}>{COMMERCIAL_OFFER_LABELS[value]}</option>)}
+        </select>
+        <input type="date" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} className="min-h-10 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-xs text-white" />
+        <input value={paymentUrl} onChange={(event) => setPaymentUrl(event.target.value)} placeholder="https://wise.com/pay/... (optional)" className="min-h-10 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-xs text-white placeholder:text-zinc-600" />
+        <input value={paymentLabel} onChange={(event) => setPaymentLabel(event.target.value)} placeholder="Pay with Wise" className="min-h-10 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-xs text-white placeholder:text-zinc-600" />
+      </div>
+      <input value={exceptionNote} onChange={(event) => setExceptionNote(event.target.value)} placeholder="Strategic exception note (only when applicable)" className="min-h-10 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-xs text-white placeholder:text-zinc-600" />
+      {publicUrl && <div className="rounded-lg bg-zinc-950 p-2 text-xs text-zinc-300"><a href={publicUrl} target="_blank" rel="noreferrer" className="break-all text-cyan-300 underline">{publicUrl}</a></div>}
+      {feedback && <p className="text-xs text-zinc-400">{feedback}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={isPending} onClick={publish} className="rounded-lg bg-red-600 px-3 py-2 text-xs font-black text-white hover:bg-red-500 disabled:opacity-50">{isPending ? "Publishing…" : quote.publicPublishedAt ? "Replace public link" : "Publish public Offer"}</button>
+        {quote.publicPublishedAt && !quote.publicRevokedAt && <button type="button" disabled={isPending} onClick={() => startTransition(async () => { const result = await revokePublicOffer(quote.id); setFeedback(result.success ? result.message : result.error); if (result.success) router.refresh(); })} className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-800 disabled:opacity-50">Revoke</button>}
+        <button type="button" disabled={isPending} onClick={onDone} className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-800">Close</button>
+      </div>
     </div>
   );
 }
@@ -220,6 +275,7 @@ function QuoteRow({
   const [error, setError] = useState("");
   const [showProductionForm, setShowProductionForm] = useState(false);
   const [showScheduleCall, setShowScheduleCall] = useState(false);
+  const [showPublicOffer, setShowPublicOffer] = useState(false);
 
   const transition = (nextStatus: string) => {
     setError("");
@@ -300,6 +356,11 @@ function QuoteRow({
               📞 Schedule call
             </button>
           )}
+          {quote.status !== "DECLINED" && (
+            <button type="button" onClick={() => setShowPublicOffer((value) => !value)} className="rounded-lg border border-red-800/60 bg-red-950/20 px-2.5 py-1 text-[11px] font-bold text-red-300 hover:bg-red-950/40">
+              {quote.publicPublishedAt && !quote.publicRevokedAt ? "Public Offer" : "Publish Offer"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -315,6 +376,15 @@ function QuoteRow({
             onDone={() => setShowScheduleCall(false)}
           />
         </div>
+      )}
+
+      {showPublicOffer && <PublicOfferForm quote={quote} onDone={() => setShowPublicOffer(false)} />}
+
+      {quote.publicPublishedAt && (
+        <p className="mt-2 text-[11px] text-zinc-500">
+          Public Offer: {quote.publicRevokedAt ? "revoked" : quote.publicExpiresAt && new Date(quote.publicExpiresAt) <= new Date() ? "expired" : "active"}
+          {quote.offerType ? ` · ${COMMERCIAL_OFFER_LABELS[quote.offerType]}` : ""}
+        </p>
       )}
 
       {quote.status === "APPROVED" && !hasProduction && (

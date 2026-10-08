@@ -43,6 +43,7 @@ const VALUES = {
   reviewComplexity: ["one", "several", "unclear"],
   deadlineType: ["specific", "window", "cadence", "urgent", "unsure"],
   dependencyFlags: ["assets", "feedback", "approval", "none", "unsure"],
+  budgetReadiness: ["needs_investment_context", "range_in_mind", "approved_budget", "compare_options", "unsure"],
 } as const;
 
 type ValueOf<K extends keyof typeof VALUES> = (typeof VALUES)[K][number];
@@ -61,6 +62,17 @@ export type GuidedIntakeAnswers = {
   deadlineType: ValueOf<"deadlineType">;
   dependencyFlags: ValueOf<"dependencyFlags">[];
   contact: { name: string; email: string; company: string | null };
+  desiredOutcome: string | null;
+  budgetReadiness: ValueOf<"budgetReadiness"> | null;
+  budgetRange: string | null;
+};
+
+export type GuidedAcquisitionContext = {
+  entryContext: "homepage" | "experts" | "brands" | "offer" | "portfolio" | "campaign" | "referral" | null;
+  landingSource: "experts" | "brands" | null;
+  offerContext: "recurring_partnership" | "hero_edit" | "vsl_launch" | null;
+  offerRef: string | null;
+  rawRef: string | null;
 };
 
 export type GuidedDerivedDimensions = {
@@ -94,6 +106,7 @@ export type GuidedIntakePayloadV1 = {
   referralContext: { key: string; source: string } | null;
   freeformContext: string | null;
   submissionContext: { channel: "start" };
+  acquisitionContext?: GuidedAcquisitionContext;
 };
 
 export type GuidedIntakePayload = GuidedIntakePayloadV1 | GuidedIntakePayloadV2;
@@ -103,6 +116,7 @@ export type ValidatedGuidedIntakeSubmission = {
   freeformContext: string | null;
   idempotencyKey: string;
   ref: string | null;
+  acquisitionContext: GuidedAcquisitionContext;
 };
 
 export type GuidedIntakeValidation =
@@ -113,10 +127,11 @@ const ANSWER_KEYS = [
   "contentType", "durationBand", "deliverableCountBand", "recurrence",
   "formatMaturity", "sourceReadiness", "editorialReadiness",
   "creativeFlexibility", "technicalComplexityFlags", "reviewComplexity",
-  "deadlineType", "dependencyFlags", "contact", "freeformContext",
+  "deadlineType", "dependencyFlags", "contact", "freeformContext", "desiredOutcome", "budgetReadiness", "budgetRange",
 ] as const;
-const REQUEST_KEYS = ["answers", "idempotencyKey", "ref", "company_website"] as const;
+const REQUEST_KEYS = ["answers", "idempotencyKey", "ref", "company_website", "acquisitionContext"] as const;
 const CONTACT_KEYS = ["name", "email", "company"] as const;
+const ACQUISITION_KEYS = ["entryContext", "landingSource", "offerContext", "offerRef", "rawRef"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -195,6 +210,14 @@ export function validateGuidedIntakeSubmission(value: unknown): GuidedIntakeVali
   if (contact.company && company === null) errors.company = "Business or website is too long.";
   const freeformContext = optionalText(raw.freeformContext, 1_200);
   if (raw.freeformContext && freeformContext === null) errors.freeformContext = "Additional context is too long.";
+  const desiredOutcome = optionalText(raw.desiredOutcome, 500);
+  if (raw.desiredOutcome && desiredOutcome === null) errors.desiredOutcome = "Desired outcome is too long.";
+  const budgetRange = optionalText(raw.budgetRange, 160);
+  if (raw.budgetRange && budgetRange === null) errors.budgetRange = "Budget range is too long.";
+  const budgetReadiness = raw.budgetReadiness === null || raw.budgetReadiness === undefined
+    ? null
+    : enumValue("budgetReadiness", raw.budgetReadiness);
+  if (raw.budgetReadiness && budgetReadiness === null) errors.budgetReadiness = "Choose a valid budget readiness.";
 
   const idempotencyKey = typeof value.idempotencyKey === "string" ? value.idempotencyKey.trim() : "";
   if (!/^[A-Za-z0-9_-]{8,100}$/u.test(idempotencyKey)) {
@@ -205,6 +228,23 @@ export function validateGuidedIntakeSubmission(value: unknown): GuidedIntakeVali
     : typeof value.ref === "string" && value.ref.length <= 40
       ? value.ref
       : null;
+
+  const acquisitionRaw = value.acquisitionContext;
+  const acquisitionContext: GuidedAcquisitionContext = { entryContext: null, landingSource: null, offerContext: null, offerRef: null, rawRef: ref };
+  if (acquisitionRaw !== null && acquisitionRaw !== undefined) {
+    if (!isRecord(acquisitionRaw) || !hasOnlyKeys(acquisitionRaw, ACQUISITION_KEYS)) {
+      errors.acquisitionContext = "Unexpected acquisition context.";
+    } else {
+      const entryValues = ["homepage", "experts", "brands", "offer", "portfolio", "campaign", "referral"];
+      const landingValues = ["experts", "brands"];
+      const offerValues = ["recurring_partnership", "hero_edit", "vsl_launch"];
+      acquisitionContext.entryContext = typeof acquisitionRaw.entryContext === "string" && entryValues.includes(acquisitionRaw.entryContext) ? acquisitionRaw.entryContext as GuidedAcquisitionContext["entryContext"] : null;
+      acquisitionContext.landingSource = typeof acquisitionRaw.landingSource === "string" && landingValues.includes(acquisitionRaw.landingSource) ? acquisitionRaw.landingSource as GuidedAcquisitionContext["landingSource"] : null;
+      acquisitionContext.offerContext = typeof acquisitionRaw.offerContext === "string" && offerValues.includes(acquisitionRaw.offerContext) ? acquisitionRaw.offerContext as GuidedAcquisitionContext["offerContext"] : null;
+      acquisitionContext.offerRef = optionalText(acquisitionRaw.offerRef, 100);
+      acquisitionContext.rawRef = optionalText(acquisitionRaw.rawRef, 40) ?? ref;
+    }
+  }
 
   if (Object.keys(errors).length > 0 || Object.values(scalars).some((answer) => answer === null) || !technicalComplexityFlags || !dependencyFlags || !email) {
     return { success: false, errors };
@@ -218,10 +258,14 @@ export function validateGuidedIntakeSubmission(value: unknown): GuidedIntakeVali
         technicalComplexityFlags,
         dependencyFlags,
         contact: { name, email, company },
+        desiredOutcome,
+        budgetReadiness,
+        budgetRange,
       },
       freeformContext,
       idempotencyKey,
       ref,
+      acquisitionContext,
     },
   };
 }
@@ -385,6 +429,7 @@ export function buildGuidedIntakePayload(
     referralContext: referral ? { key: referral.key, source: referral.source } : null,
     freeformContext: data.freeformContext,
     submissionContext: { channel: "start" },
+    acquisitionContext: data.acquisitionContext,
   };
 }
 
@@ -464,6 +509,11 @@ export type GuidedIntakeProjection = {
   confidence: string;
   leadIntentEvidence: string[];
   referralSource: string | null;
+  acquisitionContext?: GuidedAcquisitionContext;
+  desiredOutcome?: string | null;
+  budgetReadiness?: string;
+  approvalOwner?: string;
+  suggestedOffer?: string;
   freeformContext: string | null;
   rawAnswers: Array<{ label: string; value: string }>;
 };
@@ -517,6 +567,13 @@ export function projectGuidedIntakePayload(payload: GuidedIntakePayload): Guided
   // events therefore gain the same readable intent projection without a
   // rewrite, while new v1 events also persist the server-derived snapshot.
   const leadIntent = deriveLeadIntent(payload.answers);
+  const suggestedOffer = payload.acquisitionContext?.offerContext === "hero_edit"
+    ? "Cinematic Brand Story / Hero Edit"
+    : payload.acquisitionContext?.offerContext === "vsl_launch"
+      ? "VSL / Launch Film"
+      : leadIntent.relationshipShape === "RECURRING"
+        ? "Recurring Post-Production Partnership"
+        : "Needs discovery";
   return {
     surface: "START V1",
     intakeVersion: payload.modelVersion === LEGACY_GUIDED_INTAKE_MODEL_VERSION ? "Legacy model v0" : "Flow 1 · intent 1",
@@ -540,6 +597,11 @@ export function projectGuidedIntakePayload(payload: GuidedIntakePayload): Guided
     referralSource: payload.referralContext?.key === "pdbm"
       ? "Perfect Day Business Mentorship (PDBM)"
       : payload.referralContext?.source ?? null,
+    acquisitionContext: payload.acquisitionContext,
+    desiredOutcome: payload.answers.desiredOutcome ?? null,
+    budgetReadiness: payload.answers.budgetReadiness ? readable(payload.answers.budgetReadiness) + (payload.answers.budgetRange ? ` · ${payload.answers.budgetRange}` : "") : "not supplied",
+    approvalOwner: payload.answers.reviewComplexity === "one" ? "One decision maker" : payload.answers.reviewComplexity === "several" ? "Several stakeholders" : "Still unclear",
+    suggestedOffer,
     freeformContext: payload.freeformContext,
     rawAnswers: [
       { label: "Content type", value: readable(payload.answers.contentType) },

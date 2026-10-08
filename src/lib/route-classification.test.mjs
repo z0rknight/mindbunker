@@ -82,6 +82,11 @@ test("/quoteavideo and /book normalize the same with the basePath prefix", () =>
   );
 });
 
+test("public Offer tokens never mount the operator shell", () => {
+  assert.equal(classifyAppShellRoute("/offer/abc").isBareShellRoute, true);
+  assert.equal(classifyAppShellRoute("/mindbunker/offer/abc").isBareShellRoute, true);
+});
+
 test("a route that merely contains 'quoteavideo' or 'book' as a substring is not misclassified", () => {
   assert.equal(classifyAppShellRoute("/crm/quoteavideo-notes").isPublicIntake, false);
   assert.equal(classifyAppShellRoute("/finance/subscriptions/book-club").isPublicIntake, false);

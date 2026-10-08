@@ -26,16 +26,19 @@ import { getSystemInbound } from "@/modules/system-inbound/data";
 import { SYNTHETIC_OPERATIONAL_CLIENT_SOURCE } from "@/modules/projects/core";
 import { getRelationshipIntegrity } from "@/modules/crm/integrity-data";
 import { EntityInspectionTrigger } from "@/components/entity-inspection/EntityDrawerProvider";
+import { getCommercialCapacity } from "@/modules/commercial-operating/data";
+import { CommercialCapacityPanel } from "./CommercialCapacityPanel";
 
 export const dynamic = "force-dynamic";
 
 export default async function CRMPage() {
-  const [rawClients, listStats, workbenchData, systemInbound, integrity] = await Promise.all([
+  const [rawClients, listStats, workbenchData, systemInbound, integrity, capacity] = await Promise.all([
     getAllClients(),
     getClientListStats(),
     getCRMWorkbenchData(),
     getSystemInbound(),
     getRelationshipIntegrity(),
+    getCommercialCapacity(),
   ]);
 
   const aliasNamesByCanonical = new Map<number, string[]>();
@@ -121,6 +124,8 @@ export default async function CRMPage() {
           Email List
         </Link>
       </nav>
+
+      {capacity && <CommercialCapacityPanel capacity={{ ...capacity, updatedAt: capacity.updatedAt.toISOString() }} />}
 
       <details
         className={`mb-6 rounded-xl border px-4 py-3 ${
