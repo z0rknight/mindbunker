@@ -62,7 +62,7 @@ Sample calculations under the existing `$50/h` internal target:
 
 - Build now embeds and displays semantic version, monotonic build number and source commit.
 - Release build output prints exact source commit and executable SHA-256.
-- Stable-signed local candidate: source `496f42a1183c54eb08ed3a16bf41016580aa11d4`, build `15`, executable SHA-256 `384ceaeedc3172e9ff542201f5a905f4823073734ea10d98217943fc1074c8cb`.
+- Initial-pass stable-signed local candidate: source `496f42a1183c54eb08ed3a16bf41016580aa11d4`, build `15`, executable SHA-256 `384ceaeedc3172e9ff542201f5a905f4823073734ea10d98217943fc1074c8cb`. The final refinement candidate is recorded in the addendum below.
 - Added a concise update-path architecture: deliberate signed candidate promotion now; remote signed manifest/update only after release authority exists.
 - Existing permission diagnostics/privacy behavior was preserved because audit found the correct model already implemented.
 
@@ -128,7 +128,7 @@ Evidence labels applied:
 
 ## 9. TEST RESULTS
 
-- MindBunker full suite: **1,588 / 1,588 pass** after new tests.
+- MindBunker final full suite: **1,591 / 1,591 pass** after the refinement tests.
 - Pricing evidence tests: confidence remains low below four completed samples; active samples never inflate confidence.
 - Film Rolls parser: rejects uncounted/negative subjects.
 - Migration 0055 integration: search `coffee + October` returns 12; rating 6 rejected; delete cascades subjects; FK check clean.
@@ -137,7 +137,7 @@ Evidence labels applied:
 - ESLint: 0 errors, 3 pre-existing unused-disable warnings.
 - Next production build: pass.
 - Human local Safari QA: Film Rolls list/form and Pricing Lab evidence/override rendered correctly; changing the local override from 3h to 6h updated the transparent estimate from `$150` to `$300` without mutating the configured baseline.
-- Native core runner: **52 / 52 pass**.
+- Native final core runner: **53 / 53 pass**.
 - Native release build: pass with full Xcode; stable local signing identity used.
 - Production D1: read-only; production head remains `0054`; no migration applied.
 
@@ -150,7 +150,7 @@ Evidence labels applied:
 - Build provenance does not yet equal a remote update channel. Notarization, immutable artifact hosting and a signed manifest remain absent.
 - Client Before/After needs an additive pair/version model, compatible-media validation, client-safe URLs and idempotent event write before UI.
 - Native delivery/review-link mutation needs explicit scoped API authorization and reuse of the existing Video mutation invariant.
-- Film Rolls has create/search in this slice; editing/deleting was not added because observed use has not yet established the correction workflow.
+- Film Rolls now has correction and archive through the same form. Permanent deletion remains intentionally absent from the operator UI so inventory evidence is preserved.
 
 ## 11. NEXT 3 HIGHEST-LEVERAGE MOVES
 
@@ -159,3 +159,93 @@ Evidence labels applied:
 3. **Human Sensor proof:** grant Accessibility and Input Monitoring to one stable-signed installed identity, relaunch once, and prove title + aggregate counts + denied-mode fallback. If repeated installs remain frequent after that, promote the signed release-manifest architecture.
 
 STOP: candidate only. Human review and explicit promotion decision next.
+
+## 12. PRE-DEPLOY REFINEMENT ADDENDUM — 07 OCT 2026
+
+### ARCHAEOLOGY
+
+- Source authority: production currently derives from MindBunker commit `9b94855`; the refinement release delta is `9b94855..9b8cc6eb5507d9dca28fa88940dec4ce6715ed85`.
+- RMEDIA native refinement source: `93c8c1c0afa4bd2f1323b9a3075c162a1a8a44e1` on `codex/pre-wave1`.
+- Production Workers remain Operator `b74835a8-c22e-4243-bb02-98f65a016bc0` and Client `313a3368-a8c3-43af-8cd2-918a163fc043`.
+- Production D1 was read only and remains at `0054_thick_sheva_callister.sql`; `0055_film_rolls.sql` remains pending/local.
+- The installed RMEDIA executable remained unchanged at SHA-256 `047dad65aa4aa68e7ded0e16ca3687781e01712e81870f077737547f15a4623e`.
+
+### FINDINGS
+
+- **P1 / FIXED:** RMEDIA's Open button used `videoId`; the canonical workspace accepts `video`. The prior link could render the workspace-unavailable state for valid current work.
+- **P1 / FIXED:** Film Roll creation used two separate D1 batches, so a subject-write failure could leave a parent-only record.
+- **P1 / FIXED:** malformed/duplicate subject lines were silently discarded, which could make the saved inventory differ from the operator's input.
+- **P1 / FIXED:** Film Rolls could be created but not corrected or archived, and archived inventory had no bounded default view.
+- **P1 / FIXED:** Pricing Lab showed global evidence/confidence beside a selected content type, so unlike work could appear comparable. A `LIMIT 24` could also undercount confidence.
+- **P2 / FIXED:** soundtrack and notes were captured but not retrievable on the Film Roll card; dates were raw; modal/search semantics had small accessibility gaps.
+- **ALREADY SOLVED:** Quick Captures are readable in MindBunker and native Notes exposes Synced/Pending/Failed/Local-only plus Session association.
+- **NOT A BUG:** Dashboard cards answer distinct operating questions; current visual repetition is not duplicate truth.
+- **DEFER:** client Before/After, native delivery/review mutation, network updater, Slack OTP and a universal execution entity still lack the required canonical contracts or repeat evidence.
+
+### FIXED
+
+- Added one tested native link builder for the exact workspace contract and clarified canonical-Video Start copy.
+- Made Film Roll subject validation fail explicitly with line number, positive integer bounds and case-insensitive duplicate detection.
+- Made create parent+subjects one transactional D1 batch; edit updates metadata and replaces subjects in one batch.
+- Added Edit + Archive, Current/Building/Ready/Archived/All views, default archive exclusion, readable capture dates, retrieved soundtrack/notes, Escape close, dialog labeling, accessible close/error and labeled filters.
+- Scoped Pricing evidence to the selected canonical type (`custom → other`), recomputed sample/confidence per type, removed query truncation and exposed revisions.
+- Added explicit Pricing coverage: only Video-linked closed Sessions; admin/off-Video time excluded; realized EHR unknown without canonically attributed comparable billing.
+
+### DEFERRED
+
+- No new Film Roll entity, media hosting, NAS integration, permanent delete, auto-tagging or recommendation engine.
+- No automatic price learning, rate mutation or inferred billed-value allocation.
+- No installed-app promotion, production deploy, remote migration, auth redesign or new Worker configuration.
+
+### NOT A BUG
+
+- Film Roll archive is the correction/removal mechanism; absence of a destructive Delete button is deliberate evidence custody.
+- The current installed RMEDIA app still displays the prior Start placeholder because the separate candidate was not installed; this does not invalidate the candidate source/build proof.
+- Wrangler's default `types --check` expects `worker-configuration.d.ts`; this repo intentionally generates `cloudflare-env.d.ts` with an explicit path. The checked-in generated file predates the installed Wrangler runtime and was not churned in this product-polish wave.
+
+### TESTS
+
+- MindBunker: **1,591 / 1,591** full tests pass.
+- Focused refinement: **7 / 7** Film Rolls/Pricing tests pass.
+- TypeScript and diff check pass.
+- ESLint: **0 errors / 3 pre-existing warnings**; refinement introduced no warning.
+- Operator and Client Next production builds pass.
+- RMEDIA core: **53 / 53** pass; full-Xcode debug and stable-signed release builds pass.
+- Separate candidate: build `16`, source `93c8c1c0afa4bd2f1323b9a3075c162a1a8a44e1`, executable SHA-256 `b9cdcfb16c031fac7915d934e6b75c0aa41316a4a139f3a67b86649bb05890d0`, signing identity `MindBunker Sensor Local Dev`.
+- Cloudflare config/schema review found no release-blocking Worker anti-pattern in the changed paths. Compatibility date `2026-08-19` and existing flags remain unchanged.
+
+### MIGRATION REVIEW
+
+- Fresh Wrangler-isolated chain `0000 → 0055`: applied; head `0055_film_rolls.sql`; `foreign_key_check` empty; `quick_check = ok`.
+- Read-only production export proved source head `0054`, then `0055` applied to an in-memory production-shaped clone: zero FK violations, `quick_check = ok`, zero initial Film Rolls.
+- The raw production-shaped temporary export was moved to Trash after verification; it is recoverable locally but no longer remains in `/private/tmp`.
+- Production itself remains at `0054`; zero remote migration and zero remote write.
+
+### HUMAN QA
+
+- Local Safari: invalid subject line stayed visible and returned the exact line-2 error; no partial record appeared.
+- Valid local record saved two subjects totaling 18, then re-opened with all metadata, archived, disappeared from Current and reappeared under Archived.
+- The exact synthetic Film Roll was guard-deleted from local D1; remaining count returned to zero, FK clean, quick-check ok.
+- Pricing Lab Short-form→Long-form switch changed both baseline and the explicitly named comparable type; no automatic repricing occurred.
+- Production read-only smoke rendered Dashboard, War Room, Projects Rows, CRM, Sessions, Finance and Capture Inbox without application-error state. No production control was submitted.
+- The running installed RMEDIA app was inspected but not closed/replaced. Candidate-only native behavior is backed by 53 core tests, full build and signed artifact rather than pretending the installed older binary is the candidate.
+
+### RELEASE DELTA
+
+- Film Rolls inventory becomes correctable, archivable, bounded and failure-atomic.
+- Pricing evidence becomes type-comparable and coverage-honest.
+- Native current-work Open reaches the real Video workspace; Start semantics no longer imply non-Video work can be canonically started.
+- No schema change beyond the already-pending additive `0055`; no change to Card UX, pricing formula, lifecycle, finance authority, auth boundary or client-safe projection.
+
+### KNOWN DEBT
+
+- Human installation/dogfood of build 16 remains a promotion-time action; installed build was deliberately preserved.
+- Sensor Accessibility/Input Monitoring grants remain human-owned macOS TCC state.
+- Geoff's extra Upwork hour and projected final duration remain non-canonical until manually reconciled/completed.
+- Client proof comparison and native update/delivery paths remain contract-level follow-ups, not release blockers.
+
+### PRODUCTION PROMOTION RECOMMENDATION
+
+**GREEN — recommend one final human promotion decision.** The candidate closes concrete release rough edges, passes the web/native/migration gates, and does not expand domain authority. Promotion must still be an explicit separate operation because it would deploy two Workers, apply production migration `0055`, and optionally replace the installed native app.
+
+No deploy, production migration, production D1 write or installed-app replacement occurred in this refinement wave.

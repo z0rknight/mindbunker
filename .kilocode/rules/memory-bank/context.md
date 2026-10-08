@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Pre-deploy refinement wave (2026-10-07, release candidate / no deploy)**
+  - [x] Closed the native workspace-link contract drift: RMEDIA now opens `/war-room/workspace?video=<id>` and the test suite guards the canonical query name; Start copy now says clearly that Project/Client text only filters a canonical Video list
+  - [x] Finished the existing Film Rolls interaction without new domain/schema: strict line-level subject validation, atomic parent+subject creation, edit/archive, Current/Archived status views, readable dates, soundtrack/notes retrieval, dialog/Escape/error semantics
+  - [x] Made Pricing Lab evidence follow the selected content type, mapped Custom to canonical `other`, removed the 24-row confidence truncation, exposed revision count and stated both off-Video exclusion and the missing billed-value boundary for realized EHR
+  - [x] Human Safari dogfood proved invalid-line rejection, 18-shot atomic creation, edit/archive, default archived exclusion, archived recovery, exact local QA cleanup and Short-form→Long-form evidence switching
+  - [x] Full web suite 1,591/1,591, typecheck, operator/client production builds, lint 0 errors / 3 pre-existing warnings; native 53/53 plus debug/release builds; isolated 0000→0055 and production-shaped 0054→0055 both FK-clean / quick-check ok
+  - [x] MindBunker source `9b8cc6e`; RMEDIA source `93c8c1c`; separate stable-signed build 16 SHA-256 `b9cdcfb1…890d`; installed app SHA remains `047dad65…23e`
+  - [x] Production remains Worker source `9b94855`, D1 head 0054. No deploy, remote migration/write, installed-app replacement or production credential mutation
+
 - [x] **07 Oct Reality / Intelligence / Client Proof Pass (2026-10-07, local candidate / no deploy)**
   - [x] Reconciled the 07 Oct dump, 48 scanned notebook pages, repository/source authority and read-only production D1 before implementation; ambiguous handwriting stayed qualitative/uncertain and produced no writes
   - [x] Added a read-only Pricing Lab reality dataset over canonical closed Work Sessions with recorded-vs-inferred content classification, completed/active sample counts, confidence disclosure and an explicit operator hour override; formula and config remain unchanged
