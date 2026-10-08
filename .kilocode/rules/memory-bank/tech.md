@@ -147,6 +147,7 @@ bun deploy         # Build and deploy to Cloudflare Workers
 - `DB`: D1 database used by every server-side data module
 - `ASSETS`: OpenNext static-asset binding
 - Bindings are declared in `wrangler.jsonc` and typed in `cloudflare-env.d.ts`
+- Repository candidate migration head: `0057_delivery_recipes.sql`; production remains at `0056_chief_vance_astro.sql` until separately authorized
 
 ### Native Sensor bridge (local candidate)
 

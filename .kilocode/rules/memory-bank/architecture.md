@@ -38,6 +38,18 @@ macOS Sensor SQLite (durability + outbox)
 
 Only `video_id` is accepted as Sensor attribution authority. Client/Project are derived through the canonical graph. Device/local UUID uniqueness makes ingestion and approval retries safe. Archive/Delete are evidence states rather than physical telemetry deletion. The existing partial unique index still enforces at most one globally open canonical Work Session.
 
+Delivery Recipe is a separate, bounded execution-quality layer:
+
+```text
+delivery_recipes + delivery_recipe_steps
+  → snapshot on video_recipe_instances + video_recipe_instance_steps
+  → append-only delivery_recipe_events
+  → operator detail in Video Workspace
+  → broad client-safe stage projection in Client Video Detail
+```
+
+Template edits never rewrite a Video's instantiated snapshot. Recipe timestamps are custody evidence, not work-duration evidence; stage time remains unknown until a defensible Recipe-state × canonical-Work-Session attribution exists. The legacy fixed production checklist remains historical and is not a second Recipe owner.
+
 `src/db/index.ts` creates a D1-backed Drizzle client per request using the `DB` binding. Data-backed pages are dynamic, and Server Actions perform mutations followed by route revalidation.
 
 ## Key Design Patterns

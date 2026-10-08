@@ -59,6 +59,13 @@ import {
   EMAIL_CONTACT_ORIGINS,
   EMAIL_CONTACT_STATUSES,
 } from "../modules/email-list/config";
+import {
+  DELIVERY_RECIPE_EVENT_ACTORS,
+  DELIVERY_RECIPE_EVENT_SOURCES,
+  DELIVERY_RECIPE_GATES,
+  DELIVERY_RECIPE_INSTANCE_STATUSES,
+  DELIVERY_RECIPE_STEP_STATES,
+} from "../modules/delivery-recipes/config";
 
 // ─── PRIVATE ACCESS ──────────────────────────────────────────────────────────
 
@@ -1033,6 +1040,125 @@ export const productionChecklistItems = sqliteTable(
     uniqueIndex("production_checklist_video_step_unique").on(table.videoId, table.step),
     check("production_checklist_step_check", sql`${table.step} in ('ASSEMBLY', 'COLOR', 'AUDIO', 'MOTION', 'CAPTIONS', 'QA', 'EXPORT', 'DELIVERY')`),
     check("production_checklist_status_check", sql`${table.status} in ('NOT_STARTED', 'DONE', 'NOT_REQUIRED')`),
+  ],
+);
+
+// Delivery Recipe / Quality Custody Wave 1: reusable process templates and
+// immutable-per-Video execution snapshots. The existing production checklist
+// above remains legacy history; these tables do not reinterpret or backfill it.
+export const deliveryRecipes = sqliteTable(
+  "delivery_recipes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    applicability: text("applicability").notNull(),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("delivery_recipes_name_unique").on(table.name),
+    index("delivery_recipes_active_name_idx").on(table.isActive, table.name),
+  ],
+);
+
+export const deliveryRecipeSteps = sqliteTable(
+  "delivery_recipe_steps",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    recipeId: integer("recipe_id").notNull().references(() => deliveryRecipes.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    gate: text("gate", { enum: DELIVERY_RECIPE_GATES }).notNull(),
+    position: integer("position").notNull(),
+    qualityStandard: text("quality_standard"),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("delivery_recipe_steps_recipe_position_idx").on(table.recipeId, table.position),
+    check("delivery_recipe_steps_gate_check", sql`${table.gate} in ('STRUCTURE', 'BUILD', 'FINISH', 'QUALITY_REVIEW', 'REVIEW_DELIVERY')`),
+    check("delivery_recipe_steps_position_check", sql`${table.position} >= 0`),
+  ],
+);
+
+export const videoRecipeInstances = sqliteTable(
+  "video_recipe_instances",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id").notNull().references(() => videoLogs.id, { onDelete: "restrict" }),
+    recipeId: integer("recipe_id").notNull().references(() => deliveryRecipes.id, { onDelete: "restrict" }),
+    recipeNameSnapshot: text("recipe_name_snapshot").notNull(),
+    status: text("status", { enum: DELIVERY_RECIPE_INSTANCE_STATUSES }).notNull().default("ACTIVE"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    archivedAt: integer("archived_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    uniqueIndex("video_recipe_instances_id_video_unique").on(table.id, table.videoId),
+    uniqueIndex("video_recipe_instances_one_current_video_idx")
+      .on(table.videoId)
+      .where(sql`${table.archivedAt} is null`),
+    index("video_recipe_instances_recipe_idx").on(table.recipeId),
+    check("video_recipe_instances_status_check", sql`${table.status} in ('ACTIVE', 'COMPLETED', 'ARCHIVED')`),
+  ],
+);
+
+export const videoRecipeInstanceSteps = sqliteTable(
+  "video_recipe_instance_steps",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    instanceId: integer("instance_id").notNull().references(() => videoRecipeInstances.id, { onDelete: "cascade" }),
+    templateStepId: integer("template_step_id").references(() => deliveryRecipeSteps.id, { onDelete: "set null" }),
+    labelSnapshot: text("label_snapshot").notNull(),
+    gateSnapshot: text("gate_snapshot", { enum: DELIVERY_RECIPE_GATES }).notNull(),
+    positionSnapshot: integer("position_snapshot").notNull(),
+    qualityStandardSnapshot: text("quality_standard_snapshot"),
+    state: text("state", { enum: DELIVERY_RECIPE_STEP_STATES }).notNull().default("NOT_STARTED"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("video_recipe_instance_steps_id_instance_unique").on(table.id, table.instanceId),
+    uniqueIndex("video_recipe_instance_steps_position_unique").on(table.instanceId, table.positionSnapshot),
+    index("video_recipe_instance_steps_state_idx").on(table.instanceId, table.state),
+    check("video_recipe_instance_steps_gate_check", sql`${table.gateSnapshot} in ('STRUCTURE', 'BUILD', 'FINISH', 'QUALITY_REVIEW', 'REVIEW_DELIVERY')`),
+    check("video_recipe_instance_steps_state_check", sql`${table.state} in ('NOT_STARTED', 'ACTIVE', 'DONE', 'N_A')`),
+  ],
+);
+
+export const deliveryRecipeEvents = sqliteTable(
+  "delivery_recipe_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id").notNull(),
+    instanceId: integer("instance_id").notNull(),
+    instanceStepId: integer("instance_step_id").notNull(),
+    previousState: text("previous_state", { enum: DELIVERY_RECIPE_STEP_STATES }).notNull(),
+    newState: text("new_state", { enum: DELIVERY_RECIPE_STEP_STATES }).notNull(),
+    occurredAt: integer("occurred_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    actor: text("actor", { enum: DELIVERY_RECIPE_EVENT_ACTORS }).notNull(),
+    source: text("source", { enum: DELIVERY_RECIPE_EVENT_SOURCES }).notNull(),
+    provenance: text("provenance").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.instanceId, table.videoId],
+      foreignColumns: [videoRecipeInstances.id, videoRecipeInstances.videoId],
+      name: "delivery_recipe_events_instance_video_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.instanceStepId, table.instanceId],
+      foreignColumns: [videoRecipeInstanceSteps.id, videoRecipeInstanceSteps.instanceId],
+      name: "delivery_recipe_events_step_instance_fk",
+    }).onDelete("cascade"),
+    index("delivery_recipe_events_video_occurred_idx").on(table.videoId, table.occurredAt),
+    index("delivery_recipe_events_instance_occurred_idx").on(table.instanceId, table.occurredAt),
+    check("delivery_recipe_events_previous_state_check", sql`${table.previousState} in ('NOT_STARTED', 'ACTIVE', 'DONE', 'N_A')`),
+    check("delivery_recipe_events_new_state_check", sql`${table.newState} in ('NOT_STARTED', 'ACTIVE', 'DONE', 'N_A')`),
+    check("delivery_recipe_events_actor_check", sql`${table.actor} in ('admin', 'system')`),
+    check("delivery_recipe_events_source_check", sql`${table.source} in ('MINDBUNKER_WEB', 'SYSTEM')`),
   ],
 );
 

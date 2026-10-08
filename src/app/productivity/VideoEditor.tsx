@@ -38,6 +38,7 @@ import { BeforeYouExport } from "@/components/client-qa/BeforeYouExport";
 import { VideoProductionContext } from "@/components/production-context/VideoProductionContext";
 import { PortalControl } from "@/components/client-portal/PortalControl";
 import { setVideoClientVisibility } from "@/modules/client-portal/admin-actions";
+import { DeliveryRecipePanel } from "./DeliveryRecipePanel";
 
 type VideoEditorProps = {
   video: {
@@ -401,6 +402,7 @@ export function VideoEditor({
               </aside>
 
               <div className="space-y-4">
+                <DeliveryRecipePanel videoId={video.id} />
                 <VideoEssentialsPanel videoId={video.id} revisionsCount={video.revisionsCount} />
                 <CommercialTermsPanel videoId={video.id} />
                 <VideoMemoryPanel videoId={video.id} />

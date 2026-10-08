@@ -9,6 +9,8 @@ import { ReviewActions } from "../../ReviewActions";
 import { PriorityToggle } from "../../PriorityToggle";
 import { ClientStatusBadge } from "../../ClientStatusBadge";
 import { DeliveryAvailability } from "../../DeliveryAvailability";
+import { getClientRecipeProjectionForVideo } from "@/modules/delivery-recipes/data";
+import { ClientRecipeProgress } from "./ClientRecipeProgress";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +71,7 @@ export default async function ClientVideoDetailPage({
   }
 
   const { video } = view;
+  const recipeProgress = await getClientRecipeProjectionForVideo(video.id);
   const aspectKey = video.orientation ?? "UNKNOWN";
   const link = primaryLink(video);
   // Delivery is its own fact. For a completed video whose primary link IS the
@@ -146,6 +149,7 @@ export default async function ClientVideoDetailPage({
         )}
 
         {video.canReview && <ReviewActions videoId={video.id} status={video.status} showHint />}
+        {recipeProgress && <ClientRecipeProgress stages={recipeProgress.stages} />}
         {delivery.show && <DeliveryAvailability href={delivery.href} label={link?.label} />}
         {video.canSetPriority && video.projectId !== null && (
           <PriorityToggle

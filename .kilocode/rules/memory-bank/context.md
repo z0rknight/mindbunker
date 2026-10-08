@@ -10,6 +10,16 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [ ] **Delivery Recipe / Quality Custody Wave 1 (2026-10-08, local candidate / real dogfood pending)**
+  - [x] Added additive migration `0057_delivery_recipes.sql`: reusable Recipe templates, ordered/enabled steps, immutable per-Video snapshots and append-only transition history with actor/source/provenance
+  - [x] Preserved canonical ownership: Video owns the deliverable; Work Sessions own time; review/revisions own client feedback; Sensor and Quick Capture are unchanged
+  - [x] Added low-friction Video Workspace controls for `NOT_STARTED → ACTIVE → DONE`, `N_A`, and truthful `DONE → ACTIVE` reopen; one active step at a time and no required notes/duration/reason
+  - [x] Added primitive `/recipes` management and a client-safe projection limited to Editing, Finishing, Quality review and Ready for you
+  - [x] Legacy production checklist remains under Advanced / history and is neither migrated nor reinterpreted
+  - [x] 1,605/1,605 tests, typecheck, production build, isolated `0000 → 0057`, production-shaped `0056 → 0057`, FK and quick checks GREEN; lint has 0 errors / 3 pre-existing warnings
+  - [x] Local authenticated HTTP smoke passed and exact QA fixture was removed; browser visual automation was blocked by saved localhost policy and no bypass was attempted
+  - [ ] Exit remains blocked only on one real Video dogfood proving naturally low tracking friction; no deploy or production migration performed
+
 - [x] **Pre-deploy refinement wave (2026-10-07, release candidate / no deploy)**
   - [x] Closed the native workspace-link contract drift: RMEDIA now opens `/war-room/workspace?video=<id>` and the test suite guards the canonical query name; Start copy now says clearly that Project/Client text only filters a canonical Video list
   - [x] Finished the existing Film Rolls interaction without new domain/schema: strict line-level subject validation, atomic parent+subject creation, edit/archive, Current/Archived status views, readable dates, soundtrack/notes retrieval, dialog/Escape/error semantics
