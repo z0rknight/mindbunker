@@ -67,7 +67,6 @@ const PRICING_EVIDENCE_SQL = `
   ORDER BY CASE WHEN v.status = 'DONE' THEN 1 ELSE 0 END ASC,
     st.tracked_seconds DESC,
     v.id DESC
-  LIMIT 24
 `;
 
 export async function getPricingReality(): Promise<PricingReality> {

@@ -25,7 +25,7 @@ import {
   A_LA_CARTE_REVISION_ROUND_HOURS,
   A_LA_CARTE_THUMBNAIL_UNIT_PRICE_CENTS,
 } from "@/modules/pricing/config";
-import type { PricingReality } from "@/modules/pricing/reality";
+import { selectPricingReality, type PricingReality } from "@/modules/pricing/reality";
 
 const MAX_QUANTITY = 99;
 const MAX_REVISION_ROUNDS = 10;
@@ -511,6 +511,10 @@ function ALaCarteHourlyCalculator({
   const contentType = A_LA_CARTE_CONTENT_TYPES.find(
     (c) => c.id === contentTypeId,
   )!;
+  const comparableReality = useMemo(
+    () => selectPricingReality(reality, contentType.id),
+    [reality, contentType.id],
+  );
   const complexity = A_LA_CARTE_COMPLEXITY_LEVELS.find(
     (c) => c.id === complexityId,
   )!;
@@ -724,20 +728,21 @@ function ALaCarteHourlyCalculator({
             <h3 className="mt-1 text-sm font-black text-white">Evidence beside the estimate</h3>
           </div>
           <span className={`rounded-full border px-2 py-1 text-[10px] font-black ${
-            reality.confidence === "HIGH"
+            comparableReality.confidence === "HIGH"
               ? "border-emerald-700/50 text-emerald-300"
-              : reality.confidence === "MEDIUM"
+              : comparableReality.confidence === "MEDIUM"
                 ? "border-amber-700/50 text-amber-300"
                 : "border-rose-800/50 text-rose-300"
           }`}>
-            {reality.confidence} CONFIDENCE
+            {comparableReality.confidence} CONFIDENCE
           </span>
         </div>
-        <p className="mt-2 text-xs leading-5 text-zinc-500">{reality.note}</p>
+        <p className="mt-2 text-xs leading-5 text-zinc-500">{comparableReality.note}</p>
         <p className="mt-1 text-[11px] leading-4 text-zinc-600">
-          Closed canonical Work Sessions only. Manual sessions are included and identified; notes and off-system recollection are not silently added.
+          Comparable type: {contentType.label}. Video-linked closed Work Sessions only; admin and off-Video work are excluded. Manual sessions are included and identified; notes and off-system recollection are not silently added.
         </p>
-        {reality.rows.length > 0 ? (
+        <p className="mt-1 text-[11px] leading-4 text-zinc-600">Realized EHR remains unknown unless a comparable billed value is canonically attributed.</p>
+        {comparableReality.rows.length > 0 ? (
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-xs">
               <thead className="text-[10px] uppercase tracking-wide text-zinc-600">
@@ -746,11 +751,12 @@ function ALaCarteHourlyCalculator({
                   <th className="pb-2 pr-3">Type evidence</th>
                   <th className="pb-2 pr-3">State</th>
                   <th className="pb-2 pr-3 text-right">Tracked</th>
-                  <th className="pb-2 text-right">Sessions</th>
+                  <th className="pb-2 pr-3 text-right">Sessions</th>
+                  <th className="pb-2 text-right">Revisions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900">
-                {reality.rows.map((row) => (
+                {comparableReality.rows.map((row) => (
                   <tr key={row.videoId}>
                     <td className="py-2.5 pr-3">
                       <span className="block font-bold text-zinc-200">{row.title}</span>
@@ -765,7 +771,8 @@ function ALaCarteHourlyCalculator({
                       {row.trackedHours.toFixed(2)}h
                       {row.manualHours > 0 && <span className="block text-[9px] font-normal text-cyan-500">{row.manualHours.toFixed(2)}h manual</span>}
                     </td>
-                    <td className="py-2.5 text-right text-zinc-500">{row.sessionCount}</td>
+                    <td className="py-2.5 pr-3 text-right text-zinc-500">{row.sessionCount}</td>
+                    <td className="py-2.5 text-right text-zinc-500">{row.revisionCount}</td>
                   </tr>
                 ))}
               </tbody>

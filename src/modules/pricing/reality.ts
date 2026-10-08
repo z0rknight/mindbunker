@@ -47,3 +47,20 @@ export function describePricingEvidence(
   }
   return `${completedSampleCount} completed and ${activeSampleCount} active comparable samples. Evidence can inform an operator override, but never changes the estimate automatically.`;
 }
+
+export function selectPricingReality(
+  reality: PricingReality,
+  calculatorContentType: string,
+): PricingReality {
+  const canonicalType = calculatorContentType === "custom" ? "other" : calculatorContentType;
+  const rows = reality.rows.filter((row) => row.contentType === canonicalType);
+  const completedSampleCount = rows.filter((row) => row.status === "DONE").length;
+  const activeSampleCount = rows.length - completedSampleCount;
+  return {
+    rows,
+    completedSampleCount,
+    activeSampleCount,
+    confidence: classifyPricingEvidence(completedSampleCount),
+    note: describePricingEvidence(completedSampleCount, activeSampleCount),
+  };
+}

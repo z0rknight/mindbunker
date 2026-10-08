@@ -36,3 +36,25 @@ test("migration 0055 creates reference-only Film Rolls with counted searchable s
   assert.equal(db.prepare("SELECT COUNT(*) n FROM film_roll_subjects").get().n, 0);
   assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 });
+
+test("create statement shape keeps parent and all subjects in one transaction", () => {
+  const db = createExact0054Database();
+  db.exec(migration);
+  db.exec("BEGIN");
+  const roll = db.prepare(`INSERT INTO film_rolls
+    (name, status, captured_from, rating) VALUES ('Atomic Roll', 'BUILDING', '2026-10-07', 0)
+    RETURNING id`).get();
+  db.prepare(`WITH roll AS MATERIALIZED (SELECT last_insert_rowid() AS id)
+    INSERT INTO film_roll_subjects (film_roll_id, label, shot_count)
+    SELECT roll.id, json_extract(value, '$.label'), json_extract(value, '$.shotCount')
+    FROM roll CROSS JOIN json_each(?)`).run(JSON.stringify([
+      { label: "coffee", shotCount: 12 },
+      { label: "walking", shotCount: 6 },
+    ]));
+  db.exec("COMMIT");
+  const id = roll.id;
+  assert.deepEqual(db.prepare("SELECT film_roll_id, label, shot_count FROM film_roll_subjects ORDER BY id").all().map((row) => ({ ...row })), [
+    { film_roll_id: id, label: "coffee", shot_count: 12 },
+    { film_roll_id: id, label: "walking", shot_count: 6 },
+  ]);
+});
