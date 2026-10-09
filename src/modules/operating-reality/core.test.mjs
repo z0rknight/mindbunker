@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import {
   buildDeliveryReality,
   buildMoneyReality,
+  computeDailyOperatingReality,
   computeRecordedWorkReality,
 } from "./core.ts";
 
@@ -60,6 +61,65 @@ test("money reality never merges received, receivable and expected evidence", ()
   }]);
 });
 
+test("daily reality keeps canonical intention separate from observed and unsessioned activity", () => {
+  const result = computeDailyOperatingReality({
+    dateKey: "2026-10-09",
+    windowStart: 1000,
+    windowEnd: 5000,
+    sessions: [
+      { startedAt: 1200, endedAt: 2400, activityType: "EDITING", clientName: "Taryn Dubreuil", clientStatus: "active", clientSource: null },
+      { startedAt: 2600, endedAt: 3200, activityType: "OTHER", clientName: "RMEDIA", clientStatus: "active", clientSource: null },
+    ],
+    observations: [
+      { appKey: "PREMIERE_PRO", surface: null, startedAt: 1100, endedAt: 2000, idle: false, keystrokeCount: 20, mouseMovementCount: 40 },
+      { appKey: "PREMIERE_PRO", surface: null, startedAt: 2000, endedAt: 2300, idle: true, keystrokeCount: 0, mouseMovementCount: 0 },
+      { appKey: "OTHER", surface: null, startedAt: 3000, endedAt: 3800, idle: false, keystrokeCount: null, mouseMovementCount: null },
+    ],
+  });
+  assert.equal(result.recordedSeconds, 1800);
+  assert.equal(result.clientSeconds, 1200);
+  assert.equal(result.internalSeconds, 600);
+  assert.equal(result.observedActiveSeconds, 1700);
+  assert.equal(result.observedIdleSeconds, 300);
+  assert.equal(result.observedSessionOverlapSeconds, 1000);
+  assert.equal(result.unsessionedObservedSeconds, 700);
+  assert.equal(result.sessionTelemetrySeconds, 1300);
+  assert.equal(result.sessionUncoveredSeconds, 500);
+  assert.equal(result.keystrokeCount, 20);
+  assert.equal(result.mouseMovementCount, 40);
+  assert.equal(result.apps[0].appKey, "PREMIERE_PRO");
+});
+
+test("daily reality clips cross-midnight/open Sessions and handles partial or absent Sensor evidence", () => {
+  const partial = computeDailyOperatingReality({
+    dateKey: "2026-10-09",
+    windowStart: 1000,
+    windowEnd: 2000,
+    sessions: [
+      { startedAt: 900, endedAt: null, activityType: "ADMIN", clientName: "RMEDIA", clientStatus: "active", clientSource: null },
+    ],
+    observations: [
+      { appKey: "SAFARI", surface: null, startedAt: 1100, endedAt: 1300, idle: false, keystrokeCount: null, mouseMovementCount: null },
+    ],
+  });
+  assert.equal(partial.recordedSeconds, 1000);
+  assert.equal(partial.adminSeconds, 1000);
+  assert.equal(partial.sessionTelemetrySeconds, 200);
+  assert.equal(partial.sessionUncoveredSeconds, 800);
+  assert.equal(partial.inputObservationCount, 0);
+
+  const none = computeDailyOperatingReality({
+    dateKey: "2026-10-09",
+    windowStart: 1000,
+    windowEnd: 2000,
+    sessions: [],
+    observations: [],
+  });
+  assert.equal(none.recordedSeconds, 0);
+  assert.equal(none.observedCoverageSeconds, 0);
+  assert.equal(none.unsessionedObservedSeconds, 0);
+});
+
 test("delivery reality reuses Wave 4 membership, progress and canonical Client rollup", () => {
   const result = buildDeliveryReality([
     project(),
@@ -110,8 +170,12 @@ test("Dashboard is observational, exposes ACTIVE/IDLE/empty states and uses the 
   assert.match(component, /No active session and no executable recommendation/u);
   assert.match(component, /EntityInspectionTrigger/u);
   assert.match(component, /Open War Room/u);
+  assert.match(component, /daily-operating-reality/u);
+  assert.match(component, /Unsessioned observed/u);
+  assert.match(component, /Input counts describe telemetry, not effort, focus or quality/u);
   assert.match(data, /getExecutionSnapshot\("\/"\)/u);
   assert.match(data, /getProjectsOverview\(\)/u);
   assert.match(data, /getApplicationUsage\("LAST_7_DAYS"\)/u);
+  assert.match(data, /getDailyFacts\(generatedAt\)/u);
   assert.doesNotMatch(data, /INSERT|UPDATE|DELETE/u);
 });

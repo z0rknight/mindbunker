@@ -5,6 +5,7 @@ import type { OperatingReality, RealityProvenance } from "@/modules/operating-re
 import { PROJECT_STATUS_LABELS } from "@/modules/projects/config";
 import { formatClosedDuration, formatLastActive } from "@/modules/work-sessions/core";
 import { formatCurrency, formatMonthKey, OPERATOR_TIME_ZONE } from "@/utils/date";
+import { APP_KEY_LABELS } from "@/modules/sensor/app-intelligence";
 import Link from "next/link";
 
 function coverageClass(coverage: RealityProvenance["coverage"]) {
@@ -137,6 +138,55 @@ export function DashboardOperatingReality({ reality }: { reality: OperatingReali
           <div className="mt-4"><EmptyFact>No active session and no executable recommendation is supported by current evidence.</EmptyFact></div>
         )}
         <Provenance value={operation.provenance} />
+      </section>
+
+      <section className="rounded-2xl border border-cyan-900/45 bg-cyan-950/10 p-4 sm:p-5" data-testid="daily-operating-reality">
+        <SectionHeader eyebrow="Today" title="Intentional work and observed machine activity" provenance={reality.daily.provenance} href="/productivity/sensor?appWindow=TODAY" linkLabel="Inspect evidence" />
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Metric label="Canonical intentional" value={formatClosedDuration(reality.daily.recordedSeconds)} note={`${reality.daily.sessionCount} Work Session${reality.daily.sessionCount === 1 ? "" : "s"}`} />
+          <Metric label="Observed active" value={formatClosedDuration(reality.daily.observedActiveSeconds)} note="Sensor foreground evidence" />
+          <Metric label="Unsessioned observed" value={formatClosedDuration(reality.daily.unsessionedObservedSeconds)} note="Active observation outside Work Sessions" />
+          <Metric
+            label="Session coverage"
+            value={reality.daily.recordedSeconds > 0 ? `${Math.round((reality.daily.sessionTelemetrySeconds / reality.daily.recordedSeconds) * 100)}%` : "No Session"}
+            note={`${formatClosedDuration(reality.daily.sessionUncoveredSeconds)} intentional time without Sensor evidence`}
+          />
+        </div>
+        <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1.2fr]">
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-wide text-zinc-600">Canonical work mix</p>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5 lg:grid-cols-2 xl:grid-cols-5">
+              {[
+                ["Client", reality.daily.clientSeconds],
+                ["Internal", reality.daily.internalSeconds],
+                ["Admin", reality.daily.adminSeconds],
+                ["Lead", reality.daily.leadSeconds],
+                ["Unknown", reality.daily.unclassifiedSeconds],
+              ].map(([label, seconds]) => (
+                <div key={String(label)} className="rounded-lg border border-zinc-800 bg-black/20 px-3 py-2">
+                  <p className="text-[9px] font-black uppercase tracking-wide text-zinc-600">{label}</p>
+                  <p className="mt-1 text-xs font-bold text-zinc-300">{formatClosedDuration(Number(seconds))}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-wide text-zinc-600">Observed apps</p>
+            {reality.daily.apps.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {reality.daily.apps.slice(0, 6).map((app) => (
+                  <span key={`${app.appKey}-${app.surface ?? "native"}`} className="rounded-lg border border-zinc-800 bg-black/20 px-3 py-2 text-xs text-zinc-400">
+                    <strong className="text-zinc-200">{APP_KEY_LABELS[app.appKey]}</strong>{app.surface ? ` · ${app.surface.replace("_WEB", " web")}` : ""} · {formatClosedDuration(app.seconds)}
+                  </span>
+                ))}
+              </div>
+            ) : <div className="mt-2"><EmptyFact>No Sensor app evidence today.</EmptyFact></div>}
+          </div>
+        </div>
+        <p className="mt-3 text-[11px] leading-4 text-zinc-600">
+          Observed idle {formatClosedDuration(reality.daily.observedIdleSeconds)} · Sensor-covered window {formatClosedDuration(reality.daily.observedCoverageSeconds)} · Keyboard events {reality.daily.keystrokeCount.toLocaleString("en-US")} · Mouse events {reality.daily.mouseMovementCount.toLocaleString("en-US")}. Input counts describe telemetry, not effort, focus or quality.
+        </p>
+        <Provenance value={reality.daily.provenance} />
       </section>
 
       <div className="grid gap-5 xl:grid-cols-2">

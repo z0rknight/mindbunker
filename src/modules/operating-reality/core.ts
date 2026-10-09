@@ -3,6 +3,13 @@ import type { ProjectOverviewItem } from "../projects/core.ts";
 import { getProjectProgress, isProjectCurrent } from "../projects/core.ts";
 import type { MonthlyFinanceRow } from "../reality/core.ts";
 import type { Signal } from "../signals/core.ts";
+import {
+  aggregateObservedAppTime,
+  computeCoverageSeconds,
+  mergeIntervals,
+  type AppObservationRow,
+  type AppTimeTotal,
+} from "../sensor/app-intelligence.ts";
 
 export type CoverageState = "COMPLETE" | "PARTIAL" | "NO_EVIDENCE";
 
@@ -170,6 +177,102 @@ export function computeRecordedWorkReality(
   });
 }
 
+export type DailyObservationFact = AppObservationRow & {
+  keystrokeCount: number | null;
+  mouseMovementCount: number | null;
+};
+
+export type DailyOperatingReality = RecordedWorkReality & {
+  dateKey: string;
+  windowStart: string;
+  windowEnd: string;
+  observedActiveSeconds: number;
+  observedIdleSeconds: number;
+  observedCoverageSeconds: number;
+  sessionTelemetrySeconds: number;
+  sessionUncoveredSeconds: number;
+  observedSessionOverlapSeconds: number;
+  unsessionedObservedSeconds: number;
+  keystrokeCount: number;
+  mouseMovementCount: number;
+  inputObservationCount: number;
+  apps: AppTimeTotal[];
+};
+
+function intersectionSeconds(
+  left: readonly { startedAt: number; endedAt: number }[],
+  right: readonly { startedAt: number; endedAt: number }[],
+) {
+  const a = mergeIntervals(left);
+  const b = mergeIntervals(right);
+  let total = 0;
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    const start = Math.max(a[i].startedAt, b[j].startedAt);
+    const end = Math.min(a[i].endedAt, b[j].endedAt);
+    if (end > start) total += end - start;
+    if (a[i].endedAt < b[j].endedAt) i += 1;
+    else j += 1;
+  }
+  return total;
+}
+
+export function computeDailyOperatingReality(input: {
+  dateKey: string;
+  windowStart: number;
+  windowEnd: number;
+  sessions: readonly RecordedSessionFact[];
+  observations: readonly DailyObservationFact[];
+}): DailyOperatingReality {
+  const sessions = input.sessions.map((row) => ({
+    ...row,
+    startedAt: Math.max(row.startedAt, input.windowStart),
+    endedAt: Math.min(row.endedAt ?? input.windowEnd, input.windowEnd),
+  }));
+  const recorded = computeRecordedWorkReality(sessions);
+  const validSessionIntervals = sessions
+    .filter((row) => row.endedAt !== null)
+    .filter((row) => row.endedAt! > row.startedAt)
+    .filter((row) => row.endedAt! - row.startedAt <= 43_200)
+    .filter((row) => row.clientSource !== "RELEASE_TEST")
+    .map((row) => ({ startedAt: row.startedAt, endedAt: row.endedAt! }));
+  const observations = input.observations.map((row) => ({
+    ...row,
+    startedAt: Math.max(row.startedAt, input.windowStart),
+    endedAt: Math.min(row.endedAt, input.windowEnd),
+  })).filter((row) => row.endedAt > row.startedAt);
+  const activeIntervals = observations
+    .filter((row) => !row.idle)
+    .map((row) => ({ startedAt: row.startedAt, endedAt: row.endedAt }));
+  const allIntervals = observations.map((row) => ({ startedAt: row.startedAt, endedAt: row.endedAt }));
+  const observedActiveSeconds = computeCoverageSeconds(activeIntervals, input.windowStart, input.windowEnd);
+  const observedCoverageSeconds = computeCoverageSeconds(allIntervals, input.windowStart, input.windowEnd);
+  const observedSessionOverlapSeconds = intersectionSeconds(activeIntervals, validSessionIntervals);
+  const sessionTelemetrySeconds = intersectionSeconds(allIntervals, validSessionIntervals);
+  const inputRows = input.observations.filter((row) =>
+    row.startedAt >= input.windowStart && row.startedAt < input.windowEnd &&
+    (row.keystrokeCount !== null || row.mouseMovementCount !== null));
+
+  return {
+    ...recorded,
+    dateKey: input.dateKey,
+    windowStart: new Date(input.windowStart * 1_000).toISOString(),
+    windowEnd: new Date(input.windowEnd * 1_000).toISOString(),
+    observedActiveSeconds,
+    observedIdleSeconds: Math.max(0, observedCoverageSeconds - observedActiveSeconds),
+    observedCoverageSeconds,
+    sessionTelemetrySeconds,
+    sessionUncoveredSeconds: Math.max(0, recorded.recordedSeconds - sessionTelemetrySeconds),
+    observedSessionOverlapSeconds,
+    unsessionedObservedSeconds: Math.max(0, observedActiveSeconds - observedSessionOverlapSeconds),
+    keystrokeCount: inputRows.reduce((sum, row) => sum + (row.keystrokeCount ?? 0), 0),
+    mouseMovementCount: inputRows.reduce((sum, row) => sum + (row.mouseMovementCount ?? 0), 0),
+    inputObservationCount: inputRows.length,
+    apps: aggregateObservedAppTime(observations, input.windowStart, input.windowEnd),
+  };
+}
+
 export type OutputEvent = {
   id: number;
   videoId: number | null;
@@ -184,6 +287,9 @@ export type OperatingReality = {
     state: "ACTIVE" | "IDLE";
     current: CurrentExecution | null;
     recommendation: ExecutionRecommendation | null;
+    provenance: RealityProvenance;
+  };
+  daily: DailyOperatingReality & {
     provenance: RealityProvenance;
   };
   money: {

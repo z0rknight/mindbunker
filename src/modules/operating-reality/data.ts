@@ -6,13 +6,15 @@ import { getExecutionSnapshot } from "@/modules/execution/data";
 import { getProjectsOverview, getUnassignedClientVideos } from "@/modules/projects/actions";
 import { getMonthlyReality } from "@/modules/reality/data";
 import { getApplicationUsage } from "@/modules/sensor/data";
-import { resolveTimeWindow } from "@/modules/sensor/app-intelligence";
+import { classifyWindowSurface, normalizeApplication, resolveTimeWindow } from "@/modules/sensor/app-intelligence";
+import { dayKeyFor } from "@/modules/work-sessions/core";
 import { getActiveSignals, getOpenCommitmentsWithContext } from "@/modules/signals";
 import { rankOpenCommitments } from "@/modules/signals/core";
 import { currentMonthKey } from "@/utils/date";
 import {
   buildDeliveryReality,
   buildMoneyReality,
+  computeDailyOperatingReality,
   computeRecordedWorkReality,
   type OperatingReality,
   type OutputEvent,
@@ -83,6 +85,70 @@ async function getSevenDayFacts(nowIso: string) {
   return { window, sessions, outputs };
 }
 
+async function getDailyFacts(nowIso: string) {
+  const db = await getAuthenticatedDb();
+  const window = resolveTimeWindow("TODAY", nowIso);
+  const [sessionRows, observationRows] = await Promise.all([
+    all(db.$client.prepare(`
+      SELECT ws.started_at, ws.ended_at, ws.activity_type,
+        c.name AS client_name, c.status AS client_status, c.source AS client_source
+      FROM work_sessions ws
+      JOIN video_logs v ON v.id = ws.video_id
+      LEFT JOIN clients c ON c.id = v.client_id
+      WHERE ws.started_at < ?2 AND COALESCE(ws.ended_at, ?2) > ?1
+      ORDER BY ws.started_at ASC
+    `).bind(window.startSeconds, window.endSeconds).all<{
+      started_at: number;
+      ended_at: number | null;
+      activity_type: string;
+      client_name: string | null;
+      client_status: string | null;
+      client_source: string | null;
+    }>()),
+    all(db.$client.prepare(`
+      SELECT app_name, bundle_id, window_title, started_at, ended_at, idle,
+        keystroke_count, mouse_movement_count
+      FROM device_activity_observations
+      WHERE started_at < ?2 AND ended_at > ?1
+      ORDER BY started_at ASC
+    `).bind(window.startSeconds, window.endSeconds).all<{
+      app_name: string;
+      bundle_id: string | null;
+      window_title: string | null;
+      started_at: number;
+      ended_at: number;
+      idle: number;
+      keystroke_count: number | null;
+      mouse_movement_count: number | null;
+    }>()),
+  ]);
+  return computeDailyOperatingReality({
+    dateKey: dayKeyFor(nowIso),
+    windowStart: window.startSeconds,
+    windowEnd: window.endSeconds,
+    sessions: sessionRows.map((row) => ({
+      startedAt: Number(row.started_at),
+      endedAt: row.ended_at === null ? null : Number(row.ended_at),
+      activityType: row.activity_type,
+      clientName: row.client_name,
+      clientStatus: row.client_status,
+      clientSource: row.client_source,
+    })),
+    observations: observationRows.map((row) => {
+      const appKey = normalizeApplication(row.bundle_id, row.app_name);
+      return {
+        appKey,
+        surface: classifyWindowSurface(appKey, row.window_title),
+        startedAt: Number(row.started_at),
+        endedAt: Number(row.ended_at),
+        idle: Boolean(row.idle),
+        keystrokeCount: row.keystroke_count === null ? null : Number(row.keystroke_count),
+        mouseMovementCount: row.mouse_movement_count === null ? null : Number(row.mouse_movement_count),
+      };
+    }),
+  });
+}
+
 function provenance(
   owner: string,
   source: string,
@@ -103,6 +169,7 @@ export async function getOperatingReality(): Promise<OperatingReality> {
     integrity,
     commitments,
     sevenDay,
+    daily,
     sensorUsage,
   ] = await Promise.all([
     getExecutionSnapshot("/"),
@@ -112,6 +179,7 @@ export async function getOperatingReality(): Promise<OperatingReality> {
     getRelationshipIntegrity(),
     getOpenCommitmentsWithContext(),
     getSevenDayFacts(generatedAt),
+    getDailyFacts(generatedAt),
     getApplicationUsage("LAST_7_DAYS"),
   ]);
   const signals = await getActiveSignals(commitments);
@@ -143,6 +211,17 @@ export async function getOperatingReality(): Promise<OperatingReality> {
         "Open Work Session + execution-policy-v1",
         execution.current || execution.recommendation ? "COMPLETE" : "NO_EVIDENCE",
         "The Dashboard observes this projection. Start, stop, queue and notes remain in War Room.",
+      ),
+    },
+    daily: {
+      ...daily,
+      provenance: provenance(
+        "Work Sessions + Sensor",
+        "canonical work_sessions / device_activity_observations",
+        daily.recordedSeconds === 0 && daily.observedCoverageSeconds === 0
+          ? "NO_EVIDENCE"
+          : daily.sessionUncoveredSeconds > 0 ? "PARTIAL" : "COMPLETE",
+        "Intentional categories come only from canonical Work Sessions. Apps, idle and input counts are descriptive Sensor telemetry. Observed activity outside a Session stays unclassified.",
       ),
     },
     money: {
