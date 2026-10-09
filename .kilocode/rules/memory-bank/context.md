@@ -10,6 +10,15 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Dogfood 01 — Offer Doc / Geoff evidence reconstruction (2026-10-09, analysis-only / no deploy)**
+  - [x] Resolved the specimen as Video `86` (`Offer Doc`) → Project `19` (`GEOFF - September Long Form Videos`) → operational alias Client `12` (`Taryn DFY`) → canonical commercial relationship Client `2` (`Taryn Dubreuil`)
+  - [x] Reconstructed five closed canonical Work Sessions totaling `9,068s` (`2h31m08s`), from 2026-10-06 21:29:16 to 2026-10-09 00:56:33 BRT; 89 Sensor observations cover `9,067s`, with telemetry kept separate from intentional time
+  - [x] Confirmed no Delivery Recipe instance/events were attached, so stage completion and stage-time estimates remain partial/unknown despite Quick Captures for assembly, color, audio and render
+  - [x] Confirmed Video `DONE`, one historical Rough Cut delivery event, a newer canonical Video delivery URL, no Video-level Quote/billing allocation/payment attribution, and an active Taryn Upwork hourly contract at USD 25/hour
+  - [x] Verified local supporting export: H.264/AAC, 1920×1080, 23.976 fps, `17m53.573s`; before/after audio and color samples exist, but no explicit reusable-template reference was persisted
+  - [x] Recorded reproduced friction: Video Workspace has many equally weighted controls; Project `19` is `delivered` while sibling Video `85` remains `IN_PROGRESS`; the reported native “tag/signature” loss was not unambiguously reproducible from code history
+  - [x] Production remained read-only, Taryn/DFY state was not changed, D1 `foreign_key_check` stayed empty and `quick_check` stayed `ok`; no migration, code change or deploy was justified for N=1
+
 - [x] **Great Reset Commercial Operating Layer (2026-10-08, production / pre-dogfood ready)**
   - [x] Added one canonical commercial path from segment landing context through `/start`, immutable Lead evidence, human Offer-fit decision, canonical Quote, optional public Offer projection, and existing Quote → Project/Video/Recipe production conversion
   - [x] Added additive migration `0058_commercial_operating_layer.sql`: one manually owned capacity singleton plus revocable/expiring public projection fields on canonical Quotes; no automatic capacity, pricing, payment, acceptance, Lead promotion, or Finance mutation
