@@ -33,6 +33,7 @@ import { VideoMemoryPanel } from "./VideoMemoryPanel";
 import { CommercialTermsPanel } from "./CommercialTermsPanel";
 import { CoverUploadField } from "@/components/media/CoverUploadField";
 import { VideoEssentialsPanel } from "./VideoEssentialsPanel";
+import { QualityEvidencePanel } from "./QualityEvidencePanel";
 import { VideoAdvancedPanel } from "./VideoAdvancedPanel";
 import { BeforeYouExport } from "@/components/client-qa/BeforeYouExport";
 import { VideoProductionContext } from "@/components/production-context/VideoProductionContext";
@@ -403,6 +404,7 @@ export function VideoEditor({
 
               <div className="space-y-4">
                 <DeliveryRecipePanel videoId={video.id} />
+                <QualityEvidencePanel videoId={video.id} />
                 <VideoEssentialsPanel videoId={video.id} revisionsCount={video.revisionsCount} />
                 <CommercialTermsPanel videoId={video.id} />
                 <VideoMemoryPanel videoId={video.id} />

@@ -11,6 +11,8 @@ import { ClientStatusBadge } from "../../ClientStatusBadge";
 import { DeliveryAvailability } from "../../DeliveryAvailability";
 import { getClientRecipeProjectionForVideo } from "@/modules/delivery-recipes/data";
 import { ClientRecipeProgress } from "./ClientRecipeProgress";
+import { getClientQualityEvidenceForVideo } from "@/modules/quality-evidence/data";
+import { QualityEvidenceItem } from "@/components/quality-evidence/QualityEvidenceComparison";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +73,10 @@ export default async function ClientVideoDetailPage({
   }
 
   const { video } = view;
-  const recipeProgress = await getClientRecipeProjectionForVideo(video.id);
+  const [recipeProgress, qualityEvidence] = await Promise.all([
+    getClientRecipeProjectionForVideo(video.id),
+    getClientQualityEvidenceForVideo(clientId, video.id),
+  ]);
   const aspectKey = video.orientation ?? "UNKNOWN";
   const link = primaryLink(video);
   // Delivery is its own fact. For a completed video whose primary link IS the
@@ -150,6 +155,17 @@ export default async function ClientVideoDetailPage({
 
         {video.canReview && <ReviewActions videoId={video.id} status={video.status} showHint />}
         {recipeProgress && <ClientRecipeProgress stages={recipeProgress.stages} />}
+        {qualityEvidence.length > 0 && (
+          <section className="space-y-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">What changed</p>
+              <p className="mt-1 text-xs text-zinc-600">A direct look at the transformation behind this Video.</p>
+            </div>
+            {qualityEvidence.map((evidence) => (
+              <QualityEvidenceItem key={evidence.id} evidence={evidence} />
+            ))}
+          </section>
+        )}
         {delivery.show && <DeliveryAvailability href={delivery.href} label={link?.label} />}
         {video.canSetPriority && video.projectId !== null && (
           <PriorityToggle

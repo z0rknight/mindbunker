@@ -407,6 +407,20 @@
       "when": 1791460018002,
       "tag": "0057_delivery_recipes",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1791528000000,
+      "tag": "0058_commercial_operating_layer",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1791548894765,
+      "tag": "0059_quality_evidence",
+      "breakpoints": true
     }
   ]
 }

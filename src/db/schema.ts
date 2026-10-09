@@ -67,6 +67,10 @@ import {
   DELIVERY_RECIPE_INSTANCE_STATUSES,
   DELIVERY_RECIPE_STEP_STATES,
 } from "../modules/delivery-recipes/config";
+import {
+  QUALITY_EVIDENCE_TYPES,
+  QUALITY_EVIDENCE_VISIBILITIES,
+} from "../modules/quality-evidence/config";
 
 // ─── PRIVATE ACCESS ──────────────────────────────────────────────────────────
 
@@ -2196,6 +2200,37 @@ export const assets = sqliteTable(
     index("assets_video_idx").on(table.videoId),
     check("assets_type_check", sql`${table.type} in ('FINAL_DELIVERABLE', 'CLIENT_REVIEW', 'UTILITY_ASSET', 'AI_INPUT', 'SOURCE_PREP', 'BONUS_EXTRA')`),
     check("assets_status_check", sql`${table.status} in ('DRAFT', 'READY', 'DELIVERED')`),
+  ],
+);
+
+// Quality Evidence is proof of one explicit Video transformation. It is
+// intentionally distinct from reusable Assets: one row owns the pair, its
+// client visibility and provenance; media bytes remain outside D1.
+export const qualityEvidence = sqliteTable(
+  "quality_evidence",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    videoId: integer("video_id")
+      .notNull()
+      .references(() => videoLogs.id, { onDelete: "cascade" }),
+    type: text("type", { enum: QUALITY_EVIDENCE_TYPES }).notNull(),
+    label: text("label").notNull(),
+    beforeReference: text("before_reference"),
+    afterReference: text("after_reference"),
+    visibility: text("visibility", { enum: QUALITY_EVIDENCE_VISIBILITIES })
+      .notNull()
+      .default("INTERNAL_ONLY"),
+    provenance: text("provenance").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("quality_evidence_video_created_idx").on(table.videoId, table.createdAt),
+    index("quality_evidence_video_visibility_idx").on(table.videoId, table.visibility),
+    check("quality_evidence_type_check", sql`${table.type} in ('IMAGE_COMPARISON', 'AUDIO_COMPARISON')`),
+    check("quality_evidence_visibility_check", sql`${table.visibility} in ('INTERNAL_ONLY', 'CLIENT_SAFE')`),
+    check("quality_evidence_has_side_check", sql`${table.beforeReference} is not null OR ${table.afterReference} is not null`),
   ],
 );
 
