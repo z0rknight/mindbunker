@@ -8,6 +8,7 @@ import {
   buildClientDashboard,
   buildClientPortalProjects,
   buildClientVideoDetail,
+  clientProjectStatusLabel,
   clientVideoStatusLabel,
   filterClientDashboardVideos,
   resolveDashboardSections,
@@ -39,6 +40,38 @@ test("clientVideoStatusLabel leaves every non-DONE status unchanged regardless o
     assert.equal(clientVideoStatusLabel(status, true), CLIENT_VIDEO_STATUS_LABELS[status]);
     assert.equal(clientVideoStatusLabel(status, false), CLIENT_VIDEO_STATUS_LABELS[status]);
   }
+});
+
+test("client Project projection never calls an inconsistent delivered Project completed", () => {
+  assert.equal(clientProjectStatusLabel("delivered", true), "Active");
+  assert.equal(clientProjectStatusLabel("delivered", false), "Completed");
+});
+
+test("delivered Project with an open child remains honestly active in the client-safe projection", () => {
+  const result = buildClientPortalProjects(
+    2,
+    [{ id: 19, clientId: 12, name: "GEOFF - September Long Form Videos", status: "delivered", deadline: null }],
+    [{
+      id: 85,
+      projectId: 19,
+      clientId: 12,
+      projectClientId: 12,
+      title: "Front Door Video 1",
+      date: "2026-10-09",
+      status: "IN_PROGRESS",
+      deliveryUrl: null,
+      reviewUrl: null,
+      publishedUrl: null,
+      batchLabel: null,
+      coverUrl: null,
+      projectCoverUrl: null,
+      clientDefaultCoverUrl: null,
+      createdAt: null,
+      updatedAt,
+    }],
+  );
+  assert.equal(result[0].status, "Active");
+  assert.equal(result[0].videos[0].status, "In production");
 });
 
 test("portal projection cannot expand beyond the token-bound client", () => {

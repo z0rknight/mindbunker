@@ -7,6 +7,7 @@ import {
   filterProjectsByView,
   getProjectException,
   getProjectGroup,
+  getProjectLifecycleIssue,
   getProjectNextAction,
   getProjectProgress,
   groupProjectsByClient,
@@ -137,6 +138,28 @@ test("project progress is derived from DONE videos only", () => {
     getProjectProgress(project({ totalVideos: 0, doneVideos: 0 })),
     0,
   );
+});
+
+test("delivered Project with unfinished deliverables is an explicit lifecycle error and stays current", () => {
+  const inconsistent = project({
+    id: 19,
+    name: "GEOFF - September Long Form Videos",
+    status: "delivered",
+    totalVideos: 2,
+    doneVideos: 1,
+    inFlightVideos: 1,
+    plannedVideos: 0,
+  });
+  assert.equal(getProjectLifecycleIssue(inconsistent), "DELIVERED_WITH_OPEN_DELIVERABLES");
+  assert.equal(getProjectException(inconsistent, "2026-10-09"), "LIFECYCLE_MISMATCH");
+  assert.equal(isProjectCurrent(inconsistent), true, "open work must not disappear from Current");
+  assert.equal(getProjectNextAction(inconsistent), "Reopen project — 1 deliverable still open");
+  assert.deepEqual(filterProjectsByView([inconsistent], "completed"), []);
+
+  const wrapped = project({ status: "delivered", totalVideos: 2, doneVideos: 2, inFlightVideos: 0, plannedVideos: 0 });
+  assert.equal(getProjectLifecycleIssue(wrapped), null);
+  assert.equal(isProjectCurrent(wrapped), false);
+  assert.equal(filterProjectsByView([wrapped], "completed").length, 1);
 });
 
 test("project overview groups and sorts active work before review", () => {
@@ -412,14 +435,14 @@ test("Current membership requires real present context and excludes completed hi
   assert.equal(isProjectCurrent(project({ totalVideos: 4, doneVideos: 2 })), true);
   assert.equal(isProjectCurrent(project({ status: "review", totalVideos: 2, doneVideos: 2 })), true);
   assert.equal(isProjectCurrent(project({ status: "active", totalVideos: 0, doneVideos: 0, deadline: null })), false);
-  assert.equal(isProjectCurrent(project({ status: "delivered" })), false);
+  assert.equal(isProjectCurrent(project({ status: "delivered", totalVideos: 5, doneVideos: 5 })), false);
 });
 
 test("semantic views keep lifecycle, condition, and work class separate", () => {
   const rows = [
     project({ id: 1, status: "active", totalVideos: 3, doneVideos: 1 }),
     project({ id: 2, status: "review", totalVideos: 1, doneVideos: 1 }),
-    project({ id: 3, status: "delivered" }),
+    project({ id: 3, status: "delivered", totalVideos: 5, doneVideos: 5, inFlightVideos: 0, plannedVideos: 0 }),
     project({ id: 4, workClass: "INTERNAL", totalVideos: 1, doneVideos: 0 }),
   ];
   assert.deepEqual(filterProjectsByView(rows, "current").map((item) => item.id), [1, 2, 4]);

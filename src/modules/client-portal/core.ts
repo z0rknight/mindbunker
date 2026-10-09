@@ -43,6 +43,14 @@ export const CLIENT_PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   archived: "Completed",
 };
 
+export function clientProjectStatusLabel(
+  status: ProjectStatus,
+  hasOpenDeliverable: boolean,
+): string {
+  if (status === "delivered" && hasOpenDeliverable) return "Active";
+  return CLIENT_PROJECT_STATUS_LABELS[status];
+}
+
 const PROJECT_STATUS_ORDER: Record<ProjectStatus, number> = {
   active: 0,
   review: 1,
@@ -129,11 +137,8 @@ export function buildClientPortalProjects(
     });
   const ownedProjectIds = new Set(ownedProjects.map((project) => project.id));
 
-  return ownedProjects.map((project) => ({
-    name: project.name,
-    status: CLIENT_PROJECT_STATUS_LABELS[project.status],
-    deadline: project.deadline,
-    videos: videoRows
+  return ownedProjects.map((project) => {
+    const projectVideos = videoRows
       .filter(
         (video) =>
           video.projectId === project.id &&
@@ -141,8 +146,13 @@ export function buildClientPortalProjects(
           video.clientId !== null &&
           canonicalClientId(video.clientId) === authenticatedClientId &&
           canonicalClientId(video.projectClientId) === authenticatedClientId,
-      )
-      .map((video) => {
+      );
+    const hasOpenDeliverable = projectVideos.some((video) => video.status !== "DONE");
+    return {
+      name: project.name,
+      status: clientProjectStatusLabel(project.status, hasOpenDeliverable),
+      deadline: project.deadline,
+      videos: projectVideos.map((video) => {
         const deliveryUrl = validateDeliveryUrl(video.deliveryUrl);
         const reviewUrl = validateDeliveryUrl(video.reviewUrl);
         const publishedUrl = validateDeliveryUrl(video.publishedUrl);
@@ -179,7 +189,8 @@ export function buildClientPortalProjects(
           coverUrl: coverUrl.success ? toClientWorkerCoverUrl(coverUrl.value) : null,
         };
       }),
-  }));
+    };
+  });
 }
 
 

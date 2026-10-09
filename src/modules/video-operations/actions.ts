@@ -427,6 +427,7 @@ export async function recordVideoDelivery(input: {
     await deliveryInsert;
   }
   revalidateVideoOperations(input.videoId);
+  revalidateProductivityViews(video.clientId);
   return { success: true, message: `Delivery v${version} recorded without changing lifecycle.` };
 }
 

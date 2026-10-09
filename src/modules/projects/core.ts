@@ -110,6 +110,22 @@ export function getProjectProgress(project: Pick<
   return Math.round((project.doneVideos / project.totalVideos) * 100);
 }
 
+export type ProjectLifecycleIssue = "DELIVERED_WITH_OPEN_DELIVERABLES";
+
+// Project completion is intentionally independent from video completion in
+// one direction: all Videos may be DONE while a Project remains active/review
+// for wrap-up. The inverse is not truthful in the current architecture:
+// `delivered` is rendered as completed and removed from Current, so it cannot
+// coexist with a real unfinished deliverable without hiding work.
+export function getProjectLifecycleIssue(
+  project: Pick<ProjectOverviewItem, "status" | "totalVideos" | "doneVideos">,
+): ProjectLifecycleIssue | null {
+  if (project.status === "delivered" && project.doneVideos < project.totalVideos) {
+    return "DELIVERED_WITH_OPEN_DELIVERABLES";
+  }
+  return null;
+}
+
 // ─── Tuesday Patch Priority 2 (Projects structural redesign) ───────────────
 //
 // Critical semantic rule from the brief: video completion != project
@@ -126,6 +142,10 @@ export function getProjectProgress(project: Pick<
 export function getProjectNextAction(
   project: Pick<ProjectOverviewItem, "status" | "totalVideos" | "doneVideos" | "inFlightVideos" | "plannedVideos">,
 ): string | null {
+  if (getProjectLifecycleIssue(project) === "DELIVERED_WITH_OPEN_DELIVERABLES") {
+    const open = Math.max(0, project.totalVideos - project.doneVideos);
+    return `Reopen project — ${open} deliverable${open === 1 ? "" : "s"} still open`;
+  }
   if (project.status === "delivered" || project.status === "archived") return null;
   if (project.totalVideos === 0) return "Plan the first video";
   if (project.plannedVideos > 0) {
@@ -141,7 +161,7 @@ export function getProjectNextAction(
   return null;
 }
 
-export type ProjectExceptionKind = "OVERDUE" | "BLOCKED" | "PLANNED";
+export type ProjectExceptionKind = "LIFECYCLE_MISMATCH" | "OVERDUE" | "BLOCKED" | "PLANNED";
 
 // The badge vocabulary the brief asks for is deliberately small: normal
 // active/in-review state gets no badge at all (you're already inside
@@ -152,6 +172,7 @@ export function getProjectException(
   project: Pick<ProjectOverviewItem, "status" | "deadline" | "openBlockerCount" | "totalVideos" | "doneVideos">,
   today: string,
 ): ProjectExceptionKind | null {
+  if (getProjectLifecycleIssue(project)) return "LIFECYCLE_MISMATCH";
   if (isProjectOverdue(project, today)) return "OVERDUE";
   if (project.openBlockerCount > 0) return "BLOCKED";
   if (project.status === "planned") return "PLANNED";
@@ -168,10 +189,11 @@ export type ClientProjectGroup = {
 };
 
 const EXCEPTION_RANK: Record<ProjectExceptionKind | "NONE", number> = {
-  OVERDUE: 0,
-  BLOCKED: 1,
-  PLANNED: 2,
-  NONE: 3,
+  LIFECYCLE_MISMATCH: 0,
+  OVERDUE: 1,
+  BLOCKED: 2,
+  PLANNED: 3,
+  NONE: 4,
 };
 
 export type ProjectSortMode = "attention" | "recent";
@@ -193,6 +215,7 @@ export function isProjectViewPreset(value: unknown): value is ProjectViewPreset 
 export function isProjectCurrent(
   project: Pick<ProjectOverviewItem, "status" | "deadline" | "totalVideos" | "doneVideos" | "openBlockerCount">,
 ): boolean {
+  if (getProjectLifecycleIssue(project)) return true;
   if (getProjectGroup(project.status) === "completed") return false;
   const openDeliverables = Math.max(0, project.totalVideos - project.doneVideos);
   return (
@@ -207,7 +230,11 @@ export function filterProjectsByView(
   projects: readonly ProjectOverviewItem[],
   view: ProjectViewPreset,
 ): ProjectOverviewItem[] {
-  if (view === "completed") return projects.filter((project) => getProjectGroup(project.status) === "completed");
+  if (view === "completed") {
+    return projects.filter((project) =>
+      getProjectGroup(project.status) === "completed" && !getProjectLifecycleIssue(project),
+    );
+  }
   if (view === "internal") {
     return projects.filter((project) => project.workClass === "INTERNAL" && getProjectGroup(project.status) !== "completed");
   }

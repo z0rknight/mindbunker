@@ -66,7 +66,7 @@ export function VideoEssentialsPanel({ videoId, revisionsCount }: { videoId: num
   const [revisionCause, setRevisionCause] = useState<RevisionCause>("UNKNOWN");
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [deliveryUrl, setDeliveryUrl] = useState("");
-  const [deliveryNote, setDeliveryNote] = useState("");
+  const [deliveryLabel, setDeliveryLabel] = useState("");
 
   const load = useCallback(async () => {
     const result = await getVideoOperationalSnapshot(videoId);
@@ -104,6 +104,7 @@ export function VideoEssentialsPanel({ videoId, revisionsCount }: { videoId: num
     () => snapshot?.blockers.filter((item) => !item.resolvedAt) ?? [],
     [snapshot],
   );
+  const nextDeliveryVersion = (snapshot?.deliveries[0]?.version ?? 0) + 1;
 
   function run(action: () => Promise<{ success: boolean; message?: string; error?: string }>, reset?: () => void) {
     setError("");
@@ -252,30 +253,44 @@ export function VideoEssentialsPanel({ videoId, revisionsCount }: { videoId: num
 
       {/* DELIVERY */}
       <section className="rounded-xl border border-zinc-800 bg-zinc-950/35 p-3.5">
-        <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Delivery</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Delivery history</p>
+          {snapshot.deliveries.length > 0 && <span className="text-[10px] font-bold text-zinc-600">{snapshot.deliveries.length} version{snapshot.deliveries.length === 1 ? "" : "s"}</span>}
+        </div>
+        {snapshot.deliveries.length > 0 && (
+          <div className="mt-2 space-y-1.5">
+            {snapshot.deliveries.slice(0, 3).map((delivery) => (
+              <div key={delivery.id} className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-black/20 px-2.5 py-2 text-[11px]">
+                <span className="min-w-0 truncate font-bold text-zinc-300">v{delivery.version} · {delivery.note?.trim() || (delivery.version === 1 ? "Delivery" : "Redelivery")}</span>
+                {delivery.deliveryUrl ? <a href={delivery.deliveryUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-cyan-400 hover:text-cyan-300">Open ↗</a> : <span className="shrink-0 text-zinc-600">No URL</span>}
+              </div>
+            ))}
+          </div>
+        )}
         {deliveryOpen ? (
           <div className="mt-2 space-y-2">
             <input type="url" value={deliveryUrl} onChange={(event) => setDeliveryUrl(event.target.value)} placeholder="HTTPS delivery link" className={inputClass} autoFocus />
-            <input value={deliveryNote} onChange={(event) => setDeliveryNote(event.target.value)} placeholder="Note (optional)" maxLength={1_000} className={inputClass} />
+            <input value={deliveryLabel} onChange={(event) => setDeliveryLabel(event.target.value)} placeholder="Version label (e.g. Final export)" maxLength={1_000} className={inputClass} />
             <div className="flex gap-2">
               <button
                 disabled={pending || !deliveryUrl.trim()}
                 onClick={() => run(
-                  () => recordVideoDelivery({ videoId, deliveryUrl, note: deliveryNote, commitmentId: null }),
-                  () => { setDeliveryNote(""); setDeliveryOpen(false); },
+                  () => recordVideoDelivery({ videoId, deliveryUrl, note: deliveryLabel, commitmentId: null }),
+                  () => { setDeliveryLabel(""); setDeliveryOpen(false); },
                 )}
                 className={smallButton}
               >
-                Record delivery
+                Record v{nextDeliveryVersion}
               </button>
               <button disabled={pending} onClick={() => setDeliveryOpen(false)} className={smallButton}>Cancel</button>
             </div>
           </div>
         ) : (
           <button type="button" onClick={() => setDeliveryOpen(true)} className="mt-2 min-h-9 rounded-lg border border-zinc-700 px-3 text-xs font-bold text-zinc-400 hover:border-violet-500/60 hover:text-white">
-            + Record delivery
+            + Record delivery v{nextDeliveryVersion}
           </button>
         )}
+        <p className="mt-2 text-[10px] leading-4 text-zinc-600">Authenticated operator action · server timestamp. A new version never replaces prior delivery history and does not imply client approval.</p>
       </section>
     </div>
   );

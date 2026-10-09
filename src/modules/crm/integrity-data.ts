@@ -35,6 +35,7 @@ export async function getRelationshipIntegrity() {
         title: videoLogs.title,
         status: videoLogs.status,
         videoKind: videoLogs.videoKind,
+        isOperationalContainer: videoLogs.isOperationalContainer,
         cancelledAt: videoLogs.cancelledAt,
       }).from(videoLogs),
       db.select({

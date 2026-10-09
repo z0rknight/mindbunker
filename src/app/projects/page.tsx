@@ -46,12 +46,14 @@ const VIEW_LABELS: Array<{ value: ProjectViewPreset; label: string }> = [
 ];
 
 const EXCEPTION_LABEL: Record<ProjectExceptionKind, string> = {
+  LIFECYCLE_MISMATCH: "Lifecycle mismatch",
   OVERDUE: "Overdue",
   BLOCKED: "Blocked",
   PLANNED: "Planned",
 };
 
 const EXCEPTION_CLASS: Record<ProjectExceptionKind, string> = {
+  LIFECYCLE_MISMATCH: "border-red-500/40 bg-red-500/10 text-red-200",
   OVERDUE: "border-red-500/40 bg-red-500/10 text-red-300",
   BLOCKED: "border-amber-500/40 bg-amber-500/10 text-amber-300",
   PLANNED: "border-zinc-600/50 bg-zinc-800/60 text-zinc-400",
@@ -210,7 +212,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
   if (clientFilterId !== null) visibleProjects = visibleProjects.filter((project) => project.canonicalClientId === clientFilterId);
   if (statusFilter) visibleProjects = visibleProjects.filter((project) => project.status === statusFilter);
   visibleProjects = filterProjectsBySearch(visibleProjects, searchQuery);
-  const rank = (project: ProjectOverviewItem) => { const exception = getProjectException(project, today); return exception === "OVERDUE" ? 0 : exception === "BLOCKED" ? 1 : exception === "PLANNED" ? 2 : 3; };
+  const rank = (project: ProjectOverviewItem) => { const exception = getProjectException(project, today); return exception === "LIFECYCLE_MISMATCH" ? 0 : exception === "OVERDUE" ? 1 : exception === "BLOCKED" ? 2 : exception === "PLANNED" ? 3 : 4; };
   visibleProjects.sort((a, b) => sortMode === "attention" ? rank(a) - rank(b) || (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0) : (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0));
 
   const visibleUnassignedVideos = clientFilterId === null ? unassignedVideos : unassignedVideos.filter((video) => video.canonicalClientId === clientFilterId);

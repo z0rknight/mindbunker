@@ -6,6 +6,7 @@ import {
   buildMoneyReality,
   computeDailyOperatingReality,
   computeRecordedWorkReality,
+  getDailyRealityCoverage,
 } from "./core.ts";
 
 function project(overrides = {}) {
@@ -118,6 +119,53 @@ test("daily reality clips cross-midnight/open Sessions and handles partial or ab
   assert.equal(none.recordedSeconds, 0);
   assert.equal(none.observedCoverageSeconds, 0);
   assert.equal(none.unsessionedObservedSeconds, 0);
+  assert.equal(getDailyRealityCoverage(none), "NO_EVIDENCE");
+});
+
+test("daily coverage distinguishes Sensor-only, Session-only, partial and complete evidence", () => {
+  const sensorOnly = computeDailyOperatingReality({
+    dateKey: "2026-10-09",
+    windowStart: 0,
+    windowEnd: 3600,
+    sessions: [],
+    observations: [
+      { appKey: "PREMIERE_PRO", surface: null, startedAt: 100, endedAt: 400, idle: false, keystrokeCount: 4, mouseMovementCount: 8 },
+    ],
+  });
+  assert.equal(sensorOnly.recordedSeconds, 0);
+  assert.equal(sensorOnly.unsessionedObservedSeconds, 300);
+  assert.equal(getDailyRealityCoverage(sensorOnly), "PARTIAL");
+
+  const sessionOnly = computeDailyOperatingReality({
+    dateKey: "2026-10-09",
+    windowStart: 0,
+    windowEnd: 3600,
+    sessions: [
+      { startedAt: 100, endedAt: 700, activityType: "CLIENT_SERVICE", clientName: "Lead", clientStatus: "lead", clientSource: null },
+    ],
+    observations: [],
+  });
+  assert.equal(sessionOnly.leadSeconds, 600);
+  assert.equal(sessionOnly.sessionUncoveredSeconds, 600);
+  assert.equal(getDailyRealityCoverage(sessionOnly), "PARTIAL");
+
+  const complete = computeDailyOperatingReality({
+    dateKey: "2026-10-09",
+    windowStart: 0,
+    windowEnd: 3600,
+    sessions: [
+      { startedAt: 100, endedAt: 700, activityType: "OTHER", clientName: "RMEDIA", clientStatus: "active", clientSource: null },
+    ],
+    observations: [
+      { appKey: "OTHER", surface: null, startedAt: 100, endedAt: 400, idle: false, keystrokeCount: null, mouseMovementCount: null },
+      { appKey: "OTHER", surface: null, startedAt: 400, endedAt: 700, idle: true, keystrokeCount: null, mouseMovementCount: null },
+    ],
+  });
+  assert.equal(complete.internalSeconds, 600);
+  assert.equal(complete.observedActiveSeconds, 300);
+  assert.equal(complete.observedIdleSeconds, 300);
+  assert.equal(complete.inputObservationCount, 0);
+  assert.equal(getDailyRealityCoverage(complete), "COMPLETE");
 });
 
 test("delivery reality reuses Wave 4 membership, progress and canonical Client rollup", () => {
@@ -173,6 +221,7 @@ test("Dashboard is observational, exposes ACTIVE/IDLE/empty states and uses the 
   assert.match(component, /daily-operating-reality/u);
   assert.match(component, /Unsessioned observed/u);
   assert.match(component, /Input counts describe telemetry, not effort, focus or quality/u);
+  assert.match(component, /Input telemetry not captured/u);
   assert.match(data, /getExecutionSnapshot\("\/"\)/u);
   assert.match(data, /getProjectsOverview\(\)/u);
   assert.match(data, /getApplicationUsage\("LAST_7_DAYS"\)/u);

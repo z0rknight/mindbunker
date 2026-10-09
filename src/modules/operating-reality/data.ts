@@ -16,6 +16,7 @@ import {
   buildMoneyReality,
   computeDailyOperatingReality,
   computeRecordedWorkReality,
+  getDailyRealityCoverage,
   type OperatingReality,
   type OutputEvent,
   type RecordedSessionFact,
@@ -218,9 +219,7 @@ export async function getOperatingReality(): Promise<OperatingReality> {
       provenance: provenance(
         "Work Sessions + Sensor",
         "canonical work_sessions / device_activity_observations",
-        daily.recordedSeconds === 0 && daily.observedCoverageSeconds === 0
-          ? "NO_EVIDENCE"
-          : daily.sessionUncoveredSeconds > 0 ? "PARTIAL" : "COMPLETE",
+        getDailyRealityCoverage(daily),
         "Intentional categories come only from canonical Work Sessions. Apps, idle and input counts are descriptive Sensor telemetry. Observed activity outside a Session stays unclassified.",
       ),
     },

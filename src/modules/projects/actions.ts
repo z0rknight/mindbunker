@@ -413,6 +413,25 @@ export async function updateProject(
     .limit(1);
   if (!current[0]) return { success: false, error: "Project not found." };
 
+  if (parsed.data.status === "delivered") {
+    const unfinished = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(videoLogs)
+      .where(and(
+        eq(videoLogs.projectId, projectId),
+        eq(videoLogs.isOperationalContainer, false),
+        isNull(videoLogs.cancelledAt),
+        ne(videoLogs.status, "DONE"),
+      ));
+    const unfinishedCount = Number(unfinished[0]?.count ?? 0);
+    if (unfinishedCount > 0) {
+      return {
+        success: false,
+        error: `Project cannot be delivered while ${unfinishedCount} deliverable${unfinishedCount === 1 ? " is" : "s are"} unfinished.`,
+      };
+    }
+  }
+
   const projectUpdate = db
     .update(projects)
     .set({ ...parsed.data, updatedAt: new Date() })

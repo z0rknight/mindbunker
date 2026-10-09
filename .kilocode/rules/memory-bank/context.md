@@ -10,6 +10,17 @@ The original February 2026 visual design is the canonical interface. The separat
 
 ## Recently Completed
 
+- [x] **Pre-Dogfood Hardening + 09AM steering projection pass (2026-10-09, local candidate / no deploy)**
+  - [x] Closed Daily Operating Reality coverage semantics: Sessions remain intentional truth; Sensor remains observation; `NO_EVIDENCE`/`PARTIAL`/`COMPLETE` now reflect source presence and uncovered Session time, and missing input telemetry is never rendered as zero productivity
+  - [x] Established the lifecycle invariant without Project-19 hardcode: active/review may contain all-DONE Videos, delivered cannot contain an open real deliverable, and archived may preserve incomplete history; mismatch stays visible in Current, is excluded from Completed and fails client-safe to Active
+  - [x] Made the existing immutable Delivery ledger operationally legible with visible version history, explicit next-version action, label/URL and server timestamp semantics; no parallel delivery model or approval inference
+  - [x] Local Safari QA passed the honest empty-day Dashboard plus an exact partial-coverage fixture (30m CLIENT Session, 20m Premiere observation, 67% coverage, 10m uncovered); all six QA rows were guard-deleted, and production Taryn's authenticated dashboard confirmed `0 active projects` beside Front Door Video 1 in production with no operator-private telemetry/finance leakage
+  - [x] Inspected real Geoff quality evidence: matched 1920×1080 PNG pair and matched-duration 48 kHz stereo MP3 pair; existing Assets lack canonical pair/type/client-visibility semantics and local files lack client-safe URLs, so no hidden naming convention or comparison UI was added
+  - [x] Preserved economics boundaries (Quote/Finance attribution only; Taryn per-Video value unknown), stage-time boundary (Recipe interval × Work Session overlap), email boundary (no Email Action owner yet) and auth boundary (password + secure no-password link already exist; Slack OTP deferred)
+  - [x] Focused 103/103 and full 1,624/1,624 tests, typecheck, production build, lint 0 errors / 3 pre-existing warnings, local 0058 FK/quick checks GREEN; no schema/new migration/deploy/production write
+  - [x] Cloudflare remote authority remains blocked by error 7403 before SQL execution; Project 19's production row and candidate promotion remain guarded follow-up operations, not silently adapted writes
+  - [ ] Next gate remains Dogfood 02 with Recipe attached from the start of one real Video
+
 - [x] **Dogfood 01 — Offer Doc / Geoff evidence reconstruction (2026-10-09, analysis-only / no deploy)**
   - [x] Resolved the specimen as Video `86` (`Offer Doc`) → Project `19` (`GEOFF - September Long Form Videos`) → operational alias Client `12` (`Taryn DFY`) → canonical commercial relationship Client `2` (`Taryn Dubreuil`)
   - [x] Reconstructed five closed canonical Work Sessions totaling `9,068s` (`2h31m08s`), from 2026-10-06 21:29:16 to 2026-10-09 00:56:33 BRT; 89 Sensor observations cover `9,067s`, with telemetry kept separate from intentional time

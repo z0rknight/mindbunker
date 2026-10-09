@@ -99,6 +99,7 @@ export function DashboardOperatingReality({ reality }: { reality: OperatingReali
   const operation = reality.currentOperation;
   const current = operation.current;
   const next = operation.recommendation;
+  const hasInputTelemetry = reality.daily.inputObservationCount > 0;
 
   return (
     <div className="space-y-5" data-testid="dashboard-operating-reality">
@@ -184,7 +185,7 @@ export function DashboardOperatingReality({ reality }: { reality: OperatingReali
           </div>
         </div>
         <p className="mt-3 text-[11px] leading-4 text-zinc-600">
-          Observed idle {formatClosedDuration(reality.daily.observedIdleSeconds)} · Sensor-covered window {formatClosedDuration(reality.daily.observedCoverageSeconds)} · Keyboard events {reality.daily.keystrokeCount.toLocaleString("en-US")} · Mouse events {reality.daily.mouseMovementCount.toLocaleString("en-US")}. Input counts describe telemetry, not effort, focus or quality.
+          Observed idle {formatClosedDuration(reality.daily.observedIdleSeconds)} · Sensor-covered window {formatClosedDuration(reality.daily.observedCoverageSeconds)} · {hasInputTelemetry ? `Keyboard events ${reality.daily.keystrokeCount.toLocaleString("en-US")} · Mouse events ${reality.daily.mouseMovementCount.toLocaleString("en-US")}.` : "Input telemetry not captured."} Input counts describe telemetry, not effort, focus or quality.
         </p>
         <Provenance value={reality.daily.provenance} />
       </section>

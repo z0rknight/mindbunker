@@ -18,6 +18,7 @@ export type RelationshipIntegrityIssue = {
     | "DUPLICATE_CLIENT_NAME"
     | "PROJECT_CLIENT_MISSING"
     | "ARCHIVED_CLIENT_ACTIVE_PROJECT"
+    | "DELIVERED_PROJECT_OPEN_VIDEO"
     | "VIDEO_CLIENT_MISSING"
     | "VIDEO_PROJECT_MISSING"
     | "VIDEO_PROJECT_CLIENT_MISMATCH"
@@ -48,6 +49,7 @@ export type RelationshipIntegrityInput = {
     title: string | null;
     status: string;
     videoKind: string;
+    isOperationalContainer: boolean;
     cancelledAt: Date | null;
   }>;
   contracts: Array<{ id: number; clientId: number; status: string }>;
@@ -148,6 +150,22 @@ export function scanRelationshipIntegrity(
         entityType: "project",
         entityId: project.id,
         message: `${project.name} is ${project.status} under archived client ${client.name}.`,
+      });
+    }
+
+    const openDeliverables = input.videos.filter((video) =>
+      video.projectId === project.id &&
+      !video.isOperationalContainer &&
+      video.cancelledAt === null &&
+      video.status !== "DONE",
+    );
+    if (project.status === "delivered" && openDeliverables.length > 0) {
+      issues.push({
+        code: "DELIVERED_PROJECT_OPEN_VIDEO",
+        severity: "ERROR",
+        entityType: "project",
+        entityId: project.id,
+        message: `${project.name} is delivered while ${openDeliverables.length} deliverable${openDeliverables.length === 1 ? " remains" : "s remain"} unfinished.`,
       });
     }
   }

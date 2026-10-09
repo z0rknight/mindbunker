@@ -199,6 +199,16 @@ export type DailyOperatingReality = RecordedWorkReality & {
   apps: AppTimeTotal[];
 };
 
+export function getDailyRealityCoverage(
+  reality: Pick<DailyOperatingReality, "recordedSeconds" | "observedCoverageSeconds" | "sessionUncoveredSeconds">,
+): CoverageState {
+  const hasIntentional = reality.recordedSeconds > 0;
+  const hasObserved = reality.observedCoverageSeconds > 0;
+  if (!hasIntentional && !hasObserved) return "NO_EVIDENCE";
+  if (!hasIntentional || !hasObserved || reality.sessionUncoveredSeconds > 0) return "PARTIAL";
+  return "COMPLETE";
+}
+
 function intersectionSeconds(
   left: readonly { startedAt: number; endedAt: number }[],
   right: readonly { startedAt: number; endedAt: number }[],
