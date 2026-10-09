@@ -80,11 +80,11 @@ export function QualityEvidencePanel({ videoId }: { videoId: number }) {
     : "audio/mpeg,audio/mp4,audio/x-m4a,audio/wav";
 
   return (
-    <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/20 p-4 sm:p-5">
+    <section className={`rounded-2xl border border-zinc-800 bg-zinc-950/20 ${items.length === 0 && !authoring && !loading ? "p-3" : "space-y-3 p-4 sm:p-5"}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Quality evidence</p>
-          <p className="mt-1 text-xs text-zinc-600">Explicit proof of transformation. Not approval, scoring, time, or billing.</p>
+          {(items.length > 0 || authoring || loading) && <p className="mt-1 text-xs text-zinc-600">Explicit proof of transformation. Not approval, scoring, time, or billing.</p>}
         </div>
         <button type="button" onClick={() => setAuthoring((value) => !value)} className="min-h-10 rounded-xl border border-zinc-700 px-3 text-xs font-black text-zinc-300 hover:border-violet-500/60 hover:text-white">
           {authoring ? "Cancel" : "+ Add evidence"}
@@ -130,7 +130,7 @@ export function QualityEvidencePanel({ videoId }: { videoId: number }) {
       {loading ? (
         <p className="text-xs text-zinc-600">Loading evidence…</p>
       ) : items.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-zinc-800 p-4 text-xs text-zinc-600">No quality evidence attached to this Video.</p>
+        <p className="mt-2 text-[11px] text-zinc-600">No before / after proof attached.</p>
       ) : (
         <div className="space-y-3">
           {items.map((item) => <QualityEvidenceItem key={item.id} evidence={item} internal />)}

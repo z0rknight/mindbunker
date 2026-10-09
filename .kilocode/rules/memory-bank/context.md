@@ -571,3 +571,10 @@ The original February 2026 visual design is the canonical interface. The separat
 - Added authenticated R2/HTTPS media reads, operator authoring/view, responsive image slider, single-context Audio A/B and the same client-safe projection in authenticated Client Video.
 - Real Geoff / Offer Doc PNG+MP3 local dogfood passed operator/client desktop/mobile QA; 401 unauthenticated and 404 cross-client isolation were proven. Exact QA D1/R2 data was removed.
 - Gates: 13/13 focused, 1,637/1,637 full, typecheck/build GREEN, lint 0 errors (3 existing warnings), local D1 FK clean/quick_check ok. Production untouched; no deploy.
+
+## 2026-10-09 — Video Workspace hierarchy local candidate
+
+- Reordered the Video Workspace around operator execution: Video identity/state, current and next Recipe step, blocker, review state and latest Delivery lead; Quality Evidence and canonical Work Session remain visible but secondary context/details/history are collapsed.
+- Added state-aware READY_FOR_REVIEW, CHANGES_REQUESTED and DONE presentations without moving canonical ownership; historical DONE Videos do not invite Recipe attachment or new Work Sessions.
+- Visually verified desktop/mobile with exact local-only fixtures for active Recipe/no Recipe, review, changes, done, blocker, Delivery and Quality Evidence. Exact fixtures were removed; local D1 `quick_check` and FK checks are clean.
+- Gates: 1,640/1,640 full tests, typecheck, Operator build, Client build and lint GREEN (3 existing warnings); `db:generate` reports no schema changes. Production untouched; no deploy or migration 0060.

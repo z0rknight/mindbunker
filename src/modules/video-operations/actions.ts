@@ -75,6 +75,7 @@ async function getVideoContext(videoId: number) {
       projectId: videoLogs.projectId,
       projectName: projects.name,
       deliveryUrl: videoLogs.deliveryUrl,
+      reviewUrl: videoLogs.reviewUrl,
     })
     .from(videoLogs)
     .leftJoin(clients, eq(videoLogs.clientId, clients.id))

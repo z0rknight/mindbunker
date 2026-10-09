@@ -258,7 +258,7 @@ export function VideoEditor({
             data-enter="true"
             className="os-arrive safe-sheet max-h-[94dvh] w-full overflow-y-auto rounded-t-3xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl sm:mx-4 sm:rounded-2xl sm:p-6 md:max-w-6xl md:p-7"
           >
-            <header className="mb-5 flex items-start justify-between gap-3">
+            <header className="mb-5 flex items-start justify-between gap-3 border-b border-zinc-800 pb-5">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">
                   Video #{video.id}
@@ -290,6 +290,25 @@ export function VideoEditor({
                     </>
                   )}
                 </nav>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <VideoStatusBadge status={status} />
+                  {video.projectDeadline && (
+                    <span className="rounded-full border border-zinc-700 bg-zinc-950/50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                      Due {formatDate(video.projectDeadline)}
+                    </span>
+                  )}
+                  {allowedTransitions.map((targetStatus) => (
+                    <button
+                      key={targetStatus}
+                      type="button"
+                      onClick={() => moveTo(targetStatus)}
+                      disabled={isPending}
+                      className="min-h-9 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 text-[11px] font-black text-violet-200 transition hover:bg-violet-500/20 disabled:opacity-40"
+                    >
+                      → {VIDEO_STATUS_LABELS[targetStatus]}
+                    </button>
+                  ))}
+                </div>
               </div>
               <button
                 type="button"
@@ -301,8 +320,8 @@ export function VideoEditor({
               </button>
             </header>
 
-            <div className="grid gap-5 md:grid-cols-[minmax(280px,0.82fr)_minmax(0,1.35fr)] md:items-start">
-              <aside className="space-y-4 md:sticky md:top-0">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.72fr)] lg:items-start">
+              <aside className="order-2 space-y-4 lg:sticky lg:top-0">
                 <section className={`relative w-full overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 ${coverAspectClass}`}>
                   {safeCoverUrl ? (
                     <Image
@@ -338,81 +357,49 @@ export function VideoEditor({
                   )}
                 </section>
 
-                <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3 md:block">
-                    <div>
-                      <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                        Lifecycle
-                      </p>
-                      <VideoStatusBadge status={status} />
-                    </div>
-                    <div className="mt-0 flex flex-wrap justify-end gap-2 md:mt-4 md:justify-start">
-                      {allowedTransitions.map((targetStatus) => (
-                        <button
-                          key={targetStatus}
-                          type="button"
-                          onClick={() => moveTo(targetStatus)}
-                          disabled={isPending}
-                          className="min-h-11 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 text-xs font-black text-violet-200 transition hover:bg-violet-500/20 disabled:opacity-40"
-                        >
-                          → {VIDEO_STATUS_LABELS[targetStatus]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </section>
-
-                {/* Wave 4: read-only pre-export reminder. Never gates a status. */}
-                <BeforeYouExport videoId={video.id} active={open} />
-
-                <PortalControl
-                  label="Client portal"
-                  description="Expose this video only when its Project is also visible"
-                  enabled={video.visibleToClient}
-                  onChange={(visible) => setVideoClientVisibility(video.id, visible)}
-                />
-
                 <WorkSessionPanel
                   key={`${video.id}-${initialWorkSessionState.summary.closedSeconds}-${initialWorkSessionState.summary.sessionCount}-${initialWorkSessionState.openSession?.id ?? "idle"}`}
                   videoId={video.id}
                   initialState={initialWorkSessionState}
+                  readOnly={status === "DONE"}
                 />
 
-                <section className="grid grid-cols-2 gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Revisions</p>
-                    <p className="mt-1 text-sm font-black text-zinc-300">{video.revisionsCount}</p>
-                    <p className="mt-1 text-[10px] text-zinc-600">Record one in Revision below</p>
+                <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/25 p-4">
+                  <summary className="cursor-pointer list-none text-xs font-black uppercase tracking-wider text-zinc-500">
+                    <span className="mr-1.5 inline-block transition group-open:rotate-90">▸</span>Client visibility & export checks
+                  </summary>
+                  <div className="mt-4 space-y-4 border-t border-zinc-800 pt-4">
+                    <BeforeYouExport videoId={video.id} active={open} />
+                    <PortalControl label="Client portal" description="Expose this video only when its Project is also visible" enabled={video.visibleToClient} onChange={(visible) => setVideoClientVisibility(video.id, visible)} />
                   </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Deadline</p>
-                    <p className="mt-1 text-sm font-black text-zinc-300">
-                      {video.projectDeadline ? formatDate(video.projectDeadline) : "Not set"}
-                    </p>
-                  </div>
-                </section>
+                </details>
 
-                {/* Production Operations Consolidation: batch/project context
-                    this video inherits (incl. the project's source media
-                    references -- this replaces the old standalone "Project
-                    source references" panel, same canonical table, shown
-                    once) + its own review/delivery facts, plus the origin-
-                    preserving link up to its Production Order. */}
-                <VideoProductionContext videoId={video.id} active={open} returnTo={returnTo} />
+                <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/25 p-4">
+                  <summary className="cursor-pointer list-none text-xs font-black uppercase tracking-wider text-zinc-500">
+                    <span className="mr-1.5 inline-block transition group-open:rotate-90">▸</span>Production & commercial context
+                  </summary>
+                  <div className="mt-4 space-y-4 border-t border-zinc-800 pt-4">
+                    <VideoProductionContext videoId={video.id} active={open} returnTo={returnTo} />
+                    <CommercialTermsPanel videoId={video.id} />
+                    <VideoMemoryPanel videoId={video.id} />
+                  </div>
+                </details>
+
+                <VideoAdvancedPanel videoId={video.id} />
 
               </aside>
 
-              <div className="space-y-4">
+              <div className="order-1 space-y-4">
                 <DeliveryRecipePanel videoId={video.id} />
+                <VideoEssentialsPanel videoId={video.id} revisionsCount={video.revisionsCount} status={status} />
                 <QualityEvidencePanel videoId={video.id} />
-                <VideoEssentialsPanel videoId={video.id} revisionsCount={video.revisionsCount} />
-                <CommercialTermsPanel videoId={video.id} />
-                <VideoMemoryPanel videoId={video.id} />
-                <VideoAdvancedPanel videoId={video.id} />
-                <form onSubmit={saveMetadata} className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-950/25 p-4 sm:p-5">
+                <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/20 p-4 sm:p-5">
+                  <summary className="cursor-pointer list-none text-xs font-black uppercase tracking-wider text-zinc-500">
+                    <span className="mr-1.5 inline-block transition group-open:rotate-90">▸</span>Video details & metadata
+                  </summary>
+                  <form onSubmit={saveMetadata} className="mt-4 space-y-4 border-t border-zinc-800 pt-4">
                 <div className="mb-1">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">Video details</p>
-                  <p className="mt-1 text-xs text-zinc-600">Canonical metadata and the client-safe delivery link.</p>
+                  <p className="text-xs text-zinc-600">Canonical metadata and client-safe links. Closed by default during execution.</p>
                 </div>
               <div>
                 <label htmlFor={`video-title-${video.id}`} className="mb-1.5 block text-xs font-bold text-zinc-400">
@@ -662,7 +649,8 @@ export function VideoEditor({
                   Only for mistaken or unused test records. Blocked automatically if this video has any tracked work, revisions, deliveries, or other real history.
                 </p>
               </div>
-                </form>
+                  </form>
+                </details>
               </div>
             </div>
           </section>

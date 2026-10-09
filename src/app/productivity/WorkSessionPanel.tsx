@@ -30,9 +30,11 @@ function toDatetimeLocalValue(date: Date) {
 export function WorkSessionPanel({
   videoId,
   initialState,
+  readOnly = false,
 }: {
   videoId: number;
   initialState: VideoWorkSessionState;
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -360,6 +362,10 @@ export function WorkSessionPanel({
             Open active video →
           </Link>
         </div>
+      ) : readOnly ? (
+        <p className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3 text-xs leading-5 text-zinc-500">
+          Historical Video · reopen the lifecycle before starting new intentional work.
+        </p>
       ) : (
         <div className="mt-4 space-y-3">
           <div>

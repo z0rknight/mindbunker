@@ -90,6 +90,8 @@ export function DeliveryRecipePanel({ videoId }: { videoId: number }) {
   }
 
   const instance = workspace.instance;
+  const currentStep = instance?.summary.currentStep ?? null;
+  const nextStep = instance?.summary.nextStep ?? null;
   return (
     <section className="rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-950/20 to-zinc-950/60 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -109,7 +111,9 @@ export function DeliveryRecipePanel({ videoId }: { videoId: number }) {
 
       {!instance ? (
         <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-          {workspace.templates.length > 0 ? (
+          {!workspace.video.mutable ? (
+            <p className="text-xs font-bold text-amber-300">Historical Video · no Recipe snapshot was attached.</p>
+          ) : workspace.templates.length > 0 ? (
             <div className="flex flex-col gap-2 sm:flex-row">
               <select
                 value={recipeId}
@@ -135,64 +139,54 @@ export function DeliveryRecipePanel({ videoId }: { videoId: number }) {
           ) : (
             <p className="text-sm text-zinc-500">Create a Recipe with at least one enabled step first.</p>
           )}
-          {!workspace.video.mutable && (
-            <p className="mt-2 text-xs font-bold text-amber-300">Historical Video · Recipe attachment is read-only.</p>
-          )}
         </div>
       ) : (
         <>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950/55 p-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Current</p>
-              <p className="mt-1 text-sm font-black text-white">
-                {instance.summary.currentStep?.label ?? (instance.summary.complete ? "Recipe complete" : "Not started")}
-              </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2" data-testid="recipe-current-next">
+            <div className={`rounded-xl border p-4 ${currentStep ? "border-violet-500/40 bg-violet-950/25" : "border-zinc-800 bg-zinc-950/45"}`}>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-violet-300">Current step</p>
+              <p className="mt-1 text-base font-black text-white">{currentStep?.label ?? (instance.summary.complete ? "Recipe complete" : "No active step")}</p>
+              {currentStep?.qualityStandard && <p className="mt-1 text-xs leading-5 text-zinc-400">{currentStep.qualityStandard}</p>}
+              {currentStep && (
+                <div className="mt-3 flex gap-2">
+                  <button type="button" disabled={!workspace.video.mutable || pending} onClick={() => run(() => transitionDeliveryRecipeStep(videoId, currentStep.id, "N_A"))} className="min-h-10 rounded-lg border border-zinc-700 px-3 text-xs font-black text-zinc-400 hover:text-white disabled:opacity-40">N/A</button>
+                  <button type="button" disabled={!workspace.video.mutable || pending} onClick={() => run(() => transitionDeliveryRecipeStep(videoId, currentStep.id, "DONE"))} className="min-h-10 rounded-lg bg-emerald-600 px-4 text-xs font-black text-white hover:bg-emerald-500 disabled:opacity-40">Mark done</button>
+                </div>
+              )}
             </div>
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950/55 p-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Next</p>
-              <p className="mt-1 text-sm font-black text-zinc-300">{instance.summary.nextStep?.label ?? "—"}</p>
+            <div className={`rounded-xl border p-4 ${!currentStep && nextStep ? "border-cyan-500/35 bg-cyan-950/20" : "border-zinc-800 bg-zinc-950/45"}`}>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Next step</p>
+              <p className="mt-1 text-base font-black text-white">{nextStep?.label ?? "No next step"}</p>
+              {nextStep?.qualityStandard && <p className="mt-1 text-xs leading-5 text-zinc-400">{nextStep.qualityStandard}</p>}
+              {nextStep && !currentStep && (
+                <button type="button" disabled={!workspace.video.mutable || pending} onClick={() => run(() => transitionDeliveryRecipeStep(videoId, nextStep.id, "ACTIVE"))} className="mt-3 min-h-10 rounded-lg bg-violet-600 px-4 text-xs font-black text-white hover:bg-violet-500 disabled:opacity-40">Start next</button>
+              )}
+              {nextStep && currentStep && <p className="mt-3 text-[11px] font-bold text-zinc-600">Finish or reopen the current step before starting this one.</p>}
             </div>
           </div>
 
-          <ol className="mt-4 space-y-2">
-            {instance.steps.map((step) => {
-              const primary = primaryTransition(step.state);
-              return (
-                <li key={step.id} className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-950/55 p-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-w-0 gap-3">
-                    <span className={`mt-0.5 text-base font-black ${step.state === "DONE" ? "text-emerald-300" : step.state === "ACTIVE" ? "text-violet-300" : "text-zinc-600"}`} aria-hidden="true">
-                      {STATE_MARK[step.state]}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-black text-white">{step.label}</p>
-                      <p className="mt-0.5 text-[10px] font-black uppercase tracking-wider text-zinc-600">{DELIVERY_RECIPE_GATE_LABELS[step.gate]}</p>
-                      {step.qualityStandard && <p className="mt-1 text-xs text-zinc-500">{step.qualityStandard}</p>}
+          <details className="group mt-4 rounded-xl border border-zinc-800 bg-zinc-950/35 p-3">
+            <summary className="cursor-pointer list-none text-xs font-black uppercase tracking-wider text-zinc-500">
+              <span className="mr-1.5 inline-block transition group-open:rotate-90">▸</span>All Recipe steps · {instance.summary.done}/{instance.summary.applicable}
+            </summary>
+            <ol className="mt-3 space-y-2 border-t border-zinc-800 pt-3">
+              {instance.steps.map((step) => {
+                const primary = primaryTransition(step.state);
+                return (
+                  <li key={step.id} className={`flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between ${step.state === "ACTIVE" ? "border-violet-500/35 bg-violet-950/20" : "border-zinc-800 bg-zinc-950/55"}`}>
+                    <div className="flex min-w-0 gap-3">
+                      <span className={`mt-0.5 text-base font-black ${step.state === "DONE" ? "text-emerald-300" : step.state === "ACTIVE" ? "text-violet-300" : "text-zinc-600"}`} aria-hidden="true">{STATE_MARK[step.state]}</span>
+                      <div className="min-w-0"><p className="text-sm font-black text-white">{step.label}</p><p className="mt-0.5 text-[10px] font-black uppercase tracking-wider text-zinc-600">{DELIVERY_RECIPE_GATE_LABELS[step.gate]}</p>{step.qualityStandard && <p className="mt-1 text-xs text-zinc-500">{step.qualityStandard}</p>}</div>
                     </div>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    {(step.state === "NOT_STARTED" || step.state === "ACTIVE") && (
-                      <button
-                        type="button"
-                        disabled={!workspace.video.mutable || pending}
-                        onClick={() => run(() => transitionDeliveryRecipeStep(videoId, step.id, "N_A"))}
-                        className="min-h-10 rounded-lg border border-zinc-700 px-3 text-xs font-black text-zinc-400 hover:text-white disabled:opacity-40"
-                      >
-                        N/A
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      disabled={!workspace.video.mutable || pending}
-                      onClick={() => run(() => transitionDeliveryRecipeStep(videoId, step.id, primary.target))}
-                      className={`min-h-10 rounded-lg px-3 text-xs font-black disabled:opacity-40 ${step.state === "ACTIVE" ? "bg-emerald-600 text-white hover:bg-emerald-500" : "bg-violet-600 text-white hover:bg-violet-500"}`}
-                    >
-                      {primary.label}
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
+                    <div className="flex shrink-0 gap-2">
+                      {(step.state === "NOT_STARTED" || step.state === "ACTIVE") && <button type="button" disabled={!workspace.video.mutable || pending} onClick={() => run(() => transitionDeliveryRecipeStep(videoId, step.id, "N_A"))} className="min-h-10 rounded-lg border border-zinc-700 px-3 text-xs font-black text-zinc-400 hover:text-white disabled:opacity-40">N/A</button>}
+                      <button type="button" disabled={!workspace.video.mutable || pending} onClick={() => run(() => transitionDeliveryRecipeStep(videoId, step.id, primary.target))} className={`min-h-10 rounded-lg px-3 text-xs font-black disabled:opacity-40 ${step.state === "ACTIVE" ? "bg-emerald-600 text-white hover:bg-emerald-500" : "bg-violet-600 text-white hover:bg-violet-500"}`}>{primary.label}</button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </details>
 
           <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3 text-xs text-zinc-500">
             <p>

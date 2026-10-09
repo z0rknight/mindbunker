@@ -17,13 +17,13 @@ test("normal delivery action appends the next immutable version and keeps lifecy
   assert.match(actions, /revalidateProductivityViews\(video\.clientId\)/u);
 });
 
-test("operator UI exposes prior versions and creates the next labelled version with minimal input", () => {
-  assert.match(panel, /Delivery history/u);
-  assert.match(panel, /snapshot\.deliveries\.slice\(0, 3\)/u);
+test("operator UI exposes the latest delivery first, preserves older versions, and creates the next labelled version with minimal input", () => {
+  assert.match(panel, /Latest delivery/u);
+  assert.match(panel, /snapshot\.deliveries\.slice\(1\)/u);
   assert.match(panel, /Version label \(e\.g\. Final export\)/u);
-  assert.match(panel, /Record delivery v\{nextDeliveryVersion\}/u);
+  assert.match(panel, /Record delivery v\$\{nextDeliveryVersion\}/u);
   assert.match(panel, /recordVideoDelivery\(\{ videoId, deliveryUrl, note: deliveryLabel/u);
-  assert.match(panel, /does not imply client approval/u);
+  assert.match(panel, /Two adjacent decisions, two canonical histories/u);
 });
 
 test("latest client-safe delivery remains the canonical Video delivery URL, never approval", () => {
